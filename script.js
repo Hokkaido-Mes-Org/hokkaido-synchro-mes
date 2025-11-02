@@ -181,6 +181,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Variáveis do novo painel de lançamento
     let selectedMachineData = null;
     let hourlyChartInstance = null;
+    let opChartInstance = null;
+    // Evitar concorrência/reentrância na atualização dos gráficos de Lançamento
+    let isRefreshingLaunchCharts = false;
     let analysisHourlyChartInstance = null;
     let machineProductionTimelineInstance = null;
     let productionTimer = null;
@@ -250,6 +253,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const machineCardEmptyState = document.getElementById('machine-card-empty');
     const productionControlPanel = document.getElementById('production-control-panel');
     const hourlyProductionChart = document.getElementById('hourly-production-chart');
+    const opProductionChart = document.getElementById('op-production-chart');
+    const launchChartModeHourlyBtn = document.getElementById('launch-chart-mode-hourly');
+    const launchChartModeOpBtn = document.getElementById('launch-chart-mode-op');
+    let launchChartMode = 'hourly'; // 'hourly' | 'op'
     const analysisHourlyProductionChart = document.getElementById('analysis-hourly-production-chart');
     const analysisMachineProductionTimelineChart = document.getElementById('analysis-machine-production-timeline');
     const currentShiftDisplay = document.getElementById('current-shift-display');
@@ -258,6 +265,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const productName = document.getElementById('product-name');
     const productMp = document.getElementById('product-mp');
     const finalizeOrderBtn = document.getElementById('finalize-order-btn');
+    const activateOrderBtn = document.getElementById('activate-order-btn');
     const shiftTarget = document.getElementById('shift-target');
     const productionTimeDisplay = document.getElementById('production-time');
     const producedToday = document.getElementById('produced-today');
@@ -300,6 +308,78 @@ document.addEventListener('DOMContentLoaded', function() {
     const graphMachineFilter = document.getElementById('graph-machine-filter');
 
     // --- FUNÇÕES UTILITÁRIAS ---
+
+    // Carregar OPs abertas para o formulário de planejamento
+    async function loadPlanningOrders() {
+        if (!planningOrderSelect) return;
+        planningOrderSelect.innerHTML = '<option value="">Selecione...</option>';
+
+        try {
+            const snapshot = await db.collection('production_orders').get();
+            const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const blocked = ['concluida','cancelada','finalizada','encerrada'];
+            const openOrders = orders.filter(o => !blocked.includes(String(o.status||'').toLowerCase()));
+
+            openOrders.sort((a,b) => {
+                const toNum = (v) => { const n = parseInt(String(v||'').replace(/\D/g,''), 10); return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY; };
+                return toNum(a.order_number) - toNum(b.order_number);
+            });
+
+            const options = openOrders.map(o => {
+                const lot = Number(o.lot_size)||0;
+                const label = `${o.order_number || o.id} • Cod ${o.part_code || '-'} • Lote ${lot.toLocaleString('pt-BR')}`;
+                const opt = document.createElement('option');
+                opt.value = o.id;
+                opt.textContent = label;
+                opt.dataset.partCode = String(o.part_code||'');
+                opt.dataset.product = String(o.product||'');
+                opt.dataset.customer = String(o.customer||'');
+                opt.dataset.lotSize = String(lot);
+                opt.dataset.orderNumber = String(o.order_number||o.id);
+                opt.dataset.machineId = String(o.machine_id||'');
+                return opt;
+            });
+
+            options.forEach(opt => planningOrderSelect.appendChild(opt));
+        } catch (err) {
+            console.error('Erro ao carregar OPs:', err);
+        }
+    }
+
+    function onPlanningOrderChange() {
+        if (!planningOrderSelect) return;
+        const selected = planningOrderSelect.selectedOptions[0];
+        if (!selected || !selected.value) {
+            if (planningOrderInfo) planningOrderInfo.style.display = 'none';
+            return;
+        }
+
+        const partCode = selected.dataset.partCode || '';
+        const product = selected.dataset.product || '';
+        const customer = selected.dataset.customer || '';
+        const lotSize = Number(selected.dataset.lotSize || '0');
+        const orderNumber = selected.dataset.orderNumber || selected.value;
+        const machineId = selected.dataset.machineId || '';
+
+        // Preencher produto
+        const productCodInput = document.getElementById('planning-product-cod');
+        if (productCodInput) {
+            productCodInput.value = partCode;
+            productCodInput.dispatchEvent(new Event('change'));
+        }
+
+        // Sugerir máquina atribuída
+        if (planningMachineSelect && machineId) {
+            const hasOption = Array.from(planningMachineSelect.options).some(opt => opt.value === machineId);
+            if (hasOption) planningMachineSelect.value = machineId;
+        }
+
+        // Mostrar info da OP
+        if (planningOrderInfo) {
+            planningOrderInfo.style.display = 'block';
+            planningOrderInfo.textContent = `OP ${orderNumber} • ${product} (${customer}) • Cod ${partCode} • Lote ${lotSize.toLocaleString('pt-BR')}${machineId ? ' • Máquina ' + machineId : ''}`;
+        }
+    }
     
     // Recupera sessão diretamente do armazenamento (sessionStorage > localStorage)
     function getStoredUserSession() {
@@ -3291,11 +3371,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const executedPercentage = planned > 0 ? Math.min((executed / planned) * 100, 100) : 0;
         const expectedPercentage = planned > 0 ? Math.min((expectedByNow / planned) * 100, 100) : 0;
         const palette = resolveProgressPalette(executedPercentage);
-        const lotCompleted = planned > 0 && executed >= planned;
         const orderStatus = (currentActiveOrder && typeof currentActiveOrder.status === 'string')
             ? currentActiveOrder.status.toLowerCase()
             : '';
-        const orderEligibleForFinalize = lotCompleted && (!orderStatus || ['planejada', 'em_andamento'].includes(orderStatus)) && !!currentActiveOrder?.id;
+        const blockedStatuses = ['concluida', 'cancelada', 'finalizada', 'encerrada'];
+    const orderEligibleForFinalize = !!currentActiveOrder?.id && !blockedStatuses.includes(orderStatus);
+    const orderEligibleForActivate = !!currentActiveOrder?.id && !blockedStatuses.includes(orderStatus) && orderStatus !== 'ativa';
 
         currentOrderProgress = {
             executed: Number.isFinite(executed) ? executed : 0,
@@ -3313,7 +3394,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         progressBar.style.background = `linear-gradient(90deg, ${palette.start}, ${palette.end})`;
         progressBar.style.boxShadow = `0 6px 18px ${hexWithAlpha(palette.end, 0.35)}`;
         targetIndicator.style.backgroundColor = palette.end;
-        progressBar.classList.toggle('timeline-complete', lotCompleted);
+    const lotCompleted = planned > 0 && executed >= planned;
+    progressBar.classList.toggle('timeline-complete', lotCompleted);
 
         // Atualizar textos
         if (percentageText) {
@@ -3383,6 +3465,201 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (finalizeOrderBtn) {
             finalizeOrderBtn.classList.toggle('hidden', !orderEligibleForFinalize);
             finalizeOrderBtn.disabled = !orderEligibleForFinalize;
+        }
+        if (activateOrderBtn) {
+            activateOrderBtn.classList.toggle('hidden', !orderEligibleForActivate);
+            activateOrderBtn.disabled = !orderEligibleForActivate;
+        }
+    }
+
+    // Ativa OP a partir do painel da máquina (botão azul)
+    async function handleActivateOrderFromPanel(event) {
+        event?.preventDefault?.();
+
+        if (!selectedMachineData) {
+            alert('Selecione uma máquina antes de ativar a OP.');
+            return;
+        }
+
+        // Se já houver ordem ativa, não fazer nada
+        if (currentActiveOrder && String(currentActiveOrder.status || '').toLowerCase() === 'ativa') {
+            showNotification('Esta OP já está ativa nesta máquina.', 'info');
+            return;
+        }
+
+        const machineId = selectedMachineData.machine;
+        let targetOrder = currentActiveOrder;
+
+        // Caso não exista uma ordem resolvida no contexto, localizar pela part_code atual
+        if (!targetOrder || !targetOrder.id) {
+            try {
+                const partCode = selectedMachineData.product_cod || selectedMachineData.product_code;
+                if (partCode) {
+                    const lotsSnapshot = await db.collection('production_orders')
+                        .where('part_code', '==', String(partCode))
+                        .get();
+
+                    if (!lotsSnapshot.empty) {
+                        const orders = lotsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        const toNum = (v) => { const n = parseInt(String(v||'').replace(/\D/g,''), 10); return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY; };
+                        const isOpen = (o) => !['concluida','cancelada','finalizada','encerrada'].includes(String(o.status||'').toLowerCase());
+                        const sameMachine = orders.filter(o => (o.machine_id || o.machine) === machineId);
+                        targetOrder = sameMachine.find(o => ['ativa','em_andamento'].includes(String(o.status||'').toLowerCase()))
+                            || sameMachine.filter(isOpen).sort((a,b) => toNum(a.order_number) - toNum(b.order_number))[0]
+                            || orders.filter(isOpen).sort((a,b) => toNum(a.order_number) - toNum(b.order_number))[0]
+                            || orders.sort((a,b) => toNum(a.order_number) - toNum(b.order_number))[0];
+                    }
+                }
+            } catch (error) {
+                console.warn('Falha ao localizar OP para ativação:', error);
+            }
+        }
+
+        if (!targetOrder || !targetOrder.id) {
+            alert('Nenhuma OP elegível encontrada para ativação.');
+            return;
+        }
+
+        try {
+            const ok = await setOrderAsActive(targetOrder.id, machineId);
+            if (!ok) {
+                showNotification('Ativação cancelada ou não concluída.', 'warning');
+                return;
+            }
+
+            // Atualizar status do planejamento para em_execucao
+            const planId = selectedMachineData?.id;
+            if (planId) {
+                try {
+                    await db.collection('planning').doc(planId).update({
+                        status: 'em_execucao',
+                        startedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        startedBy: getActiveUser()?.name || 'Sistema'
+                    });
+                } catch (planErr) {
+                    console.warn('Não foi possível atualizar o status do planejamento ao ativar a OP:', planErr);
+                }
+            }
+
+            // Atualizar listas e painel
+            await Promise.allSettled([
+                typeof loadProductionOrders === 'function' ? loadProductionOrders() : Promise.resolve(),
+                populateMachineSelector()
+            ]);
+            if (selectedMachineData?.machine) {
+                await onMachineSelected(selectedMachineData.machine);
+            }
+
+            showNotification('OP ativada com sucesso!', 'success');
+        } catch (error) {
+            console.error('Erro ao ativar OP pelo painel:', error);
+            alert('Erro ao ativar a OP. Tente novamente.');
+        }
+    }
+
+    // Finalizar OP diretamente pelo botão do card
+    async function handleCardFinalizeClick(buttonEl) {
+        try {
+            const orderId = buttonEl?.dataset?.orderId;
+            const planId = buttonEl?.dataset?.planId;
+            const card = buttonEl.closest('.machine-card');
+            const machine = card?.dataset?.machine;
+            if (!orderId) {
+                alert('Ordem não encontrada para finalizar.');
+                return;
+            }
+
+            if (typeof window.authSystem?.checkPermissionForAction === 'function') {
+                const hasPermission = window.authSystem.checkPermissionForAction('close_production_order');
+                if (hasPermission === false) return;
+            }
+
+            const confirmMsg = `Confirma a finalização desta OP?`;
+            if (!window.confirm(confirmMsg)) return;
+
+            const originalHtml = buttonEl.innerHTML;
+            buttonEl.disabled = true;
+            buttonEl.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Finalizando...</span>`;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+            const user = getActiveUser();
+            const updatePayload = {
+                status: 'concluida',
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                completedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                completedBy: user?.username || null,
+                completedByName: user?.name || null
+            };
+            await db.collection('production_orders').doc(orderId).update(updatePayload);
+
+            if (planId) {
+                try {
+                    await db.collection('planning').doc(planId).update({
+                        status: 'concluida',
+                        finishedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        finishedBy: user?.name || user?.username || null
+                    });
+                } catch (e) {
+                    console.warn('Falha ao atualizar planejamento ao finalizar pelo card:', e);
+                }
+            }
+
+            // Se a OP finalizada for a ativa no painel, limpar contexto
+            if (currentActiveOrder?.id === orderId) {
+                currentActiveOrder = null;
+                resetProductionTimer?.();
+                if (productionControlPanel) productionControlPanel.classList.add('hidden');
+            }
+
+            showNotification('OP finalizada com sucesso!', 'success');
+
+            // Recarregar cartões e, se a mesma máquina estiver selecionada, recarregar painel
+            await populateMachineSelector();
+            if (machine) {
+                const stillSelected = selectedMachineData?.machine === machine;
+                if (stillSelected) await onMachineSelected(machine);
+            }
+        } catch (err) {
+            console.error('Erro ao finalizar OP pelo card:', err);
+            alert('Erro ao finalizar OP. Tente novamente.');
+        } finally {
+            if (buttonEl) {
+                buttonEl.disabled = false;
+                buttonEl.classList.add('hidden');
+            }
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+    }
+
+    // Ativar próxima OP diretamente pelo botão do card
+    async function handleCardActivateNextClick(buttonEl) {
+        const card = buttonEl.closest('.machine-card');
+        const machine = buttonEl?.dataset?.machine || card?.dataset?.machine;
+        if (!machine) {
+            alert('Máquina não identificada para ativar próxima OP.');
+            return;
+        }
+
+        const originalHtml = buttonEl.innerHTML;
+        buttonEl.disabled = true;
+        buttonEl.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Ativando...</span>`;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+
+        try {
+            // Seleciona a máquina para garantir contexto e reaproveitar a lógica de ativação do painel
+            await onMachineSelected(machine);
+            await handleActivateOrderFromPanel();
+
+            // Recarregar cards e painel
+            await populateMachineSelector();
+            await onMachineSelected(machine);
+        } catch (err) {
+            console.error('Erro ao ativar próxima OP pelo card:', err);
+            alert('Erro ao ativar próxima OP. Tente novamente.');
+        } finally {
+            buttonEl.disabled = false;
+            buttonEl.innerHTML = originalHtml;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }
     }
 
@@ -5276,7 +5553,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (sidebarCloseBtn) sidebarCloseBtn.addEventListener('click', closeSidebar);
         if (sidebarOverlay) sidebarOverlay.addEventListener('click', closeSidebar);
 
-        if (planningForm) planningForm.addEventListener('submit', handlePlanningFormSubmit);
+    if (planningForm) planningForm.addEventListener('submit', handlePlanningFormSubmit);
+    if (planningOrderSelect) planningOrderSelect.addEventListener('change', onPlanningOrderChange);
         if (planningDateSelector) planningDateSelector.addEventListener('change', (e) => listenToPlanningChanges(e.target.value));
         if (productionOrderForm) productionOrderForm.addEventListener('submit', handleProductionOrderFormSubmit);
         
@@ -5304,6 +5582,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (refreshRecentEntriesBtn) refreshRecentEntriesBtn.addEventListener('click', () => loadRecentEntries());
         if (recentEntriesList) recentEntriesList.addEventListener('click', handleRecentEntryAction);
         if (finalizeOrderBtn) finalizeOrderBtn.addEventListener('click', handleFinalizeOrderClick);
+    if (activateOrderBtn) activateOrderBtn.addEventListener('click', handleActivateOrderFromPanel);
         
         // Event listeners para filtros de lançamentos recentes
         const filterButtons = document.querySelectorAll('.filter-entry-btn');
@@ -5314,9 +5593,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             });
         });
         
-        if (resumoDateSelector) resumoDateSelector.addEventListener('change', loadResumoData);
+    if (resumoDateSelector) resumoDateSelector.addEventListener('change', loadResumoData);
         if (printReportBtn) printReportBtn.addEventListener('click', handlePrintReport);
-        if (reportQuantBtn) reportQuantBtn.addEventListener('click', () => switchReportView('quant'));
+    if (reportQuantBtn) reportQuantBtn.addEventListener('click', () => switchReportView('quant'));
+
+    // Carregar OPs para o formulário de planejamento
+    loadPlanningOrders().catch(err => console.warn('Erro ao carregar OPs para planejamento:', err));
         if (reportEfficBtn) reportEfficBtn.addEventListener('click', () => switchReportView('effic'));
         if (resumoContentContainer) resumoContentContainer.addEventListener('click', handleResumoTableClick);
         
@@ -5851,12 +6133,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     async function handleActivateProductionOrder(e) {
         e.preventDefault();
         const orderId = e.currentTarget.dataset.orderId;
-        const machineId = e.currentTarget.dataset.machineId;
         const order = productionOrdersCache.find(o => o.id === orderId);
+        let machineId = e.currentTarget.dataset.machineId || order?.machine_id || selectedMachineData?.machine || '';
 
-        if (!order || !machineId) {
+        if (!order) {
             alert('Dados da ordem não encontrados.');
             return;
+        }
+
+        if (!machineId) {
+            const input = prompt('Informe a máquina para ativar esta OP (ex.: H-01):');
+            if (!input) return;
+            machineId = input.trim();
         }
 
         try {
@@ -5865,6 +6153,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             
             if (success) {
                 setProductionOrderStatus('Ordem ativada com sucesso!', 'success');
+                // Atualizar listas e painel
+                if (typeof loadProductionOrders === 'function') {
+                    await loadProductionOrders();
+                }
+                await populateMachineSelector();
+                if (selectedMachineData?.machine) {
+                    await onMachineSelected(selectedMachineData.machine);
+                }
                 setTimeout(() => setProductionOrderStatus('', 'info'), 2000);
             } else {
                 setProductionOrderStatus('Operação cancelada ou erro.', 'error');
@@ -6188,6 +6484,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             // Ativar nova OP
             await db.collection('production_orders').doc(orderId).update({
                 status: 'ativa',
+                machine_id: machineId,
                 startedAt: firebase.firestore.FieldValue.serverTimestamp(),
                 startedBy: getActiveUser()?.name || 'Sistema'
             });
@@ -6490,7 +6787,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
         
         const form = e.target;
-        const formData = new FormData(form);
+    const formData = new FormData(form);
         const data = Object.fromEntries(formData.entries());
         
         // Buscar dados completos do produto selecionado
@@ -6517,6 +6814,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const docData = {
                 date: data.date,
                 machine: data.machine,
+                production_order_id: data.production_order_id || null,
                 product_cod: product.cod,
                 client: product.client,
                 product: product.name,
@@ -6540,10 +6838,16 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             document.getElementById('piece-weight').value = '';
             document.getElementById('planned-quantity').value = '';
             if (planningMpInput) planningMpInput.value = '';
+            if (planningOrderSelect) planningOrderSelect.value = '';
             const productNameDisplay = document.getElementById('product-name-display');
             if (productNameDisplay) {
                 productNameDisplay.textContent = '';
                 productNameDisplay.style.display = 'none';
+            }
+            const orderInfo = document.getElementById('planning-order-info');
+            if (orderInfo) {
+                orderInfo.style.display = 'none';
+                orderInfo.textContent = '';
             }
         } catch (error) {
             console.error("Erro ao adicionar planejamento: ", error);
@@ -6594,7 +6898,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
             renderPlanningTable(combinedData);
             renderLeaderPanel(planningItems);
-            renderMachineCards(planningItems, productionEntries, downtimeEntries);
+        const activePlans = planningItems.filter(isPlanActive);
+        renderMachineCards(activePlans, productionEntries, downtimeEntries);
             showLoadingState('leader-panel', false, planningItems.length === 0);
         };
 
@@ -6603,9 +6908,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 planningItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 planningItems.sort((a, b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0));
                 if (machineSelector) {
-                    machineSelector.machineData = machineSelector.machineData || {};
+                    machineSelector.machineData = {};
                     planningItems.forEach(item => {
-                        machineSelector.machineData[item.machine] = { id: item.id, ...item };
+                        if (isPlanActive(item)) {
+                            machineSelector.machineData[item.machine] = { id: item.id, ...item };
+                        }
                     });
                 }
                 if (selectedMachineData) {
@@ -7091,6 +7398,23 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         if (machineCardGrid && !machineCardGrid.dataset.listenerAttached) {
             machineCardGrid.addEventListener('click', async (event) => {
+                // Ações de botões dentro do card
+                const finalizeBtn = event.target.closest('.card-finalize-btn');
+                if (finalizeBtn) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    await handleCardFinalizeClick(finalizeBtn);
+                    return;
+                }
+                const activateNextBtn = event.target.closest('.card-activate-next-btn');
+                if (activateNextBtn) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    await handleCardActivateNextClick(activateNextBtn);
+                    return;
+                }
+
+                // Seleção do card da máquina
                 const card = event.target.closest('.machine-card');
                 if (!card) return;
                 const machine = card.dataset.machine;
@@ -7103,6 +7427,32 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         setupActionButtons();
         updateCurrentShift();
         setInterval(updateCurrentShift, 60000);
+
+        // Toggle modo do gráfico (Por hora / OP)
+        if (launchChartModeHourlyBtn && !launchChartModeHourlyBtn.dataset.listenerAttached) {
+            launchChartModeHourlyBtn.addEventListener('click', async () => {
+                if (launchChartMode === 'hourly') return;
+                launchChartMode = 'hourly';
+                launchChartModeHourlyBtn.classList.add('bg-white','text-blue-600','shadow-sm');
+                launchChartModeOpBtn?.classList.remove('bg-white','text-blue-600','shadow-sm');
+                if (opProductionChart) opProductionChart.classList.add('hidden');
+                if (hourlyProductionChart) hourlyProductionChart.classList.remove('hidden');
+                await refreshLaunchCharts();
+            });
+            launchChartModeHourlyBtn.dataset.listenerAttached = 'true';
+        }
+        if (launchChartModeOpBtn && !launchChartModeOpBtn.dataset.listenerAttached) {
+            launchChartModeOpBtn.addEventListener('click', async () => {
+                if (launchChartMode === 'op') return;
+                launchChartMode = 'op';
+                launchChartModeOpBtn.classList.add('bg-white','text-blue-600','shadow-sm');
+                launchChartModeHourlyBtn?.classList.remove('bg-white','text-blue-600','shadow-sm');
+                if (hourlyProductionChart) hourlyProductionChart.classList.add('hidden');
+                if (opProductionChart) opProductionChart.classList.remove('hidden');
+                await refreshLaunchCharts();
+            });
+            launchChartModeOpBtn.dataset.listenerAttached = 'true';
+        }
     }
 
     function updateCurrentShift() {
@@ -7142,124 +7492,119 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
     }
     
-    async function loadHourlyProductionChart() {
-        if (!selectedMachineData || !hourlyProductionChart) return;
-
-        currentActiveOrder = null;
-        currentOrderProgress = { executed: 0, planned: 0, expected: 0 };
-        
+    
+    
+    // Carregar gráfico da OP (acumulado por DIA ao longo da ordem)
+    async function loadOpProductionChart() {
+        if (!selectedMachineData || !opProductionChart) return;
         try {
-            const today = getProductionDateString();
-            const productionSnapshot = await db.collection('production_entries')
-                .where('data', '==', today)
-                .where('planId', '==', selectedMachineData.id)
-                .get();
-
-            // Preparar dados para o gráfico
-            const hourlyData = {};
-            for (let i = 7; i < 31; i++) {
-                const hour = i >= 24 ? i - 24 : i;
-                const hourStr = `${String(hour).padStart(2, '0')}:00`;
-                hourlyData[hourStr] = { planned: 0, actual: 0 };
+            const orderId = selectedMachineData.order_id || selectedMachineData.orderId || null;
+            const planId = selectedMachineData.id;
+            let query = db.collection('production_entries');
+            if (orderId) {
+                query = query.where('orderId', '==', orderId);
+            } else {
+                query = query.where('planId', '==', planId);
             }
-
-            // Tentar buscar tamanho do lote da production_order correspondente
-            const partCode = selectedMachineData.product_cod || selectedMachineData.product_code;
-            let matchedOrder = null;
-            let lotSize = Number(selectedMachineData.planned_quantity) || 0;
-
-            if (partCode) {
+            const snap = await query.get();
+            const entries = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            if (entries.length === 0) {
+                if (opChartInstance) { opChartInstance.destroy(); opChartInstance = null; }
+                const ctx = opProductionChart.getContext('2d');
+                ctx.clearRect(0,0,opProductionChart.width, opProductionChart.height);
+                return;
+            }
+            const parseDate = (e) => {
                 try {
-                    const lotsSnapshot = await db.collection('production_orders')
-                        .where('part_code', '==', String(partCode))
-                        .get();
-
-                    if (!lotsSnapshot.empty) {
-                        const orderDocs = lotsSnapshot.docs
-                            .map(doc => ({ id: doc.id, ...doc.data() }))
-                            .sort((a, b) => {
-                                const aCreated = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?._seconds ? a.createdAt._seconds * 1000 : 0);
-                                const bCreated = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?._seconds ? b.createdAt._seconds * 1000 : 0);
-                                return bCreated - aCreated;
-                            });
-
-                        matchedOrder = orderDocs.find(order => {
-                            const status = (order.status || '').toLowerCase();
-                            return !['concluida', 'cancelada'].includes(status);
-                        }) || orderDocs[0];
-
-                        if (matchedOrder) {
-                            const orderLotSize = Number(matchedOrder.lot_size);
-                            if (Number.isFinite(orderLotSize) && orderLotSize > 0) {
-                                lotSize = orderLotSize;
+                    if (e.timestamp?.toDate) return e.timestamp.toDate();
+                } catch (_) {}
+                if (e.dataHoraInformada) return new Date(e.dataHoraInformada);
+                if (e.data && e.horaInformada) return new Date(`${e.data}T${e.horaInformada}:00`);
+                if (e.data) return new Date(`${e.data}T12:00:00`);
+                return new Date();
+            };
+            // Agrupar por DIA de produção
+            const toDateKey = (e) => {
+                if (e.data) return e.data; // já deve estar em YYYY-MM-DD
+                const d = parseDate(e);
+                const y = d.getFullYear();
+                const m = String(d.getMonth()+1).padStart(2,'0');
+                const day = String(d.getDate()).padStart(2,'0');
+                return `${y}-${m}-${day}`;
+            };
+            const dailyTotals = {};
+            entries.forEach(e => {
+                const key = toDateKey(e);
+                const qty = Number(e.produzido || e.quantity || 0) || 0;
+                dailyTotals[key] = (dailyTotals[key] || 0) + qty;
+            });
+            const dayKeys = Object.keys(dailyTotals).sort(); // YYYY-MM-DD ordena lexicograficamente por data
+            let cumulative = 0;
+            const labels = [];
+            const values = [];
+            const fmtDay = (k) => {
+                // k: YYYY-MM-DD -> DD/MM
+                const [yy, mm, dd] = k.split('-');
+                return `${dd}/${mm}`;
+            };
+            dayKeys.forEach(k => {
+                cumulative += dailyTotals[k];
+                labels.push(fmtDay(k));
+                values.push(cumulative);
+            });
+            if (opChartInstance) { opChartInstance.destroy(); opChartInstance = null; }
+            opChartInstance = new Chart(opProductionChart.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'Acumulado da OP (por dia)',
+                            data: values,
+                            borderColor: '#10B981',
+                            backgroundColor: 'rgba(16,185,129,0.15)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.2,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } }
+                    },
+                    plugins: {
+                        legend: { display: true },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => ` ${ctx.parsed.y?.toLocaleString('pt-BR')} peças`
                             }
                         }
                     }
-                } catch (lotError) {
-                    console.warn('Não foi possível recuperar informações da ordem vinculada:', lotError);
                 }
-            }
-
-            // Usar META DIÁRIA (planned_quantity) para o gráfico "planejado" por hora
-            const dailyTarget = Number(selectedMachineData.planned_quantity) || Number(selectedMachineData.daily_target) || 0;
-            const hourlyTarget = HOURS_IN_PRODUCTION_DAY > 0 ? (dailyTarget / HOURS_IN_PRODUCTION_DAY) : 0;
-
-            Object.keys(hourlyData).forEach(hour => {
-                hourlyData[hour].planned = hourlyTarget;
             });
-
-            // Adicionar dados reais de produção
-            productionSnapshot.forEach(doc => {
-                const data = doc.data();
-                const prodDate = resolveProductionDateTime(data);
-                if (!prodDate) {
-                    return;
-                }
-                const hour = `${String(prodDate.getHours()).padStart(2, '0')}:00`;
-                if (!hourlyData[hour]) {
-                    hourlyData[hour] = { planned: hourlyTarget, actual: 0 };
-                }
-                hourlyData[hour].actual += data.produzido || 0;
-            });
-
-            const totalExecuted = Object.values(hourlyData).reduce((sum, entry) => sum + (entry.actual || 0), 0);
-            const hoursElapsed = getHoursElapsedInProductionDay(new Date());
-            const expectedByNow = Math.min(dailyTarget, hoursElapsed * hourlyTarget);
-
-            if (matchedOrder) {
-                currentActiveOrder = { ...matchedOrder };
-            }
-            currentOrderProgress = {
-                executed: totalExecuted,
-                planned: dailyTarget,
-                expected: expectedByNow
-            };
-
-            updateTimelineProgress(totalExecuted, dailyTarget, expectedByNow);
-            renderHourlyChart(hourlyData);
-
         } catch (error) {
-            console.error("Erro ao carregar dados do gráfico: ", error);
+            console.error('Erro ao carregar gráfico da OP:', error);
         }
     }
-    
-    function renderHourlyChart(data) {
-        if (hourlyChartInstance) {
-            hourlyChartInstance.destroy();
-            hourlyChartInstance = null;
+
+    async function refreshLaunchCharts() {
+        // Guard para evitar atualizações concorrentes sobrescrevendo o gráfico
+        if (isRefreshingLaunchCharts) return;
+        isRefreshingLaunchCharts = true;
+        try {
+            if (launchChartMode === 'op') {
+                await loadOpProductionChart();
+            } else {
+                await loadHourlyProductionChart();
+            }
+        } finally {
+            isRefreshingLaunchCharts = false;
         }
-
-        const hours = Object.keys(data);
-        const plannedData = hours.map(hour => Number(data[hour].planned || 0));
-        const actualData = hours.map(hour => Number(data[hour].actual || 0));
-
-        hourlyChartInstance = createHourlyProductionChart({
-            canvas: hourlyProductionChart,
-            labels: hours,
-            executedPerHour: actualData,
-            plannedPerHour: plannedData,
-            highlightCurrentHour: true
-        });
     }
     
     async function loadTodayStats() {
@@ -7274,24 +7619,15 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const tomorrow = nextDay.toISOString().split('T')[0];
             const windowEnd = combineDateAndTime(tomorrow, '07:00');
             
-            // Carregar produção do dia (capturar lançamentos por planId e por machine)
-            const [prodByPlanSnap, prodByMachineSnap] = await Promise.all([
-                db.collection('production_entries')
-                    .where('data', '==', today)
-                    .where('planId', '==', selectedMachineData.id)
-                    .get(),
-                db.collection('production_entries')
-                    .where('data', '==', today)
-                    .where('machine', '==', selectedMachineData.machine)
-                    .get()
-            ]);
-            const prodDocs = [...prodByPlanSnap.docs, ...prodByMachineSnap.docs];
-            const seenProd = new Set();
+            // Carregar produção do dia para a MÁQUINA (somando todas as OPs do dia)
+            const prodSnapshot = await db.collection('production_entries')
+                .where('data', '==', today)
+                .where('machine', '==', selectedMachineData.machine)
+                .get();
+            const prodDocs = prodSnapshot.docs;
             let totalProduced = 0;
             let totalLosses = 0;
             prodDocs.forEach(doc => {
-                if (seenProd.has(doc.id)) return;
-                seenProd.add(doc.id);
                 const data = doc.data();
                 totalProduced += Number(data.produzido || data.quantity || 0) || 0;
                 totalLosses += Number(data.refugo_kg || 0) || 0;
@@ -7323,8 +7659,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 }
             });
             
-            // Calcular eficiência
-            const target = selectedMachineData.planned_quantity || 0;
+            // Calcular eficiência (mantém referência do alvo atual)
+            const target = Number(selectedMachineData.order_lot_size || selectedMachineData.lot_size || selectedMachineData.planned_quantity || 0);
             const efficiency = target > 0 ? (totalProduced / target * 100) : 0;
             
             // Atualizar display
@@ -7455,6 +7791,21 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
             await db.collection('production_orders').doc(currentActiveOrder.id).update(updatePayload);
 
+            const planId = selectedMachineData?.id;
+            if (planId) {
+                const planUpdate = {
+                    status: 'concluida',
+                    finishedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    finishedBy: currentUser.name || currentUser.username || null
+                };
+
+                try {
+                    await db.collection('planning').doc(planId).update(planUpdate);
+                } catch (planError) {
+                    console.warn('Não foi possível atualizar status do planejamento:', planError);
+                }
+            }
+
             showNotification(`OP ${orderLabel} finalizada com sucesso!`, 'success');
 
             if (button) {
@@ -7464,10 +7815,24 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             currentActiveOrder = { ...currentActiveOrder, status: 'concluida' };
 
             await Promise.allSettled([
-                loadHourlyProductionChart(),
                 loadTodayStats(),
                 refreshAnalysisIfActive()
             ]);
+
+            currentActiveOrder = null;
+            selectedMachineData = null;
+            setActiveMachineCard(null);
+            resetProductionTimer();
+            if (productionControlPanel) {
+                productionControlPanel.classList.add('hidden');
+            }
+            if (recentEntriesList) {
+                recentEntriesList.innerHTML = '';
+            }
+            updateRecentEntriesEmptyMessage('Selecione uma máquina para visualizar os lançamentos.');
+            setRecentEntriesState({ loading: false, empty: true });
+
+            await populateMachineSelector();
         } catch (error) {
             console.error('Erro ao finalizar ordem de produção:', error);
             alert('Não foi possível finalizar a ordem. Tente novamente.');
@@ -7953,7 +8318,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 updateMachineInfo();
             }
             
-            await loadHourlyProductionChart();
+            await refreshLaunchCharts();
             await loadTodayStats();
             await loadRecentEntries(false);
             // Atualizar aba de análise se estiver ativa (para refletir barra de progresso da OP)
@@ -8133,7 +8498,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 updateMachineInfo();
             }
             
-            await loadHourlyProductionChart();
+            await refreshLaunchCharts();
             await loadTodayStats();
             await loadRecentEntries(false);
             await refreshAnalysisIfActive();
@@ -8259,7 +8624,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 updateMachineInfo();
             }
             
-            await loadHourlyProductionChart();
+            await refreshLaunchCharts();
             await loadTodayStats();
             await loadRecentEntries(false);
             // Atualizar aba de análise se estiver ativa (para refletir barra de progresso da OP)
@@ -9724,6 +10089,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
     }
 
+    function isPlanActive(plan) {
+        if (!plan) return false;
+        const status = String(plan.status || '').toLowerCase();
+        const inactiveStatuses = ['concluida', 'concluido', 'finalizada', 'finalizado', 'cancelada', 'cancelado', 'encerrada', 'encerrado'];
+        if (status && inactiveStatuses.includes(status)) {
+            return false;
+        }
+        // Não esconder automaticamente quando atingir a meta.
+        // O card só deve sair quando for explicitamente finalizado (status atualizado para concluída).
+        return true;
+    }
+
     function renderMachineCards(plans = [], productionEntries = [], downtimeEntries = []) {
         if (!machineCardGrid) {
             if (machineSelector) {
@@ -9739,6 +10116,23 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             machineCardEmptyState.classList.remove('text-red-100');
         }
 
+        const activePlans = Array.isArray(plans) ? plans.filter(isPlanActive) : [];
+
+        if (activePlans.length === 0) {
+            machineCardData = {};
+            machineCardGrid.innerHTML = '';
+            if (machineSelector) {
+                machineSelector.machineData = {};
+                machineSelector.innerHTML = '<option value="">Selecione uma máquina...</option>';
+            }
+            if (machineCardEmptyState) {
+                machineCardEmptyState.textContent = 'Nenhuma OP ativa no momento.';
+                machineCardEmptyState.classList.remove('hidden');
+            }
+            setActiveMachineCard(null);
+            return;
+        }
+
         machineCardData = {};
         if (machineSelector) {
             machineSelector.machineData = {};
@@ -9747,7 +10141,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const planById = {};
         const machineOrder = [];
 
-        plans.forEach(plan => {
+        activePlans.forEach(plan => {
             if (!plan || !plan.machine) return;
             const enrichedPlan = { id: plan.id, ...plan };
             machineCardData[plan.machine] = enrichedPlan;
@@ -9777,11 +10171,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             };
         });
 
-        const planIdSet = new Set(plans.map(plan => plan.id));
+        const planIdSet = new Set(activePlans.map(plan => plan.id));
+        const machineSet = new Set(machineOrder);
+        const filteredProductionEntries = Array.isArray(productionEntries)
+            ? productionEntries.filter(entry => entry && planIdSet.has(entry.planId))
+            : [];
+        const filteredDowntimeEntries = Array.isArray(downtimeEntries)
+            ? downtimeEntries.filter(entry => entry && machineSet.has(entry.machine))
+            : [];
         const combinedEntries = [];
         const fallbackShiftKey = `T${getCurrentShift()}`;
 
-        productionEntries.forEach(entry => {
+        filteredProductionEntries.forEach(entry => {
             if (!entry || !planIdSet.has(entry.planId)) return;
             const plan = planById[entry.planId];
             if (!plan) return;
@@ -9860,6 +10261,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const progressTextClass = progressPalette.textClass || 'text-slate-600';
             const progressText = `${Math.max(0, progressPercentRaw).toFixed(progressPercentRaw >= 100 ? 0 : 1)}%`;
             const remainingQty = Math.max(0, plannedQty - goodProduction); // Restante baseado na produção boa
+            const lotCompleted = plannedQty > 0 && goodProduction >= plannedQty;
 
             machineProgressInfo[machine] = {
                 normalizedProgress,
@@ -9878,7 +10280,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             if (shiftStart instanceof Date && !Number.isNaN(shiftStart.getTime())) {
                 const elapsedSec = Math.max(0, Math.floor((nowRef.getTime() - shiftStart.getTime()) / 1000));
                 if (elapsedSec > 0) {
-                    const dts = (downtimeEntries || []).filter(dt => dt && dt.machine === machine);
+                    const dts = filteredDowntimeEntries.filter(dt => dt && dt.machine === machine);
                     const runtimeSec = calculateProductionRuntimeSeconds({ shiftStart, now: nowRef, downtimes: dts });
                     runtimeHours = Math.max(0, runtimeSec / 3600);
                     downtimeHours = Math.max(0, (elapsedSec / 3600) - runtimeHours);
@@ -9896,7 +10298,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const shiftProduced = data.byShift[currentShiftKey] ?? data.byShift[fallbackShiftKey] ?? 0;
 
             return `
-                <div class="machine-card group relative bg-white rounded-lg border border-slate-200 hover:border-blue-300 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer p-3" data-machine="${machine}">
+                <div class="machine-card group relative bg-white rounded-lg border border-slate-200 hover:border-blue-300 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer p-3 ${lotCompleted && String(plan.status||'').toLowerCase()!=='concluida' ? 'completed-blink' : ''}" data-machine="${machine}" data-plan-id="${plan.id}" data-order-id="${plan.order_id||''}" data-part-code="${plan.product_cod||''}">
                     <!-- Header compacto -->
                     <div class="flex items-center justify-between mb-2">
                         <div class="flex items-center gap-2">
@@ -9954,6 +10356,23 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
                     <!-- Indicador visual de status (máquina ativa/parada) -->
                     <div class="absolute top-2 right-2 w-2 h-2 rounded-full ${downtimeHours > runtimeHours ? 'bg-red-400' : 'bg-green-400'}" title="${downtimeHours > runtimeHours ? 'Máquina com paradas' : 'Máquina produzindo'}"></div>
+
+                                        ${lotCompleted ? `
+                                            <div class="card-actions flex gap-2 mt-3">
+                                                ${String(plan.status||'').toLowerCase()!=='concluida' && plan.order_id ? `
+                                                    <button type="button" class="btn btn-finalize card-finalize-btn" data-plan-id="${plan.id}" data-order-id="${plan.order_id}" title="Finalizar OP">
+                                                         <i data-lucide="check-circle"></i>
+                                                         <span>Finalizar OP</span>
+                                                    </button>
+                                                ` : ''}
+                                                ${String(plan.status||'').toLowerCase()==='concluida' ? `
+                                                    <button type="button" class="btn btn-activate card-activate-next-btn" data-plan-id="${plan.id}" data-machine="${machine}" data-part-code="${plan.product_cod||''}" title="Ativar próxima OP">
+                                                         <i data-lucide="play-circle"></i>
+                                                         <span>Ativar próxima OP</span>
+                                                    </button>
+                                                ` : ''}
+                                            </div>
+                                        ` : ''}
                 </div>
             `;
         }).join('');
@@ -9973,6 +10392,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             updateRecentEntriesEmptyMessage('Selecione uma máquina para visualizar os lançamentos.');
             setRecentEntriesState({ loading: false, empty: true });
         }
+
+        // Recriar ícones (por causa dos botões novos)
+        if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
     function renderMachineCardProgress(machine, progressInfo) {
@@ -10033,13 +10455,32 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
             // Enriquecer planos com dados da OP (lot size, execução acumulada)
             const orderCacheByPartCode = new Map();
+            const orderCacheById = new Map();
             const productionTotalsByOrderId = new Map();
 
             for (const plan of plans) {
                 const partCode = String(plan.product_cod || plan.product_code || plan.part_code || '').trim();
                 let resolvedOrder = null;
 
-                if (partCode) {
+                // Priorizar vínculo direto com a OP se existir no planejamento
+                const linkedOrderId = plan.production_order_id || plan.production_order || plan.order_id || null;
+                if (linkedOrderId) {
+                    try {
+                        if (!orderCacheById.has(linkedOrderId)) {
+                            const doc = await db.collection('production_orders').doc(linkedOrderId).get();
+                            if (doc.exists) {
+                                orderCacheById.set(linkedOrderId, { id: doc.id, ...doc.data() });
+                            } else {
+                                orderCacheById.set(linkedOrderId, null);
+                            }
+                        }
+                        resolvedOrder = orderCacheById.get(linkedOrderId);
+                    } catch (e) {
+                        console.warn('Falha ao carregar OP vinculada ao plano', plan.id, linkedOrderId, e);
+                    }
+                }
+
+                if (!resolvedOrder && partCode) {
                     if (!orderCacheByPartCode.has(partCode)) {
                         try {
                             const ordersSnapshot = await db.collection('production_orders')
@@ -10049,9 +10490,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                             const orders = ordersSnapshot.docs
                                 .map(doc => ({ id: doc.id, ...doc.data() }))
                                 .sort((a, b) => {
+                                    // Ordenar da mais antiga para a mais recente para priorizar a OP antiga
                                     const aTs = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?._seconds ? a.createdAt._seconds * 1000 : 0);
                                     const bTs = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?._seconds ? b.createdAt._seconds * 1000 : 0);
-                                    return bTs - aTs; // mais recente primeiro
+                                    if (aTs && bTs && aTs !== bTs) return aTs - bTs; // mais antiga primeiro
+                                    // Fallback por número da OP (numérico ascendente)
+                                    const toNum = (v) => { const n = parseInt(String(v||'').replace(/\D/g,''), 10); return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY; };
+                                    return toNum(a.order_number) - toNum(b.order_number);
                                 });
 
                             orderCacheByPartCode.set(partCode, orders);
@@ -10063,10 +10508,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
                     const cachedOrders = orderCacheByPartCode.get(partCode) || [];
                     if (cachedOrders.length > 0) {
-                        resolvedOrder = cachedOrders.find(order => {
-                            const status = (order.status || '').toLowerCase();
-                            return !['concluida', 'cancelada'].includes(status);
-                        }) || cachedOrders[0];
+                        // Preferir OP ativa/andamento na mesma máquina do plano
+                        const sameMachine = cachedOrders.filter(o => (o.machine_id || o.machine) === plan.machine);
+                        const isOpen = (o) => !['concluida','cancelada','finalizada','encerrada'].includes(String(o.status||'').toLowerCase());
+                        resolvedOrder = sameMachine.find(o => ['ativa','em_andamento'].includes(String(o.status||'').toLowerCase()))
+                            || sameMachine.find(isOpen)
+                            || cachedOrders.find(isOpen)
+                            || cachedOrders[0];
                     }
                 }
 
@@ -10119,11 +10567,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 }
             }
 
+            const activePlans = plans.filter(isPlanActive);
+
             let productionEntries = [];
             let downtimeEntries = [];
-            if (plans.length > 0) {
+            if (activePlans.length > 0) {
                 const productionSnapshot = await db.collection('production_entries').where('data', '==', today).get();
-                const planIdSet = new Set(plans.map(plan => plan.id));
+                const planIdSet = new Set(activePlans.map(plan => plan.id));
                 productionEntries = productionSnapshot.docs
                     .map(doc => ({ id: doc.id, ...doc.data() }))
                     .filter(entry => planIdSet.has(entry.planId));
@@ -10135,12 +10585,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 const dtSnapshot = await db.collection('downtime_entries')
                     .where('date', 'in', [prevStr, today])
                     .get();
-                const machineSet = new Set(plans.map(p => p.machine));
+                const machineSet = new Set(activePlans.map(p => p.machine));
                 downtimeEntries = dtSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
                     .filter(dt => machineSet.has(dt.machine));
             }
 
-            renderMachineCards(plans, productionEntries, downtimeEntries);
+            renderMachineCards(activePlans, productionEntries, downtimeEntries);
         } catch (error) {
             console.error('Erro ao carregar máquinas: ', error);
             if (machineCardGrid) {
@@ -10220,7 +10670,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         productionControlPanel.classList.remove('hidden');
         
         // Carregar dados
-        await loadHourlyProductionChart();
+    await refreshLaunchCharts();
         await loadTodayStats();
         await loadRecentEntries(false);
         
@@ -10257,25 +10707,39 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             let matchedOrder = null;
             let lotSize = Number(selectedMachineData.planned_quantity) || 0;
 
-            if (partCode) {
+            // Preferir a OP vinculada ao planejamento, se existir
+            if (selectedMachineData.order_id) {
+                try {
+                    const doc = await db.collection('production_orders').doc(selectedMachineData.order_id).get();
+                    if (doc.exists) {
+                        matchedOrder = { id: doc.id, ...doc.data() };
+                        const orderLotSize = Number(matchedOrder.lot_size);
+                        if (Number.isFinite(orderLotSize) && orderLotSize > 0) {
+                            lotSize = orderLotSize;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Falha ao recuperar OP vinculada ao plano:', e);
+                }
+            }
+
+            // Fallback por código da peça, mantendo prioridade da mesma máquina
+            if (!matchedOrder && partCode) {
                 try {
                     const lotsSnapshot = await db.collection('production_orders')
                         .where('part_code', '==', String(partCode))
                         .get();
 
                     if (!lotsSnapshot.empty) {
-                        const orderDocs = lotsSnapshot.docs
-                            .map(doc => ({ id: doc.id, ...doc.data() }))
-                            .sort((a, b) => {
-                                const aCreated = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?._seconds ? a.createdAt._seconds * 1000 : 0);
-                                const bCreated = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?._seconds ? b.createdAt._seconds * 1000 : 0);
-                                return bCreated - aCreated;
-                            });
+                        const orderDocs = lotsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-                        matchedOrder = orderDocs.find(order => {
-                            const status = (order.status || '').toLowerCase();
-                            return !['concluida', 'cancelada'].includes(status);
-                        }) || orderDocs[0];
+                        const toNum = (v) => { const n = parseInt(String(v||'').replace(/\D/g,''), 10); return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY; };
+                        const isOpen = (o) => !['concluida','cancelada','finalizada','encerrada'].includes(String(o.status||'').toLowerCase());
+                        const sameMachine = orderDocs.filter(o => (o.machine_id || o.machine) === selectedMachineData.machine);
+                        matchedOrder = sameMachine.find(o => ['ativa','em_andamento'].includes(String(o.status||'').toLowerCase()))
+                            || sameMachine.filter(isOpen).sort((a,b) => toNum(a.order_number) - toNum(b.order_number))[0]
+                            || orderDocs.filter(isOpen).sort((a,b) => toNum(a.order_number) - toNum(b.order_number))[0]
+                            || orderDocs.sort((a,b) => toNum(a.order_number) - toNum(b.order_number))[0];
 
                         if (matchedOrder) {
                             const orderLotSize = Number(matchedOrder.lot_size);
@@ -10362,7 +10826,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             
             // Buscar dados de produção
             const prodSnapshot = await db.collection('production_entries')
-                .where('planId', '==', selectedMachineData.id)
+                .where('machine', '==', selectedMachineData.machine)
                 .where('data', '==', today)
                 .get();
             
@@ -10401,7 +10865,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             });
             
             // Calcular eficiência
-            const target = selectedMachineData.planned_quantity || 0;
+            const target = Number(selectedMachineData.order_lot_size || selectedMachineData.lot_size || selectedMachineData.planned_quantity || 0);
             const efficiency = target > 0 ? (totalProduced / target * 100) : 0;
             
             // Atualizar displays
