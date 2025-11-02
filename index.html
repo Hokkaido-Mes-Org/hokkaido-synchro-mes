@@ -413,11 +413,12 @@
                             </div>
                         </div>
 
-                        <!-- Gráfico de Produção por Hora -->
+                        <!-- Gráfico de Produção (Hora/OP) -->
                         <div class="bg-white p-4 md:p-6 rounded-xl shadow-lg">
-                            <div class="mb-4 md:mb-6">
-                                <h3 class="text-base md:text-lg font-bold text-gray-800 mb-2">Produção por Hora - Planejado vs Executado</h3>
-                                <div class="flex flex-wrap items-center gap-2 md:gap-4 text-xs md:text-sm">
+                            <div class="mb-4 md:mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                <div>
+                                    <h3 class="text-base md:text-lg font-bold text-gray-800 mb-2">Produção - Planejado vs Executado</h3>
+                                    <div class="flex flex-wrap items-center gap-2 md:gap-4 text-xs md:text-sm">
                                     <div class="flex items-center gap-1 md:gap-2">
                                         <div class="w-2 h-2 md:w-3 md:h-3 bg-blue-500 rounded"></div>
                                         <span class="text-gray-600">Planejado</span>
@@ -430,7 +431,9 @@
                                         <div class="w-2 h-2 md:w-3 md:h-3 bg-red-500 rounded"></div>
                                         <span class="text-gray-600">Meta Acumulada</span>
                                     </div>
+                                    </div>
                                 </div>
+                                <!-- Toggle de modo do gráfico removido temporariamente -->
                             </div>
                             <div class="relative h-80 md:h-180">
                                 <canvas id="hourly-production-chart" class="w-full h-full"></canvas>
@@ -472,6 +475,10 @@
                                     <button id="finalize-order-btn" class="mt-3 w-full hidden bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-3 rounded-lg shadow flex items-center justify-center gap-2 text-sm transition-colors" type="button">
                                         <i data-lucide="check-circle" class="w-4 h-4"></i>
                                         <span>Finalizar ordem de produção</span>
+                                    </button>
+                                    <button id="activate-order-btn" class="mt-3 w-full hidden bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-3 rounded-lg shadow flex items-center justify-center gap-2 text-sm transition-colors" type="button">
+                                        <i data-lucide="play-circle" class="w-4 h-4"></i>
+                                        <span>Ativar ordem de produção</span>
                                     </button>
                                 </div>
                             </div>
