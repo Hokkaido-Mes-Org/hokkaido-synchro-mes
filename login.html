@@ -122,14 +122,6 @@
             </div>
         </div>
 
-        <!-- Informações de Usuários Demo (apenas desenvolvimento) -->
-        <div class="mt-6 bg-white/80 rounded-lg p-4 text-xs text-gray-600">
-            <h3 class="font-semibold mb-2">👥 Usuários Demo:</h3>
-            <div class="space-y-1">
-                <p><strong>Gestor:</strong> admin / admin123</p>
-                <p><strong>Operador:</strong> operador / op123</p>
-            </div>
-        </div>
     </div>
 
     <script>
@@ -153,6 +145,7 @@
 
         // Base de usuários (em produção, usar Firebase Auth ou API)
         const users = {
+            // USUÁRIOS PADRÃO
             'admin': {
                 password: 'admin123',
                 role: 'gestor',
@@ -176,6 +169,44 @@
                 role: 'supervisor',
                 name: 'Supervisor',
                 permissions: ['lancamento', 'analise']
+            },
+            
+            // USUÁRIOS DO PILOTO
+            'leandro.camargo': {
+                password: 'Leandro2025!',
+                role: 'gestor',
+                name: 'Leandro Camargo',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'tiago.oliveira': {
+                password: 'Tiago2025!',
+                role: 'gestor',
+                name: 'Tiago Oliveira',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'werigue': {
+                password: 'Werigue2025!',
+                role: 'gestor',
+                name: 'Werigue',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'daniella.braganca': {
+                password: 'Daniella2025!',
+                role: 'operador',
+                name: 'Daniella Bragança',
+                permissions: ['lancamento']
+            },
+            'michelle.benjamin': {
+                password: 'Michelle2025!',
+                role: 'gestor',
+                name: 'Michelle Benjamin',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'luciano': {
+                password: 'Luciano2025!',
+                role: 'gestor',
+                name: 'Luciano',
+                permissions: ['planejamento', 'lancamento', 'analise']
             }
         };
 
@@ -187,6 +218,8 @@
             const password = document.getElementById('password').value;
             const rememberMe = document.getElementById('remember-me').checked;
             
+            console.log('🔍 [DEBUG] Login tentativa:', { username, rememberMe });
+            
             // Mostrar loading
             showLoading(true);
             hideError();
@@ -194,24 +227,46 @@
             // Simular delay de verificação
             await new Promise(resolve => setTimeout(resolve, 1000));
             
-            // Verificar credenciais
-            const user = users[username.toLowerCase()];
+            // Verificar credenciais - tentar username direto e em minúsculas
+            let user = users[username.toLowerCase()];
+            let usernameUsed = username.toLowerCase();
+            
+            console.log('🔍 [DEBUG] Primeiro lookup (lowercase):', { user, usernameUsed });
+            
+            // Se não encontrou, tentar procurar por nome completo (case-insensitive)
+            if (!user) {
+                const usernameInLower = username.toLowerCase();
+                for (const [key, userData] of Object.entries(users)) {
+                    if (userData.name && userData.name.toLowerCase() === usernameInLower) {
+                        user = userData;
+                        usernameUsed = key;
+                        console.log('🔍 [DEBUG] Encontrado por nome:', { key, name: userData.name });
+                        break;
+                    }
+                }
+            }
+            
+            console.log('🔍 [DEBUG] Após busca:', { userFound: !!user, usernameUsed });
             
             if (user && user.password === password) {
                 // Login bem-sucedido
                 const userSession = {
-                    username: username,
+                    username: usernameUsed,
                     name: user.name,
                     role: user.role,
                     permissions: user.permissions,
                     loginTime: new Date().toISOString()
                 };
                 
+                console.log('✅ [DEBUG] Login sucesso! Salvando sessão:', userSession);
+                
                 // Salvar sessão
                 if (rememberMe) {
                     localStorage.setItem('synchro_user', JSON.stringify(userSession));
+                    console.log('✅ [DEBUG] Salvo em localStorage');
                 } else {
                     sessionStorage.setItem('synchro_user', JSON.stringify(userSession));
+                    console.log('✅ [DEBUG] Salvo em sessionStorage');
                 }
                 
                 // Redirecionar para o sistema principal
@@ -219,6 +274,7 @@
                 
             } else {
                 // Login falhou
+                console.warn('❌ [DEBUG] Login falhou - usuário ou senha incorretos');
                 showError('Usuário ou senha incorretos');
                 showLoading(false);
             }
@@ -254,8 +310,10 @@
         window.addEventListener('load', function() {
             const savedUser = localStorage.getItem('synchro_user') || sessionStorage.getItem('synchro_user');
             if (savedUser) {
-                // Usuário já logado, redirecionar
-                window.location.href = 'index.html';
+                // Usuário já logado, redirecionar com delay para garantir leitura correta
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 200);
             }
         });
 
@@ -263,5 +321,4 @@
         document.getElementById('username').focus();
     </script>
 </body>
-
 </html>
