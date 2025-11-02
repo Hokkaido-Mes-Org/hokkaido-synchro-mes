@@ -1706,10 +1706,6 @@
                         <label for="manual-borra-machine" class="block text-sm font-medium text-gray-700 mb-2">Máquina</label>
                         <select id="manual-borra-machine" name="machine" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent" required>
                             <option value="">Selecione...</option>
-                            <option value="MAQ-01">MAQ-01</option>
-                            <option value="MAQ-02">MAQ-02</option>
-                            <option value="MAQ-03">MAQ-03</option>
-                            <option value="MAQ-04">MAQ-04</option>
                         </select>
                     </div>
                 </div>
@@ -1737,11 +1733,9 @@
                 </div>
                 <div>
                     <label for="manual-borra-reason" class="block text-sm font-medium text-gray-700 mb-2">Motivo da Geração *</label>
-                    <input type="text" id="manual-borra-reason" name="reason" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent" placeholder="Digite o motivo da geração da borra..." required>
-                    <div class="mt-1 text-xs text-gray-500">
-                        <i data-lucide="info" class="w-3 h-3 inline mr-1"></i>
-                        Ex: Setup inicial, Troca de cor, Ajuste de parâmetros, etc.
-                    </div>
+                    <select id="manual-borra-reason" name="reason" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent" required>
+                        <option value="">Selecione o motivo...</option>
+                    </select>
                 </div>
                 <div>
                     <label for="manual-borra-obs" class="block text-sm font-medium text-gray-700 mb-2">Observações</label>
