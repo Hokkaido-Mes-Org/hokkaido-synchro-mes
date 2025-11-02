@@ -84,14 +84,38 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // --- Configuration Lists ---
-    const machineList = [
-        "H-01", "H-02", "H-03", "H-04", "H-05", "H-06", "H-07", "H-08", "H-09", "H-10",
-        "H-11", "H-12", "H-13", "H-14", "H-15", "H-16", "H-17", "H-18", "H-19", "H-20",
-        "H-26", "H-27", "H-28", "H-29", "H-30", "H-31", "H-32"
-    ];
+    // Normalização de IDs de máquina: H01, H02, ...
+    function normalizeMachineId(id) {
+        if (!id) return null;
+        const s = String(id).toUpperCase().replace(/\s+/g, '');
+        // Aceita H-01, H01, h01 etc.; mantém dois dígitos
+        const match = s.match(/^H[-_]?(\d{1,2})$/);
+        if (match) {
+            return `H${match[1].padStart(2, '0')}`;
+        }
+        // Se vier apenas dígitos (ex.: 1, 01), prefixa H
+        const n = s.match(/^(\d{1,2})$/);
+        if (n) {
+            return `H${n[1].padStart(2, '0')}`;
+        }
+        // Fallback: remove hífens e tenta novamente
+        const cleaned = s.replace(/-/g, '');
+        const m2 = cleaned.match(/^H(\d{1,2})$/);
+        if (m2) return `H${m2[1].padStart(2, '0')}`;
+        return s; // devolve como veio se não reconhecer
+    }
 
-    // Base de dados de máquinas com seus modelos
-    const machineDatabase = [
+    // Lista de máquinas padronizada via database.js quando disponível
+    const machineList = (window.databaseModule && window.databaseModule.machineDatabase)
+        ? window.databaseModule.machineDatabase.map(m => normalizeMachineId(m.id))
+        : [
+            "H01", "H02", "H03", "H04", "H05", "H06", "H07", "H08", "H09", "H10",
+            "H11", "H12", "H13", "H14", "H15", "H16", "H17", "H18", "H19", "H20",
+            "H26", "H27", "H28", "H29", "H30", "H31", "H32"
+        ];
+
+    // Base de dados de máquinas com seus modelos (usa database.js se disponível)
+    const machineDatabase = (window.databaseModule && window.databaseModule.machineDatabase) ? window.databaseModule.machineDatabase : [
         { id: "H-01", model: "SANDRETTO OTTO" },
         { id: "H-02", model: "SANDRETTO SERIE 200" },
         { id: "H-03", model: "LS LTE280" },
@@ -121,55 +145,8 @@ document.addEventListener('DOMContentLoaded', function() {
         { id: "H-32", model: "ROMI PRÁTICA CM8" }
     ];
 
-    // Motivos de Refugo (conforme Excel - Grupos P, F, Q)
-    const lossReasons = [
-        // Grupo P - PROCESSO
-        "BOLHA", "CHUPAGEM", "CONTAMINAÇÃO", "DEGRADAÇÃO", "EMPENAMENTO", "FALHA", 
-        "FIAPO", "FORA DE COR", "INÍCIO/REÍNICIO", "JUNÇÃO", "MANCHAS", 
-        "MEDIDA FORA DO ESPECIFICADO", "MOÍDO", "PEÇAS PERDIDAS", "QUEIMA", "REBARBA",
-        
-        // Grupo F - FERRAMENTARIA
-        "DEFORMAÇÃO", "GALHO PRESO", "MARCA D'ÁGUA", "MARCA EXTRATOR", "RISCOS", "SUJIDADE",
-        
-        // Grupo Q - QUALIDADE
-        "INSPEÇÃO DE LINHA"
-    ];
-
-    // Motivos de Parada (conforme Excel - Grupos A-K)
-    const downtimeReasons = [
-        // Grupo A - FERRAMENTARIA
-        "CORRETIVA DE MOLDE", "PREVENTIVA DE MOLDE", "TROCA DE VERSÃO",
-        
-        // Grupo B - PROCESSO
-        "ABERTURA DE CAVIDADE", "AJUSTE DE PROCESSO", "TRY OUT",
-        
-        // Grupo C - COMPRAS
-        "FALTA DE INSUMO PLANEJADA", "FALTA DE INSUMO NÃO PLANEJADA",
-        
-        // Grupo D - PREPARAÇÃO
-        "AGUARDANDO PREPARAÇÃO DE MATERIAL",
-        
-        // Grupo E - QUALIDADE
-        "AGUARDANDO CLIENTE/FORNECEDOR", "LIBERAÇÃO",
-        
-        // Grupo F - MANUTENÇÃO
-        "MANUTENÇÃO CORRETIVA", "MANUTENÇÃO PREVENTIVA",
-        
-        // Grupo G - PRODUÇÃO
-        "FALTA DE OPERADOR", "TROCA DE COR",
-        
-        // Grupo H - SETUP
-        "INSTALAÇÃO DE MOLDE", "RETIRADA DE MOLDE",
-        
-        // Grupo I - ADMINISTRATIVO
-        "FALTA DE ENERGIA",
-        
-        // Grupo J - PCP
-        "SEM PROGRAMAÇÃO",
-        
-        // Grupo K - COMERCIAL
-        "SEM PEDIDO"
-    ];
+    // Motivos de Refugo e Parada: preferir database.js se disponível (senão usa fallback agrupado)
+    // Observação: o app usa funções getGrouped* abaixo para popular selects/relatórios
 
     const preparadores = ['Daniel', 'João', 'Luis', 'Manaus', 'Rafael', 'Stanley', 'Wagner', 'Yohan'].sort();
     
@@ -423,6 +400,11 @@ document.addEventListener('DOMContentLoaded', function() {
         return baseDate.toISOString().split('T')[0];
     }
 
+    // Wrapper para compatibilidade com chamadas antigas
+    function getWorkDayFromDate(dateStr, timeStr) {
+        return getWorkDay(dateStr, timeStr);
+    }
+
     function normalizeToDate(value) {
         if (!value) return null;
         if (value instanceof Date) {
@@ -633,6 +615,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function getGroupedLossReasons() {
+        if (window.databaseModule && window.databaseModule.groupedLossReasons) {
+            return window.databaseModule.groupedLossReasons;
+        }
         return {
             "PROCESSO": [
                 "BOLHA", "CHUPAGEM", "CONTAMINAÇÃO", "DEGRADAÇÃO", "EMPENAMENTO", "FALHA", 
@@ -649,6 +634,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function getGroupedDowntimeReasons() {
+        if (window.databaseModule && window.databaseModule.groupedDowntimeReasons) {
+            return window.databaseModule.groupedDowntimeReasons;
+        }
         return {
             "FERRAMENTARIA": ["CORRETIVA DE MOLDE", "PREVENTIVA DE MOLDE", "TROCA DE VERSÃO"],
             "PROCESSO": ["ABERTURA DE CAVIDADE", "AJUSTE DE PROCESSO", "TRY OUT"],
@@ -1477,11 +1465,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const statusColorMap = {
                 'planejada': { badge: 'bg-sky-100 text-sky-700', label: 'Planejada' },
                 'em_andamento': { badge: 'bg-amber-100 text-amber-700', label: 'Em andamento' },
+                'ativa': { badge: 'bg-blue-100 text-blue-700', label: 'Ativa' },
                 'concluida': { badge: 'bg-emerald-100 text-emerald-700', label: 'Concluída' },
                 'cancelada': { badge: 'bg-red-100 text-red-700', label: 'Cancelada' }
             };
 
             const statusDisplay = statusColorMap[status] || statusColorMap['planejada'];
+            const isActive = status === 'ativa';
 
             // Buscar modelo da máquina
             const machineInfo = machineDatabase.find(m => m.id === order.machine_id);
@@ -1490,7 +1480,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 : '';
 
             return `
-                <div class="bg-white p-6 rounded-lg shadow border-l-4 border-primary-blue">
+                <div class="bg-white p-6 rounded-lg shadow border-l-4 border-primary-blue ${isActive ? 'ring-2 ring-blue-400' : ''}">
                     <div class="flex items-start justify-between mb-4">
                         <div class="flex-1">
                             <h3 class="text-lg font-bold text-gray-800">${escapeHtml(order.order_number)}</h3>
@@ -1624,9 +1614,10 @@ document.addEventListener('DOMContentLoaded', function() {
             return data.filter(item => Number(item.shift || 0) === appliedShift);
         };
 
-        const productionData = filterByShift(productionAll);
-        const lossesData = filterByShift(lossesAll);
-        const downtimeData = filterByShift(downtimeAll);
+    const productionData = filterByShift(productionAll);
+    const lossesData = filterByShift(lossesAll);
+    const downtimeData = filterByShift(downtimeAll);
+    const planFiltered = filterByShift(planData);
 
         // Calcular KPIs básicos
         const totalProduction = productionData.reduce((sum, item) => sum + item.quantity, 0);
@@ -1670,6 +1661,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Gerar gráficos
     await generateOEEDistributionChart(productionData, lossesData, downtimeData);
+    await generateMachineRanking(productionData, planFiltered);
     }
 
     function aggregateOeeMetrics(productionData, lossesData, downtimeData, planData, shiftFilter = 'all') {
@@ -1946,10 +1938,22 @@ document.addEventListener('DOMContentLoaded', function() {
             shiftFilter
         );
 
-        return {
-            overallOee: overall.oee,
-            filteredOee: filtered.oee
-        };
+        // Padrão A: OEE = Disponibilidade × Performance × Qualidade (produto das médias dos componentes)
+        const safeMul = (...vals) => vals.reduce((acc, v) => acc * (Number.isFinite(v) ? v : 0), 1);
+
+        const overallOee = safeMul(
+            overall?.disponibilidade || 0,
+            overall?.performance || 0,
+            overall?.qualidade || 0
+        );
+
+        const filteredOee = safeMul(
+            filtered?.disponibilidade || 0,
+            filtered?.performance || 0,
+            filtered?.qualidade || 0
+        );
+
+        return { overallOee, filteredOee };
     }
 
     // Função para carregar análise de produção
@@ -2232,11 +2236,17 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         );
         
         // Separar dados de borra
-        const borraData = lossesData.filter(item => 
-            item.reason && item.reason.toLowerCase().includes('borra') ||
-            (item.raw && item.raw.tipo_lancamento === 'borra')
-        );
+        const borraData = lossesData.filter(item => {
+            const reasonStr = (item.reason || item.raw?.perdas || '').toString().toLowerCase();
+            const isTagged = (item.raw && item.raw.tipo_lancamento === 'borra');
+            return isTagged || reasonStr.includes('borra');
+        });
         const regularLossesData = lossesData.filter(item => !borraData.includes(item));
+        console.log('[TRACE][loadLossesAnalysis] borra split', {
+            borraCount: borraData.length,
+            regularLossesCount: regularLossesData.length,
+            borraSample: borraData.slice(0, 3)
+        });
         
         // Calcular total de borra em kg
         const totalBorraKg = borraData.reduce((sum, item) => {
@@ -2244,6 +2254,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const weight = item.raw?.refugo_kg || item.quantity || 0;
             return sum + weight;
         }, 0);
+        if (lossesData.length > 0 && borraData.length === 0) {
+            console.warn('[TRACE][loadLossesAnalysis] Atenção: há perdas mas nenhuma BORRA detectada. Verifique se os lançamentos de borra possuem tipo_lancamento="borra" ou motivo contendo "borra".');
+        }
 
         // Calcular MP mais perdida
         const materialCounts = {};
@@ -2655,7 +2668,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                         return {
                             id,
                             date: mappedDate,
-                            machine: raw.machine || raw.machineRef || raw.machine_id || null,
+                            machine: normalizeMachineId(raw.machine || raw.machineRef || raw.machine_id || null),
                             quantity: Number(raw.produzido ?? raw.quantity ?? 0) || 0,
                             shift: normalizeShift(raw.turno ?? raw.shift),
                             datetime: isoDateTime,
@@ -2677,7 +2690,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                         return {
                             id,
                             date: dateValue,
-                            machine: raw.machine || raw.machineRef || raw.machine_id || null,
+                            machine: normalizeMachineId(raw.machine || raw.machineRef || raw.machine_id || null),
                             quantity: Number(raw.refugo_qty ?? raw.refugo_kg ?? raw.quantity ?? 0) || 0,
                             shift: normalizeShift(raw.turno ?? raw.shift),
                             reason: raw.perdas || raw.reason || '',
@@ -2699,15 +2712,21 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                             duration = Math.max(0, endMinutes - startMinutes);
                         }
                         const primaryTimestamp = raw.timestamp || raw.createdAt || raw.updatedAt;
-                        const timeHint = raw.startTime || raw.endTime || null;
-                        const workDay = getWorkDayFromTimestamp(primaryTimestamp) || getWorkDay(raw.date || '', timeHint);
+                                const timeHint = raw.startTime || raw.endTime || null;
+                                // Preferir calcular o workDay a partir da data/horário do próprio registro
+                                // (evita classificar pelo createdAt quando o lançamento é retroativo)
+                                const workDay = getWorkDay(raw.date || '', timeHint) || getWorkDayFromTimestamp(primaryTimestamp);
+                        let mappedShift = normalizeShift(raw.shift ?? raw.turno);
+                        if (!mappedShift) {
+                            mappedShift = inferShiftFromSegment(raw.date || '', raw.startTime || '', raw.endTime || '');
+                        }
                         return {
                             id,
                             date: raw.date || '',
-                            machine: raw.machine || null,
+                            machine: normalizeMachineId(raw.machine || null),
                             duration,
                             reason: raw.reason || '',
-                            shift: normalizeShift(raw.shift ?? raw.turno),
+                            shift: mappedShift,
                             startTime: raw.startTime || '',
                             endTime: raw.endTime || '',
                             workDay: workDay || raw.date || '',
@@ -2721,7 +2740,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     mapper: (id, raw) => ({
                         id,
                         date: raw.date || '',
-                        machine: raw.machine || null,
+                        machine: normalizeMachineId(raw.machine || null),
                         quantity: Number(raw.planned_quantity ?? raw.quantity ?? 0) || 0,
                         shift: normalizeShift(raw.shift ?? raw.turno),
                         product: raw.product || '',
@@ -2740,7 +2759,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                         return {
                             id,
                             date: dateValue,
-                            machine: raw.machine || null,
+                            machine: normalizeMachineId(raw.machine || null),
                             quantity: Number(raw.quantidade ?? raw.quantity ?? 0) || 0,
                             shift: normalizeShift(raw.turno ?? raw.shift),
                             reason: raw.motivo || raw.reason || '',
@@ -2816,11 +2835,16 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             });
 
             if (collection === 'losses') {
-                data = data.filter(item => item.quantity > 0);
+                data = data.filter(item => {
+                    if (item.quantity > 0) return true;
+                    const rawWeight = Number(item.raw?.refugo_kg ?? item.raw?.weight ?? 0) || 0;
+                    return rawWeight > 0;
+                });
             }
 
             if (machine !== 'all') {
-                data = data.filter(item => item.machine === machine);
+                const target = normalizeMachineId(machine);
+                data = data.filter(item => normalizeMachineId(item.machine) === target);
             }
 
             if (shift !== 'all') {
@@ -2898,6 +2922,28 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         return segments;
     }
 
+    // Inferir turno a partir de um segmento (usa o ponto médio do intervalo)
+    function inferShiftFromSegment(dateStr, startTimeStr, endTimeStr) {
+        const toMinutes = (t) => {
+            if (!t || !t.includes(':')) return null;
+            const [h, m] = t.split(':').map(Number);
+            if (Number.isNaN(h) || Number.isNaN(m)) return null;
+            return h * 60 + m;
+        };
+        const startMin = toMinutes(startTimeStr);
+        const endMin = toMinutes(endTimeStr);
+        // Se não houver ambos, tenta classificar pelo horário disponível
+        const refMin = (startMin !== null && endMin !== null)
+            ? Math.floor((startMin + endMin) / 2)
+            : (startMin !== null ? startMin : endMin);
+        if (refMin === null) return null;
+
+        // Turno 1: 07:00–14:59 | Turno 2: 15:00–22:59 | Turno 3: 23:00–06:59
+        if (refMin >= (7 * 60) && refMin < (15 * 60)) return 1;
+        if (refMin >= (15 * 60) && refMin < (23 * 60)) return 2;
+        return 3; // 23:00–23:59 ou 00:00–06:59
+    }
+
     function calculateHoursInPeriod(startDate, endDate) {
         if (!startDate || !endDate) return 0;
 
@@ -2955,10 +3001,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     }
 
     function loadAnalysisMachines() {
-        // Inicializar lista de máquinas com os dados do banco de dados
+        // Inicializar lista de máquinas com os dados do banco de dados (normalizados)
         machines = machineDatabase.map(machine => ({ 
-            id: machine.id, 
-            name: machine.id, 
+            id: normalizeMachineId(machine.id), 
+            name: normalizeMachineId(machine.id), 
             model: machine.model 
         }));
         
@@ -2987,8 +3033,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             
             machineDatabase.forEach(machine => {
                 const option = document.createElement('option');
-                option.value = machine.id;
-                option.textContent = `${machine.id} - ${machine.model}`;
+                const mid = normalizeMachineId(machine.id);
+                option.value = mid;
+                option.textContent = `${mid} - ${machine.model}`;
                 orderMachineSelect.appendChild(option);
             });
 
@@ -3048,27 +3095,30 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         clearNoDataMessage('oee-distribution-chart');
         
-        const oeeByMachine = {};
+    const oeeByMachine = {};
+    // Janela analisada em minutos (07:00 → 07:00)
+    const periodMinutes = Math.max(1, calculateHoursInPeriod(currentAnalysisFilters.startDate, currentAnalysisFilters.endDate) * 60);
 
         machines.forEach(machine => {
             const machineProduction = productionData.filter(item => item.machine === machine);
             const machineLosses = lossesData.filter(item => item.machine === machine);
             const machineDowntime = downtimeData.filter(item => item.machine === machine);
 
-            const totalProduced = machineProduction.reduce((sum, item) => sum + item.quantity, 0);
-            const totalLosses = machineLosses.reduce((sum, item) => sum + item.quantity, 0);
-            const totalDowntime = machineDowntime.reduce((sum, item) => sum + (item.duration || 0), 0);
+            const totalProduced = machineProduction.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+            const totalLosses = machineLosses.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+            const totalDowntime = machineDowntime.reduce((sum, item) => sum + (Number(item.duration) || 0), 0);
 
-            // Cálculo simplificado do OEE
-            const availability = totalDowntime > 0 ? Math.max(0, 100 - (totalDowntime / 480 * 100)) : 100; // 480 min = 8h
-            const quality = totalProduced > 0 ? ((totalProduced - totalLosses) / totalProduced * 100) : 100;
-            const performance = 85; // Assumindo 85% de performance média
+            // Componentes em fração [0..1]
+            const availability = Math.max(0, 1 - (totalDowntime / periodMinutes));
+            const quality = totalProduced > 0 ? Math.max(0, (totalProduced - totalLosses) / totalProduced) : 1;
+            const performance = 0.85; // aproximação conservadora até termos cálculo por máquina
 
-            oeeByMachine[machine] = (availability * quality * performance) / 10000;
+            const oeeFraction = Math.max(0, Math.min(1, availability * performance * quality));
+            oeeByMachine[machine] = oeeFraction * 100; // guardar já em %
         });
 
         const labels = Object.keys(oeeByMachine);
-        const values = Object.values(oeeByMachine).map(value => Number((value || 0) * 100));
+        const values = Object.values(oeeByMachine).map(value => Number((value || 0).toFixed(1)));
 
         renderModernDonutChart({
             canvasId: 'oee-distribution-chart',
@@ -3076,43 +3126,66 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             data: values,
             colors: ['#10B981', '#3B82F6', '#F97316', '#8B5CF6', '#F59E0B', '#EC4899'],
             datasetLabel: 'OEE %',
-            tooltipFormatter: (context) => `${context.label}: ${context.parsed.toFixed(1)}%`
+            tooltipFormatter: (context) => `${context.label}: ${Number(context.parsed || 0).toFixed(1)}%`
         });
     }
 
     // Geração do ranking de máquinas
-    async function generateMachineRanking(machinesData) {
+    async function generateMachineRanking(productionData, planData) {
         const rankingContainer = document.getElementById('machine-ranking');
         if (!rankingContainer) return;
 
-        // Simular dados para demo
-        const machines = [
-            { name: 'Máquina 01', oee: 87.5, status: 'excellent' },
-            { name: 'Máquina 02', oee: 82.3, status: 'good' },
-            { name: 'Máquina 03', oee: 75.8, status: 'average' },
-            { name: 'Máquina 04', oee: 68.2, status: 'poor' }
-        ];
+        const producedByMachine = new Map();
+        const plannedByMachine = new Map();
 
-        const statusColors = {
-            excellent: 'bg-green-500',
-            good: 'bg-blue-500',
-            average: 'bg-yellow-500',
-            poor: 'bg-red-500'
+        (productionData || []).forEach(item => {
+            const m = (item?.machine || '').toString();
+            if (!m) return;
+            producedByMachine.set(m, (producedByMachine.get(m) || 0) + (Number(item.quantity) || 0));
+        });
+
+        (planData || []).forEach(plan => {
+            const m = (plan?.machine || '').toString();
+            if (!m) return;
+            plannedByMachine.set(m, (plannedByMachine.get(m) || 0) + (Number(plan.quantity) || 0));
+        });
+
+        const entries = Array.from(new Set([...producedByMachine.keys(), ...plannedByMachine.keys()]))
+            .map(m => {
+                const produced = producedByMachine.get(m) || 0;
+                const planned = plannedByMachine.get(m) || 0;
+                const perf = planned > 0 ? Math.max(0, (produced / planned) * 100) : null;
+                return { machine: m, produced, planned, perf };
+            })
+            .filter(e => e.perf !== null)
+            .sort((a, b) => (b.perf - a.perf));
+
+        if (entries.length === 0) {
+            rankingContainer.innerHTML = '<div class="p-4 text-sm text-gray-500">Sem dados de plano para calcular performance.</div>';
+            return;
+        }
+
+        const getColor = (p) => {
+            if (p >= 90) return 'bg-green-500';
+            if (p >= 75) return 'bg-blue-500';
+            if (p >= 60) return 'bg-yellow-500';
+            return 'bg-red-500';
         };
 
-        const html = machines.map((machine, index) => `
+        const html = entries.slice(0, 6).map((row, index) => `
             <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                 <div class="flex items-center gap-4">
-                    <div class="flex items-center justify-center w-8 h-8 ${statusColors[machine.status]} text-white rounded-full font-bold">
+                    <div class="flex items-center justify-center w-8 h-8 ${getColor(row.perf)} text-white rounded-full font-bold">
                         ${index + 1}
                     </div>
-                    <span class="font-semibold">${machine.name}</span>
+                    <span class="font-semibold">${row.machine}</span>
                 </div>
                 <div class="text-right">
-                    <span class="text-2xl font-bold text-gray-800">${machine.oee.toFixed(1)}%</span>
+                    <span class="text-2xl font-bold text-gray-800">${row.perf.toFixed(1)}%</span>
                     <div class="w-24 h-2 bg-gray-200 rounded-full mt-1">
-                        <div class="h-2 ${statusColors[machine.status]} rounded-full" style="width: ${machine.oee}%"></div>
+                        <div class="h-2 ${getColor(row.perf)} rounded-full" style="width: ${Math.min(100, row.perf).toFixed(1)}%"></div>
                     </div>
+                    <div class="text-xs text-gray-500 mt-1">${row.produced.toLocaleString('pt-BR')} / ${row.planned.toLocaleString('pt-BR')} pcs</div>
                 </div>
             </div>
         `).join('');
@@ -3256,7 +3329,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
         
         if (plannedText) {
-            plannedText.textContent = `${planned.toLocaleString('pt-BR')} un (Tamanho do Lote)`;
+            plannedText.textContent = `${planned.toLocaleString('pt-BR')} un (Planejado)`;
         }
 
         // Determinar status
@@ -5421,7 +5494,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     function setupPlanningTab() {
         if (!planningMachineSelect) return;
         
-        const machineOptions = machineDatabase.map(m => `<option value="${m.id}">${m.id} - ${m.model}</option>`).join('');
+        const machineOptions = machineDatabase.map(m => {
+            const mid = normalizeMachineId(m.id);
+            return `<option value="${mid}">${mid} - ${m.model}</option>`;
+        }).join('');
         planningMachineSelect.innerHTML = `<option value="">Selecione...</option>${machineOptions}`;
 
         // Configurar select de código do produto
@@ -7124,8 +7200,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 }
             }
 
-            const totalPlanned = lotSize > 0 ? lotSize : 0;
-            const hourlyTarget = HOURS_IN_PRODUCTION_DAY > 0 ? (totalPlanned / HOURS_IN_PRODUCTION_DAY) : 0;
+            // Usar META DIÁRIA (planned_quantity) para o gráfico "planejado" por hora
+            const dailyTarget = Number(selectedMachineData.planned_quantity) || Number(selectedMachineData.daily_target) || 0;
+            const hourlyTarget = HOURS_IN_PRODUCTION_DAY > 0 ? (dailyTarget / HOURS_IN_PRODUCTION_DAY) : 0;
 
             Object.keys(hourlyData).forEach(hour => {
                 hourlyData[hour].planned = hourlyTarget;
@@ -7147,18 +7224,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
             const totalExecuted = Object.values(hourlyData).reduce((sum, entry) => sum + (entry.actual || 0), 0);
             const hoursElapsed = getHoursElapsedInProductionDay(new Date());
-            const expectedByNow = Math.min(totalPlanned, hoursElapsed * hourlyTarget);
+            const expectedByNow = Math.min(dailyTarget, hoursElapsed * hourlyTarget);
 
             if (matchedOrder) {
                 currentActiveOrder = { ...matchedOrder };
             }
             currentOrderProgress = {
                 executed: totalExecuted,
-                planned: totalPlanned,
+                planned: dailyTarget,
                 expected: expectedByNow
             };
 
-            updateTimelineProgress(totalExecuted, totalPlanned, expectedByNow);
+            updateTimelineProgress(totalExecuted, dailyTarget, expectedByNow);
             renderHourlyChart(hourlyData);
 
         } catch (error) {
@@ -7190,35 +7267,59 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         try {
             const today = getProductionDateString();
+            // Calcular janela do dia de produção atual [07:00 de hoje, 07:00 de amanhã)
+            const windowStart = combineDateAndTime(today, '07:00');
+            const nextDay = new Date(windowStart);
+            nextDay.setDate(nextDay.getDate() + 1);
+            const tomorrow = nextDay.toISOString().split('T')[0];
+            const windowEnd = combineDateAndTime(tomorrow, '07:00');
             
-            // Carregar produção do dia
-            const productionSnapshot = await db.collection('production_entries')
-                .where('data', '==', today)
-                .where('planId', '==', selectedMachineData.id)
-                .get();
-            
+            // Carregar produção do dia (capturar lançamentos por planId e por machine)
+            const [prodByPlanSnap, prodByMachineSnap] = await Promise.all([
+                db.collection('production_entries')
+                    .where('data', '==', today)
+                    .where('planId', '==', selectedMachineData.id)
+                    .get(),
+                db.collection('production_entries')
+                    .where('data', '==', today)
+                    .where('machine', '==', selectedMachineData.machine)
+                    .get()
+            ]);
+            const prodDocs = [...prodByPlanSnap.docs, ...prodByMachineSnap.docs];
+            const seenProd = new Set();
             let totalProduced = 0;
             let totalLosses = 0;
-            
-            productionSnapshot.forEach(doc => {
+            prodDocs.forEach(doc => {
+                if (seenProd.has(doc.id)) return;
+                seenProd.add(doc.id);
                 const data = doc.data();
-                totalProduced += data.produzido || 0;
-                totalLosses += data.refugo_kg || 0;
+                totalProduced += Number(data.produzido || data.quantity || 0) || 0;
+                totalLosses += Number(data.refugo_kg || 0) || 0;
             });
             
-            // Carregar paradas do dia
-            const downtimeSnapshot = await db.collection('downtime_entries')
-                .where('date', '==', today)
-                .where('machine', '==', selectedMachineData.machine)
-                .get();
-            
+            // Carregar paradas (duas consultas por data para evitar índice composto)
+            const [dtSnapToday, dtSnapTomorrow] = await Promise.all([
+                db.collection('downtime_entries')
+                  .where('machine', '==', selectedMachineData.machine)
+                  .where('date', '==', today)
+                  .get(),
+                db.collection('downtime_entries')
+                  .where('machine', '==', selectedMachineData.machine)
+                  .where('date', '==', tomorrow)
+                  .get()
+            ]);
+            const dtDocs = [...dtSnapToday.docs, ...dtSnapTomorrow.docs];
             let totalDowntime = 0;
-            downtimeSnapshot.forEach(doc => {
+            dtDocs.forEach(doc => {
                 const data = doc.data();
-                const start = new Date(`${data.date}T${data.startTime}`);
-                const end = new Date(`${data.date}T${data.endTime}`);
-                if (end > start) {
-                    totalDowntime += Math.round((end - start) / 60000);
+                const start = combineDateAndTime(data.date, data.startTime);
+                const end = combineDateAndTime(data.date, data.endTime);
+                if (!(start instanceof Date) || Number.isNaN(start.getTime())) return;
+                if (!(end instanceof Date) || Number.isNaN(end.getTime())) return;
+                const overlapStart = start > windowStart ? start : windowStart;
+                const overlapEnd = end < windowEnd ? end : windowEnd;
+                if (overlapEnd > overlapStart) {
+                    totalDowntime += Math.round((overlapEnd - overlapStart) / 60000);
                 }
             });
             
@@ -7240,49 +7341,57 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     function setupActionButtons() {
         // Botão de produção
         const btnProduction = document.getElementById('btn-production');
-        if (btnProduction) {
+        if (btnProduction && !btnProduction.dataset.listenerAttached) {
             btnProduction.addEventListener('click', openProductionModal);
+            btnProduction.dataset.listenerAttached = 'true';
         }
 
         // Botão de perdas
         const btnLosses = document.getElementById('btn-losses');
-        if (btnLosses) {
+        if (btnLosses && !btnLosses.dataset.listenerAttached) {
             btnLosses.addEventListener('click', openLossesModal);
+            btnLosses.dataset.listenerAttached = 'true';
         }
         
         // Botão de parada
         const btnDowntime = document.getElementById('btn-downtime');
-        if (btnDowntime) {
+        if (btnDowntime && !btnDowntime.dataset.listenerAttached) {
             btnDowntime.addEventListener('click', toggleDowntime);
+            btnDowntime.dataset.listenerAttached = 'true';
         }
         
         // Botão de produção manual
         const btnManualProduction = document.getElementById('btn-manual-production');
-        if (btnManualProduction) {
+        if (btnManualProduction && !btnManualProduction.dataset.listenerAttached) {
             btnManualProduction.addEventListener('click', openManualProductionModal);
+            btnManualProduction.dataset.listenerAttached = 'true';
         }
 
         const btnManualLosses = document.getElementById('btn-manual-losses');
-        if (btnManualLosses) {
+        if (btnManualLosses && !btnManualLosses.dataset.listenerAttached) {
             btnManualLosses.addEventListener('click', openManualLossesModal);
+            btnManualLosses.dataset.listenerAttached = 'true';
         }
 
         // Botão de lançamento manual de parada
         const btnManualDowntime = document.getElementById('btn-manual-downtime');
-        if (btnManualDowntime) {
+        if (btnManualDowntime && !btnManualDowntime.dataset.listenerAttached) {
             btnManualDowntime.addEventListener('click', openManualDowntimeModal);
+            btnManualDowntime.dataset.listenerAttached = 'true';
         }
         
         // Botão de retrabalho
         const btnRework = document.getElementById('btn-rework');
-        if (btnRework) {
+        if (btnRework && !btnRework.dataset.listenerAttached) {
             btnRework.addEventListener('click', openReworkModal);
+            btnRework.dataset.listenerAttached = 'true';
         }
         
         // Botão de borra
         const btnManualBorra = document.getElementById('btn-manual-borra');
-        if (btnManualBorra) {
+        if (btnManualBorra && !btnManualBorra.dataset.listenerAttached) {
             btnManualBorra.addEventListener('click', openManualBorraModal);
+            btnManualBorra.dataset.listenerAttached = 'true';
         }
         
         // Setup modals
@@ -7546,6 +7655,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
 
+        // Popular os selects do modal com máquinas e motivos do database.js
+        populateBorraModal();
+
         const dateInput = document.getElementById('manual-borra-date');
         if (dateInput) {
             dateInput.value = getProductionDateString();
@@ -7558,7 +7670,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         const machineSelect = document.getElementById('manual-borra-machine');
         if (machineSelect && selectedMachineData) {
-            machineSelect.value = selectedMachineData.machine;
+            machineSelect.value = normalizeMachineId(selectedMachineData.machine);
         }
 
         const hourInput = document.getElementById('manual-borra-hour');
@@ -7751,9 +7863,16 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
 
-        if (!Number.isFinite(quantityValue) || quantityValue <= 0) {
-            alert('Informe uma quantidade produzida válida.');
-            if (qtyInput) qtyInput.focus();
+        // Aceitar quantidade OU peso (um ou outro)
+        const hasQty = Number.isFinite(quantityValue) && quantityValue > 0;
+        const hasWeight = Number.isFinite(weightValue) && weightValue > 0;
+        if (!hasQty && !hasWeight) {
+            alert('Informe a quantidade produzida OU o peso bruto (um dos dois).');
+            if (qtyInput && (!qtyInput.value || qtyInput.value === '')) {
+                qtyInput.focus();
+            } else if (weightInput) {
+                weightInput.focus();
+            }
             return;
         }
 
@@ -7769,12 +7888,41 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     const currentUser = getActiveUser();
         const horaInformada = hourValue && /^\d{2}:\d{2}$/.test(hourValue) ? hourValue : null;
 
+        // Se só o peso foi informado, tentar converter para peças usando peso médio da peça
+        let finalQuantity = hasQty ? quantityValue : 0;
+        let finalWeightKg = hasWeight ? Number(weightValue) : 0;
+        if (!hasQty && hasWeight) {
+            const resolveAveragePieceWeight = () => {
+                if (!selectedMachineData) return 0;
+                const candidates = [
+                    selectedMachineData.piece_weight,
+                    selectedMachineData.weight,
+                    selectedMachineData.produto?.weight,
+                    selectedMachineData.mp_weight
+                ];
+                for (const candidate of candidates) {
+                    const parsed = parseFloat(candidate);
+                    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+                }
+                return 0;
+            };
+            const pieceWeightGrams = resolveAveragePieceWeight();
+            if (pieceWeightGrams > 0) {
+                finalQuantity = Math.max(1, Math.round((finalWeightKg * 1000) / pieceWeightGrams));
+                showNotification(`Convertido: ${finalWeightKg}kg = ${finalQuantity} peças`, 'info');
+            } else {
+                alert('Não foi possível converter o peso em peças porque o peso médio não está configurado. Informe a quantidade manualmente.');
+                if (qtyInput) qtyInput.focus();
+                return;
+            }
+        }
+
         const payloadBase = {
             planId,
             data: dateValue,
             turno,
-            produzido: quantityValue,
-            peso_bruto: Number.isFinite(weightValue) ? weightValue : 0,
+            produzido: finalQuantity,
+            peso_bruto: Number.isFinite(finalWeightKg) ? finalWeightKg : 0,
             refugo_kg: 0,
             perdas: '',
             observacoes: observations,
@@ -7808,6 +7956,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             await loadHourlyProductionChart();
             await loadTodayStats();
             await loadRecentEntries(false);
+            // Atualizar aba de análise se estiver ativa (para refletir barra de progresso da OP)
+            await refreshAnalysisIfActive();
 
             showNotification('Produção manual registrada com sucesso!', 'success');
         } catch (error) {
@@ -8008,14 +8158,17 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             currentEditContext
         });
 
-        const qty = parseInt(document.getElementById('quick-production-qty').value, 10) || 0;
-        const weight = parseFloat(document.getElementById('quick-production-weight').value) || 0;
+    const qty = parseInt(document.getElementById('quick-production-qty').value, 10) || 0;
+    const weight = parseFloat(document.getElementById('quick-production-weight').value) || 0;
         const obs = (document.getElementById('quick-production-obs').value || '').trim();
         
         console.log('[TRACE][handleProductionSubmit] parsed form values', { qty, weight, obs });
 
-        if (qty <= 0) {
-            alert('Por favor, informe uma quantidade válida.');
+        // Aceitar quantidade OU peso (um ou outro)
+        const hasQty = Number.isFinite(qty) && qty > 0;
+        const hasWeight = Number.isFinite(weight) && weight > 0;
+        if (!hasQty && !hasWeight) {
+            alert('Informe a quantidade produzida OU o peso bruto (um dos dois).');
             return;
         }
 
@@ -8040,12 +8193,33 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const machineRef = isEditing ? (originalData?.machine || selectedMachineData?.machine) : selectedMachineData?.machine;
         const mpValue = isEditing ? (originalData?.mp || selectedMachineData?.mp || '') : (selectedMachineData?.mp || '');
 
+        // Se apenas peso foi informado, tentar converter para peças (usar peso médio da peça)
+        let finalQty = hasQty ? qty : 0;
+        let finalWeight = hasWeight ? weight : 0;
+        if (!hasQty && hasWeight) {
+            let pesoMedio = 0;
+            if (selectedMachineData) {
+                pesoMedio = parseFloat(selectedMachineData.piece_weight) || 0;
+                if (!pesoMedio) pesoMedio = parseFloat(selectedMachineData.weight) || 0;
+                if (!pesoMedio && selectedMachineData.produto) pesoMedio = parseFloat(selectedMachineData.produto.weight) || 0;
+                if (!pesoMedio && selectedMachineData.mp_weight) pesoMedio = parseFloat(selectedMachineData.mp_weight) || 0;
+            }
+            if (pesoMedio > 0) {
+                finalQty = Math.max(1, Math.round((finalWeight * 1000) / pesoMedio));
+                console.log(`[TRACE][handleProductionSubmit] Conversão: ${finalWeight}kg ÷ ${pesoMedio}g/peça = ${finalQty} peças`);
+                showNotification(`Convertido: ${finalWeight}kg = ${finalQty} peças`, 'info');
+            } else {
+                alert('Não foi possível converter peso para peças. O peso médio da peça não está configurado. Informe a quantidade diretamente.');
+                return;
+            }
+        }
+
         const payloadBase = {
             planId,
             data: dataReferencia,
             turno,
-            produzido: qty,
-            peso_bruto: weight,
+            produzido: finalQty,
+            peso_bruto: finalWeight,
             refugo_kg: 0,
             perdas: '',
             observacoes: obs,
@@ -8088,6 +8262,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             await loadHourlyProductionChart();
             await loadTodayStats();
             await loadRecentEntries(false);
+            // Atualizar aba de análise se estiver ativa (para refletir barra de progresso da OP)
+            await refreshAnalysisIfActive();
             showNotification(successMessage, 'success');
 
             console.log('[TRACE][handleProductionSubmit] success path completed');
@@ -8389,6 +8565,16 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 console.log('[TRACE][handleDowntimeSubmit] saving segment', downtimeData);
                 await db.collection('downtime_entries').add(downtimeData);
             }
+            // Remover parada ativa dessa máquina (evita restauração automática na troca de máquina/reload)
+            try {
+                if (currentDowntimeStart?.machine) {
+                    await db.collection('active_downtimes').doc(currentDowntimeStart.machine).delete();
+                    console.log('[TRACE][handleDowntimeSubmit] active_downtime removed for machine', currentDowntimeStart.machine);
+                }
+            } catch (err) {
+                console.warn('[WARN][handleDowntimeSubmit] failed to delete active_downtime doc', err);
+                // Não bloquear o fluxo do usuário se a exclusão falhar
+            }
             
             // Resetar status
             currentDowntimeStart = null;
@@ -8440,7 +8626,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const dateValue = (dateInput?.value || '').trim();
         const shiftRaw = shiftSelect?.value || '';
         const hourValue = (hourInput?.value || '').trim();
-        const machineValue = machineSelect?.value || '';
+    const machineValue = machineSelect?.value || '';
         const weightValue = parseFloat(weightInput?.value || '0');
         const mpTypeValue = mpTypeSelect?.value || '';
         const reasonValue = (reasonInput?.value || '').trim();
@@ -8488,14 +8674,22 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
             const currentUser = getActiveUser();
             const workDay = getWorkDayFromDate(dateValue, hourValue);
+            const normalizedMachine = normalizeMachineId(machineValue || selectedMachineData.machine || '');
+            const resolvedPlanId = selectedMachineData?.id || selectedMachineData?.planId || selectedMachineData?.planningRef || null;
+            if (!resolvedPlanId) {
+                console.warn('[WARN][handleManualBorraSubmit] planId não encontrado para BORRA, registro será salvo sem vínculo de plano.', {
+                    selectedMachineData
+                });
+            }
             
             // Preparar dados da borra (salvar como perda especial)
             const borraData = {
                 data: dateValue,
                 workDay: workDay,
-                machine: machineValue,
+                machine: normalizedMachine,
+                planId: resolvedPlanId || null,
+                planningRef: resolvedPlanId || null,
                 refugo_kg: weightValue, // Salvar como refugo em kg
-                refugo_qty: 0, // Borra não tem peças, apenas peso
                 perdas: `BORRA - ${reasonValue}`,
                 mp: '',
                 mp_type: mpTypeValue,
@@ -9259,6 +9453,33 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 recentEntriesCache.set(doc.id, entry);
             });
 
+            // Fallback: buscar lançamentos da máquina (ex. BORRA) que não possuem planId associado
+            const machineId = normalizeMachineId(selectedMachineData.machine || '');
+            if (machineId) {
+                const machineSnapshot = await db.collection('production_entries')
+                    .where('machine', '==', machineId)
+                    .where('data', '==', date)
+                    .get();
+
+                machineSnapshot.forEach(doc => {
+                    if (recentEntriesCache.has(doc.id)) return;
+                    const data = doc.data();
+                    const type = (data.refugo_kg && data.refugo_kg > 0) || data.perdas ? 'loss' : 'production';
+                    const resolvedTimestamp = resolveProductionDateTime(data) || data.updatedAt?.toDate?.() || data.timestamp?.toDate?.() || data.createdAt?.toDate?.() || (data.datetime ? new Date(data.datetime) : null);
+
+                    const entry = {
+                        id: doc.id,
+                        type,
+                        collection: 'production_entries',
+                        data,
+                        timestamp: resolvedTimestamp
+                    };
+
+                    entries.push(entry);
+                    recentEntriesCache.set(doc.id, entry);
+                });
+            }
+
             const downtimeSnapshot = await db.collection('downtime_entries')
                 .where('machine', '==', selectedMachineData.machine)
                 .where('date', '==', date)
@@ -9323,6 +9544,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             setRecentEntriesState({ loading: false, empty: true });
         }
     }
+
+    function refreshRecentEntries(showLoading = false) {
+        loadRecentEntries(showLoading);
+    }
+    window.refreshRecentEntries = refreshRecentEntries;
 
     // Função para aplicar filtro de tipo de entrada
     function applyEntryFilter(filter) {
@@ -9573,7 +9799,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 machine,
                 turno,
                 produzido: produced,
-                duracao_min: Number(entry.duracao_min) || 0,
+                duracao_min: Number(entry.duracao_min ?? entry.duration_min ?? entry.duration ?? 0) || 0,
                 refugo_kg: Number(entry.refugo_kg) || 0,
                 piece_weight: plan.piece_weight,
                 real_cycle_t1: plan.real_cycle_t1,
@@ -10063,8 +10289,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 }
             }
 
-            const totalPlanned = lotSize > 0 ? lotSize : 0;
-            const hourlyTarget = HOURS_IN_PRODUCTION_DAY > 0 ? (totalPlanned / HOURS_IN_PRODUCTION_DAY) : 0;
+            // Usar META DIÁRIA (planned_quantity) para o gráfico "planejado" por hora
+            const dailyTarget = Number(selectedMachineData.planned_quantity) || Number(selectedMachineData.daily_target) || 0;
+            const hourlyTarget = HOURS_IN_PRODUCTION_DAY > 0 ? (dailyTarget / HOURS_IN_PRODUCTION_DAY) : 0;
 
             Object.keys(hourlyData).forEach(hour => {
                 hourlyData[hour].planned = hourlyTarget;
@@ -10085,18 +10312,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
             const totalExecuted = Object.values(hourlyData).reduce((sum, entry) => sum + (entry.actual || 0), 0);
             const hoursElapsed = getHoursElapsedInProductionDay(new Date());
-            const expectedByNow = Math.min(totalPlanned, hoursElapsed * hourlyTarget);
+            const expectedByNow = Math.min(dailyTarget, hoursElapsed * hourlyTarget);
 
             if (matchedOrder) {
                 currentActiveOrder = { ...matchedOrder };
             }
             currentOrderProgress = {
                 executed: totalExecuted,
-                planned: totalPlanned,
+                planned: dailyTarget,
                 expected: expectedByNow
             };
 
-            updateTimelineProgress(totalExecuted, totalPlanned, expectedByNow);
+            updateTimelineProgress(totalExecuted, dailyTarget, expectedByNow);
 
             if (hourlyChartInstance) {
                 hourlyChartInstance.destroy();
@@ -10120,12 +10347,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
     }
     
-    // Função para carregar estatísticas do dia
+    // Função para carregar estatísticas do dia (janela de produção 07:00 -> 07:00)
     async function loadTodayStats() {
         if (!selectedMachineData) return;
         
         try {
             const today = getProductionDateString();
+            // Janela do dia de produção atual: [hoje 07:00, amanhã 07:00)
+            const windowStart = combineDateAndTime(today, '07:00');
+            const nextDay = new Date(windowStart);
+            nextDay.setDate(nextDay.getDate() + 1);
+            const tomorrow = nextDay.toISOString().split('T')[0];
+            const windowEnd = combineDateAndTime(tomorrow, '07:00');
             
             // Buscar dados de produção
             const prodSnapshot = await db.collection('production_entries')
@@ -10135,24 +10368,35 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             
             const productions = prodSnapshot.docs.map(doc => doc.data());
             
-            // Buscar dados de paradas
-            const downtimeSnapshot = await db.collection('downtime_entries')
-                .where('machine', '==', selectedMachineData.machine)
-                .where('date', '==', today)
-                .get();
-            
-            const downtimes = downtimeSnapshot.docs.map(doc => doc.data());
+                        // Buscar paradas de hoje e de amanhã (duas consultas simples)
+                        const [dtSnapToday, dtSnapTomorrow] = await Promise.all([
+                                db.collection('downtime_entries')
+                                    .where('machine', '==', selectedMachineData.machine)
+                                    .where('date', '==', today)
+                                    .get(),
+                                db.collection('downtime_entries')
+                                    .where('machine', '==', selectedMachineData.machine)
+                                    .where('date', '==', tomorrow)
+                                    .get()
+                        ]);
+                        const downtimes = [...dtSnapToday.docs, ...dtSnapTomorrow.docs].map(doc => doc.data());
             
             // Calcular totais
             const totalProduced = productions.reduce((sum, prod) => sum + (prod.produzido || 0), 0);
             const totalLosses = productions.reduce((sum, prod) => sum + (prod.refugo_kg || 0), 0);
             
+            // Somar apenas a interseção com a janela de produção (evita inflar com 00:00-07:00 que pertence ao dia anterior)
             let totalDowntime = 0;
             downtimes.forEach(dt => {
-                const start = new Date(`${dt.date}T${dt.startTime}`);
-                const end = new Date(`${dt.date}T${dt.endTime}`);
-                if (end > start) {
-                    totalDowntime += Math.round((end - start) / 60000); // minutos
+                const start = combineDateAndTime(dt.date, dt.startTime);
+                const end = combineDateAndTime(dt.date, dt.endTime);
+                if (!(start instanceof Date) || Number.isNaN(start.getTime())) return;
+                if (!(end instanceof Date) || Number.isNaN(end.getTime())) return;
+                // Overlap com [windowStart, windowEnd)
+                const overlapStart = start > windowStart ? start : windowStart;
+                const overlapEnd = end < windowEnd ? end : windowEnd;
+                if (overlapEnd > overlapStart) {
+                    totalDowntime += Math.round((overlapEnd - overlapStart) / 60000);
                 }
             });
             
@@ -11409,14 +11653,52 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             
             machineDatabase.forEach(machine => {
                 const option = document.createElement('option');
-                option.value = machine.id;
-                option.textContent = `${machine.id} - ${machine.model}`;
+                const mid = normalizeMachineId(machine.id);
+                option.value = mid;
+                option.textContent = `${mid} - ${machine.model}`;
                 launchMachineSelector.appendChild(option);
             });
             
             console.log('✅ Seletor de máquinas populado com', machineDatabase.length, 'máquinas');
         } else {
             console.log('❌ Elemento machine-selector não encontrado');
+        }
+    }
+
+    // Função para popular o modal de BORRA com máquinas e motivos do database.js
+    function populateBorraModal() {
+        // Popular máquinas no modal de BORRA
+        const borraMachineSelect = document.getElementById('manual-borra-machine');
+        if (borraMachineSelect) {
+            borraMachineSelect.innerHTML = '<option value="">Selecione...</option>';
+            machineDatabase.forEach(machine => {
+                const option = document.createElement('option');
+                const mid = normalizeMachineId(machine.id);
+                option.value = mid;
+                option.textContent = `${mid} - ${machine.model}`;
+                borraMachineSelect.appendChild(option);
+            });
+            console.log('✅ Máquinas do modal de BORRA populadas');
+        }
+
+        // Popular motivos no modal de BORRA usando database.js
+        const borraReasonSelect = document.getElementById('manual-borra-reason');
+        if (borraReasonSelect) {
+            borraReasonSelect.innerHTML = '<option value="">Selecione o motivo...</option>';
+            
+            const groupedReasons = getGroupedLossReasons();
+            Object.entries(groupedReasons).forEach(([groupName, reasons]) => {
+                const group = document.createElement('optgroup');
+                group.label = groupName;
+                reasons.forEach(reason => {
+                    const option = document.createElement('option');
+                    option.value = reason;
+                    option.textContent = reason;
+                    group.appendChild(option);
+                });
+                borraReasonSelect.appendChild(group);
+            });
+            console.log('✅ Motivos do modal de BORRA populados via database.js');
         }
     }
 
