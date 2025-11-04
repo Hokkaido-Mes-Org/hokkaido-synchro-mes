@@ -9702,6 +9702,38 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const start = entry.data.startTime ? `${entry.data.startTime}` : '';
             const end = entry.data.endTime ? ` - ${entry.data.endTime}` : '';
             details.push(`Período: ${start}${end}`);
+            
+            // Calcular duração da parada
+            if (entry.data.startTime && entry.data.endTime) {
+                const [startHour, startMin] = entry.data.startTime.split(':').map(Number);
+                const [endHour, endMin] = entry.data.endTime.split(':').map(Number);
+                
+                let startTotalMin = startHour * 60 + startMin;
+                let endTotalMin = endHour * 60 + endMin;
+                
+                // Se fim é menor que inicio, passou da meia noite
+                if (endTotalMin < startTotalMin) {
+                    endTotalMin += 24 * 60;
+                }
+                
+                const durationMin = endTotalMin - startTotalMin;
+                const durationHours = Math.floor(durationMin / 60);
+                const durationMins = durationMin % 60;
+                
+                let durationStr = '';
+                if (durationHours > 0) {
+                    durationStr = `${durationHours}h`;
+                }
+                if (durationMins > 0) {
+                    durationStr += durationStr ? ` ${durationMins}min` : `${durationMins}min`;
+                }
+                if (durationMin === 0) {
+                    durationStr = '0min';
+                }
+                
+                details.push(`<span class="font-semibold text-red-600">⏱️ Duração: ${durationStr}</span>`);
+            }
+            
             if (entry.data.reason) {
                 details.push(`Motivo: ${entry.data.reason}`);
             }
