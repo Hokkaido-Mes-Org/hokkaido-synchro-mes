@@ -724,7 +724,7 @@ document.addEventListener('DOMContentLoaded', function() {
             "PREPARAÇÃO": ["AGUARDANDO PREPARAÇÃO DE MATERIAL"],
             "QUALIDADE": ["AGUARDANDO CLIENTE/FORNECEDOR", "LIBERAÇÃO"],
             "MANUTENÇÃO": ["MANUTENÇÃO CORRETIVA", "MANUTENÇÃO PREVENTIVA"],
-            "PRODUÇÃO": ["FALTA DE OPERADOR", "TROCA DE COR"],
+            "PRODUÇÃO": ["FALTA DE OPERADOR", "TROCA DE COR", "PRENDENDO GALHO"],
             "SETUP": ["INSTALAÇÃO DE MOLDE", "RETIRADA DE MOLDE"],
             "ADMINISTRATIVO": ["FALTA DE ENERGIA"],
             "PCP": ["SEM PROGRAMAÇÃO"],
@@ -12111,19 +12111,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (downtimeReasonSelect) {
             downtimeReasonSelect.innerHTML = '<option value="">Selecione o motivo...</option>';
             
-            const downtimeReasons = {
-                'FERRAMENTARIA': ["CORRETIVA DE MOLDE", "PREVENTIVA DE MOLDE", "TROCA DE VERSÃO"],
-                'PROCESSO': ["ABERTURA DE CAVIDADE", "AJUSTE DE PROCESSO", "TRY OUT"],
-                'COMPRAS': ["FALTA DE INSUMO PLANEJADA", "FALTA DE INSUMO NÃO PLANEJADA"],
-                'PREPARAÇÃO': ["AGUARDANDO PREPARAÇÃO DE MATERIAL"],
-                'QUALIDADE': ["AGUARDANDO CLIENTE/FORNECEDOR", "LIBERAÇÃO"],
-                'MANUTENÇÃO': ["MANUTENÇÃO CORRETIVA", "MANUTENÇÃO PREVENTIVA"],
-                'PRODUÇÃO': ["FALTA DE OPERADOR", "TROCA DE COR"],
-                'SETUP': ["INSTALAÇÃO DE MOLDE", "RETIRADA DE MOLDE"],
-                'ADMINISTRATIVO': ["FALTA DE ENERGIA"],
-                'PCP': ["SEM PROGRAMAÇÃO"],
-                'COMERCIAL': ["SEM PEDIDO"]
-            };
+            // Usar motivos do database.js ou fallback
+            const downtimeReasons = getGroupedDowntimeReasons();
             
             Object.entries(downtimeReasons).forEach(([groupName, reasons]) => {
                 const group = document.createElement('optgroup');
@@ -12135,6 +12124,27 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     group.appendChild(option);
                 });
                 downtimeReasonSelect.appendChild(group);
+            });
+        }
+
+        // Também popular o select de paradas manuais
+        const manualDowntimeReasonSelect = document.getElementById('manual-downtime-reason');
+        if (manualDowntimeReasonSelect) {
+            manualDowntimeReasonSelect.innerHTML = '<option value="">Selecione o motivo...</option>';
+            
+            // Usar motivos do database.js ou fallback
+            const downtimeReasons = getGroupedDowntimeReasons();
+            
+            Object.entries(downtimeReasons).forEach(([groupName, reasons]) => {
+                const group = document.createElement('optgroup');
+                group.label = groupName;
+                reasons.forEach(reason => {
+                    const option = document.createElement('option');
+                    option.value = reason;
+                    option.textContent = reason;
+                    group.appendChild(option);
+                });
+                manualDowntimeReasonSelect.appendChild(group);
             });
         }
     }
