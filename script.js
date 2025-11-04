@@ -7927,6 +7927,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (adjustQuantityClose) adjustQuantityClose.addEventListener('click', closeAdjustQuantityModal);
         if (adjustQuantityCancel) adjustQuantityCancel.addEventListener('click', closeAdjustQuantityModal);
         if (adjustQuantityForm) adjustQuantityForm.addEventListener('submit', handleAdjustQuantitySubmit);
+
+        // Modal de visualização de foto
+        const photoViewerClose = document.getElementById('photo-viewer-close');
+        if (photoViewerClose) photoViewerClose.addEventListener('click', closePhotoModal);
+        
+        // Fechar modal de foto ao clicar fora da imagem
+        const photoViewerModal = document.getElementById('photo-viewer-modal');
+        if (photoViewerModal) {
+            photoViewerModal.addEventListener('click', (e) => {
+                if (e.target === photoViewerModal) closePhotoModal();
+            });
+        }
     }
     
     // Funções para abrir/fechar modais
@@ -8063,6 +8075,30 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const modal = document.getElementById(modalId);
         if (!modal) return;
         modal.classList.remove('hidden');
+    }
+
+    function viewPhotoModal(photoUrl, entryType) {
+        const modal = document.getElementById('photo-viewer-modal');
+        const img = document.getElementById('photo-viewer-image');
+        const typeLabel = document.getElementById('photo-viewer-type');
+        
+        if (!modal || !img) return;
+        
+        img.src = photoUrl;
+        const typeConfig = {
+            production: 'Foto - Produção',
+            loss: 'Foto - Perda',
+            downtime: 'Foto - Parada',
+            rework: 'Foto - Retrabalho'
+        };
+        typeLabel.textContent = typeConfig[entryType] || 'Visualização de Foto';
+        
+        modal.classList.remove('hidden');
+    }
+
+    function closePhotoModal() {
+        const modal = document.getElementById('photo-viewer-modal');
+        if (modal) modal.classList.add('hidden');
     }
 
     async function uploadEvidencePhoto(file, folder = 'evidences') {
@@ -9750,6 +9786,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
 
         const observations = entry.data.observacoes || entry.data.observations || entry.data.notes;
+        const photoUrl = entry.data.photoUrl || null;
         const canEdit = entry.type === 'production' || entry.type === 'loss';
         const actions = [];
 
@@ -9777,8 +9814,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         return `
             <div class="border border-gray-200 rounded-lg p-4 bg-white shadow-sm">
-                <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div class="space-y-2">
+                <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div class="space-y-2 flex-1">
                         <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500">
                             <span class="px-2 py-1 rounded-full ${config.badge}">${config.label}</span>
                             ${turnoLabel ? `<span class="px-2 py-1 rounded-full bg-gray-100 text-gray-600 border border-gray-200">${turnoLabel}</span>` : ''}
@@ -9789,8 +9826,15 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                             ${details.join('<span class="text-gray-300">•</span>')}
                         </div>
                         ${observations ? `<div class="text-xs text-gray-500">Obs.: ${observations}</div>` : ''}
+                        ${photoUrl ? `<div class="mt-2 pt-2 border-t border-gray-200">
+                            <button class="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-600 border border-blue-200 rounded hover:bg-blue-100 transition"
+                                    onclick="viewPhotoModal('${photoUrl.replace(/'/g, "\\'")}', '${entry.type}')">
+                                <i data-lucide="image" class="w-3 h-3"></i>
+                                Ver Foto
+                            </button>
+                        </div>` : ''}
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 flex-shrink-0">
                         ${actions.join('')}
                     </div>
                 </div>
