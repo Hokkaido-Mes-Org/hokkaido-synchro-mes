@@ -144,6 +144,7 @@
         });
 
         // Base de usuários (em produção, usar Firebase Auth ou API)
+        // Todos os usuários com perfil GESTOR e acesso total (AUTENTICAÇÃO PILOTO)
         const users = {
             // USUÁRIOS PADRÃO
             'admin': {
@@ -160,15 +161,15 @@
             },
             'operador': {
                 password: 'op123',
-                role: 'operador',
+                role: 'gestor',
                 name: 'Operador de Produção',
-                permissions: ['lancamento']
+                permissions: ['planejamento', 'lancamento', 'analise']
             },
             'supervisor': {
                 password: 'sup123',
-                role: 'supervisor',
+                role: 'gestor',
                 name: 'Supervisor',
-                permissions: ['lancamento', 'analise']
+                permissions: ['planejamento', 'lancamento', 'analise']
             },
             
             // USUÁRIOS DO PILOTO
@@ -192,9 +193,9 @@
             },
             'daniella.braganca': {
                 password: 'Daniella2025!',
-                role: 'operador',
+                role: 'gestor',
                 name: 'Daniella Bragança',
-                permissions: ['lancamento']
+                permissions: ['planejamento', 'lancamento', 'analise']
             },
             'michelle.benjamin': {
                 password: 'Michelle2025!',
@@ -207,8 +208,108 @@
                 role: 'gestor',
                 name: 'Luciano',
                 permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            
+            // NOVOS USUÁRIOS SOLICITADOS
+            'marilise.katia': {
+                password: 'Marilise2025!',
+                role: 'gestor',
+                name: 'Marilise Katia',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'daniel.rocha': {
+                password: 'Daniel2025!',
+                role: 'gestor',
+                name: 'Daniel Rocha',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'leonardo.doria': {
+                password: 'Leonardo2025!',
+                role: 'gestor',
+                name: 'Leonardo Dória',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'davi.batista': {
+                password: 'Davi2025!',
+                role: 'gestor',
+                name: 'Davi Batista',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'thiago.alberigi': {
+                password: 'Thiago2025!',
+                role: 'gestor',
+                name: 'Thiago Alberigi',
+                permissions: ['planejamento', 'lancamento', 'analise']
             }
         };
+
+        // Utilidades de normalização e busca tolerante de usuário
+        function normalizeStr(str) {
+            return String(str || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '') // remove acentos
+                .toLowerCase()
+                .trim()
+                .replace(/\s+/g, ' ');
+        }
+
+        function findUserKeyFlexible(input) {
+            const raw = String(input || '').trim();
+            const norm = normalizeStr(raw);
+
+            console.log('🔍 [FLEX] Input:', raw, '→ Normalizado:', norm);
+
+            // 1) Match direto por chave (case-insensitive)
+            if (users[norm]) {
+                console.log('✅ [FLEX] Match método 1 (chave direta):', norm);
+                return { key: norm, userData: users[norm] };
+            }
+
+            // 2) Tentar substituir espaço por ponto (ex.: "thiago alberigui" -> "thiago.alberigui")
+            const dotVariant = norm.replace(/\s+/g, '.');
+            if (users[dotVariant]) {
+                console.log('✅ [FLEX] Match método 2 (espaço→ponto):', dotVariant);
+                return { key: dotVariant, userData: users[dotVariant] };
+            }
+
+            // 3) Tentar remover pontos do input e comparar com chaves sem ponto
+            const noDotNorm = norm.replaceAll('.', '');
+            for (const key of Object.keys(users)) {
+                const keyNoDot = key.replaceAll('.', '');
+                if (keyNoDot === noDotNorm) {
+                    console.log('✅ [FLEX] Match método 3 (sem pontos):', key);
+                    return { key, userData: users[key] };
+                }
+            }
+
+            // 4) Match por NOME completo normalizado (exato)
+            for (const [key, userData] of Object.entries(users)) {
+                const nameNorm = normalizeStr(userData?.name || '');
+                if (nameNorm && nameNorm === norm) {
+                    console.log('✅ [FLEX] Match método 4 (nome completo):', key, nameNorm);
+                    return { key, userData };
+                }
+            }
+
+            // 5) Match por tokens do nome (todos os tokens presentes)
+            const tokens = norm.split(' ').filter(Boolean);
+            if (tokens.length) {
+                let best = null;
+                for (const [key, userData] of Object.entries(users)) {
+                    const nameNorm = normalizeStr(userData?.name || '');
+                    if (!nameNorm) continue;
+                    const hasAll = tokens.every(t => nameNorm.includes(t));
+                    if (hasAll) {
+                        console.log('✅ [FLEX] Match método 5 (tokens):', key, 'tokens:', tokens);
+                        best = best || { key, userData };
+                    }
+                }
+                if (best) return best;
+            }
+
+            console.log('❌ [FLEX] Nenhum usuário encontrado para:', raw);
+            return { key: null, userData: null };
+        }
 
         // Função de login
         document.getElementById('login-form').addEventListener('submit', async function(e) {
@@ -218,7 +319,11 @@
             const password = document.getElementById('password').value;
             const rememberMe = document.getElementById('remember-me').checked;
             
-            console.log('🔍 [DEBUG] Login tentativa:', { username, rememberMe });
+            console.log('🔍 [DEBUG] === TENTATIVA DE LOGIN ===');
+            console.log('🔍 [DEBUG] Username digitado:', username);
+            console.log('🔍 [DEBUG] Senha digitada:', password);
+            console.log('🔍 [DEBUG] Lembrar login:', rememberMe);
+            console.log('🔍 [DEBUG] Usuários disponíveis:', Object.keys(users));
             
             // Mostrar loading
             showLoading(true);
@@ -227,26 +332,24 @@
             // Simular delay de verificação
             await new Promise(resolve => setTimeout(resolve, 1000));
             
-            // Verificar credenciais - tentar username direto e em minúsculas
-            let user = users[username.toLowerCase()];
-            let usernameUsed = username.toLowerCase();
+            // Verificar credenciais com busca flexível (username, nome completo, variações)
+            console.log('🔍 [DEBUG] Iniciando busca flexível...');
+            const found = findUserKeyFlexible(username);
+            let user = found.userData;
+            let usernameUsed = found.key || username.toLowerCase();
             
-            console.log('🔍 [DEBUG] Primeiro lookup (lowercase):', { user, usernameUsed });
+            console.log('🔍 [DEBUG] Resultado da busca flexível:', { 
+                usuarioEncontrado: !!user, 
+                chaveUsada: usernameUsed,
+                dados: user ? { name: user.name, role: user.role } : null
+            });
             
-            // Se não encontrou, tentar procurar por nome completo (case-insensitive)
-            if (!user) {
-                const usernameInLower = username.toLowerCase();
-                for (const [key, userData] of Object.entries(users)) {
-                    if (userData.name && userData.name.toLowerCase() === usernameInLower) {
-                        user = userData;
-                        usernameUsed = key;
-                        console.log('🔍 [DEBUG] Encontrado por nome:', { key, name: userData.name });
-                        break;
-                    }
-                }
+            if (user) {
+                console.log('🔍 [DEBUG] Comparando senha...');
+                console.log('🔍 [DEBUG] Senha esperada:', user.password);
+                console.log('🔍 [DEBUG] Senha fornecida:', password);
+                console.log('🔍 [DEBUG] Senhas conferem?:', user.password === password);
             }
-            
-            console.log('🔍 [DEBUG] Após busca:', { userFound: !!user, usernameUsed });
             
             if (user && user.password === password) {
                 // Login bem-sucedido
@@ -258,7 +361,8 @@
                     loginTime: new Date().toISOString()
                 };
                 
-                console.log('✅ [DEBUG] Login sucesso! Salvando sessão:', userSession);
+                console.log('✅ [DEBUG] === LOGIN BEM-SUCEDIDO ===');
+                console.log('✅ [DEBUG] Sessão:', userSession);
                 
                 // Salvar sessão
                 if (rememberMe) {
@@ -270,11 +374,17 @@
                 }
                 
                 // Redirecionar para o sistema principal
+                console.log('✅ [DEBUG] Redirecionando para index.html...');
                 window.location.href = 'index.html';
                 
             } else {
                 // Login falhou
-                console.warn('❌ [DEBUG] Login falhou - usuário ou senha incorretos');
+                console.error('❌ [DEBUG] === LOGIN FALHOU ===');
+                if (!user) {
+                    console.error('❌ [DEBUG] Motivo: Usuário não encontrado');
+                } else {
+                    console.error('❌ [DEBUG] Motivo: Senha incorreta');
+                }
                 showError('Usuário ou senha incorretos');
                 showLoading(false);
             }
