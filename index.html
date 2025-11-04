@@ -1355,7 +1355,7 @@
             <form id="quick-losses-form" class="space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">Quantidade de Perdas</label>
-                    <input type="number" id="quick-losses-qty" name="quantity" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent" placeholder="Quantidade de peças perdidas" required>
+                    <input type="number" id="quick-losses-qty" name="quantity" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent" placeholder="Quantidade de peças perdidas">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">Peso das Perdas (kg)</label>
@@ -2081,6 +2081,17 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Modal de Visualização de Foto -->
+    <div id="photo-viewer-modal" class="hidden fixed inset-0 bg-black bg-opacity-80 z-50 flex justify-center items-center p-4">
+        <div class="relative flex flex-col items-center justify-center max-w-3xl max-h-screen">
+            <button id="photo-viewer-close" class="absolute top-4 right-4 bg-white rounded-full p-2 hover:bg-gray-100 z-10">
+                <i data-lucide="x" class="w-6 h-6 text-gray-800"></i>
+            </button>
+            <img id="photo-viewer-image" src="" alt="Visualização de foto" class="max-w-full max-h-96 object-contain rounded-lg shadow-2xl">
+            <p id="photo-viewer-type" class="mt-4 text-white text-center text-sm">Clique no X para fechar</p>
         </div>
     </div>
 
