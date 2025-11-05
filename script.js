@@ -29,12 +29,27 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
         }
+        
+        // Configurações de Firestore para melhorar estabilidade
         db = firebase.firestore();
+        
+        // Tentar desabilitar QUIC se disponível (evita ERR_QUIC_PROTOCOL_ERROR)
+        if (db.settings) {
+            try {
+                db.settings({
+                    experimentalForceLongPolling: true
+                });
+                console.log('✅ Firestore: Long polling forçado (QUIC desabilitado)');
+            } catch (e) {
+                console.warn('⚠️ Não foi possível configurar long polling:', e.message);
+            }
+        }
+        
         if (typeof firebase.storage === 'function') {
-            storage = firebase.storage();
-            console.log('Firebase Storage inicializado com sucesso');
+            // Nota: Fotos foram removidas do sistema; Storage não é utilizado.
+            console.log('Firebase Storage detectado (não utilizado: fotos removidas)');
         } else {
-            console.warn('Firebase Storage não disponível. Upload de fotos será desativado.');
+            console.log('Firebase Storage indisponível (irrelevante: fotos removidas).');
         }
         
         // Testar conexão com Firebase
@@ -82,6 +97,28 @@ document.addEventListener('DOMContentLoaded', function() {
         alert("Erro fatal: Não foi possível conectar à base de dados.");
         return;
     }
+
+    // Monitor global para erros de rede (inclui QUIC)
+    window.addEventListener('error', (event) => {
+        if (event.message && event.message.includes('QUIC')) {
+            console.warn('⚠️ QUIC Protocol Error detectado - tentando reconectar...');
+            console.warn('Detalhes:', {
+                message: event.message,
+                filename: event.filename,
+                lineno: event.lineno,
+                colno: event.colno
+            });
+        }
+    });
+
+    // Monitor para erros não capturados de Promise
+    window.addEventListener('unhandledrejection', (event) => {
+        if (event.reason && (event.reason.message?.includes('QUIC') || event.reason.code?.includes('QUIC'))) {
+            console.warn('⚠️ QUIC Promise Rejection detectada');
+            console.warn('Reason:', event.reason);
+            // Não preventar o erro - deixar prosseguir normalmente
+        }
+    });
 
     // --- Configuration Lists ---
     // Normalização de IDs de máquina: H01, H02, ...
@@ -6967,7 +7004,55 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return realCycle > budgetedCycle ? 'text-status-error font-bold' : '';
         };
 
-        planningTableBody.innerHTML = items.map(item => `
+        // Agrupar por Máquina + Produto (independente da OP)
+        const grouped = new Map();
+        (items || []).forEach(item => {
+            const key = `${item.machine}||${item.product_cod || item.product || ''}`;
+            if (!grouped.has(key)) {
+                grouped.set(key, {
+                    machine: item.machine,
+                    product: item.product,
+                    product_cod: item.product_cod,
+                    mp: item.mp,
+                    budgeted_cycle: item.budgeted_cycle,
+                    mold_cavities: item.mold_cavities,
+                    piece_weight: item.piece_weight,
+                    // Ciclos/Cavidades reais por turno (pega o primeiro valor informado)
+                    real_cycle_t1: item.real_cycle_t1 || null,
+                    active_cavities_t1: item.active_cavities_t1 || null,
+                    real_cycle_t2: item.real_cycle_t2 || null,
+                    active_cavities_t2: item.active_cavities_t2 || null,
+                    real_cycle_t3: item.real_cycle_t3 || null,
+                    active_cavities_t3: item.active_cavities_t3 || null,
+                    // Produção por turno acumulada
+                    T1: { produzido: Number(item.T1?.produzido) || 0 },
+                    T2: { produzido: Number(item.T2?.produzido) || 0 },
+                    T3: { produzido: Number(item.T3?.produzido) || 0 },
+                    total_produzido: Number(item.total_produzido) || 0
+                });
+            } else {
+                const agg = grouped.get(key);
+                // Manter primeiro valor de ciclo/cavidades reais informado; se vazio, assumir do item atual
+                if (!agg.real_cycle_t1 && item.real_cycle_t1) agg.real_cycle_t1 = item.real_cycle_t1;
+                if (!agg.active_cavities_t1 && item.active_cavities_t1) agg.active_cavities_t1 = item.active_cavities_t1;
+                if (!agg.real_cycle_t2 && item.real_cycle_t2) agg.real_cycle_t2 = item.real_cycle_t2;
+                if (!agg.active_cavities_t2 && item.active_cavities_t2) agg.active_cavities_t2 = item.active_cavities_t2;
+                if (!agg.real_cycle_t3 && item.real_cycle_t3) agg.real_cycle_t3 = item.real_cycle_t3;
+                if (!agg.active_cavities_t3 && item.active_cavities_t3) agg.active_cavities_t3 = item.active_cavities_t3;
+                // Atualizar campos básicos se estiverem vazios
+                if (!agg.mp && item.mp) agg.mp = item.mp;
+                if (!agg.budgeted_cycle && item.budgeted_cycle) agg.budgeted_cycle = item.budgeted_cycle;
+                if (!agg.mold_cavities && item.mold_cavities) agg.mold_cavities = item.mold_cavities;
+                if (!agg.piece_weight && item.piece_weight) agg.piece_weight = item.piece_weight;
+                // Somar produção por turno e total
+                agg.T1.produzido += Number(item.T1?.produzido) || 0;
+                agg.T2.produzido += Number(item.T2?.produzido) || 0;
+                agg.T3.produzido += Number(item.T3?.produzido) || 0;
+                agg.total_produzido += Number(item.total_produzido) || 0;
+            }
+        });
+
+        const rows = Array.from(grouped.values()).map(item => `
             <tr class="hover:bg-gray-50 text-center text-sm">
                 <td class="px-2 py-2 whitespace-nowrap border text-left">${item.machine}</td>
                 <td class="px-2 py-2 whitespace-nowrap border text-left">${item.product}</td>
@@ -6990,11 +7075,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
                 <td class="px-2 py-2 whitespace-nowrap border font-bold">${orDashNum(item.total_produzido)}</td>
                 <td class="px-2 py-2 whitespace-nowrap border">${item.machine}</td>
-                <td class="px-2 py-2 whitespace-nowrap border no-print">
-                    <button data-id="${item.id}" class="delete-plan-btn text-status-error hover:text-red-700 p-1 mx-auto flex"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                </td>
+                <td class="px-2 py-2 whitespace-nowrap border no-print"></td>
             </tr>
         `).join('');
+
+        planningTableBody.innerHTML = rows;
         lucide.createIcons();
     }
 
@@ -7010,35 +7095,72 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     function renderLeaderPanel(planItems) {
         if (!leaderLaunchPanel) return;
 
-        leaderLaunchPanel.innerHTML = planItems.map(item => {
+        // Agrupar por Máquina + Produto (consolidar itens de OPs diferentes do mesmo produto)
+        const groups = new Map();
+        (planItems || []).forEach(item => {
+            const key = `${item.machine}||${item.product_cod || item.product || ''}`;
+            if (!groups.has(key)) {
+                groups.set(key, {
+                    ids: [item.id],
+                    machine: item.machine,
+                    product: item.product,
+                    product_cod: item.product_cod,
+                    mp: item.mp || '',
+                    real_cycle_t1: item.real_cycle_t1 || null,
+                    active_cavities_t1: item.active_cavities_t1 || null,
+                    real_cycle_t2: item.real_cycle_t2 || null,
+                    active_cavities_t2: item.active_cavities_t2 || null,
+                    real_cycle_t3: item.real_cycle_t3 || null,
+                    active_cavities_t3: item.active_cavities_t3 || null
+                });
+            } else {
+                const g = groups.get(key);
+                g.ids.push(item.id);
+                // Manter o primeiro valor informado para ciclo/cavidades de cada turno
+                if (!g.real_cycle_t1 && item.real_cycle_t1) g.real_cycle_t1 = item.real_cycle_t1;
+                if (!g.active_cavities_t1 && item.active_cavities_t1) g.active_cavities_t1 = item.active_cavities_t1;
+                if (!g.real_cycle_t2 && item.real_cycle_t2) g.real_cycle_t2 = item.real_cycle_t2;
+                if (!g.active_cavities_t2 && item.active_cavities_t2) g.active_cavities_t2 = item.active_cavities_t2;
+                if (!g.real_cycle_t3 && item.real_cycle_t3) g.real_cycle_t3 = item.real_cycle_t3;
+                if (!g.active_cavities_t3 && item.active_cavities_t3) g.active_cavities_t3 = item.active_cavities_t3;
+                if (!g.mp && item.mp) g.mp = item.mp;
+            }
+        });
+
+        leaderLaunchPanel.innerHTML = Array.from(groups.values()).map(group => {
             const turnos = ['T1', 'T2', 'T3'];
             const statusHtml = turnos.map(turno => {
-                const isComplete = item[`real_cycle_${turno.toLowerCase()}`] && item[`active_cavities_${turno.toLowerCase()}`];
+                const rc = group[`real_cycle_${turno.toLowerCase()}`];
+                const cav = group[`active_cavities_${turno.toLowerCase()}`];
+                const isComplete = rc && cav;
                 const statusClass = isComplete ? 'bg-green-100 text-status-success' : 'bg-yellow-100 text-status-warning';
                 const statusIcon = isComplete ? `<i data-lucide="check-circle-2" class="w-4 h-4"></i>` : `<i data-lucide="alert-circle" class="w-4 h-4"></i>`;
                 return `<div class="flex items-center justify-center gap-2 p-1 rounded-md text-xs font-semibold ${statusClass}">${statusIcon} ${turno}</div>`;
             }).join('');
-            
+
             const btnClasses = turnos.map(turno => {
-                 const isComplete = item[`real_cycle_${turno.toLowerCase()}`] && item[`active_cavities_${turno.toLowerCase()}`];
-                 return isComplete ? 'bg-status-success hover:bg-green-700' : 'bg-gray-500 hover:bg-gray-600';
+                const rc = group[`real_cycle_${turno.toLowerCase()}`];
+                const cav = group[`active_cavities_${turno.toLowerCase()}`];
+                const isComplete = rc && cav;
+                return isComplete ? 'bg-status-success hover:bg-green-700' : 'bg-gray-500 hover:bg-gray-600';
             });
-            const mpLabel = item.mp ? `<p class="text-xs text-gray-500 mt-1">MP: ${item.mp}</p>` : '';
+            const mpLabel = group.mp ? `<p class="text-xs text-gray-500 mt-1">MP: ${group.mp}</p>` : '';
+            const idsCsv = group.ids.join(',');
 
             return `
                 <div class="border rounded-lg p-4 shadow-md flex flex-col justify-between bg-white">
                     <div>
-                        <h3 class="font-bold text-lg">${item.machine}</h3>
-                        <p class="text-sm text-gray-600">${item.product}</p>
+                        <h3 class="font-bold text-lg">${group.machine}</h3>
+                        <p class="text-sm text-gray-600">${group.product}</p>
                         ${mpLabel}
                         <div class="grid grid-cols-3 gap-2 mt-2">
                            ${statusHtml}
                         </div>
                     </div>
                     <div class="grid grid-cols-3 gap-2 mt-4">
-                        <button data-id="${item.id}" data-turno="T1" class="setup-btn ${btnClasses[0]} text-white font-bold py-2 px-3 rounded-lg text-sm">1º Turno</button>
-                        <button data-id="${item.id}" data-turno="T2" class="setup-btn ${btnClasses[1]} text-white font-bold py-2 px-3 rounded-lg text-sm">2º Turno</button>
-                        <button data-id="${item.id}" data-turno="T3" class="setup-btn ${btnClasses[2]} text-white font-bold py-2 px-3 rounded-lg text-sm">3º Turno</button>
+                        <button data-id="${idsCsv}" data-turno="T1" class="setup-btn ${btnClasses[0]} text-white font-bold py-2 px-3 rounded-lg text-sm">1º Turno</button>
+                        <button data-id="${idsCsv}" data-turno="T2" class="setup-btn ${btnClasses[1]} text-white font-bold py-2 px-3 rounded-lg text-sm">2º Turno</button>
+                        <button data-id="${idsCsv}" data-turno="T3" class="setup-btn ${btnClasses[2]} text-white font-bold py-2 px-3 rounded-lg text-sm">3º Turno</button>
                     </div>
                 </div>
             `;
@@ -7084,16 +7206,31 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         document.getElementById('leader-entry-turno').value = turno;
 
         try {
-            const docRef = db.collection('planning').doc(docId);
-            const doc = await docRef.get();
-            if (doc.exists) {
-                const data = doc.data();
-                console.log('[TRACE][showLeaderModal] planning data', data);
-                leaderModalTitle.textContent = `Lançamento: ${data.machine} - ${turno}`;
-                
-                document.getElementById('leader-entry-real-cycle').value = data[`real_cycle_${turno.toLowerCase()}`] || '';
-                document.getElementById('leader-entry-active-cavities').value = data[`active_cavities_${turno.toLowerCase()}`] || '';
+            // Suporta múltiplos IDs (csv) vindos do painel consolidado
+            const ids = String(docId).split(',').map(s => s.trim()).filter(Boolean);
+            let headerMachine = '';
+            let prefillReal = '';
+            let prefillCav = '';
+            for (const id of ids) {
+                try {
+                    const ref = db.collection('planning').doc(id);
+                    const snap = await ref.get();
+                    if (snap.exists) {
+                        const data = snap.data();
+                        if (!headerMachine) headerMachine = data.machine || '';
+                        const rc = data[`real_cycle_${turno.toLowerCase()}`];
+                        const cav = data[`active_cavities_${turno.toLowerCase()}`];
+                        if (!prefillReal && rc) prefillReal = rc;
+                        if (!prefillCav && cav) prefillCav = cav;
+                        if (prefillReal && prefillCav) break; // já temos valores para preencher
+                    }
+                } catch (innerErr) {
+                    console.warn('[TRACE][showLeaderModal] falha ao recuperar doc para prefill', id, innerErr);
+                }
             }
+            leaderModalTitle.textContent = `Lançamento: ${headerMachine || 'Máquina'} - ${turno}`;
+            document.getElementById('leader-entry-real-cycle').value = prefillReal || '';
+            document.getElementById('leader-entry-active-cavities').value = prefillCav || '';
             
         } catch (error) {
             console.error("Erro ao buscar dados do setup: ", error);
@@ -7130,10 +7267,21 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         console.log('[TRACE][handleLeaderEntrySubmit] updating planning document', planDataToUpdate);
 
         try {
-            await db.collection('planning').doc(docId).update(planDataToUpdate);
+            // Suporta múltiplos IDs (csv) para manter OPs sincronizadas para o mesmo produto
+            const ids = String(docId).split(',').map(s => s.trim()).filter(Boolean);
+            const batchSize = 20; // segurança para não estourar limites
+            for (let i = 0; i < ids.length; i += batchSize) {
+                const slice = ids.slice(i, i + batchSize);
+                const batch = db.batch();
+                slice.forEach(id => {
+                    const ref = db.collection('planning').doc(id);
+                    batch.update(ref, planDataToUpdate);
+                });
+                await batch.commit();
+            }
 
             hideLeaderModal();
-            console.log('[TRACE][handleLeaderEntrySubmit] completed successfully');
+            console.log('[TRACE][handleLeaderEntrySubmit] completed successfully for ids', ids);
         } catch (error) {
             console.error("Erro ao salvar dados do líder: ", error);
             alert("Não foi possível salvar os dados. Tente novamente.");
@@ -7252,6 +7400,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             if (planDoc.exists) {
                 const planData = planDoc.data();
                 productionModalTitle.textContent = `Lançamento: ${planData.machine} - ${turno}`;
+                // Preencher contexto do modal com dados do plano (máquina/produto)
+                try {
+                    fillModalContext(productionModal, {
+                        machine: planData.machine,
+                        product: planData.product,
+                        product_cod: planData.product_cod
+                    });
+                } catch (e) { /* noop */ }
                 
                 // Configurar informações do produto
                 const productWeightInfo = document.getElementById('product-weight-info');
@@ -7927,18 +8083,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (adjustQuantityClose) adjustQuantityClose.addEventListener('click', closeAdjustQuantityModal);
         if (adjustQuantityCancel) adjustQuantityCancel.addEventListener('click', closeAdjustQuantityModal);
         if (adjustQuantityForm) adjustQuantityForm.addEventListener('submit', handleAdjustQuantitySubmit);
-
-        // Modal de visualização de foto
-        const photoViewerClose = document.getElementById('photo-viewer-close');
-        if (photoViewerClose) photoViewerClose.addEventListener('click', closePhotoModal);
-        
-        // Fechar modal de foto ao clicar fora da imagem
-        const photoViewerModal = document.getElementById('photo-viewer-modal');
-        if (photoViewerModal) {
-            photoViewerModal.addEventListener('click', (e) => {
-                if (e.target === photoViewerModal) closePhotoModal();
-            });
-        }
     }
     
     // Funções para abrir/fechar modais
@@ -7948,7 +8092,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             alert('Selecione uma máquina primeiro.');
             return;
         }
-        document.getElementById('quick-production-modal').classList.remove('hidden');
+        openModal('quick-production-modal');
     }
     
     function openLossesModal() {
@@ -7957,7 +8101,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             alert('Selecione uma máquina primeiro.');
             return;
         }
-        document.getElementById('quick-losses-modal').classList.remove('hidden');
+        openModal('quick-losses-modal');
     }
     
     function openReworkModal() {
@@ -7966,7 +8110,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             alert('Selecione uma máquina primeiro.');
             return;
         }
-        document.getElementById('quick-rework-modal').classList.remove('hidden');
+        openModal('quick-rework-modal');
     }
     
     function openManualProductionModal() {
@@ -8071,83 +8215,30 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
     }
 
+    // Preenche o contexto (máquina/produto) em um modal, se existir o bloco .modal-context
+    function fillModalContext(modalEl, context = null) {
+        if (!modalEl) return;
+        const ctx = modalEl.querySelector('.modal-context');
+        if (!ctx) return;
+        const machineEl = ctx.querySelector('.context-machine');
+        const productEl = ctx.querySelector('.context-product');
+        const src = context || selectedMachineData || {};
+        const machine = src.machine || src.machine_id || '-';
+        let product = src.product || src.product_name || '';
+        const code = src.product_cod || src.product_code || src.part_code || '';
+        if (!product && code) product = `Cod ${code}`;
+        if (machineEl) machineEl.textContent = machine || '-';
+        if (productEl) productEl.textContent = product || 'Produto não definido';
+    }
+
     function openModal(modalId) {
         const modal = document.getElementById(modalId);
         if (!modal) return;
+        // Atualizar faixa de contexto do modal, quando aplicável
+        try { fillModalContext(modal); } catch (e) { /* noop */ }
         modal.classList.remove('hidden');
     }
 
-    function viewPhotoModal(photoUrl, entryType) {
-        const modal = document.getElementById('photo-viewer-modal');
-        const img = document.getElementById('photo-viewer-image');
-        const typeLabel = document.getElementById('photo-viewer-type');
-        
-        if (!modal || !img) return;
-        
-        img.src = photoUrl;
-        const typeConfig = {
-            production: 'Foto - Produção',
-            loss: 'Foto - Perda',
-            downtime: 'Foto - Parada',
-            rework: 'Foto - Retrabalho'
-        };
-        typeLabel.textContent = typeConfig[entryType] || 'Visualização de Foto';
-        
-        modal.classList.remove('hidden');
-    }
-
-    function closePhotoModal() {
-        const modal = document.getElementById('photo-viewer-modal');
-        if (modal) modal.classList.add('hidden');
-    }
-
-    async function uploadEvidencePhoto(file, folder = 'evidences') {
-        if (!file) {
-            return { url: null, path: null };
-        }
-
-        if (!storage) {
-            throw new Error('storage-not-configured');
-        }
-
-        const baseFolder = folder
-            .replace(/^\/+/g, '')
-            .replace(/\/+$/g, '')
-            .replace(/^\.+/, '')
-            .replace(/\\+/g, '/');
-        const sanitizedFolder = (baseFolder || 'evidences').replace(/\s+/g, '_');
-        const inferredExt = (file.type && file.type.split('/')[1]) || (file.name.split('.').pop() || 'jpg');
-        const extension = (inferredExt || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
-        const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-        const storagePath = `${sanitizedFolder}/${uniqueSuffix}.${extension}`;
-        const metadata = { contentType: file.type || 'image/jpeg' };
-
-        console.log('[TRACE][uploadEvidencePhoto] iniciando upload', { storagePath, contentType: metadata.contentType });
-
-        const snapshot = await storage.ref().child(storagePath).put(file, metadata);
-        const downloadURL = await snapshot.ref.getDownloadURL();
-
-        console.log('[TRACE][uploadEvidencePhoto] upload concluído', { storagePath, downloadURL });
-        return { url: downloadURL, path: storagePath };
-    }
-
-    async function deleteEvidencePhoto(storagePath) {
-        if (!storagePath || !storage) {
-            return;
-        }
-
-        try {
-            console.log('[TRACE][deleteEvidencePhoto] removendo arquivo antigo', { storagePath });
-            await storage.ref().child(storagePath).delete();
-        } catch (error) {
-            if (error?.code === 'storage/object-not-found') {
-                console.warn('[TRACE][deleteEvidencePhoto] arquivo já inexistente', storagePath);
-            } else {
-                console.warn('[TRACE][deleteEvidencePhoto] falha ao remover arquivo', { storagePath, error });
-            }
-        }
-    }
-    
     // Função para toggle de parada (stop/start)
     function toggleDowntime() {
         if (!selectedMachineData) {
@@ -8386,7 +8477,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const weightInput = document.getElementById('manual-losses-weight');
         const reasonSelect = document.getElementById('manual-losses-reason');
         const obsInput = document.getElementById('manual-losses-obs');
-        const photoInput = document.getElementById('manual-losses-photo');
 
         const dateValue = (dateInput?.value || '').trim();
         const shiftRaw = shiftSelect?.value || '';
@@ -8395,7 +8485,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const weightValue = parseFloat(weightInput?.value || '0');
         const reasonValue = reasonSelect?.value || '';
         const observations = (obsInput?.value || '').trim();
-        const photoFile = photoInput?.files?.[0] || null;
 
         if (!dateValue) {
             alert('Informe a data referente à perda.');
@@ -8469,24 +8558,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
 
-        let photoUrl = null;
-        let photoStoragePath = null;
-        if (photoFile) {
-            try {
-                const uploadResult = await uploadEvidencePhoto(photoFile, `losses/${planId}`);
-                photoUrl = uploadResult?.url || null;
-                photoStoragePath = uploadResult?.path || null;
-            } catch (error) {
-                console.error('Erro ao enviar foto da perda manual:', error);
-                if (error?.message === 'storage-not-configured') {
-                    alert('Não foi possível salvar a foto porque o armazenamento não está configurado.');
-                } else {
-                    alert('Erro ao enviar a foto. O registro não foi salvo.');
-                }
-                return;
-            }
-        }
-
         const shiftNumeric = parseInt(shiftRaw, 10);
         const turno = [1, 2, 3].includes(shiftNumeric) ? shiftNumeric : getCurrentShift();
         const horaInformada = hourValue && /^\d{2}:\d{2}$/.test(hourValue) ? hourValue : null;
@@ -8511,9 +8582,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             horaInformada,
             dataHoraInformada,
             registradoPor: currentUser.username || null,
-            registradoPorNome: getCurrentUserName(),
-            photoUrl,
-            photoStoragePath
+            registradoPorNome: getCurrentUserName()
         };
 
         console.log('[TRACE][handleManualLossesSubmit] prepared payload', payloadBase);
@@ -8693,8 +8762,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const weight = parseFloat(weightInput.value) || 0;
         const reason = document.getElementById('quick-losses-reason').value;
         const obs = (document.getElementById('quick-losses-obs').value || '').trim();
-        const lossesPhotoInput = document.getElementById('quick-losses-photo');
-        const lossesPhotoFile = lossesPhotoInput?.files?.[0] || null;
 
         console.log('[TRACE][handleLossesSubmit] parsed form values', { quantity, weight, reason, obs });
 
@@ -8775,30 +8842,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
 
-        let photoUrl = isEditing ? (originalData?.photoUrl || null) : null;
-        let photoStoragePath = isEditing ? (originalData?.photoStoragePath || null) : null;
-
-        if (lossesPhotoFile) {
-            try {
-                const uploadResult = await uploadEvidencePhoto(lossesPhotoFile, `losses/${planId}`);
-                if (uploadResult?.url) {
-                    if (photoStoragePath && photoStoragePath !== uploadResult.path) {
-                        await deleteEvidencePhoto(photoStoragePath);
-                    }
-                    photoUrl = uploadResult.url;
-                    photoStoragePath = uploadResult.path;
-                }
-            } catch (error) {
-                console.error('Erro ao enviar foto da perda:', error);
-                if (error?.message === 'storage-not-configured') {
-                    alert('Não foi possível salvar a foto porque o armazenamento não está configurado.');
-                } else {
-                    alert('Erro ao enviar a foto. O registro não foi salvo.');
-                }
-                return;
-            }
-        }
-
         const currentShift = getCurrentShift();
         const turno = isEditing ? (originalData?.turno || currentShift) : currentShift;
         const dataReferencia = isEditing ? (originalData?.data || getProductionDateString()) : getProductionDateString();
@@ -8830,9 +8873,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             machine: machineRef || null,
             mp: mpValue,
             orderId: selectedMachineData?.order_id || null,
-            orderNumber: selectedMachineData?.order_number || null,
-            photoUrl: photoUrl || null,
-            photoStoragePath: photoStoragePath || null
+            orderNumber: selectedMachineData?.order_number || null
         };
 
         console.log('[TRACE][handleLossesSubmit] payloadBase prepared', payloadBase);
@@ -8895,8 +8936,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
     const reason = document.getElementById('quick-downtime-reason').value;
     const obs = (document.getElementById('quick-downtime-obs').value || '').trim();
-        const downtimePhotoInput = document.getElementById('quick-downtime-photo');
-        const downtimePhotoFile = downtimePhotoInput?.files?.[0] || null;
         
         console.log('[TRACE][handleDowntimeSubmit] parsed form values', { reason, obs });
 
@@ -8915,25 +8954,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const now = new Date();
             const endTime = now.toTimeString().substr(0, 5);
             
-            let photoUrl = null;
-            let photoStoragePath = null;
-            if (downtimePhotoFile) {
-                try {
-                    const folder = `downtime/${currentDowntimeStart.machine || 'geral'}`;
-                    const uploadResult = await uploadEvidencePhoto(downtimePhotoFile, folder);
-                    photoUrl = uploadResult?.url || null;
-                    photoStoragePath = uploadResult?.path || null;
-                } catch (error) {
-                    console.error('Erro ao enviar foto da parada:', error);
-                    if (error?.message === 'storage-not-configured') {
-                        alert('Não foi possível salvar a foto porque o armazenamento não está configurado.');
-                    } else {
-                        alert('Erro ao enviar a foto. O registro não foi salvo.');
-                    }
-                    return;
-                }
-            }
-
             // Determinar datas de início e fim (fim = data atual de produção)
             const startDateStr = currentDowntimeStart.date || formatDateYMD(currentDowntimeStart.startTimestamp || new Date());
             const endDateStr = getProductionDateString();
@@ -8958,9 +8978,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     observations: obs,
                     registradoPor: currentUser.username || null,
                     registradoPorNome: getCurrentUserName(),
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    photoUrl,
-                    photoStoragePath
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
 
                 console.log('[TRACE][handleDowntimeSubmit] saving segment', downtimeData);
@@ -9149,8 +9167,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const endTime = document.getElementById('manual-downtime-end').value;
         const reason = document.getElementById('manual-downtime-reason').value;
         const obs = (document.getElementById('manual-downtime-obs').value || '').trim();
-        const manualDowntimePhotoInput = document.getElementById('manual-downtime-photo');
-        const manualDowntimePhotoFile = manualDowntimePhotoInput?.files?.[0] || null;
         
         console.log('[TRACE][handleManualDowntimeSubmit] parsed form values', { startTime, endTime, reason, obs });
 
@@ -9190,25 +9206,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 return;
             }
 
-            let photoUrl = null;
-            let photoStoragePath = null;
-            if (manualDowntimePhotoFile) {
-                try {
-                    const folder = `downtime/${selectedMachineData.machine || 'manual'}`;
-                    const uploadResult = await uploadEvidencePhoto(manualDowntimePhotoFile, folder);
-                    photoUrl = uploadResult?.url || null;
-                    photoStoragePath = uploadResult?.path || null;
-                } catch (error) {
-                    console.error('Erro ao enviar foto da parada manual:', error);
-                    if (error?.message === 'storage-not-configured') {
-                        alert('Não foi possível salvar a foto porque o armazenamento não está configurado.');
-                    } else {
-                        alert('Erro ao enviar a foto. O registro não foi salvo.');
-                    }
-                    return;
-                }
-            }
-
             // Persistir cada segmento
             const currentUser = getActiveUser();
             for (const seg of segments) {
@@ -9222,9 +9219,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     observations: obs,
                     registradoPor: currentUser.username || null,
                     registradoPorNome: getCurrentUserName(),
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    photoUrl,
-                    photoStoragePath
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
                 console.log('[TRACE][handleManualDowntimeSubmit] saving segment', downtimeData);
                 await db.collection('downtime_entries').add(downtimeData);
@@ -9336,13 +9331,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const weightInput = document.getElementById('quick-rework-weight');
         const reasonSelect = document.getElementById('quick-rework-reason');
         const obsInput = document.getElementById('quick-rework-obs');
-        const reworkPhotoInput = document.getElementById('quick-rework-photo');
 
         const quantity = parseInt(qtyInput?.value, 10) || 0;
         const weight = parseFloat(weightInput?.value) || 0;
         const reason = reasonSelect?.value || '';
         const observations = (obsInput?.value || '').trim();
-        const reworkPhotoFile = reworkPhotoInput?.files?.[0] || null;
 
         if (quantity <= 0) {
             alert('Informe uma quantidade válida de peças para retrabalho.');
@@ -9362,24 +9355,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
 
-        let photoUrl = null;
-        let photoStoragePath = null;
-        if (reworkPhotoFile) {
-            try {
-                const uploadResult = await uploadEvidencePhoto(reworkPhotoFile, `rework/${planId}`);
-                photoUrl = uploadResult?.url || null;
-                photoStoragePath = uploadResult?.path || null;
-            } catch (error) {
-                console.error('Erro ao enviar foto do retrabalho:', error);
-                if (error?.message === 'storage-not-configured') {
-                    alert('Não foi possível salvar a foto porque o armazenamento não está configurado.');
-                } else {
-                    alert('Erro ao enviar a foto. O registro não foi salvo.');
-                }
-                return;
-            }
-        }
-
         const currentShift = getCurrentShift();
         const dataReferencia = getProductionDateString();
     const currentUser = getActiveUser();
@@ -9394,8 +9369,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             observacoes: observations,
             machine: selectedMachineData.machine || null,
             mp: selectedMachineData.mp || '',
-            photoUrl: photoUrl || null,
-            photoStoragePath: photoStoragePath || null,
             registradoPor: currentUser.username || null,
             registradoPorNome: getCurrentUserName(),
             timestamp: firebase.firestore.FieldValue.serverTimestamp(),
@@ -9786,7 +9759,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
 
         const observations = entry.data.observacoes || entry.data.observations || entry.data.notes;
-        const photoUrl = entry.data.photoUrl || null;
         const canEdit = entry.type === 'production' || entry.type === 'loss';
         const actions = [];
 
@@ -9826,13 +9798,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                             ${details.join('<span class="text-gray-300">•</span>')}
                         </div>
                         ${observations ? `<div class="text-xs text-gray-500">Obs.: ${observations}</div>` : ''}
-                        ${photoUrl ? `<div class="mt-2 pt-2 border-t border-gray-200">
-                            <button class="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-600 border border-blue-200 rounded hover:bg-blue-100 transition"
-                                    onclick="viewPhotoModal('${photoUrl.replace(/'/g, "\\'")}', '${entry.type}')">
-                                <i data-lucide="image" class="w-3 h-3"></i>
-                                Ver Foto
-                            </button>
-                        </div>` : ''}
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
                         ${actions.join('')}
@@ -10767,9 +10732,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         try {
             const today = getProductionDateString();
+            // 1) Recuperar todos os lançamentos de produção da MÁQUINA no dia atual
+            //    (filtraremos em memória pelos planos do MESMO PRODUTO)
             const productionSnapshot = await db.collection('production_entries')
                 .where('data', '==', today)
-                .where('planId', '==', selectedMachineData.id)
+                .where('machine', '==', selectedMachineData.machine)
                 .get();
 
             const hourlyData = {};
@@ -10782,6 +10749,26 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const partCode = selectedMachineData.product_cod || selectedMachineData.product_code;
             let matchedOrder = null;
             let lotSize = Number(selectedMachineData.planned_quantity) || 0;
+
+            // 2) Identificar todos os planos de HOJE para esta máquina e MESMO PRODUTO
+            //    para consolidar entre trocas de OP do mesmo produto
+            let relevantPlans = [];
+            try {
+                const planSnap = await db.collection('planning')
+                    .where('date', '==', today)
+                    .where('machine', '==', selectedMachineData.machine)
+                    .get();
+                const partMatcher = String(partCode || '').trim().toLowerCase();
+                relevantPlans = planSnap.docs
+                    .map(doc => ({ id: doc.id, ...doc.data() }))
+                    .filter(plan => {
+                        const code = String(plan.product_cod || plan.product_code || plan.part_code || '').trim().toLowerCase();
+                        return partMatcher && code && code === partMatcher;
+                    });
+            } catch (e) {
+                console.warn('[HOUR-CHART] Falha ao recuperar planos do dia para consolidação', e);
+                relevantPlans = [];
+            }
 
             // Preferir a OP vinculada ao planejamento, se existir
             if (selectedMachineData.order_id) {
@@ -10829,16 +10816,37 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 }
             }
 
-            // Usar META DIÁRIA (planned_quantity) para o gráfico "planejado" por hora
-            const dailyTarget = Number(selectedMachineData.planned_quantity) || Number(selectedMachineData.daily_target) || 0;
+            // 3) Calcular META DIÁRIA consolidada por MÁQUINA + PRODUTO (somatório dos planos do dia)
+            let dailyTarget = 0;
+            if (Array.isArray(relevantPlans) && relevantPlans.length > 0) {
+                dailyTarget = relevantPlans.reduce((sum, p) => {
+                    const pq = Number(p.planned_quantity || p.daily_target || 0) || 0;
+                    return sum + pq;
+                }, 0);
+            }
+            // Fallback: manter meta do plano selecionado se não houver agrupamento
+            if (!Number.isFinite(dailyTarget) || dailyTarget <= 0) {
+                dailyTarget = Number(selectedMachineData.planned_quantity) || Number(selectedMachineData.daily_target) || 0;
+            }
             const hourlyTarget = HOURS_IN_PRODUCTION_DAY > 0 ? (dailyTarget / HOURS_IN_PRODUCTION_DAY) : 0;
 
             Object.keys(hourlyData).forEach(hour => {
                 hourlyData[hour].planned = hourlyTarget;
             });
 
+            // 4) Somar EXECUTADO por hora somente para lançamentos pertencentes aos planos do mesmo produto
+            const relevantPlanIdSet = new Set((relevantPlans || []).map(p => p.id));
+            // Se não encontramos planos relevantes (edge), considerar ao menos o plano atual como elegível
+            if (relevantPlanIdSet.size === 0 && selectedMachineData.id) {
+                relevantPlanIdSet.add(selectedMachineData.id);
+            }
+
             productionSnapshot.forEach(doc => {
                 const data = doc.data();
+                // Filtrar por plano relevante (mesmo produto)
+                if (data.planId && !relevantPlanIdSet.has(data.planId)) {
+                    return;
+                }
                 const prodDate = resolveProductionDateTime(data);
                 if (!prodDate) {
                     return;
