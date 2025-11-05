@@ -1756,7 +1756,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Calcular KPIs básicos
         const totalProduction = productionData.reduce((sum, item) => sum + item.quantity, 0);
-        const totalLosses = lossesData.reduce((sum, item) => sum + item.quantity, 0);
+    const totalLosses = lossesData.reduce((sum, item) => sum + (Number(item.scrapPcs ?? item.quantity ?? 0) || 0), 0);
         const totalDowntime = downtimeData.reduce((sum, item) => sum + (item.duration || 0), 0);
         
         // Calcular OEE real usando disponibilidade × performance × qualidade
@@ -1783,7 +1783,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         if (overviewProduction) overviewProduction.textContent = totalProduction.toLocaleString();
-        if (overviewLosses) overviewLosses.textContent = totalLosses.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (overviewLosses) overviewLosses.textContent = totalLosses.toLocaleString('pt-BR');
         if (overviewDowntime) overviewDowntime.textContent = `${(totalDowntime / 60).toFixed(1)}h`;
 
         console.log('[TRACE][loadOverviewData] KPIs calculated', { 
@@ -1909,7 +1909,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     shift: shiftNum,
                     workDay,
                     production: 0,
-                    lossesKg: 0,
+                    scrapPcs: 0,
+                    scrapKg: 0,
                     downtimeMin: 0
                 };
             }
@@ -1925,7 +1926,10 @@ document.addEventListener('DOMContentLoaded', function() {
         lossesData.forEach(item => {
             const group = getOrCreateGroup(item);
             if (!group) return;
-            group.lossesKg += item.quantity || 0;
+            const scrapPcs = Number(item.scrapPcs ?? item.quantity ?? 0) || 0;
+            const scrapKg = Number(item.scrapKg ?? 0) || 0;
+            group.scrapPcs += scrapPcs;
+            group.scrapKg += scrapKg;
         });
 
         downtimeData.forEach(item => {
@@ -1988,7 +1992,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const cavAtivas = plan.raw[`active_cavities_${shiftKey}`] || plan.raw.mold_cavities || 2;
             const pieceWeight = plan.raw.piece_weight || 0.1; // peso padrão de 100g
 
-            const refugoPcs = pieceWeight > 0 ? Math.round((group.lossesKg * 1000) / pieceWeight) : 0;
+            let refugoPcs = Math.round(Math.max(0, group.scrapPcs || 0));
+            if (!refugoPcs && group.scrapKg > 0 && pieceWeight > 0) {
+                refugoPcs = Math.round((group.scrapKg * 1000) / pieceWeight);
+            }
 
             const metrics = calculateShiftOEE(
                 group.production,
@@ -2005,6 +2012,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 production: group.production,
                 downtimeMin: group.downtimeMin,
                 refugoPcs,
+                scrapPcs: group.scrapPcs,
+                scrapKg: group.scrapKg,
                 cicloReal,
                 cavAtivas,
                 metrics
@@ -2822,16 +2831,28 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                         const resolvedDateTime = resolveProductionDateTime(raw);
                         const timeHint = raw.horaInformada || raw.hora || raw.hour || raw.time || null;
                         const workDay = getWorkDayFromTimestamp(resolvedDateTime || primaryTimestamp) || getWorkDay(dateValue, timeHint);
+                        const rawRefugoKg = Number(raw.refugo_kg ?? raw.refugoKg ?? raw.scrap_kg ?? raw.scrapKg ?? 0) || 0;
+                        const rawRefugoPcs = Number(raw.refugo_qty ?? raw.refugo_qtd ?? raw.scrap_qty ?? raw.scrap_qtd ?? 0) || 0;
+                        const pieceWeight = Number(raw.piece_weight ?? raw.peso_unitario ?? raw.pesoUnitario ?? raw.peso ?? 0) || 0;
+                        const resolvedPcs = rawRefugoPcs > 0
+                            ? rawRefugoPcs
+                            : (rawRefugoKg > 0 && pieceWeight > 0 ? Math.round((rawRefugoKg * 1000) / pieceWeight) : 0);
+                        const resolvedKg = rawRefugoKg > 0
+                            ? rawRefugoKg
+                            : (pieceWeight > 0 && resolvedPcs > 0 ? (resolvedPcs * pieceWeight) / 1000 : 0);
                         return {
                             id,
                             date: dateValue,
                             machine: normalizeMachineId(raw.machine || raw.machineRef || raw.machine_id || null),
-                            quantity: Number(raw.refugo_qty ?? raw.refugo_kg ?? raw.quantity ?? 0) || 0,
+                            quantity: resolvedPcs,
                             shift: normalizeShift(raw.turno ?? raw.shift),
                             reason: raw.perdas || raw.reason || '',
                             mp: raw.mp || '',
                             mp_type: raw.mp_type || raw.mp || '',
                             workDay: workDay || dateValue,
+                            scrapPcs: resolvedPcs,
+                            scrapKg: resolvedKg,
+                            pieceWeight,
                             raw
                         };
                     }
@@ -8129,7 +8150,110 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         // Ocultar botão de exclusão em novo lançamento
         const quickLossesDeleteBtn = document.getElementById('quick-losses-delete-btn');
         if (quickLossesDeleteBtn) quickLossesDeleteBtn.classList.add('hidden');
+        
+        // Configurar poka yoke para entrada de peso
+        const weightInput = document.getElementById('quick-losses-weight');
+        if (weightInput) {
+            // Criar helper de validação se não existir
+            if (!document.getElementById('weight-feedback-helper')) {
+                const helper = document.createElement('div');
+                helper.id = 'weight-feedback-helper';
+                helper.className = 'mt-1 text-sm font-medium';
+                weightInput.parentElement.appendChild(helper);
+            }
+            
+            // Limpar valor anterior
+            weightInput.value = '';
+            
+            // Adicionar listener para feedback real-time
+            weightInput.removeEventListener('input', updateWeightFeedback);
+            weightInput.addEventListener('input', updateWeightFeedback);
+            
+            // Adicionar listener para validação ao sair
+            weightInput.removeEventListener('blur', validateWeightInput);
+            weightInput.addEventListener('blur', validateWeightInput);
+        }
+        
         openModal('quick-losses-modal');
+    }
+    
+    // Atualizar feedback em tempo real do input de peso
+    function updateWeightFeedback() {
+        const weightInput = document.getElementById('quick-losses-weight');
+        const helper = document.getElementById('weight-feedback-helper');
+        
+        if (!helper || !weightInput.value) {
+            if (helper) {
+                helper.innerHTML = '';
+                helper.className = 'mt-1 text-sm';
+            }
+            return;
+        }
+        
+        const rawValue = weightInput.value;
+        const parsed = parseNumberPtBR(rawValue);
+        
+        // Detectar se há caractere suspeito
+        const hasComma = rawValue.includes(',');
+        const hasDot = rawValue.includes('.');
+        const multipleDots = (rawValue.match(/\./g) || []).length > 1;
+        const multipleCommas = (rawValue.match(/,/g) || []).length > 1;
+        
+        let feedbackHTML = '';
+        let feedbackClass = 'text-gray-600';
+        
+        if (multipleCommas || multipleDots) {
+            feedbackHTML = `⚠️ <strong>Aviso:</strong> Múltiplos separadores detectados! Usando: <strong>${parsed.toFixed(3)} kg</strong>`;
+            feedbackClass = 'text-yellow-700 bg-yellow-50 p-2 rounded border border-yellow-200';
+        } else if (parsed > 0) {
+            // Interpretação bem-sucedida
+            feedbackHTML = `✓ Interpretado como: <strong>${parsed.toFixed(3)} kg</strong>`;
+            feedbackClass = 'text-green-700';
+        } else if (rawValue && parsed === 0) {
+            // Entrada não-vazia mas não foi convertida
+            feedbackHTML = `❌ <strong>Erro:</strong> Não foi possível interpretar "${rawValue}" como número`;
+            feedbackClass = 'text-red-700 bg-red-50 p-2 rounded border border-red-200';
+        }
+        
+        if (helper) {
+            helper.innerHTML = feedbackHTML;
+            helper.className = `mt-1 text-sm font-medium ${feedbackClass}`;
+        }
+    }
+    
+    // Validar e corrigir entrada de peso ao sair do campo
+    function validateWeightInput() {
+        const weightInput = document.getElementById('quick-losses-weight');
+        if (!weightInput || !weightInput.value) return;
+        
+        const rawValue = weightInput.value;
+        const parsed = parseNumberPtBR(rawValue);
+        
+        if (parsed === 0 && rawValue.trim()) {
+            // Campo tem texto mas não foi interpretado como número
+            const confirmation = window.confirm(
+                `Não consegui interpretar "${rawValue}" como peso.\n\n` +
+                `Use vírgula (,) para decimais: 1,5 kg\n` +
+                `Ou ponto (.): 1.5 kg\n\n` +
+                `Deseja limpar o campo e tentar novamente?`
+            );
+            if (confirmation) {
+                weightInput.value = '';
+                updateWeightFeedback();
+                weightInput.focus();
+            }
+        } else if (parsed > 100) {
+            // Alerta se peso muito alto (pode ser digitação errada de 1,5 como 15)
+            const confirmation = window.confirm(
+                `⚠️ Peso muito alto: ${parsed.toFixed(3)} kg\n\n` +
+                `Confirma este peso ou quer corrigir?`
+            );
+            if (!confirmation) {
+                weightInput.value = '';
+                updateWeightFeedback();
+                weightInput.focus();
+            }
+        }
     }
     
     function openReworkModal() {
@@ -8771,6 +8895,34 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
     }
     
+    // Helper: Converte string com vírgula ou ponto em número, normalizando para locale pt-BR
+    function parseNumberPtBR(str) {
+        if (!str) return 0;
+        str = String(str).trim();
+        // Remover espaços
+        str = str.replace(/\s/g, '');
+        // Se tem ambos vírgula e ponto, considerar o último como separador decimal
+        const lastComma = str.lastIndexOf(',');
+        const lastDot = str.lastIndexOf('.');
+        let normalized = str;
+        
+        if (lastComma > lastDot) {
+            // Vírgula é o separador decimal: "1.234,56" → "1234.56"
+            normalized = str.replace(/\./g, '').replace(',', '.');
+        } else if (lastDot > lastComma) {
+            // Ponto é o separador decimal: "1,234.56" ou "1.23" → mantém "1.23"
+            normalized = str.replace(/,/g, '');
+        } else if (lastComma >= 0) {
+            // Só tem vírgula: "1,50" → "1.50"
+            normalized = str.replace(',', '.');
+        }
+        // Caso contrário (só números ou só ponto): mantém como está
+        
+        const result = parseFloat(normalized) || 0;
+        console.log(`[TRACE][parseNumberPtBR] Input: "${str}" → Normalized: "${normalized}" → Result: ${result}`);
+        return result;
+    }
+
     async function handleLossesSubmit(e) {
         e.preventDefault();
         
@@ -8787,7 +8939,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const quantityInput = document.getElementById('quick-losses-qty');
         const weightInput = document.getElementById('quick-losses-weight');
         const quantity = parseInt(quantityInput.value, 10) || 0;
-        const weight = parseFloat(weightInput.value) || 0;
+        const weight = parseNumberPtBR(weightInput.value);
         const reason = document.getElementById('quick-losses-reason').value;
         const obs = (document.getElementById('quick-losses-obs').value || '').trim();
 
