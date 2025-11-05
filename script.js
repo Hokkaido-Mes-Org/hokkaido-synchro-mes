@@ -821,15 +821,22 @@ document.addEventListener('DOMContentLoaded', function() {
     function showConfirmModal(id, collection) {
         docIdToDelete = id;
         collectionToDelete = collection;
-        const confirmText = document.getElementById('confirm-modal-text');
-        if (confirmText) {
-            if (collection === 'downtime_entries') {
-                confirmText.textContent = 'Tem a certeza de que deseja excluir este registro de parada? Esta ação não pode ser desfeita.'
-            } else {
-                confirmText.textContent = 'Tem a certeza de que deseja excluir este item? Todos os lançamentos associados também serão removidos.'
-            }
+        try { console.log('[TRACE][showConfirmModal] target', { id, collection }); } catch(e) { /* noop */ }
+
+        let message = 'Tem a certeza de que deseja excluir este lançamento? Esta ação não pode ser desfeita.';
+        if (collection === 'downtime_entries') {
+            message = 'Tem a certeza de que deseja excluir este registro de parada? Esta ação não pode ser desfeita.';
+        } else if (collection === 'planning') {
+            message = 'Tem a certeza de que deseja excluir este planejamento? Todos os lançamentos de produção associados também serão removidos.';
         }
-        if (confirmModal) confirmModal.classList.remove('hidden');
+
+        // Usar confirm nativo para garantir que o usuário consiga confirmar mesmo se o modal customizado falhar
+        const userConfirmed = window.confirm(message);
+        if (userConfirmed) {
+            executeDelete();
+        } else {
+            hideConfirmModal();
+        }
     }
     
     function hideConfirmModal() {
@@ -839,11 +846,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     async function executeDelete() {
-        if (!docIdToDelete || !collectionToDelete) return;
+        try { console.log('[TRACE][executeDelete] called', { docIdToDelete, collectionToDelete }); } catch(e){}
+        if (!docIdToDelete || !collectionToDelete) {
+            try { console.warn('[TRACE][executeDelete] missing target', { docIdToDelete, collectionToDelete }); } catch(e){}
+            return;
+        }
         
         const docRef = db.collection(collectionToDelete).doc(docIdToDelete);
 
         try {
+            console.log('[TRACE][executeDelete] deleting', { id: docIdToDelete, collection: collectionToDelete });
             if (collectionToDelete === 'planning') {
                 const prodEntriesSnapshot = await db.collection('production_entries').where('planId', '==', docIdToDelete).get();
                 const batch = db.batch();
@@ -854,6 +866,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             await docRef.delete();
+            try { showNotification('Item excluído com sucesso.', 'success'); } catch(e) { /* noop */ }
             
             if (pageTitle && pageTitle.textContent === 'Análise' && currentAnalysisView === 'resumo') {
                 loadResumoData();
@@ -867,7 +880,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
         } catch (error) {
             console.error("Erro ao excluir: ", error);
-            alert("Não foi possível excluir o item e/ou seus dados associados.");
+            const code = error && (error.code || error.name) || '';
+            const msg = code === 'permission-denied'
+                ? 'Permissão negada para excluir este item. Verifique seu perfil de acesso.'
+                : 'Não foi possível excluir o item e/ou seus dados associados.';
+            try { showNotification(msg, 'error'); } catch(e) { /* noop */ }
+            alert(msg);
         } finally {
             hideConfirmModal();
         }
@@ -5651,11 +5669,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             });
         });
 
-
-        if (confirmModal) {
-            document.getElementById('confirm-modal-cancel-btn').addEventListener('click', hideConfirmModal);
-            document.getElementById('confirm-modal-ok-btn').addEventListener('click', executeDelete);
-        }
+        // Confirm modal handlers are assigned dynamically inside showConfirmModal
 
         // NOVOS EVENT LISTENERS PARA O SISTEMA DE LANÇAMENTOS POR HORA
         document.addEventListener('input', function(e) {
@@ -8016,10 +8030,21 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const quickLossesClose = document.getElementById('quick-losses-close');
         const quickLossesCancel = document.getElementById('quick-losses-cancel');
         const quickLossesForm = document.getElementById('quick-losses-form');
+        const quickLossesDeleteBtn = document.getElementById('quick-losses-delete-btn');
         
         if (quickLossesClose) quickLossesClose.addEventListener('click', () => closeModal('quick-losses-modal'));
         if (quickLossesCancel) quickLossesCancel.addEventListener('click', () => closeModal('quick-losses-modal'));
         if (quickLossesForm) quickLossesForm.addEventListener('submit', handleLossesSubmit);
+        if (quickLossesDeleteBtn) {
+            quickLossesDeleteBtn.addEventListener('click', () => {
+                if (currentEditContext && currentEditContext.type === 'loss' && currentEditContext.id) {
+                    const targetCollection = currentEditContext.collection || 'production_entries';
+                    showConfirmModal(currentEditContext.id, targetCollection);
+                } else {
+                    alert('Abra um lançamento existente para excluir.');
+                }
+            });
+        }
         
         // Modal de parada
         const quickDowntimeClose = document.getElementById('quick-downtime-close');
@@ -8101,6 +8126,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             alert('Selecione uma máquina primeiro.');
             return;
         }
+        // Ocultar botão de exclusão em novo lançamento
+        const quickLossesDeleteBtn = document.getElementById('quick-losses-delete-btn');
+        if (quickLossesDeleteBtn) quickLossesDeleteBtn.classList.add('hidden');
         openModal('quick-losses-modal');
     }
     
@@ -10047,6 +10075,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             document.getElementById('quick-losses-weight').value = entry.data.refugo_kg || 0;
             document.getElementById('quick-losses-reason').value = entry.data.perdas || '';
             document.getElementById('quick-losses-obs').value = entry.data.observacoes || '';
+            const quickLossesDeleteBtn = document.getElementById('quick-losses-delete-btn');
+            if (quickLossesDeleteBtn) quickLossesDeleteBtn.classList.remove('hidden');
             openModal('quick-losses-modal');
         } else {
             alert('Edição deste tipo de lançamento ainda não está disponível.');
