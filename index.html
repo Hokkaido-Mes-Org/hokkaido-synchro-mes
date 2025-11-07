@@ -110,41 +110,79 @@
 
     <div class="flex h-screen bg-background-light">
         <!-- Sidebar de Navegação -->
-        <aside id="sidebar" class="w-64 bg-white flex-col no-print border-r border-gray-200 fixed inset-y-0 left-0 z-30 transform -translate-x-full transition-transform duration-300 md:relative md:translate-x-0 md:flex">
+        <aside id="sidebar" class="w-64 bg-white flex flex-col no-print border-r border-gray-200 fixed inset-y-0 left-0 z-30 transform -translate-x-full transition-transform duration-300 md:relative md:translate-x-0 md:flex md:w-64 sidebar-expanded" data-state="expanded">
             <div class="h-16 flex items-center justify-center border-b border-gray-200 px-4 relative">
-                <img src="https://i.postimg.cc/5jdHwhF9/hokkaido-logo-110.png" alt="Logo Hokkaido Plastics" class="h-10">
+                <img id="sidebar-logo" src="https://i.postimg.cc/5jdHwhF9/hokkaido-logo-110.png" alt="Logo Hokkaido Plastics" class="h-10 transition-all duration-300">
+                <!-- Botão toggle para desktop -->
+                <button id="sidebar-toggle-btn" class="absolute -right-12 top-1/2 -translate-y-1/2 p-2 bg-white border border-gray-200 rounded-r-lg hover:bg-gray-100 hidden md:block transition-colors" title="Retrair/Expandir menu">
+                    <i data-lucide="chevron-left" class="w-5 h-5 text-gray-600"></i>
+                </button>
+                <!-- Botão close para mobile -->
                 <button id="sidebar-close-btn" class="absolute top-1/2 -translate-y-1/2 right-4 p-2 md:hidden">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
             <nav class="flex-1 px-4 py-6 space-y-2">
-                <a href="#" class="nav-btn" data-page="planejamento">
-                    <i data-lucide="clipboard-list"></i><span>Planejamento</span>
+                <a href="#" class="nav-btn group" data-page="planejamento" title="Planejamento">
+                    <i data-lucide="clipboard-list" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Planejamento</span>
+                    <span class="nav-tooltip">Planejamento</span>
                 </a>
-                <a href="#" class="nav-btn" data-page="ordens">
-                    <i data-lucide="package-check"></i><span>Ordens</span>
+                <a href="#" class="nav-btn group" data-page="ordens" title="Ordens">
+                    <i data-lucide="package-check" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Ordens</span>
+                    <span class="nav-tooltip">Ordens</span>
                 </a>
-                <a href="#" class="nav-btn active" data-page="lancamento">
-                    <i data-lucide="keyboard"></i><span>Lançamento</span>
+                <a href="#" class="nav-btn active group" data-page="lancamento" title="Lançamento">
+                    <i data-lucide="keyboard" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Lançamento</span>
+                    <span class="nav-tooltip">Lançamento</span>
                 </a>
-                <a href="#" class="nav-btn" data-page="analise">
-                    <i data-lucide="area-chart"></i><span>Análise</span>
+                <a href="#" class="nav-btn group" data-page="analise" title="Análise">
+                    <i data-lucide="area-chart" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Análise</span>
+                    <span class="nav-tooltip">Análise</span>
+                </a>
+                <a href="#" class="nav-btn group" data-page="qualidade" title="Qualidade">
+                    <i data-lucide="shield-check" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Qualidade</span>
+                    <span class="nav-tooltip">Qualidade</span>
+                </a>
+                <a href="#" class="nav-btn group" data-page="teste" title="Teste">
+                    <i data-lucide="flask-conical" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Teste</span>
+                    <span class="nav-tooltip">Teste</span>
                 </a>
             </nav>
         </aside>
 
         <!-- Conteúdo Principal -->
-        <main class="flex-1 flex flex-col overflow-hidden">
-                <header class="bg-white border-b border-gray-200 p-4 flex items-center no-print h-16 relative">
-                 <div class="flex items-center">
-                    <button id="sidebar-open-btn" type="button" class="hamburger-btn md:hidden" aria-label="Abrir menu" aria-expanded="false">
-                        <span></span>
-                        <span></span>
-                        <span></span>
-                    </button>
-                    <h2 id="page-title" class="text-xl font-semibold text-text-dark ml-2">Lançamento</h2>
-                 </div>
-                      <img src="https://i.postimg.cc/h47TKP4d/logosynchro.png" alt="Logo Hokkaido Synchro" class="absolute top-2 right-4 h-10 md:h-14 object-contain">
+    <main class="flex-1 flex flex-col">
+            <header class="bg-white/95 backdrop-blur border-b border-gray-200 px-4 lg:px-8 py-3 flex items-center gap-4 no-print relative min-h-[70px]">
+                <button id="sidebar-open-btn" type="button" class="hamburger-btn md:hidden absolute left-4" aria-label="Abrir menu" aria-expanded="false">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+                <div class="flex w-full items-center justify-between gap-4 pl-10 md:pl-0">
+                    <div class="flex items-center gap-3 md:gap-4">
+                        <div class="hidden md:flex h-12 w-12 items-center justify-center rounded-xl bg-primary-blue/10 text-primary-blue">
+                            <i data-lucide="keyboard" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <h1 id="page-title" class="text-2xl font-semibold text-gray-900 leading-tight">Lançamento</h1>
+                            <p class="text-sm font-medium text-gray-500">Registro operacional em tempo real</p>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-end gap-3 sm:gap-4">
+                        <img src="https://i.postimg.cc/h47TKP4d/logosynchro.png" alt="Logo Hokkaido Synchro" class="hidden sm:block h-10 md:h-12 object-contain drop-shadow-sm">
+                        <div id="header-user-card" class="flex w-full max-w-xs sm:max-w-none flex-wrap items-center justify-between sm:flex-nowrap sm:justify-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 shadow-sm">
+                            <div id="header-user-avatar" class="flex h-9 w-9 items-center justify-center rounded-full bg-primary-blue/10 text-primary-blue text-sm font-semibold uppercase">LC</div>
+                            <div class="text-right sm:text-left leading-tight">
+                                <div id="header-user-name" class="text-sm font-semibold text-gray-900">Leandro Camargo</div>
+                                <span id="header-user-role-chip" class="inline-flex items-center justify-end rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-blue-700 ring-1 ring-blue-200">Gestor</span>
+                            </div>
+                            <button id="logout-btn" class="mt-2 w-full inline-flex items-center justify-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-semibold text-red-600 shadow-sm ring-1 ring-red-200 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400 sm:mt-0 sm:w-auto sm:ml-3">
+                                <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+                                Sair
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </header>
 
             <div class="flex-1 overflow-y-auto p-2 sm:p-6">
@@ -163,6 +201,10 @@
                                     <option value="">Selecione...</option>
                                 </select>
                                 <div id="planning-order-info" class="mt-2 p-2 bg-gray-50 rounded-md text-sm font-medium text-gray-700" style="display: none;"></div>
+                            </div>
+                            <div>
+                                <label for="planning-lot-size" class="block text-sm font-medium text-gray-700">Tamanho do Lote</label>
+                                <input type="number" id="planning-lot-size" name="order_lot_size" class="mt-1 block w-full p-2 border-gray-300 rounded-md bg-gray-50" readonly placeholder="Automático da OP">
                             </div>
                             <div>
                                 <label for="planning-machine" class="block text-sm font-medium text-gray-700">Máquina</label>
@@ -208,6 +250,10 @@
                                     <label for="piece-weight" class="block text-sm font-medium">Peso Peça (g)</label>
                                     <input type="number" id="piece-weight" name="piece_weight" required step="0.01" class="mt-1 w-full p-2 border-gray-300 rounded-md">
                                 </div>
+                            </div>
+                            <div>
+                                <label for="quantidade-embalagem" class="block text-sm font-medium">Quantidade da Embalagem (peças/saco)</label>
+                                <input type="number" id="quantidade-embalagem" name="quantidade_da_embalagem" placeholder="Ex: 100 - peças por saco/embalagem" class="mt-1 w-full p-2 border-gray-300 rounded-md shadow-sm">
                             </div>
                             <div>
                                 <label for="planned-quantity" class="block text-sm font-medium">Qtd. Planejada (85% Efic.)</label>
@@ -348,6 +394,679 @@
                             </table>
                             <div id="production-order-empty" class="text-center py-10 text-gray-500" style="display: none;">
                                 Nenhuma ordem cadastrada até o momento.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PÁGINA: Qualidade -->
+                <div id="qualidade-page" class="page-content hidden space-y-6">
+                    <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg border-t-4 border-emerald-500">
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                            <div>
+                                <h2 class="text-2xl font-bold mb-1 flex items-center gap-2"><i data-lucide="shield-check" class="text-emerald-500"></i>Controle de Processos</h2>
+                                <p class="text-sm text-gray-600">Visualize os indicadores de produção e registre o checklist de qualidade em um único fluxo.</p>
+                            </div>
+                            <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 max-w-md">
+                                <strong>Como funciona</strong>
+                                <div class="mt-2 space-y-1 text-xs text-emerald-800">
+                                    <p>1. Escolha a data e o plano ativo para carregar os apontamentos do turno.</p>
+                                    <p>2. Confira o resumo automático dos registros de produção, perdas e paradas.</p>
+                                    <p>3. Preencha e salve o checklist digital de qualidade.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <form id="quality-context-form" class="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div>
+                                <label for="quality-date" class="block text-sm font-medium text-gray-700">Data de Produção</label>
+                                <input type="date" id="quality-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500" />
+                            </div>
+                            <div class="md:col-span-2">
+                                <label for="quality-plan-select" class="block text-sm font-medium text-gray-700">Plano / Máquina / OP</label>
+                                <select id="quality-plan-select" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500">
+                                    <option value="">Selecione a máquina ou OP planejada</option>
+                                </select>
+                            </div>
+                            <div class="flex items-end">
+                                <button id="quality-load-btn" class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2" type="submit">
+                                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                                    Atualizar contexto
+                                </button>
+                            </div>
+                            <div class="md:col-span-4">
+                                <p id="quality-status-message" class="text-sm text-gray-500"></p>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div id="quality-context-container" class="space-y-6">
+                        <div id="quality-info-grid" class="grid gap-4 md:grid-cols-2 xl:grid-cols-4"></div>
+
+                        <div id="quality-summary-cards" class="grid gap-4 md:grid-cols-2 xl:grid-cols-4"></div>
+
+                        <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg">
+                            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+                                <h3 class="text-lg font-semibold text-gray-800 flex items-center gap-2"><i data-lucide="bar-chart-3" class="text-blue-500"></i>Produção consolidada por turno</h3>
+                                <span id="quality-operators-chip" class="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700"></span>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200 border rounded-lg">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Turno</th>
+                                            <th class="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-600">Produzido (pcs)</th>
+                                            <th class="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-600">Refugo (pcs)</th>
+                                            <th class="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-600">Refugo (kg)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="quality-shift-tbody" class="divide-y divide-gray-200"></tbody>
+                                </table>
+                                <div id="quality-shift-empty" class="hidden py-6 text-center text-sm text-gray-500">Nenhum apontamento de produção para os filtros selecionados.</div>
+                            </div>
+                        </div>
+
+                        <div class="grid gap-6 lg:grid-cols-2">
+                            <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-lg font-semibold text-gray-800 flex items-center gap-2"><i data-lucide="timer" class="text-amber-500"></i>Lançamentos por hora</h3>
+                                    <span id="quality-hourly-total" class="text-xs font-semibold uppercase tracking-wide text-amber-600"></span>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full divide-y divide-gray-200 border rounded-lg">
+                                        <thead class="bg-gray-50">
+                                            <tr>
+                                                <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Hora</th>
+                                                <th class="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-600">Peso bruto (kg)</th>
+                                                <th class="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-600">Embalagens</th>
+                                                <th class="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Usou tara?</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="quality-hourly-tbody" class="divide-y divide-gray-200"></tbody>
+                                    </table>
+                                    <div id="quality-hourly-empty" class="hidden py-6 text-center text-sm text-gray-500">Nenhuma medição horária registrada.</div>
+                                </div>
+                            </div>
+
+                            <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-lg font-semibold text-gray-800 flex items-center gap-2"><i data-lucide="activity" class="text-rose-500"></i>Ocorrências de parada e ajustes</h3>
+                                    <span id="quality-downtime-total" class="text-xs font-semibold uppercase tracking-wide text-rose-600"></span>
+                                </div>
+                                <div id="quality-downtime-list" class="space-y-3"></div>
+                                <div id="quality-downtime-empty" class="hidden py-6 text-center text-sm text-gray-500">Nenhuma parada associada ao plano.</div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg border border-emerald-200">
+                            <div class="flex items-start justify-between gap-4 mb-4">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-gray-800 flex items-center gap-2"><i data-lucide="check-square" class="text-emerald-500"></i>Checklist digital de qualidade - Inspeção hora-a-hora</h3>
+                                    <p class="text-sm text-gray-600">Avalie a inspeção de cada hora conforme os apontamentos são lançados.</p>
+                                </div>
+                                <span id="quality-checklist-status" class="text-xs font-semibold uppercase tracking-wide text-emerald-600"></span>
+                            </div>
+
+                            <!-- Cabeçalho com informações do produto -->
+                            <div id="quality-process-header" class="hidden mb-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+                                <div class="grid grid-cols-3 gap-3">
+                                    <div>
+                                        <p class="text-xs text-gray-600 uppercase tracking-wide font-semibold">Produto</p>
+                                        <p id="quality-header-product" class="text-xs font-bold text-gray-800">-</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-xs text-gray-600 uppercase tracking-wide font-semibold">Máquina</p>
+                                        <p id="quality-header-machine" class="text-xs font-bold text-gray-800">-</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-xs text-gray-600 uppercase tracking-wide font-semibold">OP</p>
+                                        <p id="quality-header-order" class="text-xs font-bold text-gray-800">-</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tabelas de Controle por Turno -->
+                            <div id="quality-process-tables" class="hidden space-y-3">
+                                <!-- TURNO 1 -->
+                                <div class="bg-white rounded-lg shadow-sm border-l-4 border-blue-500">
+                                    <div class="bg-blue-50 px-3 py-2 border-b border-blue-200 rounded-t-lg">
+                                        <h4 class="text-xs font-bold text-blue-900">1º TURNO (7h - 14h)</h4>
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-xs border-collapse">
+                                            <thead>
+                                                <tr class="bg-gray-100 border-b">
+                                                    <th class="px-2 py-1 text-left font-semibold text-gray-700">DESC</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700 border-r">7h</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700 border-r">8h</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700 border-r">9h</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700 border-r">10h</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700 border-r">11h</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700 border-r">12h</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700 border-r">13h</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700">14h</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr class="border-b">
+                                                    <td class="px-2 py-1 font-semibold text-gray-700 bg-gray-50 text-xs">Cavid</td>
+                                                    <td class="px-1 py-1 text-center bg-blue-50 border-r"><input type="text" class="quality-cavities-input shift-1 hour-7 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-blue-50 border-r"><input type="text" class="quality-cavities-input shift-1 hour-8 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-blue-50 border-r"><input type="text" class="quality-cavities-input shift-1 hour-9 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-blue-50 border-r"><input type="text" class="quality-cavities-input shift-1 hour-10 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-blue-50 border-r"><input type="text" class="quality-cavities-input shift-1 hour-11 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-blue-50 border-r"><input type="text" class="quality-cavities-input shift-1 hour-12 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-blue-50 border-r"><input type="text" class="quality-cavities-input shift-1 hour-13 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-blue-50"><input type="text" class="quality-cavities-input shift-1 hour-14 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                </tr>
+                                                <tr class="border-b">
+                                                    <td class="px-2 py-1 font-semibold text-gray-700 bg-gray-50 text-xs">Embal</td>
+                                                    <td class="px-1 py-1 text-center border-r text-xs"><span class="quality-packaging-shift-1-7">-</span></td>
+                                                    <td class="px-1 py-1 text-center border-r text-xs"><span class="quality-packaging-shift-1-8">-</span></td>
+                                                    <td class="px-1 py-1 text-center border-r text-xs"><span class="quality-packaging-shift-1-9">-</span></td>
+                                                    <td class="px-1 py-1 text-center border-r text-xs"><span class="quality-packaging-shift-1-10">-</span></td>
+                                                    <td class="px-1 py-1 text-center border-r text-xs"><span class="quality-packaging-shift-1-11">-</span></td>
+                                                    <td class="px-1 py-1 text-center border-r text-xs"><span class="quality-packaging-shift-1-12">-</span></td>
+                                                    <td class="px-1 py-1 text-center border-r text-xs"><span class="quality-packaging-shift-1-13">-</span></td>
+                                                    <td class="px-1 py-1 text-center text-xs"><span class="quality-packaging-shift-1-14">-</span></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="px-2 py-1 font-semibold text-gray-700 bg-gray-50 text-xs">Insp</td>
+                                                    <td class="px-1 py-1 text-center bg-blue-50 border-r"><input type="text" class="quality-inspection-input shift-1 hour-7 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-blue-50 border-r"><input type="text" class="quality-inspection-input shift-1 hour-8 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-blue-50 border-r"><input type="text" class="quality-inspection-input shift-1 hour-9 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-blue-50 border-r"><input type="text" class="quality-inspection-input shift-1 hour-10 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-blue-50 border-r"><input type="text" class="quality-inspection-input shift-1 hour-11 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-blue-50 border-r"><input type="text" class="quality-inspection-input shift-1 hour-12 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-blue-50 border-r"><input type="text" class="quality-inspection-input shift-1 hour-13 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-blue-50"><input type="text" class="quality-inspection-input shift-1 hour-14 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <!-- TURNO 2 -->
+                                <div class="bg-white rounded-lg shadow-sm border-l-4 border-green-500">
+                                    <div class="bg-green-50 px-3 py-2 border-b border-green-200 rounded-t-lg">
+                                        <h4 class="text-xs font-bold text-green-900">2º TURNO (15h - 22h)</h4>
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-xs border-collapse">
+                                            <thead>
+                                                <tr class="bg-gray-100 border-b">
+                                                    <th class="px-2 py-1 text-left font-semibold text-gray-700">DESC</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700 border-r">15h</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700 border-r">16h</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700 border-r">17h</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700 border-r">18h</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700 border-r">19h</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700 border-r">20h</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700 border-r">21h</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700">22h</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr class="border-b">
+                                                    <td class="px-2 py-1 font-semibold text-gray-700 bg-gray-50 text-xs">Cavid</td>
+                                                    <td class="px-1 py-1 text-center bg-green-50 border-r"><input type="text" class="quality-cavities-input shift-2 hour-15 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-green-50 border-r"><input type="text" class="quality-cavities-input shift-2 hour-16 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-green-50 border-r"><input type="text" class="quality-cavities-input shift-2 hour-17 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-green-50 border-r"><input type="text" class="quality-cavities-input shift-2 hour-18 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-green-50 border-r"><input type="text" class="quality-cavities-input shift-2 hour-19 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-green-50 border-r"><input type="text" class="quality-cavities-input shift-2 hour-20 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-green-50 border-r"><input type="text" class="quality-cavities-input shift-2 hour-21 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-green-50"><input type="text" class="quality-cavities-input shift-2 hour-22 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                </tr>
+                                                <tr class="border-b">
+                                                    <td class="px-2 py-1 font-semibold text-gray-700 bg-gray-50 text-xs">Embal</td>
+                                                    <td class="px-1 py-1 text-center border-r text-xs"><span class="quality-packaging-shift-2-15">-</span></td>
+                                                    <td class="px-1 py-1 text-center border-r text-xs"><span class="quality-packaging-shift-2-16">-</span></td>
+                                                    <td class="px-1 py-1 text-center border-r text-xs"><span class="quality-packaging-shift-2-17">-</span></td>
+                                                    <td class="px-1 py-1 text-center border-r text-xs"><span class="quality-packaging-shift-2-18">-</span></td>
+                                                    <td class="px-1 py-1 text-center border-r text-xs"><span class="quality-packaging-shift-2-19">-</span></td>
+                                                    <td class="px-1 py-1 text-center border-r text-xs"><span class="quality-packaging-shift-2-20">-</span></td>
+                                                    <td class="px-1 py-1 text-center border-r text-xs"><span class="quality-packaging-shift-2-21">-</span></td>
+                                                    <td class="px-1 py-1 text-center text-xs"><span class="quality-packaging-shift-2-22">-</span></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="px-2 py-1 font-semibold text-gray-700 bg-gray-50 text-xs">Insp</td>
+                                                    <td class="px-1 py-1 text-center bg-green-50 border-r"><input type="text" class="quality-inspection-input shift-2 hour-15 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-green-50 border-r"><input type="text" class="quality-inspection-input shift-2 hour-16 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-green-50 border-r"><input type="text" class="quality-inspection-input shift-2 hour-17 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-green-50 border-r"><input type="text" class="quality-inspection-input shift-2 hour-18 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-green-50 border-r"><input type="text" class="quality-inspection-input shift-2 hour-19 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-green-50 border-r"><input type="text" class="quality-inspection-input shift-2 hour-20 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-green-50 border-r"><input type="text" class="quality-inspection-input shift-2 hour-21 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-green-50"><input type="text" class="quality-inspection-input shift-2 hour-22 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <!-- TURNO 3 -->
+                                <div class="bg-white rounded-lg shadow-sm border-l-4 border-amber-500">
+                                    <div class="bg-amber-50 px-3 py-2 border-b border-amber-200 rounded-t-lg">
+                                        <h4 class="text-xs font-bold text-amber-900">3º TURNO (23h - 6h)</h4>
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-xs border-collapse">
+                                            <thead>
+                                                <tr class="bg-gray-100 border-b">
+                                                    <th class="px-2 py-1 text-left font-semibold text-gray-700">DESC</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700 border-r">23h</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700 border-r">00h</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700 border-r">01h</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700 border-r">02h</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700 border-r">03h</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700 border-r">04h</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700 border-r">05h</th>
+                                                    <th class="px-1 py-1 text-center font-semibold text-gray-700">06h</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr class="border-b">
+                                                    <td class="px-2 py-1 font-semibold text-gray-700 bg-gray-50 text-xs">Cavid</td>
+                                                    <td class="px-1 py-1 text-center bg-amber-50 border-r"><input type="text" class="quality-cavities-input shift-3 hour-23 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-amber-50 border-r"><input type="text" class="quality-cavities-input shift-3 hour-0 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-amber-50 border-r"><input type="text" class="quality-cavities-input shift-3 hour-1 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-amber-50 border-r"><input type="text" class="quality-cavities-input shift-3 hour-2 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-amber-50 border-r"><input type="text" class="quality-cavities-input shift-3 hour-3 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-amber-50 border-r"><input type="text" class="quality-cavities-input shift-3 hour-4 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-amber-50 border-r"><input type="text" class="quality-cavities-input shift-3 hour-5 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-amber-50"><input type="text" class="quality-cavities-input shift-3 hour-6 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                </tr>
+                                                <tr class="border-b">
+                                                    <td class="px-2 py-1 font-semibold text-gray-700 bg-gray-50 text-xs">Embal</td>
+                                                    <td class="px-1 py-1 text-center border-r text-xs"><span class="quality-packaging-shift-3-23">-</span></td>
+                                                    <td class="px-1 py-1 text-center border-r text-xs"><span class="quality-packaging-shift-3-0">-</span></td>
+                                                    <td class="px-1 py-1 text-center border-r text-xs"><span class="quality-packaging-shift-3-1">-</span></td>
+                                                    <td class="px-1 py-1 text-center border-r text-xs"><span class="quality-packaging-shift-3-2">-</span></td>
+                                                    <td class="px-1 py-1 text-center border-r text-xs"><span class="quality-packaging-shift-3-3">-</span></td>
+                                                    <td class="px-1 py-1 text-center border-r text-xs"><span class="quality-packaging-shift-3-4">-</span></td>
+                                                    <td class="px-1 py-1 text-center border-r text-xs"><span class="quality-packaging-shift-3-5">-</span></td>
+                                                    <td class="px-1 py-1 text-center text-xs"><span class="quality-packaging-shift-3-6">-</span></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="px-2 py-1 font-semibold text-gray-700 bg-gray-50 text-xs">Insp</td>
+                                                    <td class="px-1 py-1 text-center bg-amber-50 border-r"><input type="text" class="quality-inspection-input shift-3 hour-23 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-amber-50 border-r"><input type="text" class="quality-inspection-input shift-3 hour-0 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-amber-50 border-r"><input type="text" class="quality-inspection-input shift-3 hour-1 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-amber-50 border-r"><input type="text" class="quality-inspection-input shift-3 hour-2 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-amber-50 border-r"><input type="text" class="quality-inspection-input shift-3 hour-3 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-amber-50 border-r"><input type="text" class="quality-inspection-input shift-3 hour-4 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-amber-50 border-r"><input type="text" class="quality-inspection-input shift-3 hour-5 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                    <td class="px-1 py-1 text-center bg-amber-50"><input type="text" class="quality-inspection-input shift-3 hour-6 w-full h-5 border-0 text-center text-xs bg-transparent"></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Barra de Controle de Preenchimento -->
+                            <div id="quality-control-bar" class="hidden mt-4 flex items-center gap-2 p-3 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg border border-amber-200">
+                                <div class="flex-1">
+                                    <p class="text-xs font-semibold text-gray-700">Modo de Preenchimento:</p>
+                                </div>
+                                <button id="quality-auto-fill-btn" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-2 rounded text-xs font-semibold transition flex items-center gap-1">
+                                    <i data-lucide="zap" class="w-3 h-3"></i>Automático
+                                </button>
+                                <button id="quality-manual-clear-btn" class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-2 rounded text-xs font-semibold transition flex items-center gap-1">
+                                    <i data-lucide="edit-3" class="w-3 h-3"></i>Modo Manual
+                                </button>
+                                <button id="quality-clear-all-btn" class="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded text-xs font-semibold transition flex items-center gap-1">
+                                    <i data-lucide="trash-2" class="w-3 h-3"></i>Limpar Tudo
+                                </button>
+                            </div>
+
+                            <!-- Seção de Observações -->
+                            <div id="quality-observations-section" class="hidden mt-4 grid grid-cols-1 lg:grid-cols-2 gap-3">
+                                <!-- Observações de Produção -->
+                                <div class="bg-white rounded-lg shadow-sm border-l-4 border-blue-500">
+                                    <div class="bg-blue-50 px-3 py-2 border-b border-blue-200 rounded-t-lg">
+                                        <h4 class="text-xs font-bold text-blue-900">📝 Produção</h4>
+                                    </div>
+                                    <div class="p-2">
+                                        <div class="mb-2">
+                                            <input type="time" id="quality-prod-obs-time" class="w-full px-2 py-1 border border-gray-300 rounded text-xs">
+                                        </div>
+                                        <div class="mb-2">
+                                            <textarea id="quality-prod-obs-text" rows="2" placeholder="Observação..." class="w-full px-2 py-1 border border-gray-300 rounded text-xs"></textarea>
+                                        </div>
+                                        <button id="quality-prod-obs-save" class="w-full bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs font-semibold transition">Salvar</button>
+                                        <div id="quality-prod-obs-list" class="mt-2 space-y-1 max-h-32 overflow-y-auto"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Observações de Qualidade -->
+                                <div class="bg-white rounded-lg shadow-sm border-l-4 border-emerald-500">
+                                    <div class="bg-emerald-50 px-3 py-2 border-b border-emerald-200 rounded-t-lg">
+                                        <h4 class="text-xs font-bold text-emerald-900">📋 Qualidade</h4>
+                                    </div>
+                                    <div class="p-2">
+                                        <div class="mb-2">
+                                            <input type="time" id="quality-qual-obs-time" class="w-full px-2 py-1 border border-gray-300 rounded text-xs">
+                                        </div>
+                                        <div class="mb-2">
+                                            <textarea id="quality-qual-obs-text" rows="2" placeholder="Observação..." class="w-full px-2 py-1 border border-gray-300 rounded text-xs"></textarea>
+                                        </div>
+                                        <button id="quality-qual-obs-save" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-1 rounded text-xs font-semibold transition">Salvar</button>
+                                        <div id="quality-qual-obs-list" class="mt-2 space-y-1 max-h-32 overflow-y-auto"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Plano não selecionado -->
+                            <div id="quality-process-empty" class="py-6 text-center text-sm text-gray-500">
+                                <!-- TURNO 1 -->
+                                <div class="bg-white rounded-lg shadow border-l-4 border-blue-500">
+                                    <div class="bg-blue-50 px-4 py-3 border-b border-blue-200 rounded-t-lg">
+                                        <h4 class="text-sm font-bold text-blue-900">1º TURNO (07:00 - 14:00)</h4>
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-xs">
+                                            <thead>
+                                                <tr class="bg-gray-100 border-b">
+                                                    <th class="px-3 py-2 text-left font-semibold text-gray-700">DESCRIÇÃO</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">7h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">8h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">9h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">10h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">11h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">12h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">13h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">14h</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr class="border-b hover:bg-gray-50">
+                                                    <td class="px-3 py-2 font-semibold text-gray-700 bg-gray-50">Cavidades reais</td>
+                                                    <td class="px-2 py-2 text-center bg-blue-50"><input type="text" class="quality-cavities-input shift-1 hour-7" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-blue-50"><input type="text" class="quality-cavities-input shift-1 hour-8" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-blue-50"><input type="text" class="quality-cavities-input shift-1 hour-9" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-blue-50"><input type="text" class="quality-cavities-input shift-1 hour-10" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-blue-50"><input type="text" class="quality-cavities-input shift-1 hour-11" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-blue-50"><input type="text" class="quality-cavities-input shift-1 hour-12" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-blue-50"><input type="text" class="quality-cavities-input shift-1 hour-13" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-blue-50"><input type="text" class="quality-cavities-input shift-1 hour-14" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                </tr>
+                                                <tr class="border-b hover:bg-gray-50">
+                                                    <td class="px-3 py-2 font-semibold text-gray-700 bg-gray-50">Nº embalagem</td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-1-7">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-1-8">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-1-9">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-1-10">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-1-11">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-1-12">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-1-13">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-1-14">-</span></td>
+                                                </tr>
+                                                <tr class="hover:bg-gray-50">
+                                                    <td class="px-3 py-2 font-semibold text-gray-700 bg-gray-50">Inspeção</td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-1 hour-7" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-1 hour-8" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-1 hour-9" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-1 hour-10" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-1 hour-11" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-1 hour-12" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-1 hour-13" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-1 hour-14" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <!-- TURNO 2 -->
+                                <div class="bg-white rounded-lg shadow border-l-4 border-green-500">
+                                    <div class="bg-green-50 px-4 py-3 border-b border-green-200 rounded-t-lg">
+                                        <h4 class="text-sm font-bold text-green-900">2º TURNO (14:00 - 22:00)</h4>
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-xs">
+                                            <thead>
+                                                <tr class="bg-gray-100 border-b">
+                                                    <th class="px-3 py-2 text-left font-semibold text-gray-700">DESCRIÇÃO</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">14h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">15h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">16h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">17h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">18h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">19h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">20h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">21h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">22h</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr class="border-b hover:bg-gray-50">
+                                                    <td class="px-3 py-2 font-semibold text-gray-700 bg-gray-50">Cavidades reais</td>
+                                                    <td class="px-2 py-2 text-center bg-green-50"><input type="text" class="quality-cavities-input shift-2 hour-14" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-green-50"><input type="text" class="quality-cavities-input shift-2 hour-15" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-green-50"><input type="text" class="quality-cavities-input shift-2 hour-16" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-green-50"><input type="text" class="quality-cavities-input shift-2 hour-17" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-green-50"><input type="text" class="quality-cavities-input shift-2 hour-18" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-green-50"><input type="text" class="quality-cavities-input shift-2 hour-19" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-green-50"><input type="text" class="quality-cavities-input shift-2 hour-20" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-green-50"><input type="text" class="quality-cavities-input shift-2 hour-21" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-green-50"><input type="text" class="quality-cavities-input shift-2 hour-22" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                </tr>
+                                                <tr class="border-b hover:bg-gray-50">
+                                                    <td class="px-3 py-2 font-semibold text-gray-700 bg-gray-50">Nº embalagem</td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-2-14">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-2-15">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-2-16">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-2-17">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-2-18">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-2-19">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-2-20">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-2-21">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-2-22">-</span></td>
+                                                </tr>
+                                                <tr class="hover:bg-gray-50">
+                                                    <td class="px-3 py-2 font-semibold text-gray-700 bg-gray-50">Inspeção</td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-2 hour-14" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-2 hour-15" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-2 hour-16" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-2 hour-17" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-2 hour-18" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-2 hour-19" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-2 hour-20" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-2 hour-21" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-2 hour-22" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <!-- TURNO 3 -->
+                                <div class="bg-white rounded-lg shadow border-l-4 border-amber-500">
+                                    <div class="bg-amber-50 px-4 py-3 border-b border-amber-200 rounded-t-lg">
+                                        <h4 class="text-sm font-bold text-amber-900">3º TURNO (22:00 - 07:00)</h4>
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-xs">
+                                            <thead>
+                                                <tr class="bg-gray-100 border-b">
+                                                    <th class="px-3 py-2 text-left font-semibold text-gray-700">DESCRIÇÃO</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">22h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">23h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">00h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">01h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">02h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">03h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">04h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">05h</th>
+                                                    <th class="px-2 py-2 text-center font-semibold text-gray-700">06h</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr class="border-b hover:bg-gray-50">
+                                                    <td class="px-3 py-2 font-semibold text-gray-700 bg-gray-50">Cavidades reais</td>
+                                                    <td class="px-2 py-2 text-center bg-amber-50"><input type="text" class="quality-cavities-input shift-3 hour-22" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-amber-50"><input type="text" class="quality-cavities-input shift-3 hour-23" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-amber-50"><input type="text" class="quality-cavities-input shift-3 hour-0" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-amber-50"><input type="text" class="quality-cavities-input shift-3 hour-1" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-amber-50"><input type="text" class="quality-cavities-input shift-3 hour-2" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-amber-50"><input type="text" class="quality-cavities-input shift-3 hour-3" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-amber-50"><input type="text" class="quality-cavities-input shift-3 hour-4" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-amber-50"><input type="text" class="quality-cavities-input shift-3 hour-5" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center bg-amber-50"><input type="text" class="quality-cavities-input shift-3 hour-6" class="w-10 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                </tr>
+                                                <tr class="border-b hover:bg-gray-50">
+                                                    <td class="px-3 py-2 font-semibold text-gray-700 bg-gray-50">Nº embalagem</td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-3-22">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-3-23">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-3-0">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-3-1">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-3-2">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-3-3">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-3-4">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-3-5">-</span></td>
+                                                    <td class="px-2 py-2 text-center"><span class="quality-packaging-shift-3-6">-</span></td>
+                                                </tr>
+                                                <tr class="hover:bg-gray-50">
+                                                    <td class="px-3 py-2 font-semibold text-gray-700 bg-gray-50">Inspeção</td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-3 hour-22" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-3 hour-23" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-3 hour-0" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-3 hour-1" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-3 hour-2" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-3 hour-3" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-3 hour-4" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-3 hour-5" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                    <td class="px-2 py-2 text-center"><input type="text" class="quality-inspection-input shift-3 hour-6" placeholder="OK/N OK" class="w-14 h-6 border border-gray-300 rounded text-center text-xs"></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Seção de Observações -->
+                            <div id="quality-observations-section" class="hidden mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <!-- Observações de Produção -->
+                                <div class="bg-white rounded-lg shadow border-l-4 border-blue-500">
+                                    <div class="bg-blue-50 px-4 py-3 border-b border-blue-200 rounded-t-lg">
+                                        <h4 class="text-sm font-bold text-blue-900">📝 Anotações - Produção</h4>
+                                    </div>
+                                    <div class="p-4">
+                                        <div class="mb-3">
+                                            <label class="block text-xs font-semibold text-gray-700 mb-1">Hora</label>
+                                            <input type="time" id="quality-prod-obs-time" class="w-full px-2 py-1 border border-gray-300 rounded text-sm">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="block text-xs font-semibold text-gray-700 mb-1">Observação</label>
+                                            <textarea id="quality-prod-obs-text" rows="4" placeholder="Descreva situações relacionadas à produção..." class="w-full px-2 py-1 border border-gray-300 rounded text-sm"></textarea>
+                                        </div>
+                                        <button id="quality-prod-obs-save" class="w-full bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm font-semibold transition">Adicionar Anotação</button>
+                                        <div id="quality-prod-obs-list" class="mt-4 space-y-2 max-h-48 overflow-y-auto"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Observações de Qualidade -->
+                                <div class="bg-white rounded-lg shadow border-l-4 border-emerald-500">
+                                    <div class="bg-emerald-50 px-4 py-3 border-b border-emerald-200 rounded-t-lg">
+                                        <h4 class="text-sm font-bold text-emerald-900">📋 Anotações - Qualidade</h4>
+                                    </div>
+                                    <div class="p-4">
+                                        <div class="mb-3">
+                                            <label class="block text-xs font-semibold text-gray-700 mb-1">Hora</label>
+                                            <input type="time" id="quality-qual-obs-time" class="w-full px-2 py-1 border border-gray-300 rounded text-sm">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="block text-xs font-semibold text-gray-700 mb-1">Observação</label>
+                                            <textarea id="quality-qual-obs-text" rows="4" placeholder="Descreva situações relacionadas à qualidade..." class="w-full px-2 py-1 border border-gray-300 rounded text-sm"></textarea>
+                                        </div>
+                                        <button id="quality-qual-obs-save" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-2 rounded text-sm font-semibold transition">Adicionar Anotação</button>
+                                        <div id="quality-qual-obs-list" class="mt-4 space-y-2 max-h-48 overflow-y-auto"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Plano não selecionado -->
+                            <div id="quality-process-empty" class="py-6 text-center text-sm text-gray-500">
+                                Selecione um plano e data para carregar o controle de processos.
+                            </div>
+                        </div>
+                        </div>
+
+                        <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-semibold text-gray-800 flex items-center gap-2"><i data-lucide="history" class="text-gray-500"></i>Histórico de checklists</h3>
+                                <span id="quality-history-chip" class="text-xs font-semibold uppercase tracking-wide text-gray-500"></span>
+                            </div>
+                            <div id="quality-history-list" class="space-y-4"></div>
+                            <div id="quality-history-empty" class="hidden py-6 text-center text-sm text-gray-500">Nenhum checklist registrado para este plano e data.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PÁGINA: Teste -->
+                <div id="teste-page" class="page-content hidden space-y-6">
+                    <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg border-t-4 border-purple-500">
+                        <h2 class="text-2xl font-bold mb-4 flex items-center gap-2"><i data-lucide="flask-conical" class="text-purple-500"></i>Painel de Testes e Debug</h2>
+                        <p class="text-gray-600 mb-6">Área exclusiva para testes, debug e experimentação de novas funcionalidades.</p>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <!-- Card 1: Info do Sistema -->
+                            <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-lg border border-blue-200">
+                                <h3 class="text-lg font-semibold text-blue-900 mb-3 flex items-center gap-2">
+                                    <i data-lucide="info" class="w-5 h-5"></i>
+                                    Informações do Sistema
+                                </h3>
+                                <div class="space-y-2 text-sm">
+                                    <p><strong>Versão:</strong> <span id="test-system-version" class="text-gray-700">v8.0</span></p>
+                                    <p><strong>Data/Hora:</strong> <span id="test-current-datetime" class="text-gray-700">-</span></p>
+                                    <p><strong>Usuário:</strong> <span id="test-current-user" class="text-gray-700">-</span></p>
+                                    <p><strong>Turno:</strong> <span id="test-current-shift" class="text-gray-700">-</span></p>
+                                </div>
+                            </div>
+                            
+                            <!-- Card 2: Console de Teste -->
+                            <div class="bg-gradient-to-br from-gray-50 to-gray-100 p-6 rounded-lg border border-gray-200">
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                    <i data-lucide="terminal" class="w-5 h-5"></i>
+                                    Console de Teste
+                                </h3>
+                                <textarea id="test-console-input" rows="4" placeholder="Digite código JavaScript aqui..." class="w-full p-2 border border-gray-300 rounded font-mono text-xs mb-2"></textarea>
+                                <button id="test-console-run" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-semibold">
+                                    Executar
+                                </button>
+                                <div id="test-console-output" class="mt-2 p-2 bg-black text-green-400 rounded font-mono text-xs max-h-48 overflow-y-auto"></div>
+                            </div>
+                            
+                            <!-- Card 3: Ferramentas -->
+                            <div class="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-lg border border-green-200">
+                                <h3 class="text-lg font-semibold text-green-900 mb-3 flex items-center gap-2">
+                                    <i data-lucide="wrench" class="w-5 h-5"></i>
+                                    Ferramentas de Debug
+                                </h3>
+                                <div class="space-y-2">
+                                    <button id="test-clear-cache" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded font-semibold text-sm">
+                                        Limpar Cache
+                                    </button>
+                                    <button id="test-reload-page" class="w-full bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded font-semibold text-sm">
+                                        Recarregar Página
+                                    </button>
+                                    <button id="test-open-devtools" class="w-full bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded font-semibold text-sm">
+                                        Abrir DevTools
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Card 4: Logs -->
+                            <div class="bg-gradient-to-br from-red-50 to-red-100 p-6 rounded-lg border border-red-200 md:col-span-2 lg:col-span-3">
+                                <h3 class="text-lg font-semibold text-red-900 mb-3 flex items-center gap-2">
+                                    <i data-lucide="activity" class="w-5 h-5"></i>
+                                    Logs em Tempo Real
+                                </h3>
+                                <div id="test-logs-container" class="p-3 bg-gray-900 text-gray-200 rounded font-mono text-xs max-h-64 overflow-y-auto space-y-1">
+                                    <p class="text-green-400">✓ Console de testes inicializado</p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1379,8 +2098,9 @@
                     <input type="number" id="quick-losses-qty" name="quantity" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent" placeholder="Quantidade de peças perdidas">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Peso das Perdas (kg)</label>
-                    <input type="number" step="0.01" id="quick-losses-weight" name="weight" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent" placeholder="Peso em kg">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Peso das Perdas (kg) <span class="text-gray-500 text-xs">Use vírgula (1,5) ou ponto (1.5)</span></label>
+                    <input type="text" id="quick-losses-weight" name="weight" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent" placeholder="Ex: 0,980 ou 1.5 ou 1.500,50" inputmode="decimal">
+                    <div id="weight-feedback-helper" class="mt-2 text-sm"></div>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">Motivo da Perda</label>
@@ -1424,6 +2144,9 @@
                 <div class="flex gap-3 pt-4">
                     <button type="button" id="quick-losses-cancel" class="flex-1 py-3 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium">
                         Cancelar
+                    </button>
+                    <button type="button" id="quick-losses-delete-btn" class="hidden py-3 px-4 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 font-medium">
+                        Excluir
                     </button>
                     <button type="submit" class="flex-1 py-3 px-4 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium">
                         Registrar
@@ -2124,6 +2847,6 @@
     </div>
 
     <script src="database.js"></script>
-    <script src="script.js"></script>
+    <script src="script.js?v=20251105-1"></script>
 </body>
 </html>
