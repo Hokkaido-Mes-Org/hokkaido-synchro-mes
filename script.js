@@ -237,6 +237,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const machineCardCharts = {};
     let activeMachineCard = null;
 
+    // Flags de configuração
+    const QUALITY_AUTOFILL_ENABLED = false;
+
     let cachedProductionDataset = {
         productionData: [],
         planData: [],
@@ -368,6 +371,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const qualityAutoFillBtn = document.getElementById('quality-auto-fill-btn');
     const qualityManualClearBtn = document.getElementById('quality-manual-clear-btn');
     const qualityClearAllBtn = document.getElementById('quality-clear-all-btn');
+    const qualityPrintBtn = document.getElementById('quality-print-btn');
     
     // Elementos de observações
     const qualityProdObsTime = document.getElementById('quality-prod-obs-time');
@@ -775,6 +779,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    let cachedResolvedUserName = null;
+
     // Recupera sessão diretamente do armazenamento (sessionStorage > localStorage)
     function getStoredUserSession() {
         const storageSources = [() => sessionStorage, () => localStorage];
@@ -785,6 +791,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = storage.getItem('synchro_user');
                 if (data) {
                     const parsed = JSON.parse(data);
+                    if (parsed && typeof parsed === 'object' && typeof parsed.name === 'string') {
+                        parsed.name = parsed.name.trim();
+                    }
                     console.log('🔍 [DEBUG] getStoredUserSession() encontrou:', parsed);
                     return parsed;
                 }
@@ -805,47 +814,112 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const storedUser = getStoredUserSession();
         if (storedUser) {
-            if (window.authSystem?.setCurrentUser) {
-                window.authSystem.setCurrentUser(storedUser);
-            } else if (window.authSystem) {
-                window.authSystem.currentUser = storedUser;
+            const sanitizedUser = { ...storedUser };
+            if (typeof sanitizedUser.name === 'string') {
+                sanitizedUser.name = sanitizedUser.name.trim();
             }
-            return storedUser;
+            if (window.authSystem?.setCurrentUser) {
+                window.authSystem.setCurrentUser(sanitizedUser);
+            } else if (window.authSystem) {
+                window.authSystem.currentUser = sanitizedUser;
+            }
+            return sanitizedUser;
         }
 
         return {};
     }
 
+    function deriveNameFromIdentifier(identifier) {
+        if (!identifier || typeof identifier !== 'string') return '';
+        const trimmed = identifier.trim();
+        if (!trimmed) return '';
+        const base = trimmed.includes('@') ? trimmed.split('@')[0] : trimmed;
+        const sanitized = base.replace(/[^\wÀ-ÿ.\-_\s]/g, ' ');
+        const parts = sanitized.split(/[._\-\s]+/).filter(Boolean);
+        if (!parts.length) return '';
+        return parts.map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()).join(' ');
+    }
+
+    function persistResolvedUserName(name, currentUser) {
+        if (!name || typeof name !== 'string') return;
+        cachedResolvedUserName = name.trim();
+        if (!cachedResolvedUserName) return;
+        if (currentUser && typeof currentUser === 'object') {
+            const updatedUser = { ...currentUser, name: cachedResolvedUserName };
+            if (window.authSystem?.setCurrentUser) {
+                window.authSystem.setCurrentUser(updatedUser);
+            } else if (window.authSystem) {
+                window.authSystem.currentUser = updatedUser;
+            }
+        }
+    }
+
     // Função para obter o nome do usuário com fallback seguro
     function getCurrentUserName() {
+        if (cachedResolvedUserName && cachedResolvedUserName !== 'Desconhecido') {
+            return cachedResolvedUserName;
+        }
+
         const currentUser = getActiveUser();
-        
         console.log('🔍 [DEBUG] getCurrentUserName() - currentUser:', currentUser);
-        
-        // Tentar obter o nome do usuário atual
-        if (currentUser.name && currentUser.name.trim()) {
-            console.log('✅ [DEBUG] Nome obtido da sessão:', currentUser.name);
-            return currentUser.name;
-        }
-        
-        // Fallback: tentar extrair do username
-        if (currentUser.username) {
-            // Se o username tem ponto, dividir e pegar a primeira palavra capitalizada
-            if (currentUser.username.includes('.')) {
-                const parts = currentUser.username.split('.');
-                const resultado = parts.map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
-                console.log('✅ [DEBUG] Nome extraído do username:', resultado);
-                return resultado;
+
+        const candidateSources = [
+            currentUser?.name,
+            currentUser?.displayName,
+            currentUser?.fullName,
+            currentUser?.profile?.name,
+            currentUser?.user?.name,
+            currentUser?.user?.displayName
+        ];
+
+        for (const source of candidateSources) {
+            if (typeof source === 'string' && source.trim()) {
+                console.log('✅ [DEBUG] Nome obtido de fonte primária:', source.trim());
+                persistResolvedUserName(source.trim(), currentUser);
+                return cachedResolvedUserName;
             }
-            // Caso contrário, retornar capitalizado
-            const resultado = currentUser.username.charAt(0).toUpperCase() + currentUser.username.slice(1);
-            console.log('✅ [DEBUG] Username capitalizado:', resultado);
-            return resultado;
         }
-        
+
+        const usernameDerived = deriveNameFromIdentifier(currentUser?.username || currentUser?.user?.username);
+        if (usernameDerived) {
+            console.log('✅ [DEBUG] Nome derivado do username:', usernameDerived);
+            persistResolvedUserName(usernameDerived, currentUser);
+            return cachedResolvedUserName;
+        }
+
+        const emailDerived = deriveNameFromIdentifier(currentUser?.email || currentUser?.user?.email);
+        if (emailDerived) {
+            console.log('✅ [DEBUG] Nome derivado do e-mail:', emailDerived);
+            persistResolvedUserName(emailDerived, currentUser);
+            return cachedResolvedUserName;
+        }
+
+        const storedSession = getStoredUserSession();
+        if (storedSession && typeof storedSession === 'object') {
+            const storedCandidates = [
+                storedSession.name,
+                storedSession.displayName,
+                storedSession.fullName
+            ];
+            for (const stored of storedCandidates) {
+                if (typeof stored === 'string' && stored.trim()) {
+                    console.log('✅ [DEBUG] Nome recuperado da sessão armazenada:', stored.trim());
+                    persistResolvedUserName(stored.trim(), currentUser || storedSession);
+                    return cachedResolvedUserName;
+                }
+            }
+
+            const fallbackFromIdentifier = deriveNameFromIdentifier(storedSession.username || storedSession.email);
+            if (fallbackFromIdentifier) {
+                console.log('✅ [DEBUG] Nome derivado da sessão armazenada:', fallbackFromIdentifier);
+                persistResolvedUserName(fallbackFromIdentifier, currentUser || storedSession);
+                return cachedResolvedUserName;
+            }
+        }
+
         console.warn('⚠️ [DEBUG] Nenhum nome encontrado, retornando "Desconhecido"');
-        // Último recurso
-        return 'Desconhecido';
+        cachedResolvedUserName = 'Desconhecido';
+        return cachedResolvedUserName;
     }
     
     // Funções para normalizar datas conforme o ciclo de trabalho (7h a 7h do dia seguinte)
@@ -1880,7 +1954,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if (!orderId) return;
 
-                const producedQty = Number(data.produzido || data.quantity || 0);
+                const producedQty = coerceToNumber(data.produzido ?? data.quantity, 0);
                 if (!Number.isFinite(producedQty) || producedQty <= 0) {
                     return;
                 }
@@ -1899,12 +1973,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const ordersWithProgress = normalizedOrders
             .map(order => {
-                const lotSize = Number(order.lot_size) || 0;
+                const lotSize = coerceToNumber(order.lot_size, 0);
                 const status = (order.status || '').toLowerCase();
                 const isFinishedStatus = ['concluida', 'finalizada', 'encerrada'].includes(status);
 
                 const aggregateTotals = productionTotalsByOrderId.get(order.id) || 0;
-                const storedTotals = Number(order.total_produzido || order.totalProduced || 0);
+                const storedTotals = coerceToNumber(order.total_produzido ?? order.totalProduced, 0);
                 const totalProduced = Math.max(aggregateTotals, storedTotals, 0);
 
                 const computedProgress = lotSize > 0
@@ -6342,7 +6416,17 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         // Manipuladores de eventos para controle de preenchimento
         if (qualityAutoFillBtn) {
+            if (!QUALITY_AUTOFILL_ENABLED) {
+                qualityAutoFillBtn.disabled = true;
+                qualityAutoFillBtn.classList.add('opacity-60', 'cursor-not-allowed');
+                qualityAutoFillBtn.title = 'Integração automática temporariamente desativada';
+            }
+
             qualityAutoFillBtn.addEventListener('click', () => {
+                if (!QUALITY_AUTOFILL_ENABLED) {
+                    showNotification('Integração automática está desativada. Utilize o preenchimento manual.', 'info');
+                    return;
+                }
                 loadQualityContext();
                 showNotification('Preenchimento automático reativado!', 'success');
             });
@@ -6362,6 +6446,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     showNotification('Todos os dados foram limpos!', 'success');
                 }
             });
+        }
+
+        if (qualityPrintBtn && !qualityPrintBtn.dataset.listenerAttached) {
+            qualityPrintBtn.addEventListener('click', handleQualityChecklistPrint);
+            qualityPrintBtn.dataset.listenerAttached = 'true';
         }
 
         // Tentar carregar dados de hoje automaticamente
@@ -6503,6 +6592,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             input.readOnly = false;
         });
 
+        enableManualPackagingInputs();
+
         // Limpar observações também
         if (qualityProdObsTime) qualityProdObsTime.value = '';
         if (qualityProdObsText) qualityProdObsText.value = '';
@@ -6532,8 +6623,370 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             span.textContent = '-';
             span.title = '';
         });
+
+        document.querySelectorAll('.quality-packaging-input').forEach(input => {
+            input.value = '';
+        });
         
         setQualityStatus('Todos os dados foram limpos. Selecione um plano para começar.', 'info');
+    }
+
+    function enableManualPackagingInputs() {
+        const packagingSpans = document.querySelectorAll('[class*="quality-packaging-shift"]');
+        packagingSpans.forEach(span => {
+            const cell = span.parentElement;
+            if (!cell) return;
+
+            span.classList.add('hidden');
+
+            let input = cell.querySelector('input.quality-packaging-input');
+            if (!input) {
+                input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'quality-packaging-input w-full h-5 rounded border border-gray-300 bg-white text-center text-xs text-gray-800';
+                input.placeholder = 'Saco';
+                input.dataset.linkedSpanClass = span.className;
+                cell.appendChild(input);
+            }
+
+            input.classList.remove('bg-gray-100', 'text-gray-600');
+            input.classList.add('bg-white', 'text-gray-800');
+            input.readOnly = false;
+            input.value = '';
+        });
+    }
+
+    function handleQualityChecklistPrint() {
+        if (!currentQualityContext) {
+            showNotification('Carregue um plano antes de imprimir o checklist.', 'warning');
+            return;
+        }
+
+        const snapshot = buildQualityChecklistSnapshot();
+        const html = renderQualityChecklistPrint(snapshot);
+        const printWindow = window.open('', '_blank', 'width=1024,height=768');
+
+        if (!printWindow) {
+            showNotification('Não foi possível abrir a janela de impressão. Verifique o bloqueador de pop-ups.', 'error');
+            return;
+        }
+
+        printWindow.document.write(html);
+        printWindow.document.close();
+        printWindow.focus();
+
+        setTimeout(() => {
+            try {
+                printWindow.print();
+            } catch (err) {
+                console.error('Erro ao acionar impressão:', err);
+            }
+        }, 300);
+    }
+
+    function buildQualityChecklistSnapshot() {
+        const plan = currentQualityContext?.plan || {};
+        const dateValue = currentQualityContext?.date || qualityDateInput?.value || getProductionDateString();
+        const responsavel = (qualityResponsavelInput?.value || getCurrentUserName() || '').trim();
+        const notes = (qualityNotesInput?.value || '').trim();
+        const actions = (qualityActionsInput?.value || '').trim();
+        const status = (qualityChecklistStatus?.textContent || '').trim();
+        const printedAt = new Date();
+
+        const shiftHours = {
+            1: [7, 8, 9, 10, 11, 12, 13, 14],
+            2: [15, 16, 17, 18, 19, 20, 21, 22],
+            3: [23, 0, 1, 2, 3, 4, 5, 6]
+        };
+
+        const shifts = [
+            {
+                id: 1,
+                title: '1º TURNO · 07h às 14h',
+                theme: 'blue',
+                data: collectQualityShiftData(1, shiftHours[1])
+            },
+            {
+                id: 2,
+                title: '2º TURNO · 15h às 22h',
+                theme: 'green',
+                data: collectQualityShiftData(2, shiftHours[2])
+            },
+            {
+                id: 3,
+                title: '3º TURNO · 23h às 06h',
+                theme: 'amber',
+                data: collectQualityShiftData(3, shiftHours[3])
+            }
+        ];
+
+        const prodObservations = collectQualityObservations(qualityProdObsList, qualityProdObsTime, qualityProdObsText);
+        const qualObservations = collectQualityObservations(qualityQualObsList, qualityQualObsTime, qualityQualObsText);
+
+        return {
+            plan,
+            dateValue,
+            responsavel,
+            notes,
+            actions,
+            status,
+            shifts,
+            prodObservations,
+            qualObservations,
+            printedAt
+        };
+    }
+
+    function collectQualityObservations(listContainer, pendingTimeInput, pendingTextInput) {
+        const entries = [];
+
+        if (listContainer) {
+            Array.from(listContainer.children || []).forEach(card => {
+                if (!(card instanceof HTMLElement)) return;
+                const paragraphs = card.querySelectorAll('p');
+                const time = paragraphs[0]?.textContent?.trim() || '';
+                const text = paragraphs[1]?.textContent?.trim() || '';
+
+                if (text) {
+                    entries.push({ time, text });
+                }
+            });
+        }
+
+        const pendingTime = pendingTimeInput?.value?.trim();
+        const pendingText = pendingTextInput?.value?.trim();
+
+        if (pendingTime && pendingText) {
+            entries.push({ time: pendingTime, text: `${pendingText} (não salvo)` });
+        } else if (!pendingTime && pendingText) {
+            entries.push({ time: '', text: `${pendingText} (não salvo)` });
+        }
+
+        return entries;
+    }
+
+    function collectQualityShiftData(shift, hours = []) {
+        const rows = hours.map(hour => {
+            const cavitiesInput = document.querySelector(`.quality-cavities-input.shift-${shift}.hour-${hour}`);
+            const inspectionInput = document.querySelector(`.quality-inspection-input.shift-${shift}.hour-${hour}`);
+            const packagingSpan = document.querySelector(`.quality-packaging-shift-${shift}-${hour}`);
+            const packagingCell = packagingSpan?.parentElement || null;
+            const packagingInput = packagingCell?.querySelector('.quality-packaging-input') || null;
+
+            const cavities = cavitiesInput?.value?.trim() || '';
+            const inspection = inspectionInput?.value?.trim() || '';
+            const packagingFallback = packagingSpan?.textContent?.trim();
+            const packagingValue = packagingInput?.value?.trim() || (packagingFallback === '-' ? '' : (packagingFallback || ''));
+
+            return {
+                hour,
+                label: formatPrintHour(hour),
+                cavities,
+                packaging: packagingValue,
+                inspection
+            };
+        });
+
+        return {
+            hours: rows.map(row => row.label),
+            cavities: rows.map(row => row.cavities || ''),
+            packaging: rows.map(row => row.packaging || ''),
+            inspection: rows.map(row => row.inspection || '')
+        };
+    }
+
+    function renderQualityChecklistPrint(snapshot) {
+        const { plan, dateValue, responsavel, notes, actions, status, shifts, prodObservations, qualObservations, printedAt } = snapshot;
+        const dateLabel = dateValue ? dateValue.split('-').reverse().join('/') : '-';
+        const printedLabel = printedAt.toLocaleString('pt-BR');
+
+        const formatMultiline = (value, emptyLabel) => {
+            const safe = (value || '').trim();
+            if (!safe) return escapeHtml(emptyLabel || '');
+            return escapeHtml(safe).replace(/\n/g, '<br />');
+        };
+
+        const renderShiftTable = shift => {
+            const data = shift.data;
+            if (!data || data.hours.length === 0) {
+                return '';
+            }
+
+            const renderCells = values => values.map(value => {
+                const safe = (value || '').trim();
+                return `<td>${safe ? escapeHtml(safe) : '&nbsp;'}</td>`;
+            }).join('');
+            const hoursHeader = data.hours.map(hourLabel => `<th>${escapeHtml(hourLabel)}</th>`).join('');
+            const shiftClass = `shift-${shift.theme || 'neutral'}`;
+
+            return `
+                <section class="print-section ${shiftClass}">
+                    <h3 class="section-title">${escapeHtml(shift.title)}</h3>
+                    <table class="print-table print-table-grid">
+                        <thead>
+                            <tr>
+                                <th class="desc-col">Desc</th>
+                                ${hoursHeader}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="row-label">Cavidades</td>
+                                ${renderCells(data.cavities)}
+                            </tr>
+                            <tr>
+                                <td class="row-label">Embalagem</td>
+                                ${renderCells(data.packaging)}
+                            </tr>
+                            <tr>
+                                <td class="row-label">Inspeção</td>
+                                ${renderCells(data.inspection)}
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+            `;
+        };
+
+        const renderObs = (title, items) => {
+            if (!items || items.length === 0) {
+                return `
+                    <div class="obs-block">
+                        <h4 class="section-subtitle">${escapeHtml(title)}</h4>
+                        <p class="muted">Nenhuma observação registrada.</p>
+                    </div>
+                `;
+            }
+
+            const obsItems = items.map(item => `
+                <div class="obs-item">
+                    <div class="obs-time">${escapeHtml(item.time || '--:--')}</div>
+                    <div class="obs-text">${formatMultiline(item.text, '')}</div>
+                </div>
+            `).join('');
+
+            return `
+                <div class="obs-block">
+                    <h4 class="section-subtitle">${escapeHtml(title)}</h4>
+                    <div class="obs-list">${obsItems}</div>
+                </div>
+            `;
+        };
+
+        return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8" />
+    <title>Checklist de Qualidade - ${escapeHtml(plan.product || plan.product_name || plan.product_cod || 'Plano')}</title>
+    <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; color: #1f2937; }
+    h1 { font-size: 18px; margin: 0; font-weight: 700; }
+    h2 { font-size: 12px; margin: 4px 0 0 0; color: #475569; letter-spacing: 0.08em; text-transform: uppercase; }
+    header { border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 16px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .meta-card { border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; background: #fafafa; }
+    .meta-label { font-size: 9px; text-transform: uppercase; color: #64748b; font-weight: 600; letter-spacing: 0.06em; }
+    .meta-value { margin-top: 4px; font-size: 12px; font-weight: 600; color: #0f172a; }
+    .print-section { margin-top: 18px; }
+    .section-title { font-size: 12px; font-weight: 700; color: #0f172a; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em; }
+    .print-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .print-table th, .print-table td { border: 1px solid #e2e8f0; padding: 5px 6px; text-align: center; }
+    .print-table th { background: #f1f5f9; color: #0f172a; font-weight: 700; }
+    .print-table td { background: #ffffff; font-weight: 500; }
+    .print-table .desc-col { width: 70px; text-align: left; padding-left: 8px; }
+    .print-table .row-label { background: #f8fafc; text-align: left; font-weight: 700; padding-left: 8px; }
+    .print-table-grid td + td { border-left: 1px solid #e2e8f0; }
+    .shift-blue .section-title { color: #1d4ed8; }
+    .shift-blue .print-table th { background: #e0f2fe; }
+    .shift-blue .row-label { background: #eff6ff; }
+    .shift-green .section-title { color: #047857; }
+    .shift-green .print-table th { background: #dcfce7; }
+    .shift-green .row-label { background: #ecfdf5; }
+    .shift-amber .section-title { color: #b45309; }
+    .shift-amber .print-table th { background: #fef3c7; }
+    .shift-amber .row-label { background: #fefce8; }
+    .observations-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+    .obs-block { display: flex; flex-direction: column; gap: 6px; }
+    .section-subtitle { font-size: 11px; font-weight: 700; color: #0f172a; margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }
+    .obs-list { border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; background: #ffffff; display: flex; flex-direction: column; gap: 6px; }
+    .obs-item { display: grid; grid-template-columns: 56px 1fr; gap: 6px; font-size: 11px; }
+    .obs-time { font-weight: 700; color: #2563eb; }
+    .obs-text { color: #1f2937; }
+    .muted { font-size: 11px; color: #94a3b8; }
+    .notes { border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; background: #ffffff; font-size: 11px; line-height: 1.5; }
+    .footer { margin-top: 28px; display: flex; justify-content: space-between; font-size: 10px; color: #94a3b8; }
+    .signature { margin-top: 32px; border-top: 1px solid #e2e8f0; width: 220px; padding-top: 6px; font-size: 10px; text-align: center; color: #475569; }
+        @media print {
+            body { margin: 16px; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Checklist digital de qualidade</h1>
+        <h2>Inspeção hora-a-hora</h2>
+    </header>
+
+    <section class="meta-grid">
+        <div class="meta-card">
+            <div class="meta-label">Produto</div>
+            <div class="meta-value">${escapeHtml(plan.product || plan.product_name || 'Não informado')}</div>
+        </div>
+        <div class="meta-card">
+            <div class="meta-label">Máquina</div>
+            <div class="meta-value">${escapeHtml(plan.machine || '-')}</div>
+        </div>
+        <div class="meta-card">
+            <div class="meta-label">OP / Plano</div>
+            <div class="meta-value">${escapeHtml(plan.order_number || plan.order_id || plan.id || '-')}</div>
+        </div>
+        <div class="meta-card">
+            <div class="meta-label">Data</div>
+            <div class="meta-value">${escapeHtml(dateLabel)}</div>
+        </div>
+        <div class="meta-card">
+            <div class="meta-label">Responsável</div>
+            <div class="meta-value">${escapeHtml(responsavel || '-')}</div>
+        </div>
+        <div class="meta-card">
+            <div class="meta-label">Status</div>
+            <div class="meta-value">${escapeHtml(status || 'Em preenchimento')}</div>
+        </div>
+    </section>
+
+    ${shifts.map(renderShiftTable).join('')}
+
+    <section class="print-section">
+        <h3 class="section-title">Observações</h3>
+        <div class="observations-grid">
+            ${renderObs('Produção', prodObservations)}
+            ${renderObs('Qualidade', qualObservations)}
+        </div>
+    </section>
+
+    <section class="print-section">
+        <h3 class="section-title">Anotações do checklist</h3>
+        <div class="notes">
+            <strong>Notas:</strong><br />${formatMultiline(notes, 'Sem anotações.')}
+            <br /><br />
+            <strong>Ações:</strong><br />${formatMultiline(actions, 'Sem ações registradas.')}
+        </div>
+    </section>
+
+    <div class="footer">
+        <div>Emitido em: ${escapeHtml(printedLabel)}</div>
+        <div class="signature">Assinatura do responsável</div>
+    </div>
+</body>
+</html>`;
+    }
+
+    function formatPrintHour(hour) {
+        const normalized = Number(hour);
+        if (!Number.isFinite(normalized)) return String(hour);
+        const padded = String((normalized + 24) % 24).padStart(2, '0');
+        return `${padded}h`;
     }
 
     async function populateQualityPlanOptions(dateValue) {
@@ -7048,7 +7501,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (qualityControlBar) qualityControlBar.classList.remove('hidden');
         if (qualityObservationsSection) qualityObservationsSection.classList.remove('hidden');
 
-        // Popular cavidades e embalagens nas tabelas
+        if (!QUALITY_AUTOFILL_ENABLED) {
+            clearQualityInputsForManualEntry();
+            setQualityStatus('Modo manual ativo: preencha o checklist diretamente na tabela.', 'info');
+            return;
+        }
+
+        // Popular cavidades e embalagens nas tabelas (modo automático)
         populateQualityProcessTables(hourlyEntries, plan);
     }
 
@@ -7070,6 +7529,48 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
 
         console.log(`📊 Cavidades padrão: ${cavitiesStandard}, Capacidade do saco: ${bagCapacity}`);
+
+        const parsePositiveInt = (value) => {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : null;
+        };
+
+        const getShiftActiveCavities = (shift) => {
+            const candidatesByShift = {
+                1: [
+                    plan.active_cavities_t1,
+                    plan.active_cavities_T1,
+                    plan.activeCavitiesT1,
+                    plan.activeCavities?.t1
+                ],
+                2: [
+                    plan.active_cavities_t2,
+                    plan.active_cavities_T2,
+                    plan.activeCavitiesT2,
+                    plan.activeCavities?.t2
+                ],
+                3: [
+                    plan.active_cavities_t3,
+                    plan.active_cavities_T3,
+                    plan.activeCavitiesT3,
+                    plan.activeCavities?.t3
+                ]
+            };
+            const candidates = candidatesByShift[shift] || [];
+            for (const candidate of candidates) {
+                const parsed = parsePositiveInt(candidate);
+                if (parsed !== null) {
+                    return parsed;
+                }
+            }
+            return null;
+        };
+
+        const activeCavitiesByShift = {
+            1: getShiftActiveCavities(1),
+            2: getShiftActiveCavities(2),
+            3: getShiftActiveCavities(3)
+        };
 
         // Agrupar por hora
         const hourlyMap = {};
@@ -7095,7 +7596,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const entries = hourlyMap[hh];
             
             // Calcular totais para essa hora
-            const totalCavities = entries.reduce((sum, e) => sum + (Number(e.ciclo_real || 0)), 0);
+            const totalCycles = entries.reduce((sum, e) => sum + (Number(e.ciclo_real || 0)), 0);
             // A quantidade pode estar em: quantidade, produzido, ou precisar ser calculada de peso/cavidades
             let totalQuantity = entries.reduce((sum, e) => sum + (Number(e.quantidade || e.produzido || 0)), 0);
             
@@ -7108,7 +7609,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 }, 0);
             }
 
-            console.log(`  Hora ${hh}h: ${totalCavities} ciclos reais, ${totalQuantity} peças produzidas`);
+            console.log(`  Hora ${hh}h: ${totalCycles} ciclos reais, ${totalQuantity} peças produzidas`);
 
             // Determinar turno baseado nos horários corretos:
             // 1º Turno: 7h - 14h
@@ -7121,13 +7622,44 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 shift = 2;
             }
 
+            // Determinar cavidades reais priorizando o painel de ciclo/cavidades
+            let hourlyReportedCavities = null;
+            for (const row of entries) {
+                const candidates = [
+                    row.cavidades,
+                    row.cavidade,
+                    row.cavidades_ativas,
+                    row.cavidade_real,
+                    row.active_cavities,
+                    row.activeCavities
+                ];
+                for (const candidate of candidates) {
+                    const parsed = parsePositiveInt(candidate);
+                    if (parsed !== null) {
+                        hourlyReportedCavities = parsed;
+                        break;
+                    }
+                }
+                if (hourlyReportedCavities !== null) {
+                    break;
+                }
+            }
+
+            const shiftActiveCavities = activeCavitiesByShift[shift];
+            const resolvedCavities = hourlyReportedCavities ?? shiftActiveCavities ?? cavitiesStandard;
+            const cavitiesSource = hourlyReportedCavities !== null
+                ? 'apontamentos horários'
+                : shiftActiveCavities !== null
+                    ? 'painel de ciclo/cavidades'
+                    : 'planejamento da OP';
+
             // Atualizar campo de cavidades reais
             const cavitiesInput = document.querySelector(`.quality-cavities-input.shift-${shift}.hour-${hh}`);
             if (cavitiesInput) {
-                cavitiesInput.value = totalCavities || cavitiesStandard;
+                cavitiesInput.value = resolvedCavities ? String(resolvedCavities) : '';
                 cavitiesInput.readOnly = true;
                 cavitiesInput.classList.add('bg-gray-100');
-                cavitiesInput.title = `${totalCavities} ciclos registrados`;
+                cavitiesInput.title = `Cavidades ativas: ${resolvedCavities} (${cavitiesSource})`;
             }
 
             // Calcular número de saco e atualizar (acumulado por turno)
@@ -7637,10 +8169,47 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             .replace(/'/g, '&#39;');
     }
 
+    function normalizeNumericString(value) {
+        if (typeof value !== 'string') return null;
+        const trimmed = value.trim();
+        if (!trimmed) return null;
+
+        const thousandPatternPtBr = /^\d{1,3}(\.\d{3})+(,\d+)?$/;
+        const thousandPatternEn = /^\d{1,3}(,\d{3})+(\.\d+)?$/;
+
+        if (thousandPatternPtBr.test(trimmed)) {
+            return trimmed.replace(/\./g, '').replace(',', '.');
+        }
+
+        if (thousandPatternEn.test(trimmed)) {
+            return trimmed.replace(/,/g, '');
+        }
+
+        // Caso geral: remover espaços e trocar vírgula por ponto
+        return trimmed.replace(/\s+/g, '').replace(',', '.');
+    }
+
     function parseOptionalNumber(value) {
         if (value === null || value === undefined || value === '') return null;
-        const num = Number(value);
-        return Number.isFinite(num) ? num : null;
+
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+
+        if (typeof value === 'string') {
+            const normalized = normalizeNumericString(value);
+            if (normalized === null) return null;
+            const parsed = Number(normalized);
+            return Number.isFinite(parsed) ? parsed : null;
+        }
+
+        const fallback = Number(value);
+        return Number.isFinite(fallback) ? fallback : null;
+    }
+
+    function coerceToNumber(value, fallback = 0) {
+        const parsed = parseOptionalNumber(value);
+        return parsed === null ? fallback : parsed;
     }
 
     function getProductionOrderStatusBadge(status = 'planejada') {
@@ -8681,7 +9250,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     function renderPlanningTable(items) {
         if (!planningTableBody) return;
         const orDash = (value) => value || '-';
-        const orDashNum = (value) => value ? value.toLocaleString('pt-BR') : '-';
+        const orDashNum = (value) => {
+            const parsed = parseOptionalNumber(value);
+            return parsed !== null ? parsed.toLocaleString('pt-BR') : '-';
+        };
         const cycleClass = (realCycle, budgetedCycle) => {
             if (!realCycle || !budgetedCycle) return '';
             return realCycle > budgetedCycle ? 'text-status-error font-bold' : '';
@@ -8711,7 +9283,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     T1: { produzido: Number(item.T1?.produzido) || 0 },
                     T2: { produzido: Number(item.T2?.produzido) || 0 },
                     T3: { produzido: Number(item.T3?.produzido) || 0 },
-                    total_produzido: Number(item.total_produzido) || 0
+                    total_produzido: coerceToNumber(item.total_produzido, 0)
                 });
             } else {
                 const agg = grouped.get(key);
@@ -8731,7 +9303,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 agg.T1.produzido += Number(item.T1?.produzido) || 0;
                 agg.T2.produzido += Number(item.T2?.produzido) || 0;
                 agg.T3.produzido += Number(item.T3?.produzido) || 0;
-                agg.total_produzido += Number(item.total_produzido) || 0;
+                agg.total_produzido += coerceToNumber(item.total_produzido, 0);
             }
         });
 
@@ -9343,7 +9915,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (shiftTarget) {
             // Usar APENAS lot_size, não planned_quantity (meta diária)
             const totalPlanned = selectedMachineData.order_lot_size || selectedMachineData.lot_size || 0;
-            const totalExecuted = selectedMachineData.total_produzido || 0;
+            const totalExecuted = coerceToNumber(selectedMachineData.total_produzido, 0);
             
             if (!totalPlanned) {
                 shiftTarget.textContent = `${totalExecuted.toLocaleString('pt-BR')} / N/A`;
@@ -11716,9 +12288,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const registradoPorNome = entry.data.registradoPorNome || 'Desconhecido';
         const details = [];
         const parseNumber = (value) => {
-            if (typeof value === 'number') return value;
-            const parsed = parseFloat(value);
-            return Number.isFinite(parsed) ? parsed : 0;
+            const parsed = parseOptionalNumber(value);
+            return parsed !== null ? parsed : 0;
         };
 
         if (entry.data.mp) {
@@ -12261,11 +12832,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const plan = planById[entry.planId];
             if (!plan) return;
             const machine = plan.machine;
-            const produced = Number(entry.produzido) || 0;
+            const produced = coerceToNumber(entry.produzido ?? entry.quantity, 0);
             const turno = normalizeShiftValue(entry.turno);
 
             aggregated[machine].totalProduced += produced;
-            aggregated[machine].totalLossesKg += Number(entry.refugo_kg) || 0;
+            aggregated[machine].totalLossesKg += coerceToNumber(entry.refugo_kg, 0);
             if (turno) {
                 aggregated[machine].byShift[turno] = (aggregated[machine].byShift[turno] || 0) + produced;
             }
@@ -12274,8 +12845,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 machine,
                 turno,
                 produzido: produced,
-                duracao_min: Number(entry.duracao_min ?? entry.duration_min ?? entry.duration ?? 0) || 0,
-                refugo_kg: Number(entry.refugo_kg) || 0,
+                duracao_min: coerceToNumber(entry.duracao_min ?? entry.duration_min ?? entry.duration, 0),
+                refugo_kg: coerceToNumber(entry.refugo_kg, 0),
                 piece_weight: plan.piece_weight,
                 real_cycle_t1: plan.real_cycle_t1,
                 real_cycle_t2: plan.real_cycle_t2,
@@ -12311,7 +12882,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     const oeeByMachine = oeeSummary?.oeeByMachine || {};
     const currentShiftKey = oeeSummary?.currentShift || fallbackShiftKey;
 
-        const formatQty = (value) => Number(value || 0).toLocaleString('pt-BR');
+        const formatQty = (value) => {
+            const parsed = coerceToNumber(value, 0);
+            return Math.round(parsed).toLocaleString('pt-BR');
+        };
         const machineProgressInfo = {};
 
         machineCardGrid.innerHTML = machineOrder.map(machine => {
@@ -12319,14 +12893,17 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const plan = data.plan || {};
             // Usar APENAS lot_size da OP (quantidade total planejada da ordem)
             // Não use planned_quantity - esse é apenas meta diária
-            const plannedQty = Number(plan.order_lot_size) || Number(plan.lot_size) || 0;
+            const plannedQtyPrimary = parseOptionalNumber(plan.order_lot_size);
+            const plannedQtyFallback = parseOptionalNumber(plan.lot_size);
+            const plannedQty = (plannedQtyPrimary ?? plannedQtyFallback ?? 0);
             
             // Calcular produção total acumulada da OP (não apenas do dia atual)
-            const totalAccumulatedProduced = Number(plan.total_produzido) || data.totalProduced || 0;
-            const lossesKg = Number(data.totalLossesKg) || 0;
-            const pieceWeight = Number(plan.piece_weight) || 0;
+            const totalAccumulatedProduced = (parseOptionalNumber(plan.total_produzido) ?? data.totalProduced ?? 0);
+            const lossesKg = coerceToNumber(data.totalLossesKg, 0);
+            const pieceWeight = coerceToNumber(plan.piece_weight, 0);
             const scrapPcs = pieceWeight > 0 ? Math.round((lossesKg * 1000) / pieceWeight) : 0;
-            const goodProduction = Math.max(0, totalAccumulatedProduced - scrapPcs); // Executado = produção boa total
+            const goodProductionRaw = Math.max(0, totalAccumulatedProduced - scrapPcs);
+            const goodProduction = Math.round(goodProductionRaw); // Executado = produção boa total
             const progressPercentRaw = plannedQty > 0 ? (goodProduction / plannedQty) * 100 : 0;
             
             console.log(`Card ${machine} - Lot Size: ${plan.order_lot_size}, Planned Qty: ${plan.planned_quantity}, Planejado Final: ${plannedQty}, Total Produzido: ${totalAccumulatedProduced}, Produção Boa: ${goodProduction}`);
@@ -12618,8 +13195,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     }
 
                     const accumulated = productionTotalsByOrderId.get(resolvedOrder.id) || 0;
-                    const resolvedOrderTotal = Number(resolvedOrder.total_produzido || resolvedOrder.totalProduced || 0);
-                    const planAccumulated = Number(plan.total_produzido) || 0;
+                    const resolvedOrderTotal = coerceToNumber(resolvedOrder.total_produzido ?? resolvedOrder.totalProduced, 0);
+                    const planAccumulated = coerceToNumber(plan.total_produzido, 0);
                     plan.total_produzido = resolvedOrderTotal > 0
                         ? resolvedOrderTotal
                         : (accumulated > 0 ? accumulated : planAccumulated);
@@ -12730,7 +13307,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             // Mostrar dados da OP: executado acumulado vs quantidade total da OP
             // Usar APENAS lot_size, não planned_quantity (meta diária)
             const totalPlanned = selectedMachineData.order_lot_size || selectedMachineData.lot_size || 0;
-            const totalExecuted = selectedMachineData.total_produzido || 0;
+            const totalExecuted = coerceToNumber(selectedMachineData.total_produzido, 0);
             
             if (!totalPlanned) {
                 shiftTarget.textContent = `${totalExecuted.toLocaleString('pt-BR')} / N/A`;
@@ -13441,15 +14018,17 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 </thead>
                 <tbody class="divide-y divide-gray-200">
                     ${data.map(item => {
-                        const faltante = (item.planned_quantity || 0) - item.total_produzido;
+                        const plannedTotal = coerceToNumber(item.planned_quantity, 0);
+                        const producedTotal = coerceToNumber(item.total_produzido, 0);
+                        const faltante = plannedTotal - producedTotal;
                         return `
                         <tr>
                             <td class="px-2 py-2 whitespace-nowrap">${item.machine}</td><td class="px-2 py-2 whitespace-nowrap">${item.product}</td>
                             <td class="px-2 py-2 text-center">${(item.T1.produzido || 0).toLocaleString('pt-BR')}</td><td class="px-2 py-2 text-center">${(item.T1.refugo_kg || 0).toFixed(2)}</td>
                             <td class="px-2 py-2 text-center border-l">${(item.T2.produzido || 0).toLocaleString('pt-BR')}</td><td class="px-2 py-2 text-center">${(item.T2.refugo_kg || 0).toFixed(2)}</td>
                             <td class="px-2 py-2 text-center border-l">${(item.T3.produzido || 0).toLocaleString('pt-BR')}</td><td class="px-2 py-2 text-center">${(item.T3.refugo_kg || 0).toFixed(2)}</td>
-                            <td class="px-2 py-2 text-center border-l">${(item.planned_quantity || 0).toLocaleString('pt-BR')}</td>
-                            <td class="px-2 py-2 text-center font-bold border-l">${item.total_produzido.toLocaleString('pt-BR')}</td>
+                            <td class="px-2 py-2 text-center border-l">${plannedTotal.toLocaleString('pt-BR')}</td>
+                            <td class="px-2 py-2 text-center font-bold border-l">${producedTotal.toLocaleString('pt-BR')}</td>
                             <td class="px-2 py-2 text-center font-bold border-l ${faltante > 0 ? 'text-status-error' : 'text-status-success'}">${faltante.toLocaleString('pt-BR')}</td>
                             <td class="px-2 py-2 text-center border-l no-print">
                                 <button data-id="${item.id}" class="delete-resumo-btn text-status-error hover:text-red-700 p-1"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
