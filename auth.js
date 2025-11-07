@@ -25,6 +25,11 @@ class AuthSystem {
                 console.log('✅ Usuário já logado. Redirecionando para index...');
                 this.redirectToIndex();
             }
+            
+            // Se chegou aqui e está em index.html, filtrar abas baseado em permissões
+            if (this.currentUser && !isLoginPage) {
+                this.filterTabsBasedOnPermissions();
+            }
         }, 100);
     }
 
@@ -116,11 +121,29 @@ class AuthSystem {
     canAccessTab(tabName) {
         if (!this.currentUser) return false;
         
+        // ⚙️ ACESSO EXCLUSIVO: Aba Qualidade apenas para Leandro Camargo
+        if (tabName === 'qualidade') {
+            const isLeandroCamargo = this.currentUser.name === 'Leandro Camargo' || this.currentUser.email === 'leandro@hokkaido.com.br';
+            if (!isLeandroCamargo) {
+                return false;
+            }
+        }
+        
+        // ⚙️ ACESSO EXCLUSIVO: Aba Teste apenas para Leandro Camargo
+        if (tabName === 'teste') {
+            const isLeandroCamargo = this.currentUser.name === 'Leandro Camargo' || this.currentUser.email === 'leandro@hokkaido.com.br';
+            if (!isLeandroCamargo) {
+                return false;
+            }
+        }
+        
         const tabPermissions = {
             planejamento: ['planejamento'],
             ordens: ['planejamento', 'lancamento'],
             lancamento: ['lancamento'],
-            analise: ['analise']
+            analise: ['analise'],
+            qualidade: ['analise', 'lancamento'],
+            teste: ['admin', 'lancamento']
         };
         
         const requiredPermissions = tabPermissions[tabName];
@@ -141,7 +164,14 @@ class AuthSystem {
             const tabName = btn.getAttribute('data-page');
             
             if (!this.canAccessTab(tabName)) {
+                // Usar múltiplos métodos para garantir ocultação
                 btn.style.display = 'none';
+                btn.classList.add('hidden');
+                btn.setAttribute('disabled', 'true');
+                btn.style.visibility = 'hidden';
+                btn.style.pointerEvents = 'none';
+                
+                console.log(`🔒 Aba '${tabName}' ocultada para usuário: ${this.currentUser?.name}`);
                 
                 // Se a aba ativa está sendo ocultada, mudar para uma permitida
                 if (btn.classList.contains('active')) {
@@ -149,7 +179,14 @@ class AuthSystem {
                     this.setDefaultActiveTab();
                 }
             } else {
+                // Mostrar aba permitida
                 btn.style.display = '';
+                btn.classList.remove('hidden');
+                btn.removeAttribute('disabled');
+                btn.style.visibility = 'visible';
+                btn.style.pointerEvents = 'auto';
+                
+                console.log(`✅ Aba '${tabName}' disponível para usuário: ${this.currentUser?.name}`);
             }
         });
     }
@@ -197,68 +234,68 @@ class AuthSystem {
     }
 
     addUserInfoToHeader() {
-        const header = document.querySelector('header') || document.querySelector('.bg-white.shadow-sm');
-        
-        if (header && !document.getElementById('user-info')) {
-            const userInfo = document.createElement('div');
-            userInfo.id = 'user-info';
-            userInfo.className = 'flex items-center gap-3 text-sm text-gray-600';
-            
-            const roleColors = {
-                'gestor': 'bg-blue-100 text-blue-800',
-                'operador': 'bg-green-100 text-green-800',
-                'supervisor': 'bg-purple-100 text-purple-800'
-            };
-            
-            const roleColor = roleColors[this.currentUser.role] || 'bg-gray-100 text-gray-800';
-            
-            userInfo.innerHTML = `
-                <div class="flex items-center gap-2">
-                    <div class="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-                        <i class="w-4 h-4" data-lucide="user"></i>
-                    </div>
-                    <div>
-                        <div class="font-medium text-gray-900">${this.currentUser.name}</div>
-                        <div class="flex items-center gap-2">
-                            <span class="px-2 py-1 rounded-full text-xs ${roleColor} capitalize">
-                                ${this.currentUser.role}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            // Inserir no final do header
-            header.appendChild(userInfo);
-            
-            // Recriar ícones
-            lucide.createIcons();
+        const legacyContainer = document.getElementById('user-info');
+        if (legacyContainer) {
+            legacyContainer.remove();
         }
+
+        const nameEl = document.getElementById('header-user-name');
+        const roleChip = document.getElementById('header-user-role-chip');
+        const avatarEl = document.getElementById('header-user-avatar');
+
+        if (!nameEl && !roleChip && !avatarEl) {
+            // header custom não disponível nesta página
+            return;
+        }
+
+        const name = this.currentUser?.name?.trim() || 'Usuário';
+        if (nameEl) {
+            nameEl.textContent = name;
+        }
+
+        if (avatarEl) {
+            const initials = name
+                .split(' ')
+                .filter(Boolean)
+                .map(part => part[0])
+                .join('')
+                .substring(0, 2)
+                .toUpperCase();
+            avatarEl.textContent = initials || 'US';
+        }
+
+        if (roleChip) {
+            const role = (this.currentUser?.role || '').toLowerCase();
+            const roleLabel = role ? role.replace(/\b\w/g, l => l.toUpperCase()) : 'Sem Função';
+            roleChip.textContent = roleLabel;
+
+            const roleStyles = {
+                gestor: 'bg-blue-100 text-blue-700 ring-1 ring-blue-200',
+                operador: 'bg-green-100 text-green-700 ring-1 ring-green-200',
+                supervisor: 'bg-purple-100 text-purple-700 ring-1 ring-purple-200'
+            };
+
+            const baseClasses = 'inline-flex items-center justify-end rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide';
+            roleChip.className = `${baseClasses} ${roleStyles[role] || 'bg-gray-100 text-gray-700 ring-1 ring-gray-200'}`;
+        }
+
+        lucide.createIcons();
     }
 
     addLogoutButton() {
-        const userInfo = document.getElementById('user-info');
-        
-        if (userInfo && !document.getElementById('logout-btn')) {
-            const logoutBtn = document.createElement('button');
-            logoutBtn.id = 'logout-btn';
-            logoutBtn.className = 'ml-4 px-3 py-1 text-xs text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors flex items-center gap-1';
-            logoutBtn.innerHTML = `
-                <i class="w-3 h-3" data-lucide="log-out"></i>
-                Sair
-            `;
-            
-            logoutBtn.addEventListener('click', () => {
-                if (confirm('Deseja realmente sair do sistema?')) {
-                    this.logout();
-                }
-            });
-            
-            userInfo.appendChild(logoutBtn);
-            
-            // Recriar ícones
-            lucide.createIcons();
+        const logoutBtn = document.getElementById('logout-btn');
+        if (!logoutBtn || logoutBtn.dataset.bound === 'true') {
+            return;
         }
+
+        logoutBtn.addEventListener('click', () => {
+            if (confirm('Deseja realmente sair do sistema?')) {
+                this.logout();
+            }
+        });
+
+        logoutBtn.dataset.bound = 'true';
+        lucide.createIcons();
     }
 
     // Verificar permissões antes de executar ações sensíveis
@@ -274,7 +311,9 @@ class AuthSystem {
             'add_rework': 'lancamento',
             'view_analysis': 'analise',
             'export_data': 'analise',
-            'close_production_order': 'mixed'
+            'close_production_order': 'mixed',
+            'submit_quality': 'analise',
+            'view_quality': 'analise'
         };
         
         const requiredPermission = actionPermissions[action];
@@ -302,32 +341,30 @@ class AuthSystem {
         const modal = document.createElement('div');
         modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
         modal.innerHTML = `
-            <div class="bg-white rounded-lg p-6 max-w-md mx-4">
+            <div class="bg-white rounded-lg p-6 max-w-md mx-4 shadow-2xl">
                 <div class="flex items-center gap-3 mb-4">
                     <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
                         <i class="w-6 h-6 text-red-600" data-lucide="shield-x"></i>
                     </div>
                     <div>
-                        <h3 class="font-semibold text-gray-900">Acesso Negado</h3>
-                        <p class="text-sm text-gray-600">Você não tem permissão para esta ação</p>
+                        <h3 class="font-bold text-lg text-gray-900">⛔ Acesso Restrito</h3>
+                        <p class="text-sm text-gray-600">Permissão não concedida</p>
                     </div>
                 </div>
-                <div class="text-sm text-gray-600 mb-4">
-                    Seu nível de acesso (<span class="font-medium capitalize">${this.currentUser?.role || 'desconhecido'}</span>) 
-                    não permite executar esta operação.
+                <div class="text-sm text-gray-700 mb-6 p-3 bg-red-50 rounded-lg border border-red-200">
+                    <p>❌ Esta aba é restrita apenas para <strong>Leandro Camargo</strong></p>
                 </div>
-                <button class="w-full bg-red-600 text-white py-2 px-4 rounded hover:bg-red-700 transition-colors" onclick="this.closest('.fixed').remove()">
-                    Entendi
+                <button onclick="this.closest('.fixed').remove()" class="w-full py-2 px-4 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-semibold transition">
+                    Entendido
                 </button>
             </div>
         `;
-        
         document.body.appendChild(modal);
-        lucide.createIcons();
-        
-        // Remover modal após 5 segundos
         setTimeout(() => {
-            if (modal.parentNode) {
+            if (document.body.contains(modal)) lucide.createIcons();
+        }, 100);
+        setTimeout(() => {
+            if (document.body.contains(modal)) {
                 modal.remove();
             }
         }, 5000);
