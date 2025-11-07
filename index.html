@@ -152,14 +152,14 @@
 
         <!-- Conteúdo Principal -->
     <main class="flex-1 flex flex-col">
-            <header class="bg-white/95 backdrop-blur border-b border-gray-200 px-4 lg:px-8 py-3 flex items-center gap-4 no-print relative min-h-[70px]">
-                <button id="sidebar-open-btn" type="button" class="hamburger-btn md:hidden absolute left-4" aria-label="Abrir menu" aria-expanded="false">
+            <header class="bg-white/95 backdrop-blur border-b border-gray-200 px-4 lg:px-8 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4 no-print relative min-h-[70px]">
+                <button id="sidebar-open-btn" type="button" class="hamburger-btn md:hidden absolute left-4 top-1/2 -translate-y-1/2" aria-label="Abrir menu" aria-expanded="false">
                     <span></span>
                     <span></span>
                     <span></span>
                 </button>
-                <div class="flex w-full items-center justify-between gap-4 pl-10 md:pl-0">
-                    <div class="flex items-center gap-3 md:gap-4">
+                <div class="flex w-full flex-col gap-3 pl-12 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:pl-0">
+                    <div class="flex items-start gap-3 sm:items-center sm:gap-4">
                         <div class="hidden md:flex h-12 w-12 items-center justify-center rounded-xl bg-primary-blue/10 text-primary-blue">
                             <i data-lucide="keyboard" class="w-6 h-6"></i>
                         </div>
@@ -168,15 +168,17 @@
                             <p class="text-sm font-medium text-gray-500">Registro operacional em tempo real</p>
                         </div>
                     </div>
-                    <div class="flex flex-wrap items-center justify-end gap-3 sm:gap-4">
+                    <div class="flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row sm:items-center sm:justify-end sm:gap-4">
                         <img src="https://i.postimg.cc/h47TKP4d/logosynchro.png" alt="Logo Hokkaido Synchro" class="hidden sm:block h-10 md:h-12 object-contain drop-shadow-sm">
-                        <div id="header-user-card" class="flex w-full max-w-xs sm:max-w-none flex-wrap items-center justify-between sm:flex-nowrap sm:justify-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 shadow-sm">
-                            <div id="header-user-avatar" class="flex h-9 w-9 items-center justify-center rounded-full bg-primary-blue/10 text-primary-blue text-sm font-semibold uppercase">LC</div>
-                            <div class="text-right sm:text-left leading-tight">
-                                <div id="header-user-name" class="text-sm font-semibold text-gray-900">Leandro Camargo</div>
-                                <span id="header-user-role-chip" class="inline-flex items-center justify-end rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-blue-700 ring-1 ring-blue-200">Gestor</span>
+                        <div id="header-user-card" class="flex w-full flex-col gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 shadow-sm sm:w-auto sm:flex-row sm:items-center sm:gap-3">
+                            <div class="flex items-center gap-3">
+                                <div id="header-user-avatar" class="flex h-9 w-9 items-center justify-center rounded-full bg-primary-blue/10 text-primary-blue text-sm font-semibold uppercase">LC</div>
+                                <div class="flex flex-col leading-tight text-left">
+                                    <div id="header-user-name" class="text-sm font-semibold text-gray-900">Leandro Camargo</div>
+                                    <span id="header-user-role-chip" class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-blue-700 ring-1 ring-blue-200">Gestor</span>
+                                </div>
                             </div>
-                            <button id="logout-btn" class="mt-2 w-full inline-flex items-center justify-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-semibold text-red-600 shadow-sm ring-1 ring-red-200 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400 sm:mt-0 sm:w-auto sm:ml-3">
+                            <button id="logout-btn" class="inline-flex w-full items-center justify-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-semibold text-red-600 shadow-sm ring-1 ring-red-200 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400 sm:w-auto sm:self-center">
                                 <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
                                 Sair
                             </button>
@@ -466,37 +468,7 @@
                             </div>
                         </div>
 
-                        <div class="grid gap-6 lg:grid-cols-2">
-                            <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg">
-                                <div class="flex items-center justify-between mb-4">
-                                    <h3 class="text-lg font-semibold text-gray-800 flex items-center gap-2"><i data-lucide="timer" class="text-amber-500"></i>Lançamentos por hora</h3>
-                                    <span id="quality-hourly-total" class="text-xs font-semibold uppercase tracking-wide text-amber-600"></span>
-                                </div>
-                                <div class="overflow-x-auto">
-                                    <table class="min-w-full divide-y divide-gray-200 border rounded-lg">
-                                        <thead class="bg-gray-50">
-                                            <tr>
-                                                <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Hora</th>
-                                                <th class="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-600">Peso bruto (kg)</th>
-                                                <th class="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-600">Embalagens</th>
-                                                <th class="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Usou tara?</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="quality-hourly-tbody" class="divide-y divide-gray-200"></tbody>
-                                    </table>
-                                    <div id="quality-hourly-empty" class="hidden py-6 text-center text-sm text-gray-500">Nenhuma medição horária registrada.</div>
-                                </div>
-                            </div>
-
-                            <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg">
-                                <div class="flex items-center justify-between mb-4">
-                                    <h3 class="text-lg font-semibold text-gray-800 flex items-center gap-2"><i data-lucide="activity" class="text-rose-500"></i>Ocorrências de parada e ajustes</h3>
-                                    <span id="quality-downtime-total" class="text-xs font-semibold uppercase tracking-wide text-rose-600"></span>
-                                </div>
-                                <div id="quality-downtime-list" class="space-y-3"></div>
-                                <div id="quality-downtime-empty" class="hidden py-6 text-center text-sm text-gray-500">Nenhuma parada associada ao plano.</div>
-                            </div>
-                        </div>
+                        
 
                         <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg border border-emerald-200">
                             <div class="flex items-start justify-between gap-4 mb-4">
@@ -710,6 +682,9 @@
                                 <div class="flex-1">
                                     <p class="text-xs font-semibold text-gray-700">Modo de Preenchimento:</p>
                                 </div>
+                                <button id="quality-print-btn" class="bg-slate-700 hover:bg-slate-800 text-white px-3 py-2 rounded text-xs font-semibold transition flex items-center gap-1">
+                                    <i data-lucide="printer" class="w-3 h-3"></i>Imprimir
+                                </button>
                                 <button id="quality-auto-fill-btn" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-2 rounded text-xs font-semibold transition flex items-center gap-1">
                                     <i data-lucide="zap" class="w-3 h-3"></i>Automático
                                 </button>
