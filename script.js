@@ -266,6 +266,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const sidebar = document.getElementById('sidebar');
     const sidebarOpenBtn = document.getElementById('sidebar-open-btn');
     const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
+    const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
     const sidebarOverlay = document.getElementById('sidebar-overlay');
 
     const planningDateSelector = document.getElementById('planning-date-selector');
@@ -326,6 +327,69 @@ document.addEventListener('DOMContentLoaded', function() {
     const productionOrderCustomerInput = document.getElementById('order-customer');
     const productionOrderRawMaterialInput = document.getElementById('order-raw-material');
 
+    // Elementos da aba de Qualidade
+    const qualityPlanSelect = document.getElementById('quality-plan-select');
+    const qualityDateInput = document.getElementById('quality-date');
+    const qualityLoadBtn = document.getElementById('quality-load-btn');
+    const qualityStatusMessage = document.getElementById('quality-status-message');
+    const qualityInfoGrid = document.getElementById('quality-info-grid');
+    const qualitySummaryCards = document.getElementById('quality-summary-cards');
+    const qualityOperatorsChip = document.getElementById('quality-operators-chip');
+    const qualityShiftTbody = document.getElementById('quality-shift-tbody');
+    const qualityShiftEmpty = document.getElementById('quality-shift-empty');
+    const qualityHourlyTableBody = document.getElementById('quality-hourly-tbody');
+    const qualityHourlyEmpty = document.getElementById('quality-hourly-empty');
+    const qualityHourlyTotal = document.getElementById('quality-hourly-total');
+    const qualityHourlyContainer = document.getElementById('quality-hourly-container');
+    const qualityDowntimeList = document.getElementById('quality-downtime-list');
+    const qualityDowntimeEmpty = document.getElementById('quality-downtime-empty');
+    const qualityDowntimeTotal = document.getElementById('quality-downtime-total');
+    const qualityProcessForm = document.getElementById('quality-process-form');
+    const qualityChecklistStatus = document.getElementById('quality-checklist-status');
+    const qualityResponsavelInput = document.getElementById('quality-responsavel');
+    const qualityNotesInput = document.getElementById('quality-notes');
+    const qualityActionsInput = document.getElementById('quality-actions');
+    const qualityHistoryList = document.getElementById('quality-history-list');
+    const qualityHistoryEmpty = document.getElementById('quality-history-empty');
+    const qualityHistoryChip = document.getElementById('quality-history-chip');
+    const qualityContextContainer = document.getElementById('quality-context-container');
+    
+    // Elementos de controle de processos (tabelas de turno)
+    const qualityProcessHeader = document.getElementById('quality-process-header');
+    const qualityHeaderProduct = document.getElementById('quality-header-product');
+    const qualityHeaderMachine = document.getElementById('quality-header-machine');
+    const qualityHeaderOrder = document.getElementById('quality-header-order');
+    const qualityProcessTables = document.getElementById('quality-process-tables');
+    const qualityObservationsSection = document.getElementById('quality-observations-section');
+    const qualityProcessEmpty = document.getElementById('quality-process-empty');
+    
+    // Elementos de controle de preenchimento
+    const qualityControlBar = document.getElementById('quality-control-bar');
+    const qualityAutoFillBtn = document.getElementById('quality-auto-fill-btn');
+    const qualityManualClearBtn = document.getElementById('quality-manual-clear-btn');
+    const qualityClearAllBtn = document.getElementById('quality-clear-all-btn');
+    
+    // Elementos de observações
+    const qualityProdObsTime = document.getElementById('quality-prod-obs-time');
+    const qualityProdObsText = document.getElementById('quality-prod-obs-text');
+    const qualityProdObsSave = document.getElementById('quality-prod-obs-save');
+    const qualityProdObsList = document.getElementById('quality-prod-obs-list');
+    const qualityQualObsTime = document.getElementById('quality-qual-obs-time');
+    const qualityQualObsText = document.getElementById('quality-qual-obs-text');
+    const qualityQualObsSave = document.getElementById('quality-qual-obs-save');
+    const qualityQualObsList = document.getElementById('quality-qual-obs-list');
+
+    // Elementos de dados dinâmicos da qualidade
+    const qualityCavitiesDisplay = document.getElementById('quality-cavities-display');
+    const qualityCavitiesInput = document.getElementById('quality-cavities-input');
+    const qualityBagNumberDisplay = document.getElementById('quality-bag-number-display');
+    const qualityBagNumberInput = document.getElementById('quality-bag-number-input');
+    const qualityCycleDisplay = document.getElementById('quality-cycle-display');
+    const qualityCycleInput = document.getElementById('quality-cycle-input');
+    const qualityLastMeasurementDisplay = document.getElementById('quality-last-measurement-display');
+    const qualityOkCavitiesCheckbox = document.getElementById('quality-ok-cavities');
+    const qualityOkCycleCheckbox = document.getElementById('quality-ok-cycle');
+
     updateRecentEntriesEmptyMessage('Selecione uma máquina para visualizar os lançamentos.');
     setRecentEntriesState({ loading: false, empty: true });
     
@@ -344,6 +408,138 @@ document.addEventListener('DOMContentLoaded', function() {
     
     const graphMachineFilter = document.getElementById('graph-machine-filter');
 
+    let qualityTabInitialized = false;
+    let currentQualityContext = null;
+    let qualityPlansCache = {
+        lastDate: null,
+        plans: []
+    };
+
+    // Gerenciador centralizado para garantir que todos os modais fiquem visíveis mesmo com conflitos de CSS.
+    const MODAL_FORCE_PROPS = [
+        'display',
+        'opacity',
+        'visibility',
+        'pointer-events',
+        'position',
+        'inset',
+        'background-color',
+        'z-index',
+        'width',
+        'height',
+        'transform'
+    ];
+    const MODAL_CONTENT_FORCE_PROPS = [
+        'display',
+        'opacity',
+        'visibility',
+        'pointer-events',
+        'position',
+        'z-index',
+        'transform'
+    ];
+
+    const modalManager = (() => {
+        const rootId = 'global-modal-root';
+        let root = document.getElementById(rootId);
+        if (!root) {
+            root = document.createElement('div');
+            root.id = rootId;
+            root.style.position = 'relative';
+            root.style.zIndex = '2147483600';
+            document.body.appendChild(root);
+        }
+
+        const portalize = (modal) => {
+            if (!modal) return modal;
+            if (modal.parentElement !== root) {
+                root.appendChild(modal);
+            }
+            if (!modal.dataset.portalized) {
+                modal.dataset.portalized = 'true';
+            }
+            return modal;
+        };
+
+        const applyStyles = (modal) => {
+            if (!modal) return;
+            const pairs = [
+                ['display', 'flex'],
+                ['opacity', '1'],
+                ['visibility', 'visible'],
+                ['pointer-events', 'auto'],
+                ['position', 'fixed'],
+                ['inset', '0'],
+                ['background-color', 'rgba(0, 0, 0, 0.6)'],
+                ['z-index', '2147483601'],
+                ['width', '100vw'],
+                ['height', '100vh'],
+                ['transform', 'none']
+            ];
+            pairs.forEach(([prop, value]) => modal.style.setProperty(prop, value, 'important'));
+        };
+
+        const clearStyles = (modal) => {
+            if (!modal) return;
+            MODAL_FORCE_PROPS.forEach((prop) => modal.style.removeProperty(prop));
+        };
+
+        const applyContentStyles = (content) => {
+            if (!content) return;
+            const pairs = [
+                ['display', 'block'],
+                ['opacity', '1'],
+                ['visibility', 'visible'],
+                ['pointer-events', 'auto'],
+                ['position', 'relative'],
+                ['z-index', '2147483602'],
+                ['transform', 'none']
+            ];
+            pairs.forEach(([prop, value]) => content.style.setProperty(prop, value, 'important'));
+        };
+
+        const clearContentStyles = (content) => {
+            if (!content) return;
+            MODAL_CONTENT_FORCE_PROPS.forEach((prop) => content.style.removeProperty(prop));
+        };
+
+        const verify = (modal) => {
+            if (!modal) return;
+            const computed = window.getComputedStyle(modal);
+            const rect = modal.getBoundingClientRect();
+            if (computed.visibility !== 'visible' || computed.display === 'none' || rect.width < 1 || rect.height < 1) {
+                console.warn('⚠️ [ModalManager] Modal ainda não visível após forçar estilos', {
+                    id: modal.id,
+                    visibility: computed.visibility,
+                    display: computed.display,
+                    rect
+                });
+                modal.style.setProperty('z-index', '2147483647', 'important');
+                modal.style.setProperty('visibility', 'visible', 'important');
+                modal.style.setProperty('opacity', '1', 'important');
+                modal.style.setProperty('pointer-events', 'auto', 'important');
+                modal.style.setProperty('transform', 'none', 'important');
+            }
+        };
+
+        return { root, portalize, applyStyles, clearStyles, applyContentStyles, clearContentStyles, verify };
+    })();
+
+    window.__modalManager = modalManager;
+
+    // Portalizar todos os modais logo no carregamento evita que fiquem presos a containers com overflow ou z-index baixo.
+    document.querySelectorAll('div[id$="-modal"]').forEach((modal) => {
+        modalManager.portalize(modal);
+        if (!modal.classList.contains('hidden')) {
+            modal.classList.add('hidden');
+        }
+        modalManager.clearStyles(modal);
+        const content = modal.querySelector('.bg-white, .modal-content, [class*="bg-white"]');
+        if (content) {
+            modalManager.clearContentStyles(content);
+        }
+    });
+
     // --- FUNÇÕES UTILITÁRIAS ---
 
     // Carregar OPs abertas para o formulário de planejamento
@@ -359,21 +555,27 @@ document.addEventListener('DOMContentLoaded', function() {
 
             openOrders.sort((a,b) => {
                 const toNum = (v) => { const n = parseInt(String(v||'').replace(/\D/g,''), 10); return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY; };
-                return toNum(a.order_number) - toNum(b.order_number);
+                return toNum(a.order_number || a.order_number_original || a.id) - toNum(b.order_number || b.order_number_original || b.id);
             });
 
             const options = openOrders.map(o => {
                 const lot = Number(o.lot_size)||0;
+                const snapshotData = o.product_snapshot || {};
                 const label = `${o.order_number || o.id} • Cod ${o.part_code || '-'} • Lote ${lot.toLocaleString('pt-BR')}`;
                 const opt = document.createElement('option');
                 opt.value = o.id;
                 opt.textContent = label;
-                opt.dataset.partCode = String(o.part_code||'');
-                opt.dataset.product = String(o.product||'');
-                opt.dataset.customer = String(o.customer||'');
-                opt.dataset.lotSize = String(lot);
-                opt.dataset.orderNumber = String(o.order_number||o.id);
-                opt.dataset.machineId = String(o.machine_id||'');
+                opt.dataset.partCode = String(o.part_code||o.product_cod||snapshotData.cod||'');
+                opt.dataset.product = String(o.product||snapshotData.name||'');
+                opt.dataset.customer = String(o.customer||o.client||snapshotData.client||'');
+                opt.dataset.lotSize = lot > 0 ? String(lot) : '';
+                opt.dataset.orderNumber = String(o.order_number||o.order_number_original||o.id);
+                opt.dataset.machineId = String(o.machine_id||o.machine||'');
+                opt.dataset.rawMaterial = String(o.raw_material || snapshotData.mp || '');
+                opt.dataset.mpType = String(o.mp_type || '');
+                opt.dataset.cycle = snapshotData.cycle != null ? String(snapshotData.cycle) : '';
+                opt.dataset.cavities = snapshotData.cavities != null ? String(snapshotData.cavities) : '';
+                opt.dataset.weight = snapshotData.weight != null ? String(snapshotData.weight) : '';
                 return opt;
             });
 
@@ -385,36 +587,191 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function onPlanningOrderChange() {
         if (!planningOrderSelect) return;
-        const selected = planningOrderSelect.selectedOptions[0];
-        if (!selected || !selected.value) {
-            if (planningOrderInfo) planningOrderInfo.style.display = 'none';
+
+        const selectedOption = planningOrderSelect.selectedOptions[0];
+        if (!selectedOption || !selectedOption.value) {
+            const productCodInput = document.getElementById('planning-product-cod');
+            if (productCodInput) {
+                productCodInput.value = '';
+                productCodInput.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            fillPlanningFormWithOrder(null);
             return;
         }
 
-        const partCode = selected.dataset.partCode || '';
-        const product = selected.dataset.product || '';
-        const customer = selected.dataset.customer || '';
-        const lotSize = Number(selected.dataset.lotSize || '0');
-        const orderNumber = selected.dataset.orderNumber || selected.value;
-        const machineId = selected.dataset.machineId || '';
+        const dataset = selectedOption.dataset || {};
+        const orderId = selectedOption.value;
+        const partCode = dataset.partCode || dataset.productCod || '';
+        const machineId = dataset.machineId || '';
 
-        // Preencher produto
         const productCodInput = document.getElementById('planning-product-cod');
         if (productCodInput) {
-            productCodInput.value = partCode;
-            productCodInput.dispatchEvent(new Event('change'));
+            if (productCodInput.value !== partCode) {
+                productCodInput.value = partCode;
+            }
+            productCodInput.dispatchEvent(new Event('change', { bubbles: true }));
         }
 
-        // Sugerir máquina atribuída
         if (planningMachineSelect && machineId) {
             const hasOption = Array.from(planningMachineSelect.options).some(opt => opt.value === machineId);
             if (hasOption) planningMachineSelect.value = machineId;
         }
 
-        // Mostrar info da OP
-        if (planningOrderInfo) {
-            planningOrderInfo.style.display = 'block';
-            planningOrderInfo.textContent = `OP ${orderNumber} • ${product} (${customer}) • Cod ${partCode} • Lote ${lotSize.toLocaleString('pt-BR')}${machineId ? ' • Máquina ' + machineId : ''}`;
+        const selectedOrder = Array.isArray(productionOrdersCache)
+            ? productionOrdersCache.find(order => order && order.id === orderId)
+            : null;
+
+        fillPlanningFormWithOrder(selectedOrder || null, dataset);
+    }
+
+    function fillPlanningFormWithOrder(order, dataset = {}) {
+        const infoElement = planningOrderInfo;
+        const productNameDisplay = document.getElementById('product-name-display');
+        const mpInput = planningMpInput || document.getElementById('planning-mp');
+        const mpTypeSelect = document.getElementById('planning-mp-type');
+        const cycleInput = document.getElementById('budgeted-cycle');
+        const cavitiesInput = document.getElementById('mold-cavities');
+        const weightInput = document.getElementById('piece-weight');
+        const plannedQtyInput = document.getElementById('planned-quantity');
+        const lotSizeInput = document.getElementById('planning-lot-size');
+
+        if (!order) {
+            if (infoElement) {
+                infoElement.style.display = 'none';
+                infoElement.textContent = '';
+            }
+            if (mpInput) mpInput.value = '';
+            if (mpTypeSelect) mpTypeSelect.value = '';
+            if (cycleInput) cycleInput.value = '';
+            if (cavitiesInput) cavitiesInput.value = '';
+            if (weightInput) weightInput.value = '';
+            if (plannedQtyInput) plannedQtyInput.value = '';
+            if (lotSizeInput) lotSizeInput.value = '';
+            if (productNameDisplay) {
+                productNameDisplay.textContent = '';
+                productNameDisplay.style.display = 'none';
+                productNameDisplay.classList.remove('text-red-600', 'bg-red-50');
+                productNameDisplay.classList.add('text-primary-blue', 'bg-gray-50');
+            }
+            return;
+        }
+
+        const resolvedOrderNumber = order.order_number || order.order_number_original || dataset.orderNumber || order.id || '';
+        const partCode = dataset.partCode || order.part_code || order.product_cod || '';
+        const productName = order.product || dataset.product || order.product_snapshot?.name || '';
+        const customer = order.customer || order.client || dataset.customer || order.product_snapshot?.client || '';
+        const machineId = dataset.machineId || order.machine_id || order.machine || '';
+        const lotSize = (() => {
+            if (dataset.lotSize) {
+                const dsValue = Number(dataset.lotSize);
+                if (Number.isFinite(dsValue) && dsValue > 0) return dsValue;
+            }
+            const fromOrder = parseOptionalNumber(order.lot_size);
+            return typeof fromOrder === 'number' && Number.isFinite(fromOrder) && fromOrder > 0 ? fromOrder : 0;
+        })();
+
+        if (lotSizeInput && lotSize > 0) {
+            lotSizeInput.value = lotSize;
+        } else if (lotSizeInput) {
+            lotSizeInput.value = '';
+        }
+
+        if (infoElement) {
+            const infoSegments = [`OP ${resolvedOrderNumber}`];
+            if (productName) {
+                const productSegment = customer ? `${productName} (${customer})` : productName;
+                infoSegments.push(`• ${productSegment}`);
+            } else if (customer) {
+                infoSegments.push(`• (${customer})`);
+            }
+            if (partCode) infoSegments.push(`• Cod ${partCode}`);
+            if (lotSize) infoSegments.push(`• Lote ${lotSize.toLocaleString('pt-BR')}`);
+            if (machineId) infoSegments.push(`• Máquina ${machineId}`);
+            infoElement.textContent = infoSegments.join(' ');
+            infoElement.style.display = 'block';
+        }
+
+        const rawMaterial = (dataset.rawMaterial || order.raw_material || order.product_snapshot?.mp || '').trim();
+        if (mpInput && rawMaterial) {
+            mpInput.value = rawMaterial;
+        }
+
+        if (mpTypeSelect) {
+            const mpTypeValue = dataset.mpType || order.mp_type || '';
+            mpTypeSelect.value = mpTypeValue;
+        }
+
+        const resolvedCycle = (() => {
+            if (dataset.cycle) {
+                const parsed = Number(dataset.cycle);
+                if (Number.isFinite(parsed) && parsed > 0) return parsed;
+            }
+            const snapshotCycle = Number(order.product_snapshot?.cycle);
+            if (Number.isFinite(snapshotCycle) && snapshotCycle > 0) return snapshotCycle;
+            const orderCycle = Number(order.budgeted_cycle);
+            if (Number.isFinite(orderCycle) && orderCycle > 0) return orderCycle;
+            return Number(cycleInput?.value) || 0;
+        })();
+
+        if (cycleInput && resolvedCycle) {
+            cycleInput.value = resolvedCycle;
+        }
+
+        const resolvedCavities = (() => {
+            if (dataset.cavities) {
+                const parsed = Number(dataset.cavities);
+                if (Number.isFinite(parsed) && parsed > 0) return parsed;
+            }
+            const snapshotCavities = Number(order.product_snapshot?.cavities);
+            if (Number.isFinite(snapshotCavities) && snapshotCavities > 0) return snapshotCavities;
+            const orderCavities = Number(order.mold_cavities);
+            if (Number.isFinite(orderCavities) && orderCavities > 0) return orderCavities;
+            return Number(cavitiesInput?.value) || 0;
+        })();
+
+        if (cavitiesInput && resolvedCavities) {
+            cavitiesInput.value = resolvedCavities;
+        }
+
+        const resolvedWeight = (() => {
+            if (dataset.weight) {
+                const parsed = Number(dataset.weight);
+                if (Number.isFinite(parsed) && parsed > 0) return parsed;
+            }
+            const snapshotWeight = Number(order.product_snapshot?.weight);
+            if (Number.isFinite(snapshotWeight) && snapshotWeight > 0) return snapshotWeight;
+            const orderWeight = Number(order.piece_weight);
+            if (Number.isFinite(orderWeight) && orderWeight > 0) return orderWeight;
+            return Number(weightInput?.value) || 0;
+        })();
+
+        if (weightInput && resolvedWeight) {
+            weightInput.value = resolvedWeight;
+        }
+
+        if (plannedQtyInput) {
+            const cycle = Number(cycleInput?.value) || resolvedCycle;
+            const cavities = Number(cavitiesInput?.value) || resolvedCavities;
+            const plannedQty = cycle > 0 && cavities > 0
+                ? Math.floor((86400 / cycle) * cavities * 0.85)
+                : 0;
+            if (plannedQty > 0) {
+                plannedQtyInput.value = plannedQty;
+            } else if (!plannedQtyInput.value) {
+                plannedQtyInput.value = '';
+            }
+        }
+
+        if (productNameDisplay) {
+            const label = [productName, customer ? `(${customer})` : ''].filter(Boolean).join(' ');
+            productNameDisplay.textContent = label;
+            if (label) {
+                productNameDisplay.style.display = 'block';
+                productNameDisplay.classList.remove('text-red-600', 'bg-red-50');
+                productNameDisplay.classList.add('text-primary-blue', 'bg-gray-50');
+            } else {
+                productNameDisplay.style.display = 'none';
+            }
         }
     }
     
@@ -1108,11 +1465,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             setTodayDate();
+            restoreSidebarState();
             setupEventListeners();
             setupPlanningTab();
             setupProductionOrdersTab();
             setupLaunchTab();
             setupAnalysisTab();
+            setupQualityTab();
             populateLossOptions();
             
             // Inicializar dados básicos
@@ -1541,18 +1900,27 @@ document.addEventListener('DOMContentLoaded', function() {
         const ordersWithProgress = normalizedOrders
             .map(order => {
                 const lotSize = Number(order.lot_size) || 0;
-                // Buscar produção por ID da ordem (não por part_code)
-                const totalProduced = productionTotalsByOrderId.get(order.id) || 0;
-                const progress = lotSize > 0 ? Math.min((totalProduced / lotSize) * 100, 100) : 0;
-                const remaining = Math.max(0, lotSize - totalProduced);
                 const status = (order.status || '').toLowerCase();
+                const isFinishedStatus = ['concluida', 'finalizada', 'encerrada'].includes(status);
+
+                const aggregateTotals = productionTotalsByOrderId.get(order.id) || 0;
+                const storedTotals = Number(order.total_produzido || order.totalProduced || 0);
+                const totalProduced = Math.max(aggregateTotals, storedTotals, 0);
+
+                const computedProgress = lotSize > 0
+                    ? Math.min((totalProduced / lotSize) * 100, 100)
+                    : 0;
+                const progress = isFinishedStatus && computedProgress < 100 ? 100 : computedProgress;
+                const remaining = isFinishedStatus
+                    ? 0
+                    : Math.max(0, lotSize - totalProduced);
 
                 return {
                     ...order,
                     totalProduced,
                     progress,
                     remaining,
-                    isComplete: lotSize > 0 ? totalProduced >= lotSize : ['concluida'].includes(status),
+                    isComplete: isFinishedStatus || (lotSize > 0 && totalProduced >= lotSize),
                     hasProduction: totalProduced > 0
                 };
             });
@@ -5627,6 +5995,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         if (sidebarOpenBtn) sidebarOpenBtn.addEventListener('click', openSidebar);
         if (sidebarCloseBtn) sidebarCloseBtn.addEventListener('click', closeSidebar);
+        if (sidebarToggleBtn) sidebarToggleBtn.addEventListener('click', toggleSidebarCollapse);
         if (sidebarOverlay) sidebarOverlay.addEventListener('click', closeSidebar);
 
     if (planningForm) planningForm.addEventListener('submit', handlePlanningFormSubmit);
@@ -5646,13 +6015,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (planningTableBody) planningTableBody.addEventListener('click', handlePlanningTableClick);
         
         if (leaderLaunchPanel) leaderLaunchPanel.addEventListener('click', handleLeaderPanelClick);
-        if (leaderModal) leaderModal.querySelector('#leader-modal-close-btn').addEventListener('click', hideLeaderModal);
+        if (leaderModal) {
+            const leaderModalCloseBtn = leaderModal.querySelector('#leader-modal-close-btn');
+            if (leaderModalCloseBtn) leaderModalCloseBtn.addEventListener('click', hideLeaderModal);
+        }
         if (leaderModalForm) leaderModalForm.addEventListener('submit', handleLeaderEntrySubmit);
         
         if (launchPanelContainer) launchPanelContainer.addEventListener('click', handleLaunchPanelClick);
         if (productionModal) {
-            productionModal.querySelector('#production-modal-close-btn').addEventListener('click', hideProductionModal);
-            productionModal.querySelector('#production-modal-cancel-btn').addEventListener('click', hideProductionModal);
+            const prodCloseBtn = productionModal.querySelector('#production-modal-close-btn');
+            const prodCancelBtn = productionModal.querySelector('#production-modal-cancel-btn');
+            if (prodCloseBtn) prodCloseBtn.addEventListener('click', hideProductionModal);
+            if (prodCancelBtn) prodCancelBtn.addEventListener('click', hideProductionModal);
         }
         if (productionModalForm) productionModalForm.addEventListener('submit', handleProductionEntrySubmit);
         if (refreshRecentEntriesBtn) refreshRecentEntriesBtn.addEventListener('click', () => loadRecentEntries());
@@ -5788,10 +6162,1176 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             loadAnalysisData(activeView);
         }
 
+        if (page === 'qualidade') {
+            if (!qualityTabInitialized) {
+                setupQualityTab();
+            }
+
+            if (qualityResponsavelInput && !qualityResponsavelInput.value) {
+                qualityResponsavelInput.value = getCurrentUserName();
+            }
+
+            if (qualityPlanSelect && qualityPlanSelect.value && !currentQualityContext) {
+                loadQualityContext();
+            } else if (!qualityPlanSelect?.value) {
+                setQualityStatus('Selecione a data e o plano desejado para carregar o contexto.', 'info');
+            }
+        }
+
+        if (page === 'teste') {
+            setupTestPage();
+        }
+
         if (window.innerWidth < 768) {
             closeSidebar();
         }
     }
+
+    // --- ABA DE TESTES ---
+    function setupTestPage() {
+        updateTestPageInfo();
+        setupTestConsole();
+        setupTestTools();
+    }
+
+    function updateTestPageInfo() {
+        const now = new Date();
+        const timeStr = now.toLocaleString('pt-BR');
+        const userName = getCurrentUserName();
+        const shift = getCurrentShift();
+        
+        const versionEl = document.getElementById('test-system-version');
+        const datetimeEl = document.getElementById('test-current-datetime');
+        const userEl = document.getElementById('test-current-user');
+        const shiftEl = document.getElementById('test-current-shift');
+        
+        if (versionEl) versionEl.textContent = 'v8.0 - Modo Teste';
+        if (datetimeEl) datetimeEl.textContent = timeStr;
+        if (userEl) userEl.textContent = userName;
+        if (shiftEl) shiftEl.textContent = `${shift}º Turno`;
+    }
+
+    function setupTestConsole() {
+        const runBtn = document.getElementById('test-console-run');
+        const input = document.getElementById('test-console-input');
+        const output = document.getElementById('test-console-output');
+        
+        if (!runBtn) return;
+        
+        runBtn.addEventListener('click', () => {
+            const code = input?.value || '';
+            if (!code.trim()) {
+                addTestLog('❌ Código vazio!', 'error');
+                return;
+            }
+            
+            try {
+                addTestLog(`▶ Executando: ${code.substring(0, 50)}...`, 'info');
+                const result = eval(code);
+                addTestLog(`✓ Resultado: ${JSON.stringify(result)}`, 'success');
+            } catch (error) {
+                addTestLog(`✗ Erro: ${error.message}`, 'error');
+            }
+        });
+    }
+
+    function setupTestTools() {
+        const clearCacheBtn = document.getElementById('test-clear-cache');
+        const reloadBtn = document.getElementById('test-reload-page');
+        const devToolsBtn = document.getElementById('test-open-devtools');
+        
+        if (clearCacheBtn) {
+            clearCacheBtn.addEventListener('click', () => {
+                localStorage.clear();
+                sessionStorage.clear();
+                addTestLog('✓ Cache limpo!', 'success');
+            });
+        }
+        
+        if (reloadBtn) {
+            reloadBtn.addEventListener('click', () => {
+                addTestLog('⟳ Recarregando página...', 'info');
+                setTimeout(() => location.reload(), 500);
+            });
+        }
+        
+        if (devToolsBtn) {
+            devToolsBtn.addEventListener('click', () => {
+                addTestLog('📋 DevTools devem abrir automaticamente (F12)', 'info');
+                console.log('🔧 [DEVTOOLS] Aberto manualmente pelo usuário');
+            });
+        }
+    }
+
+    function addTestLog(message, type = 'info') {
+        const container = document.getElementById('test-logs-container');
+        if (!container) return;
+        
+        const icons = { success: '✓', error: '✗', info: 'ℹ', warning: '⚠' };
+        const colors = { success: 'text-green-400', error: 'text-red-400', info: 'text-blue-400', warning: 'text-yellow-400' };
+        
+        const line = document.createElement('p');
+        line.className = colors[type] || colors.info;
+        line.textContent = `${icons[type] || '•'} ${message}`;
+        
+        container.appendChild(line);
+        container.scrollTop = container.scrollHeight;
+        
+        // Manter apenas as últimas 100 linhas
+        while (container.children.length > 100) {
+            container.removeChild(container.firstChild);
+        }
+    }
+
+    // --- ABA DE QUALIDADE ---
+    function setupQualityTab() {
+        if (qualityTabInitialized) return;
+        qualityTabInitialized = true;
+
+        const today = getProductionDateString();
+        if (qualityDateInput && !qualityDateInput.value) {
+            qualityDateInput.value = today;
+        }
+
+        const defaultShift = getCurrentShift();
+
+        if (qualityResponsavelInput) {
+            qualityResponsavelInput.value = getCurrentUserName();
+        }
+
+        if (qualityLoadBtn) {
+            qualityLoadBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                loadQualityContext();
+            });
+        }
+
+        if (qualityDateInput) {
+            qualityDateInput.addEventListener('change', () => {
+                qualityPlansCache = { lastDate: null, plans: [] };
+                clearQualityContext(false);
+                populateQualityPlanOptions(qualityDateInput.value);
+            });
+        }
+
+        if (qualityPlanSelect) {
+            qualityPlanSelect.addEventListener('change', () => {
+                clearQualityContext(false);
+                if (qualityPlanSelect.value) {
+                    setQualityStatus('Plano selecionado. Clique em "Atualizar contexto" para carregar os dados.', 'info');
+                }
+            });
+        }
+
+        populateQualityPlanOptions(qualityDateInput?.value || today);
+        setQualityStatus('Selecione a data e o plano desejado para carregar o contexto.', 'info');
+
+        // Manipuladores de eventos para observações de produção
+        if (qualityProdObsSave) {
+            qualityProdObsSave.addEventListener('click', () => {
+                saveQualityObservation('production');
+            });
+        }
+
+        // Manipuladores de eventos para observações de qualidade
+        if (qualityQualObsSave) {
+            qualityQualObsSave.addEventListener('click', () => {
+                saveQualityObservation('quality');
+            });
+        }
+
+        // Manipuladores de eventos para controle de preenchimento
+        if (qualityAutoFillBtn) {
+            qualityAutoFillBtn.addEventListener('click', () => {
+                loadQualityContext();
+                showNotification('Preenchimento automático reativado!', 'success');
+            });
+        }
+
+        if (qualityManualClearBtn) {
+            qualityManualClearBtn.addEventListener('click', () => {
+                clearQualityInputsForManualEntry();
+                showNotification('Modo manual ativado. Campos limpos para preenchimento manual.', 'info');
+            });
+        }
+
+        if (qualityClearAllBtn) {
+            qualityClearAllBtn.addEventListener('click', () => {
+                if (confirm('Tem certeza que deseja limpar TODOS os dados das tabelas? Esta ação não pode ser desfeita.')) {
+                    clearAllQualityInputs();
+                    showNotification('Todos os dados foram limpos!', 'success');
+                }
+            });
+        }
+
+        // Tentar carregar dados de hoje automaticamente
+        autoLoadQualityDataForToday(today);
+    }
+
+    function saveQualityObservation(type) {
+        const timeInput = type === 'production' ? qualityProdObsTime : qualityQualObsTime;
+        const textInput = type === 'production' ? qualityProdObsText : qualityQualObsText;
+        const listContainer = type === 'production' ? qualityProdObsList : qualityQualObsList;
+
+        const time = timeInput?.value || '';
+        const text = textInput?.value || '';
+
+        if (!time || !text) {
+            showNotification('Por favor, preencha a hora e a observação.', 'warning');
+            return;
+        }
+
+        // Criar card de observação
+        const obsCard = document.createElement('div');
+        obsCard.className = 'bg-gray-50 p-2 rounded border-l-2 ' + (type === 'production' ? 'border-blue-500' : 'border-emerald-500');
+        obsCard.innerHTML = `
+            <div class="flex justify-between items-start gap-2">
+                <div>
+                    <p class="text-xs font-semibold text-gray-700">${time}</p>
+                    <p class="text-xs text-gray-600 mt-1">${escapeHtml(text)}</p>
+                </div>
+                <button class="text-xs text-red-500 hover:text-red-700 font-semibold">✕</button>
+            </div>
+        `;
+
+        listContainer?.appendChild(obsCard);
+
+        // Limpar inputs
+        if (timeInput) timeInput.value = '';
+        if (textInput) textInput.value = '';
+
+        showNotification('Anotação adicionada com sucesso!', 'success');
+    }
+
+    async function autoLoadQualityDataForToday(dateValue) {
+        try {
+            // Buscar planos ativos para hoje
+            const plansSnapshot = await db.collection('planning')
+                .where('date', '==', dateValue)
+                .where('status', '==', 'active')
+                .limit(1)
+                .get();
+
+            if (plansSnapshot.empty) {
+                console.log('ℹ️ Nenhum plano ativo para hoje');
+                return;
+            }
+
+            // Pegar o primeiro plano ativo
+            const planDoc = plansSnapshot.docs[0];
+            const planId = planDoc.id;
+
+            // Definir o plano no select
+            if (qualityPlanSelect) {
+                qualityPlanSelect.value = planId;
+                // Disparar evento de mudança para atualizar a lista
+                qualityPlanSelect.dispatchEvent(new Event('change'));
+                
+                // Aguardar um pouco para os dados carregarem
+                setTimeout(() => {
+                    setQualityStatus('Carregando dados de hoje automaticamente...', 'info');
+                    loadQualityContext();
+                }, 500);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar dados automaticamente:', error);
+            // Não mostrar erro - deixar o usuário escolher manualmente se falhar
+        }
+    }
+
+
+    function setQualityStatus(message, type = 'info') {
+        if (!qualityStatusMessage) return;
+        const classMap = {
+            info: 'text-sm text-gray-600',
+            success: 'text-sm font-semibold text-emerald-600',
+            warning: 'text-sm font-semibold text-amber-600',
+            error: 'text-sm font-semibold text-red-600'
+        };
+        qualityStatusMessage.textContent = message || '';
+        qualityStatusMessage.className = classMap[type] || classMap.info;
+    }
+
+    function clearQualityContext(resetStatus = true) {
+        currentQualityContext = null;
+
+        if (qualityInfoGrid) qualityInfoGrid.innerHTML = '';
+        if (qualitySummaryCards) qualitySummaryCards.innerHTML = '';
+        if (qualityOperatorsChip) qualityOperatorsChip.textContent = '';
+        if (qualityShiftTbody) qualityShiftTbody.innerHTML = '';
+        if (qualityShiftEmpty) qualityShiftEmpty.classList.add('hidden');
+        if (qualityHourlyTableBody) qualityHourlyTableBody.innerHTML = '';
+        if (qualityHourlyEmpty) qualityHourlyEmpty.classList.add('hidden');
+        if (qualityHourlyTotal) qualityHourlyTotal.textContent = '';
+        if (qualityDowntimeList) qualityDowntimeList.innerHTML = '';
+        if (qualityDowntimeEmpty) qualityDowntimeEmpty.classList.add('hidden');
+        if (qualityDowntimeTotal) qualityDowntimeTotal.textContent = '';
+        if (qualityChecklistStatus) qualityChecklistStatus.textContent = '';
+        if (qualityNotesInput) qualityNotesInput.value = '';
+        if (qualityActionsInput) qualityActionsInput.value = '';
+        if (qualityHistoryList) qualityHistoryList.innerHTML = '';
+        if (qualityHistoryEmpty) qualityHistoryEmpty.classList.add('hidden');
+        if (qualityHistoryChip) qualityHistoryChip.textContent = '';
+
+        if (qualityContextContainer) {
+            qualityContextContainer.classList.remove('opacity-60');
+        }
+
+        if (resetStatus) {
+            setQualityStatus('Selecione a data e o plano desejado para carregar o contexto.', 'info');
+        }
+    }
+
+    function clearQualityInputsForManualEntry() {
+        // Limpar apenas os inputs de cavidades e inspeção, mantendo o layout visível
+        // Isso permite que o usuário preencha manualmente os valores
+        
+        const cavitiesInputs = document.querySelectorAll('.quality-cavities-input');
+        const inspectionInputs = document.querySelectorAll('.quality-inspection-input');
+        
+        cavitiesInputs.forEach(input => {
+            input.value = '';
+            input.classList.remove('bg-gray-100', 'text-gray-600');
+            input.classList.add('bg-white', 'text-gray-800');
+            input.readOnly = false;
+        });
+        
+        inspectionInputs.forEach(input => {
+            input.value = '';
+            input.classList.remove('bg-gray-100', 'text-gray-600');
+            input.classList.add('bg-white', 'text-gray-800');
+            input.readOnly = false;
+        });
+
+        // Limpar observações também
+        if (qualityProdObsTime) qualityProdObsTime.value = '';
+        if (qualityProdObsText) qualityProdObsText.value = '';
+        if (qualityQualObsTime) qualityQualObsTime.value = '';
+        if (qualityQualObsText) qualityQualObsText.value = '';
+        if (qualityProdObsList) qualityProdObsList.innerHTML = '';
+        if (qualityQualObsList) qualityQualObsList.innerHTML = '';
+    }
+
+    function clearAllQualityInputs() {
+        // Limpar TUDO: cavidades, inspeções, observações
+        clearQualityInputsForManualEntry();
+        
+        // Limpar a barra de controle também (esconder)
+        if (qualityControlBar) {
+            qualityControlBar.classList.add('hidden');
+        }
+        
+        // Limpar header
+        if (qualityProcessHeader) {
+            qualityProcessHeader.classList.add('hidden');
+        }
+        
+        // Limpar tabelas - manter a estrutura HTML mas esvaziar conteúdo
+        const packagingSpans = document.querySelectorAll('[class*="quality-packaging"]');
+        packagingSpans.forEach(span => {
+            span.textContent = '-';
+            span.title = '';
+        });
+        
+        setQualityStatus('Todos os dados foram limpos. Selecione um plano para começar.', 'info');
+    }
+
+    async function populateQualityPlanOptions(dateValue) {
+        if (!qualityPlanSelect) return;
+
+        const effectiveDate = dateValue || getProductionDateString();
+        if (qualityDateInput && !qualityDateInput.value) {
+            qualityDateInput.value = effectiveDate;
+        }
+
+        qualityPlanSelect.disabled = true;
+        const previousSelection = qualityPlanSelect.value;
+        qualityPlanSelect.innerHTML = '<option value="">Carregando planos...</option>';
+
+        try {
+            if (!effectiveDate) {
+                qualityPlanSelect.innerHTML = '<option value="">Informe a data para listar os planos</option>';
+                return;
+            }
+
+            if (qualityPlansCache.lastDate === effectiveDate && Array.isArray(qualityPlansCache.plans)) {
+                buildQualityPlanOptions(qualityPlansCache.plans, previousSelection);
+                return;
+            }
+
+            const snapshot = await db.collection('planning').where('date', '==', effectiveDate).get();
+            const plans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            plans.sort((a, b) => (a.machine || '').localeCompare(b.machine || ''));
+            qualityPlansCache = { lastDate: effectiveDate, plans };
+
+            buildQualityPlanOptions(plans, previousSelection);
+        } catch (error) {
+            console.error('Erro ao carregar planos para a aba de qualidade:', error);
+            qualityPlanSelect.innerHTML = '<option value="">Erro ao carregar planos</option>';
+            setQualityStatus('Não foi possível carregar os planos do dia. Tente novamente.', 'error');
+        } finally {
+            qualityPlanSelect.disabled = false;
+        }
+    }
+
+    function buildQualityPlanOptions(plans, previousSelection) {
+        if (!qualityPlanSelect) return;
+
+        if (!Array.isArray(plans) || plans.length === 0) {
+            qualityPlanSelect.innerHTML = '<option value="">Nenhum plano para a data selecionada</option>';
+            setQualityStatus('Nenhum plano encontrado para a data informada.', 'warning');
+            return;
+        }
+
+        const options = ['<option value="">Selecione a máquina ou OP planejada</option>'];
+        plans.forEach(plan => {
+            const machineLabel = escapeHtml(plan.machine || 'Máquina não definida');
+            const productLabel = escapeHtml(plan.product || plan.product_cod || 'Produto não informado');
+            const statusLabel = (plan.status || 'planejado').toString().replace(/_/g, ' ');
+            const optionLabel = `${machineLabel} • ${productLabel} • ${escapeHtml(statusLabel.toUpperCase())}`;
+            options.push(`<option value="${plan.id}">${optionLabel}</option>`);
+        });
+
+        qualityPlanSelect.innerHTML = options.join('');
+
+        if (previousSelection && plans.some(plan => plan.id === previousSelection)) {
+            qualityPlanSelect.value = previousSelection;
+        } else if (plans.length === 1) {
+            qualityPlanSelect.value = plans[0].id;
+            setQualityStatus('Plano selecionado automaticamente. Clique em "Atualizar contexto" para visualizar os dados.', 'info');
+        } else {
+            qualityPlanSelect.value = '';
+            setQualityStatus('Selecione o plano desejado e clique em "Atualizar contexto".', 'info');
+        }
+    }
+
+    async function loadQualityContext() {
+        if (!qualityPlanSelect) return;
+
+        if (!window.authSystem.checkPermissionForAction('view_quality')) {
+            return;
+        }
+
+        const planId = qualityPlanSelect.value;
+        if (!planId) {
+            setQualityStatus('Selecione um plano para carregar o contexto.', 'warning');
+            return;
+        }
+
+        const dateValue = (qualityDateInput?.value || '').trim();
+        if (!dateValue) {
+            setQualityStatus('Informe a data de produção para continuar.', 'warning');
+            return;
+        }
+
+        setQualityStatus('Carregando dados integrados do plano selecionado...', 'info');
+        if (qualityContextContainer) {
+            qualityContextContainer.classList.add('opacity-60');
+        }
+
+        try {
+            const planDoc = await db.collection('planning').doc(planId).get();
+            if (!planDoc.exists) {
+                setQualityStatus('Plano não encontrado. Atualize a lista e tente novamente.', 'error');
+                return;
+            }
+
+            const planData = { id: planDoc.id, ...planDoc.data() };
+            const machineId = planData.machine || null;
+
+            const productionSnapshot = await db.collection('production_entries').where('planId', '==', planId).get();
+            const productionEntries = productionSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(entry => (entry.data || entry.workDay || '').slice(0, 10) === dateValue);
+
+            const hourlySnapshot = await db.collection('hourly_production_entries').where('planId', '==', planId).get();
+            console.log(`📊 Query 'hourly_production_entries' retornou ${hourlySnapshot.docs.length} documentos para planId=${planId}`);
+            
+            // Enriquecer hourlyEntries com dados de quantidade de production_entries
+            const hourlyEntriesMap = {};
+            hourlySnapshot.docs.forEach(doc => {
+                const payload = { id: doc.id, ...doc.data() };
+                const timestamp = doc.data().timestamp || doc.data().createdAt;
+                if (timestamp && typeof timestamp.toDate === 'function') {
+                    payload.timestampDate = timestamp.toDate();
+                }
+                const hora = payload.hora || '00:00';
+                if (!hourlyEntriesMap[hora]) {
+                    hourlyEntriesMap[hora] = [];
+                }
+                hourlyEntriesMap[hora].push(payload);
+            });
+
+            // Somar quantidades dos production_entries para cada hora
+            productionEntries.forEach(entry => {
+                const hora = entry.horaInformada || entry.hora || '00:00';
+                if (!hourlyEntriesMap[hora]) {
+                    hourlyEntriesMap[hora] = [];
+                }
+                
+                // Encontrar ou criar entrada horária para essa quantidade
+                let hourEntry = hourlyEntriesMap[hora].find(e => e.produzido === undefined);
+                if (!hourEntry) {
+                    hourEntry = { hora: hora };
+                    hourlyEntriesMap[hora].push(hourEntry);
+                }
+                
+                hourEntry.quantidade = (hourEntry.quantidade || 0) + (Number(entry.produzido || 0));
+                hourEntry.produzido = hourEntry.quantidade;
+                hourEntry.ciclo_real = (hourEntry.ciclo_real || 0) + (Number(entry.ciclo_real || 0));
+                hourEntry.cavidades = entry.cavidades || Number(planData.mold_cavities || 1);
+            });
+
+            // Converter map de volta para array
+            const hourlyEntries = Object.values(hourlyEntriesMap).flat();
+            console.log(`📊 Após enriquecer com production_entries: ${hourlyEntries.length} registros`);
+            hourlyEntries.forEach(e => {
+                console.log(`  Hora ${e.hora}: ${e.produzido || e.quantidade || 0} peças, ${e.ciclo_real || 0} ciclos`);
+            });
+
+            let downtimeEntries = [];
+            if (machineId) {
+                const downtimeSnapshot = await db.collection('downtime_entries').where('machine', '==', machineId).get();
+                downtimeEntries = downtimeSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+                    .filter(entry => (entry.date || entry.workDay || '').slice(0, 10) === dateValue);
+            }
+
+            const qualityMetrics = buildQualityMetrics(planData, productionEntries, hourlyEntries, downtimeEntries);
+
+            currentQualityContext = {
+                plan: planData,
+                date: dateValue,
+                machine: machineId,
+                productionEntries,
+                hourlyEntries,
+                downtimeEntries,
+                metrics: qualityMetrics,
+                operators: qualityMetrics.operators,
+                shiftSuggestion: qualityMetrics.shiftSuggestion
+            };
+
+            renderQualityContext(currentQualityContext);
+            await loadQualityHistory(planId, dateValue);
+            setQualityStatus('Dados carregados com sucesso.', 'success');
+        } catch (error) {
+            console.error('Erro ao carregar dados para a aba de qualidade:', error);
+            setQualityStatus('Erro ao carregar os dados. Verifique sua conexão e tente novamente.', 'error');
+        } finally {
+            if (qualityContextContainer) {
+                qualityContextContainer.classList.remove('opacity-60');
+            }
+            lucide.createIcons();
+        }
+    }
+
+    function buildQualityMetrics(planData, productionEntries, hourlyEntries, downtimeEntries) {
+        const metrics = {
+            totals: {
+                produced: 0,
+                pesoBruto: 0,
+                refugoQty: 0,
+                refugoKg: 0
+            },
+            shifts: {
+                1: { produced: 0, pesoBruto: 0, refugoQty: 0, refugoKg: 0 },
+                2: { produced: 0, pesoBruto: 0, refugoQty: 0, refugoKg: 0 },
+                3: { produced: 0, pesoBruto: 0, refugoQty: 0, refugoKg: 0 }
+            },
+            operators: [],
+            downtime: {
+                totalMinutes: 0,
+                reasons: {}
+            },
+            hourly: {
+                totalKg: 0,
+                entries: hourlyEntries.length
+            },
+            shiftSuggestion: getCurrentShift()
+        };
+
+        const operatorSet = new Set();
+
+        productionEntries.forEach(entry => {
+            const turnValue = parseInt(entry.turno, 10);
+            const produced = Number(entry.produzido || entry.quantity || 0);
+            const pesoBruto = Number(entry.peso_bruto || 0);
+            const refugoKg = Number(entry.refugo_kg || 0);
+            const refugoQty = Number(entry.refugo_qty || entry.perdas_qty || 0);
+
+            if (metrics.shifts[turnValue]) {
+                metrics.shifts[turnValue].produced += produced;
+                metrics.shifts[turnValue].pesoBruto += pesoBruto;
+                metrics.shifts[turnValue].refugoKg += refugoKg;
+                metrics.shifts[turnValue].refugoQty += refugoQty;
+            }
+
+            metrics.totals.produced += produced;
+            metrics.totals.pesoBruto += pesoBruto;
+            metrics.totals.refugoKg += refugoKg;
+            metrics.totals.refugoQty += refugoQty;
+
+            const operatorName = (entry.registradoPorNome || entry.registradoPor || entry.createdByName || '').toString().trim();
+            if (operatorName) {
+                operatorSet.add(operatorName);
+            }
+        });
+
+        hourlyEntries.forEach(entry => {
+            metrics.hourly.totalKg += Number(entry.peso_bruto || 0);
+        });
+
+        const downtimeReasons = {};
+        downtimeEntries.forEach(entry => {
+            const duration = Number(entry.duration || 0);
+            metrics.downtime.totalMinutes += duration;
+            const reasonKey = (entry.reason || 'Sem motivo').toString();
+            downtimeReasons[reasonKey] = (downtimeReasons[reasonKey] || 0) + duration;
+        });
+        metrics.downtime.reasons = downtimeReasons;
+
+        metrics.operators = Array.from(operatorSet);
+        metrics.shiftSuggestion = determineSuggestedShift(metrics.shifts) || getCurrentShift();
+        metrics.planTarget = Number(planData?.planned_quantity || planData?.order_lot_size || 0);
+
+        return metrics;
+    }
+
+    function determineSuggestedShift(shiftMetrics) {
+        if (!shiftMetrics) return getCurrentShift();
+        let bestShift = 1;
+        let bestValue = shiftMetrics[1]?.produced || 0;
+        [2, 3].forEach(shift => {
+            const produced = shiftMetrics[shift]?.produced || 0;
+            if (produced > bestValue) {
+                bestValue = produced;
+                bestShift = shift;
+            }
+        });
+        return bestShift;
+    }
+
+    function formatLocaleNumber(value, fractionDigits = 0) {
+        if (!Number.isFinite(value)) return (0).toLocaleString('pt-BR');
+        return Number(value).toLocaleString('pt-BR', {
+            minimumFractionDigits: fractionDigits,
+            maximumFractionDigits: fractionDigits
+        });
+    }
+
+    function formatMinutesToHuman(minutes) {
+        if (!Number.isFinite(minutes) || minutes <= 0) {
+            return '0 min';
+        }
+        const hours = Math.floor(minutes / 60);
+        const mins = Math.round(minutes % 60);
+        const parts = [];
+        if (hours > 0) parts.push(`${hours}h`);
+        if (mins > 0) parts.push(`${mins}min`);
+        return parts.join(' ') || '0 min';
+    }
+
+    function renderQualityContext(context) {
+        if (!context) return;
+
+        const { plan, date, metrics, productionEntries, hourlyEntries, downtimeEntries } = context;
+
+        if (qualityInfoGrid) {
+            const plannedQty = Number(plan?.planned_quantity || plan?.order_lot_size || 0);
+            const producedTotal = metrics.totals.produced || 0;
+            const progressPercent = plannedQty > 0 ? Math.min(100, Math.round((producedTotal / plannedQty) * 100)) : 0;
+            const progressLabel = plannedQty > 0 ? `${progressPercent}%` : 'N/D';
+
+            qualityInfoGrid.innerHTML = `
+                <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm flex items-start gap-3">
+                    <div class="rounded-full bg-blue-50 p-2 text-blue-600"><i data-lucide="factory" class="w-5 h-5"></i></div>
+                    <div class="space-y-1">
+                        <p class="text-xs uppercase font-semibold text-gray-500">Máquina</p>
+                        <p class="text-sm font-semibold text-gray-800">${escapeHtml(plan.machine || 'N/D')}</p>
+                        <p class="text-xs text-gray-500">${escapeHtml(plan.machine_model || plan.model || '')}</p>
+                    </div>
+                </div>
+                <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm flex items-start gap-3">
+                    <div class="rounded-full bg-indigo-50 p-2 text-indigo-600"><i data-lucide="package" class="w-5 h-5"></i></div>
+                    <div class="space-y-1">
+                        <p class="text-xs uppercase font-semibold text-gray-500">Produto / MP</p>
+                        <p class="text-sm font-semibold text-gray-800">${escapeHtml(plan.product || 'Produto não informado')}</p>
+                        <p class="text-xs text-gray-500">MP: ${escapeHtml(plan.mp || 'N/D')}</p>
+                    </div>
+                </div>
+                <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm flex items-start gap-3">
+                    <div class="rounded-full bg-emerald-50 p-2 text-emerald-600"><i data-lucide="calendar" class="w-5 h-5"></i></div>
+                    <div class="space-y-1">
+                        <p class="text-xs uppercase font-semibold text-gray-500">Data · Turno sugerido</p>
+                        <p class="text-sm font-semibold text-gray-800">${date.split('-').reverse().join('/')}</p>
+                        <p class="text-xs text-gray-500">Turno destaque: ${metrics.shiftSuggestion}º</p>
+                    </div>
+                </div>
+                <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm flex items-start gap-3">
+                    <div class="rounded-full bg-orange-50 p-2 text-orange-500"><i data-lucide="target" class="w-5 h-5"></i></div>
+                    <div class="space-y-1">
+                        <p class="text-xs uppercase font-semibold text-gray-500">Meta x Produção</p>
+                        <p class="text-sm font-semibold text-gray-800">${formatLocaleNumber(producedTotal)} / ${formatLocaleNumber(plannedQty)} pcs</p>
+                        <p class="text-xs text-gray-500">Progresso estimado: ${progressLabel}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        if (qualitySummaryCards) {
+            const producedTotal = metrics.totals.produced || 0;
+            const pesoTotal = metrics.totals.pesoBruto || 0;
+            const refugoKg = metrics.totals.refugoKg || 0;
+            const refugoQty = metrics.totals.refugoQty || 0;
+            const downtimeMinutes = metrics.downtime.totalMinutes || 0;
+
+            // Calcular peso médio por peça
+            const pesoMedio = producedTotal > 0 ? pesoTotal / producedTotal : 0;
+            // Converter refugo kg para quantidade usando peso médio
+            const refugoQtyCalculated = pesoMedio > 0 ? Math.round(refugoKg / pesoMedio) : refugoQty;
+
+            qualitySummaryCards.innerHTML = `
+                <div class="rounded-xl border border-blue-200 bg-blue-50 p-4 shadow-sm">
+                    <p class="text-xs uppercase font-semibold text-blue-600">Produção total (pcs)</p>
+                    <p class="mt-2 text-2xl font-bold text-blue-900">${formatLocaleNumber(producedTotal)}</p>
+                </div>
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+                    <p class="text-xs uppercase font-semibold text-amber-600">Refugo total (pcs)</p>
+                    <p class="mt-2 text-2xl font-bold text-amber-900">${formatLocaleNumber(refugoQtyCalculated)}</p>
+                    <p class="text-xs text-amber-600 mt-1">${formatLocaleNumber(refugoKg, 2)} kg</p>
+                </div>
+                <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 shadow-sm">
+                    <p class="text-xs uppercase font-semibold text-rose-600">Refugo acumulado (kg)</p>
+                    <p class="mt-2 text-2xl font-bold text-rose-900">${formatLocaleNumber(refugoKg, 2)}</p>
+                </div>
+                <div class="rounded-xl border border-gray-300 bg-gray-50 p-4 shadow-sm">
+                    <p class="text-xs uppercase font-semibold text-gray-600">Paradas registradas</p>
+                    <p class="mt-2 text-2xl font-bold text-gray-900">${formatMinutesToHuman(downtimeMinutes)}</p>
+                </div>
+            `;
+        }
+
+        if (qualityOperatorsChip) {
+            if (metrics.operators.length > 0) {
+                qualityOperatorsChip.textContent = `Operadores: ${metrics.operators.join(', ')}`;
+            } else {
+                qualityOperatorsChip.textContent = 'Nenhum operador identificado nos apontamentos.';
+            }
+        }
+
+        if (qualityShiftTbody) {
+            const rows = [1, 2, 3].map(shift => {
+                const data = metrics.shifts[shift] || { produced: 0, pesoBruto: 0, refugoQty: 0, refugoKg: 0 };
+                return `
+                    <tr>
+                        <td class="px-4 py-3 text-sm font-semibold text-gray-700">${shift}º Turno</td>
+                        <td class="px-4 py-3 text-right text-sm text-gray-700">${formatLocaleNumber(data.produced)}</td>
+                        <td class="px-4 py-3 text-right text-sm text-gray-700">${formatLocaleNumber(data.refugoQty)}</td>
+                        <td class="px-4 py-3 text-right text-sm text-gray-700">${formatLocaleNumber(data.refugoKg, 2)}</td>
+                    </tr>
+                `;
+            }).join('');
+            qualityShiftTbody.innerHTML = rows;
+            if (qualityShiftEmpty) {
+                qualityShiftEmpty.classList.toggle('hidden', productionEntries.length > 0);
+            }
+        }
+
+        if (qualityHourlyTableBody) {
+            if (hourlyEntries.length === 0) {
+                qualityHourlyTableBody.innerHTML = '';
+                if (qualityHourlyEmpty) qualityHourlyEmpty.classList.remove('hidden');
+            } else {
+                const sortedHourly = [...hourlyEntries].sort((a, b) => (a.hora || '').localeCompare(b.hora || ''));
+                qualityHourlyTableBody.innerHTML = sortedHourly.map(entry => {
+                    const hour = entry.hora || '--:--';
+                    const peso = formatLocaleNumber(Number(entry.peso_bruto || 0), 2);
+                    const embalagens = formatLocaleNumber(Number(entry.embalagem_fechada || 0));
+                    const tara = entry.usar_tara ? 'Sim' : 'Não';
+                    return `
+                        <tr>
+                            <td class="px-4 py-3 text-sm text-gray-700">${escapeHtml(hour)}</td>
+                            <td class="px-4 py-3 text-right text-sm text-gray-700">${peso}</td>
+                            <td class="px-4 py-3 text-right text-sm text-gray-700">${embalagens}</td>
+                            <td class="px-4 py-3 text-center text-sm text-gray-700">${tara}</td>
+                        </tr>
+                    `;
+                }).join('');
+                if (qualityHourlyEmpty) qualityHourlyEmpty.classList.add('hidden');
+            }
+        }
+
+        if (qualityHourlyTotal) {
+            qualityHourlyTotal.textContent = metrics.hourly.entries > 0
+                ? `${metrics.hourly.entries} registro(s) · ${formatLocaleNumber(metrics.hourly.totalKg, 2)} kg`
+                : '';
+        }
+
+        if (qualityDowntimeList) {
+            if (downtimeEntries.length === 0) {
+                qualityDowntimeList.innerHTML = '';
+                if (qualityDowntimeEmpty) qualityDowntimeEmpty.classList.remove('hidden');
+            } else {
+                const reasonChips = Object.entries(metrics.downtime.reasons || {}).map(([reason, minutes]) => {
+                    return `<span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700">${escapeHtml(reason)} · ${formatMinutesToHuman(minutes)}</span>`;
+                }).join('');
+
+                const cards = downtimeEntries
+                    .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''))
+                    .map(entry => {
+                        const duration = formatMinutesToHuman(Number(entry.duration || 0));
+                        const obs = entry.observations ? `<p class="text-xs text-gray-500 mt-1">${escapeHtml(entry.observations)}</p>` : '';
+                        return `
+                            <div class="rounded-lg border border-rose-100 bg-rose-50 p-4 shadow-sm">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div>
+                                        <p class="text-sm font-semibold text-rose-800">${escapeHtml(entry.reason || 'Sem motivo')}</p>
+                                        <p class="text-xs text-gray-500">${escapeHtml(entry.startTime || '--:--')} ➜ ${escapeHtml(entry.endTime || '--:--')} · ${duration}</p>
+                                        ${obs}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+
+                qualityDowntimeList.innerHTML = `
+                    <div class="flex flex-wrap items-center gap-2 mb-3">${reasonChips}</div>
+                    <div class="space-y-3">${cards}</div>
+                `;
+                if (qualityDowntimeEmpty) qualityDowntimeEmpty.classList.add('hidden');
+            }
+        }
+
+        if (qualityDowntimeTotal) {
+            qualityDowntimeTotal.textContent = metrics.downtime.totalMinutes > 0
+                ? formatMinutesToHuman(metrics.downtime.totalMinutes)
+                : '';
+        }
+
+        if (qualityProcessForm) {
+            const suggestedShift = metrics.shiftSuggestion || getCurrentShift();
+            const shiftRadio = qualityProcessForm.querySelector(`input[name="quality-shift"][value="${suggestedShift}"]`);
+            if (shiftRadio) {
+                shiftRadio.checked = true;
+            }
+        }
+
+        if (qualityChecklistStatus) {
+            qualityChecklistStatus.textContent = `Plano vinculado: ${escapeHtml(plan.machine || '---')} · ${escapeHtml(plan.product || '---')}`;
+        }
+
+        // Renderizar tabelas de controle de processos
+        renderQualityProcessTables(plan, hourlyEntries);
+
+        lucide.createIcons();
+    }
+
+    function renderQualityProcessTables(plan, hourlyEntries) {
+        if (!plan) {
+            if (qualityProcessEmpty) qualityProcessEmpty.classList.remove('hidden');
+            if (qualityProcessHeader) qualityProcessHeader.classList.add('hidden');
+            if (qualityProcessTables) qualityProcessTables.classList.add('hidden');
+            if (qualityControlBar) qualityControlBar.classList.add('hidden');
+            if (qualityObservationsSection) qualityObservationsSection.classList.add('hidden');
+            return;
+        }
+
+        // Mostrar cabeçalho com informações do plano
+        if (qualityProcessEmpty) qualityProcessEmpty.classList.add('hidden');
+        if (qualityProcessHeader) {
+            qualityProcessHeader.classList.remove('hidden');
+            if (qualityHeaderProduct) qualityHeaderProduct.textContent = plan.product || '-';
+            if (qualityHeaderMachine) qualityHeaderMachine.textContent = plan.machine || '-';
+            if (qualityHeaderOrder) qualityHeaderOrder.textContent = plan.order_number || plan.order_id || '-';
+        }
+
+        // Mostrar tabelas, barra de controle e observações
+        if (qualityProcessTables) qualityProcessTables.classList.remove('hidden');
+        if (qualityControlBar) qualityControlBar.classList.remove('hidden');
+        if (qualityObservationsSection) qualityObservationsSection.classList.remove('hidden');
+
+        // Popular cavidades e embalagens nas tabelas
+        populateQualityProcessTables(hourlyEntries, plan);
+    }
+
+    function populateQualityProcessTables(hourlyEntries, plan) {
+        if (!plan || !hourlyEntries || hourlyEntries.length === 0) {
+            console.log('⚠️ Sem dados para popular tabelas');
+            return;
+        }
+
+        // Obter cavidades padrão do plano
+        const cavitiesStandard = Number(plan.mold_cavities || 1);
+        
+        // Se não houver capacidade de saco definida, usar quantidade planejada ou padrão
+        let bagCapacity = Number(plan.bag_capacity || 0);
+        if (bagCapacity <= 0) {
+            // Calcular capacidade por saco: quantidade_planejada / 2 (estimativa de 2 sacos)
+            const plannedQty = Number(plan.planned_quantity || plan.order_lot_size || 1000);
+            bagCapacity = Math.ceil(plannedQty / 2);
+        }
+
+        console.log(`📊 Cavidades padrão: ${cavitiesStandard}, Capacidade do saco: ${bagCapacity}`);
+
+        // Agrupar por hora
+        const hourlyMap = {};
+        hourlyEntries.forEach(entry => {
+            const hora = entry.hora || entry.hour || '00:00';
+            const hh = parseInt(hora.split(':')[0], 10);
+            if (!hourlyMap[hh]) {
+                hourlyMap[hh] = [];
+            }
+            hourlyMap[hh].push(entry);
+        });
+
+        console.log(`📊 Populando tabelas com ${Object.keys(hourlyMap).length} horas de dados`);
+
+        // Manter rastreamento acumulado de produção por turno
+        let accumulatedByShift = { 1: 0, 2: 0, 3: 0 };
+
+        // Ordenar horas para processar sequencialmente
+        const sortedHours = Object.keys(hourlyMap).map(h => parseInt(h, 10)).sort((a, b) => a - b);
+
+        // Para cada hora, atualizar os campos de cavidades e número de embalagem
+        sortedHours.forEach(hh => {
+            const entries = hourlyMap[hh];
+            
+            // Calcular totais para essa hora
+            const totalCavities = entries.reduce((sum, e) => sum + (Number(e.ciclo_real || 0)), 0);
+            // A quantidade pode estar em: quantidade, produzido, ou precisar ser calculada de peso/cavidades
+            let totalQuantity = entries.reduce((sum, e) => sum + (Number(e.quantidade || e.produzido || 0)), 0);
+            
+            // Se não houver quantidade direta, calcular a partir de ciclo_real * cavidades
+            if (totalQuantity === 0) {
+                totalQuantity = entries.reduce((sum, e) => {
+                    const ciclos = Number(e.ciclo_real || 0);
+                    const cavs = Number(e.cavidades || cavitiesStandard);
+                    return sum + (ciclos * cavs);
+                }, 0);
+            }
+
+            console.log(`  Hora ${hh}h: ${totalCavities} ciclos reais, ${totalQuantity} peças produzidas`);
+
+            // Determinar turno baseado nos horários corretos:
+            // 1º Turno: 7h - 14h
+            // 2º Turno: 15h - 22h
+            // 3º Turno: 23h - 6h
+            let shift = 3; // Default para 3º turno
+            if (hh >= 7 && hh <= 14) {
+                shift = 1;
+            } else if (hh >= 15 && hh <= 22) {
+                shift = 2;
+            }
+
+            // Atualizar campo de cavidades reais
+            const cavitiesInput = document.querySelector(`.quality-cavities-input.shift-${shift}.hour-${hh}`);
+            if (cavitiesInput) {
+                cavitiesInput.value = totalCavities || cavitiesStandard;
+                cavitiesInput.readOnly = true;
+                cavitiesInput.classList.add('bg-gray-100');
+                cavitiesInput.title = `${totalCavities} ciclos registrados`;
+            }
+
+            // Calcular número de saco e atualizar (acumulado por turno)
+            accumulatedByShift[shift] += totalQuantity;
+            const bagsCompleted = Math.floor(accumulatedByShift[shift] / bagCapacity);
+            const piecesInCurrentBag = accumulatedByShift[shift] % bagCapacity;
+            const currentBag = bagsCompleted + 1;
+
+            console.log(`    Turno ${shift} acumulado: ${accumulatedByShift[shift]} peças = ${bagsCompleted} sacos completos + ${piecesInCurrentBag} peças no saco ${currentBag}`);
+
+            // Atualizar campo de embalagem (número do saco atual)
+            const packagingSpan = document.querySelector(`.quality-packaging-shift-${shift}-${hh}`);
+            if (packagingSpan) {
+                packagingSpan.textContent = currentBag > 0 ? `Saco ${currentBag}` : '-';
+                packagingSpan.title = `${accumulatedByShift[shift]} peças | ${piecesInCurrentBag}/${bagCapacity} no saco`;
+                packagingSpan.classList.add('cursor-help');
+            }
+        });
+
+        // Preparar observações salvas se existirem
+        loadQualityObservations();
+    }
+
+    function loadQualityObservations() {
+        // Esta função carregará observações salvas do Firestore quando implementado
+        console.log('📝 Sistema de observações pronto');
+    }
+
+
+    async function loadQualityHistory(planId, dateValue) {
+        if (!planId || !qualityHistoryList) return;
+
+        try {
+            const snapshot = await db.collection('process_control_checks').where('planId', '==', planId).get();
+            const records = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const filtered = records.filter(record => (record.date || '').slice(0, 10) === dateValue);
+            filtered.sort((a, b) => {
+                const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+                const bTime = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+                return bTime - aTime;
+            });
+
+            renderQualityHistory(filtered.slice(0, 5));
+        } catch (error) {
+            console.error('Erro ao carregar histórico de qualidade:', error);
+            if (qualityHistoryList) qualityHistoryList.innerHTML = '';
+            if (qualityHistoryEmpty) {
+                qualityHistoryEmpty.classList.remove('hidden');
+                qualityHistoryEmpty.textContent = 'Erro ao carregar histórico. Tente novamente mais tarde.';
+            }
+        }
+    }
+
+    function renderQualityHistory(records) {
+        if (!qualityHistoryList || !qualityHistoryEmpty) return;
+
+        if (!Array.isArray(records) || records.length === 0) {
+            qualityHistoryList.innerHTML = '';
+            qualityHistoryEmpty.classList.remove('hidden');
+            if (qualityHistoryChip) qualityHistoryChip.textContent = '';
+            if (qualityChecklistStatus) {
+                qualityChecklistStatus.textContent = 'Nenhum checklist salvo para esta data.';
+            }
+            return;
+        }
+
+        qualityHistoryEmpty.classList.add('hidden');
+        if (qualityHistoryChip) {
+            qualityHistoryChip.textContent = `${records.length} registro(s)`;
+        }
+
+        qualityHistoryList.innerHTML = records.map(record => {
+            const createdAt = record.createdAt && typeof record.createdAt.toDate === 'function' ? record.createdAt.toDate() : null;
+            const createdDateLabel = createdAt ? createdAt.toLocaleDateString('pt-BR') : 'Data não informada';
+            const createdTimeLabel = createdAt ? createdAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--:--';
+            const statusLabels = {
+                em_execucao: 'Produção em execução',
+                setup: 'Em setup',
+                ajuste: 'Em ajuste',
+                parada: 'Parada'
+            };
+            const statusLabel = statusLabels[record.status] || 'Status não informado';
+
+            const checkChips = [
+                { label: 'Setup', ok: record.checks?.setup },
+                { label: 'Parâmetros', ok: record.checks?.parameters },
+                { label: 'Poka-yokes', ok: record.checks?.pokaYoke },
+                { label: 'Organização', ok: record.checks?.clean }
+            ].map(item => {
+                const icon = item.ok ? 'check' : 'x';
+                const classes = item.ok ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-red-100 text-red-700 border border-red-200';
+                return `<span class="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold ${classes}"><i data-lucide="${icon}" class="w-3 h-3"></i>${item.label}</span>`;
+            }).join(' ');
+
+            const observations = record.observations ? `<p class="text-xs text-gray-600 mt-2"><strong>Observações:</strong> ${escapeHtml(record.observations)}</p>` : '';
+            const actions = record.actions ? `<p class="text-xs text-gray-600 mt-1"><strong>Ações:</strong> ${escapeHtml(record.actions)}</p>` : '';
+
+            return `
+                <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+                    <div class="flex flex-col gap-2">
+                        <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-2">
+                            <div class="flex-1">
+                                <p class="text-sm font-semibold text-gray-800">${escapeHtml(statusLabel)}</p>
+                                <p class="text-xs text-gray-500">${createdDateLabel} · ${createdTimeLabel} · Turno ${record.turno || '-'} · ${escapeHtml(record.createdByName || 'Responsável não identificado')}</p>
+                            </div>
+                            <button class="quality-delete-history-btn inline-flex items-center justify-center gap-1 rounded-lg bg-red-100 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-200 transition" data-record-id="${record.id}" title="Excluir este lançamento">
+                                <i data-lucide="trash-2" class="w-3 h-3"></i>
+                                Excluir
+                            </button>
+                        </div>
+                        <div class="flex flex-wrap gap-2">${checkChips}</div>
+                        ${observations}
+                        ${actions}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Adicionar event listeners para botões de exclusão
+        document.querySelectorAll('.quality-delete-history-btn').forEach(btn => {
+            btn.addEventListener('click', deleteQualityHistoryRecord);
+        });
+
+        if (qualityChecklistStatus) {
+            const latest = records[0];
+            const createdAt = latest.createdAt && typeof latest.createdAt.toDate === 'function' ? latest.createdAt.toDate() : null;
+            if (createdAt) {
+                qualityChecklistStatus.textContent = `Último checklist salvo em ${createdAt.toLocaleDateString('pt-BR')} às ${createdAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+            }
+        }
+
+        lucide.createIcons();
+    }
+
+    async function deleteQualityHistoryRecord(event) {
+        event.preventDefault();
+        const recordId = event.currentTarget.getAttribute('data-record-id');
+        
+        if (!recordId) {
+            showNotification('ID do registro não encontrado', 'error');
+            return;
+        }
+
+        // Confirmar exclusão
+        if (!confirm('Tem certeza que deseja excluir este lançamento? Esta ação não pode ser desfeita.')) {
+            return;
+        }
+
+        try {
+            await db.collection('process_control_checks').doc(recordId).delete();
+            showNotification('Lançamento excluído com sucesso!', 'success');
+            
+            // Recarregar histórico
+            if (currentQualityContext && currentQualityContext.plan) {
+                await loadQualityHistory(currentQualityContext.plan.id, currentQualityContext.date);
+            }
+        } catch (error) {
+            console.error('Erro ao excluir lançamento:', error);
+            showNotification('Erro ao excluir o lançamento. Tente novamente.', 'error');
+        }
+    }
+
+    async function getPlansWithProductionDataForDate(dateValue) {
+        try {
+            // Buscar todos os planos para a data
+            const plansSnapshot = await db.collection('planning')
+                .where('date', '==', dateValue)
+                .get();
+
+            if (plansSnapshot.empty) {
+                console.log('ℹ️ Nenhum plano para a data', dateValue);
+                return [];
+            }
+
+            // Para cada plano, verificar se tem dados de produção
+            const plansWithData = [];
+            for (const planDoc of plansSnapshot.docs) {
+                const planId = planDoc.id;
+                const planData = planDoc.data();
+
+                // Verificar se há apontamentos de produção
+                const prodSnapshot = await db.collection('production_entries')
+                    .where('planId', '==', planId)
+                    .limit(1)
+                    .get();
+
+                if (!prodSnapshot.empty) {
+                    plansWithData.push({
+                        id: planId,
+                        machine: planData.machine,
+                        product: planData.product,
+                        status: planData.status,
+                        hasData: true
+                    });
+                }
+            }
+
+            return plansWithData;
+        } catch (error) {
+            console.error('Erro ao buscar planos com dados:', error);
+            return [];
+        }
+    }
+
     
     function openSidebar() {
         if (sidebar && sidebarOverlay) {
@@ -5812,6 +7352,49 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 sidebarOpenBtn.classList.remove('is-active');
                 sidebarOpenBtn.setAttribute('aria-expanded', 'false');
             }
+        }
+    }
+
+    // Toggle collapse/expand sidebar (desktop only)
+    function toggleSidebarCollapse() {
+        if (!sidebar) return;
+        
+        const isCollapsed = sidebar.classList.contains('sidebar-collapsed');
+        
+        if (isCollapsed) {
+            // Expandir
+            sidebar.classList.remove('sidebar-collapsed');
+            sidebar.classList.add('sidebar-expanded');
+            localStorage.setItem('sidebar-state', 'expanded');
+            console.log('[TRACE][toggleSidebarCollapse] Sidebar expandido');
+        } else {
+            // Retrair
+            sidebar.classList.remove('sidebar-expanded');
+            sidebar.classList.add('sidebar-collapsed');
+            localStorage.setItem('sidebar-state', 'collapsed');
+            console.log('[TRACE][toggleSidebarCollapse] Sidebar retraído');
+        }
+        
+        // Atualizar ícone do toggle
+        if (sidebarToggleBtn) {
+            lucide.createIcons();
+        }
+    }
+
+    // Restaurar estado do sidebar ao carregar página
+    function restoreSidebarState() {
+        if (!sidebar) return;
+        
+        const savedState = localStorage.getItem('sidebar-state') || 'expanded';
+        
+        if (savedState === 'collapsed') {
+            sidebar.classList.remove('sidebar-expanded');
+            sidebar.classList.add('sidebar-collapsed');
+            console.log('[TRACE][restoreSidebarState] Sidebar restaurado como retraído');
+        } else {
+            sidebar.classList.add('sidebar-expanded');
+            sidebar.classList.remove('sidebar-collapsed');
+            console.log('[TRACE][restoreSidebarState] Sidebar restaurado como expandido');
         }
     }
 
@@ -5907,48 +7490,62 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (!planningOrderSelect || !Array.isArray(productionOrdersCache)) return;
 
         const currentValue = planningOrderSelect.value;
+        const blockedStatuses = new Set(['concluida', 'cancelada', 'finalizada', 'encerrada']);
+        const toNumeric = (value) => {
+            if (!value) return Number.POSITIVE_INFINITY;
+            const digits = String(value).match(/\d+/g);
+            if (!digits) return Number.POSITIVE_INFINITY;
+            const parsed = parseInt(digits.join(''), 10);
+            return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+        };
 
-        planningOrderSelect.innerHTML = '<option value="">Selecione uma OP...</option>';
-        productionOrdersCache.forEach(order => {
+        const openOrders = productionOrdersCache
+            .filter(order => !blockedStatuses.has(String(order.status || '').toLowerCase()))
+            .sort((a, b) => toNumeric(a.order_number || a.order_number_original || a.id) - toNumeric(b.order_number || b.order_number_original || b.id));
+
+        const fragment = document.createDocumentFragment();
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = 'Selecione uma OP...';
+        fragment.appendChild(placeholder);
+
+        openOrders.forEach(order => {
+            if (!order || !order.id) return;
+
             const option = document.createElement('option');
             option.value = order.id;
-            option.textContent = `${order.order_number} - ${order.product || 'N/A'} (${order.customer || 'N/A'})`;
-            planningOrderSelect.appendChild(option);
+
+            const orderLabelNumber = order.order_number || order.order_number_original || order.id;
+            const productLabel = order.product || order.product_snapshot?.name || 'N/A';
+            const customerLabel = order.customer || order.client || order.product_snapshot?.client || 'N/A';
+            option.textContent = `${orderLabelNumber} - ${productLabel} (${customerLabel})`;
+
+            const snapshot = order.product_snapshot || {};
+            option.dataset.partCode = String(order.part_code || order.product_cod || snapshot.cod || '');
+            option.dataset.product = String(order.product || snapshot.name || '');
+            option.dataset.customer = String(order.customer || order.client || snapshot.client || '');
+            const lotSizeNumeric = parseOptionalNumber(order.lot_size);
+            option.dataset.lotSize = typeof lotSizeNumeric === 'number' && Number.isFinite(lotSizeNumeric) && lotSizeNumeric > 0
+                ? String(lotSizeNumeric)
+                : '';
+            option.dataset.orderNumber = String(orderLabelNumber || '');
+            option.dataset.machineId = String(order.machine_id || order.machine || '');
+            option.dataset.rawMaterial = String(order.raw_material || snapshot.mp || '');
+            option.dataset.mpType = String(order.mp_type || '');
+            option.dataset.cycle = snapshot.cycle != null ? String(snapshot.cycle) : '';
+            option.dataset.cavities = snapshot.cavities != null ? String(snapshot.cavities) : '';
+            option.dataset.weight = snapshot.weight != null ? String(snapshot.weight) : '';
+
+            fragment.appendChild(option);
         });
 
-        planningOrderSelect.value = currentValue;
-        planningOrderSelect.addEventListener('change', handlePlanningOrderSelection);
-    }
+        planningOrderSelect.innerHTML = '';
+        planningOrderSelect.appendChild(fragment);
 
-    function handlePlanningOrderSelection(e) {
-        const selectedOrderId = e.target.value;
-
-        if (!selectedOrderId) {
-            if (planningOrderInfo) {
-                planningOrderInfo.style.display = 'none';
-                planningOrderInfo.innerHTML = '';
-            }
-            return;
-        }
-
-        const selectedOrder = productionOrdersCache.find(o => o.id === selectedOrderId);
-        if (!selectedOrder) return;
-
-        const productCode = selectedOrder.part_code || selectedOrder.product_cod || '';
-        const product = productCode ? productDatabase.find(p => String(p.cod) === productCode) : null;
-
-        if (planningOrderInfo) {
-            const infoText = `OP: ${selectedOrder.order_number} | Produto: ${selectedOrder.product || 'N/A'} | Cliente: ${selectedOrder.customer || 'N/A'} | Lote: ${selectedOrder.lot_size || 'N/A'}`;
-            planningOrderInfo.textContent = infoText;
-            planningOrderInfo.style.display = 'block';
-        }
-
-        if (productCode) {
-            const planningProductCodInput = document.getElementById('planning-product-cod');
-            if (planningProductCodInput) {
-                planningProductCodInput.value = productCode;
-                planningProductCodInput.dispatchEvent(new Event('change', { bubbles: true }));
-            }
+        if (currentValue && openOrders.some(order => order.id === currentValue)) {
+            planningOrderSelect.value = currentValue;
+        } else {
+            planningOrderSelect.value = '';
         }
     }
 
@@ -6861,6 +8458,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const form = e.target;
     const formData = new FormData(form);
         const data = Object.fromEntries(formData.entries());
+        const productionOrderId = (data.production_order_id || '').trim();
         
         // Buscar dados completos do produto selecionado
         const productCod = data.product_cod;
@@ -6881,23 +8479,69 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         lucide.createIcons();
         
         try {
-            const mpValue = (data.mp || product.mp || '').trim();
-            product.mp = mpValue;
+            let linkedOrder = null;
+            if (productionOrderId) {
+                linkedOrder = Array.isArray(productionOrdersCache)
+                    ? productionOrdersCache.find(order => order && order.id === productionOrderId)
+                    : null;
+
+                if (!linkedOrder) {
+                    try {
+                        const orderDoc = await db.collection('production_orders').doc(productionOrderId).get();
+                        if (orderDoc.exists) {
+                            linkedOrder = { id: orderDoc.id, ...orderDoc.data() };
+                        }
+                    } catch (orderError) {
+                        console.warn('Falha ao carregar dados da OP vinculada:', orderError);
+                    }
+                }
+            }
+
+            const snapshot = linkedOrder?.product_snapshot || {};
+            const resolvedProductName = linkedOrder?.product || product.name;
+            const resolvedClient = linkedOrder?.customer || linkedOrder?.client || product.client || '';
+            const resolvedMp = (data.mp || linkedOrder?.raw_material || snapshot.mp || product.mp || '').trim();
+            const resolvedCycle = parseFloat(data.budgeted_cycle) || Number(product.cycle) || Number(snapshot.cycle) || 0;
+            const resolvedCavities = parseFloat(data.mold_cavities) || Number(product.cavities) || Number(snapshot.cavities) || 0;
+            const resolvedWeight = parseFloat(data.piece_weight) || Number(snapshot.weight) || Number(product.weight) || 0;
+            const resolvedQuantidadeEmbalagem = parseFloat(data.quantidade_da_embalagem) || null;
+            const resolvedPlannedQuantity = (() => {
+                const parsed = parseInt(data.planned_quantity, 10);
+                return Number.isFinite(parsed) ? parsed : 0;
+            })();
+
+            product.mp = resolvedMp;
+
             const docData = {
                 date: data.date,
                 machine: data.machine,
-                production_order_id: data.production_order_id || null,
+                production_order_id: productionOrderId || null,
                 product_cod: product.cod,
-                client: product.client,
-                product: product.name,
-                budgeted_cycle: product.cycle,
-                mold_cavities: product.cavities,
-                piece_weight: parseFloat(data.piece_weight) || product.weight,
-                planned_quantity: parseInt(data.planned_quantity, 10) || 0,
-                mp: mpValue,
-                mp_type: data.mp_type || '',
+                client: resolvedClient,
+                product: resolvedProductName,
+                budgeted_cycle: resolvedCycle || null,
+                mold_cavities: resolvedCavities || null,
+                piece_weight: resolvedWeight || null,
+                quantidade_da_embalagem: resolvedQuantidadeEmbalagem,
+                planned_quantity: resolvedPlannedQuantity,
+                mp: resolvedMp,
+                mp_type: data.mp_type || linkedOrder?.mp_type || '',
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             };
+
+            if (linkedOrder) {
+                docData.order_id = linkedOrder.id;
+                docData.order_number = linkedOrder.order_number || linkedOrder.order_number_original || linkedOrder.id;
+                docData.order_customer = resolvedClient;
+                const linkedLotSize = parseOptionalNumber(linkedOrder.lot_size);
+                if (typeof linkedLotSize === 'number' && Number.isFinite(linkedLotSize)) {
+                    docData.order_lot_size = linkedLotSize;
+                }
+                const linkedPartCode = linkedOrder.part_code || linkedOrder.product_cod;
+                if (linkedPartCode) {
+                    docData.order_part_code = String(linkedPartCode);
+                }
+            }
             await db.collection('planning').add(docData);
             
             if (statusMessage) {
@@ -6908,9 +8552,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             document.getElementById('budgeted-cycle').value = '';
             document.getElementById('mold-cavities').value = '';
             document.getElementById('piece-weight').value = '';
+            document.getElementById('quantidade-embalagem').value = '';
             document.getElementById('planned-quantity').value = '';
             if (planningMpInput) planningMpInput.value = '';
-            if (planningOrderSelect) planningOrderSelect.value = '';
+            if (planningOrderSelect) {
+                planningOrderSelect.value = '';
+                planningOrderSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            }
             const productNameDisplay = document.getElementById('product-name-display');
             if (productNameDisplay) {
                 productNameDisplay.textContent = '';
@@ -7389,6 +9037,20 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const progresso = meta > 0 ? (totalProduzido / meta) * 100 : 0;
             const progressoCor = progresso < 50 ? 'bg-status-error' : progresso < 90 ? 'bg-status-warning' : 'bg-status-success';
 
+            const linkedOrderId = item.order_id || item.production_order_id || item.production_order || null;
+            const linkedOrder = linkedOrderId && Array.isArray(productionOrdersCache)
+                ? productionOrdersCache.find(order => order && order.id === linkedOrderId)
+                : null;
+            const orderNumberRaw = linkedOrder?.order_number
+                || item.order_number
+                || linkedOrder?.order_number_original
+                || item.order_number_original
+                || linkedOrder?.id
+                || '';
+            const orderNumberLabel = orderNumberRaw
+                ? `OP ${escapeHtml(orderNumberRaw)}`
+                : 'OP não vinculada';
+
             return `
             <div class="bg-gray-50 border rounded-lg p-4 shadow-sm flex flex-col justify-between">
                 <div>
@@ -7396,6 +9058,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                         <div>
                             <h3 class="font-bold text-lg">${item.machine}</h3>
                             <p class="text-sm text-gray-600">${item.product}</p>
+                            <p class="text-xs text-gray-500">${orderNumberLabel}</p>
                             <p class="text-xs text-gray-500 mt-1">${item.mp ? `MP: ${item.mp}` : 'MP não definida'}</p>
                         </div>
                         <span class="text-xs font-bold text-gray-500">${totalProduzido.toLocaleString('pt-BR')} / ${meta.toLocaleString('pt-BR')}</span>
@@ -7518,6 +9181,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const querySnapshot = await q.get();
             const planDoc = await db.collection('planning').doc(planId).get();
             const planData = planDoc.exists ? planDoc.data() : {};
+            const linkedOrderId = planData.order_id || planData.production_order_id || planData.production_order || null;
+            const linkedOrderNumber = planData.order_number || planData.orderNumber || null;
             const planMachine = planData.machine || selectedMachineData?.machine || null;
             const planDate = planData.date || getProductionDateString();
             const planMp = planData.mp || '';
@@ -7527,7 +9192,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 planMachine,
                 planDate,
                 planMp,
-                planMpType
+                planMpType,
+                linkedOrderId
             });
 
             const entryPayload = {
@@ -7539,7 +9205,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 timestamp: firebase.firestore.FieldValue.serverTimestamp(),
                 machine: planMachine, // FIX: vincula a máquina correta para análise e filtros
                 mp: planMp,
-                mp_type: planMpType
+                mp_type: planMpType,
+                orderId: linkedOrderId || null,
+                order_id: linkedOrderId || null,
+                production_order_id: linkedOrderId || null,
+                order_number: linkedOrderNumber || null
             };
 
             console.log('[TRACE][handleProductionEntrySubmit] entry payload', entryPayload);
@@ -7883,8 +9553,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         // Botão de parada
         const btnDowntime = document.getElementById('btn-downtime');
         if (btnDowntime && !btnDowntime.dataset.listenerAttached) {
+            console.log('[TRACE][setupEventListeners] Anexando listener ao btn-downtime');
             btnDowntime.addEventListener('click', toggleDowntime);
             btnDowntime.dataset.listenerAttached = 'true';
+        } else if (btnDowntime) {
+            console.log('[TRACE][setupEventListeners] btn-downtime listener já anexado');
+        } else {
+            console.warn('[WARN][setupEventListeners] btn-downtime não encontrado no DOM');
         }
         
         // Botão de produção manual
@@ -7903,26 +9578,46 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         // Botão de lançamento manual de parada
         const btnManualDowntime = document.getElementById('btn-manual-downtime');
         if (btnManualDowntime && !btnManualDowntime.dataset.listenerAttached) {
+            console.log('[TRACE][setupEventListeners] Anexando listener ao btn-manual-downtime');
             btnManualDowntime.addEventListener('click', openManualDowntimeModal);
             btnManualDowntime.dataset.listenerAttached = 'true';
+        } else if (btnManualDowntime) {
+            console.log('[TRACE][setupEventListeners] btn-manual-downtime listener já anexado');
+        } else {
+            console.warn('[WARN][setupEventListeners] btn-manual-downtime não encontrado no DOM');
         }
         
         // Botão de retrabalho
         const btnRework = document.getElementById('btn-rework');
         if (btnRework && !btnRework.dataset.listenerAttached) {
+            console.log('[TRACE][setupEventListeners] Anexando listener ao btn-rework');
             btnRework.addEventListener('click', openReworkModal);
             btnRework.dataset.listenerAttached = 'true';
+        } else if (btnRework) {
+            console.log('[TRACE][setupEventListeners] btn-rework listener já anexado');
+        } else {
+            console.warn('[WARN][setupEventListeners] btn-rework não encontrado no DOM');
         }
         
         // Botão de borra
         const btnManualBorra = document.getElementById('btn-manual-borra');
         if (btnManualBorra && !btnManualBorra.dataset.listenerAttached) {
+            console.log('[TRACE][setupEventListeners] Anexando listener ao btn-manual-borra');
             btnManualBorra.addEventListener('click', openManualBorraModal);
             btnManualBorra.dataset.listenerAttached = 'true';
+        } else if (btnManualBorra) {
+            console.log('[TRACE][setupEventListeners] btn-manual-borra listener já anexado');
+        } else {
+            console.warn('[WARN][setupEventListeners] btn-manual-borra não encontrado no DOM');
         }
         
         // Setup modals
-        setupModals();
+        try {
+            setupModals();
+            console.log('[TRACE][setupEventListeners] setupModals completed successfully');
+        } catch (err) {
+            console.error('[ERROR][setupEventListeners] setupModals failed:', err);
+        }
     }
 
     async function handleFinalizeOrderClick(event) {
@@ -8257,12 +9952,25 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     }
     
     function openReworkModal() {
+        console.log('[TRACE][openReworkModal] called, selectedMachineData:', selectedMachineData);
+        
         currentEditContext = null;
         if (!selectedMachineData) {
+            console.warn('[WARN][openReworkModal] Nenhuma máquina selecionada');
             alert('Selecione uma máquina primeiro.');
             return;
         }
-        openModal('quick-rework-modal');
+        
+        const reworkModal = document.getElementById('quick-rework-modal');
+        if (reworkModal) {
+            console.log('[DEBUG] Portalizando quick-rework-modal antes da abertura');
+            modalManager.portalize(reworkModal);
+        }
+
+        setTimeout(() => {
+            console.log('[TRACE][openReworkModal] abrindo modal quick-rework-modal');
+            openModal('quick-rework-modal');
+        }, 0);
     }
     
     function openManualProductionModal() {
@@ -8322,8 +10030,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     }
 
     function openManualBorraModal() {
+        console.log('[TRACE][openManualBorraModal] called, selectedMachineData:', selectedMachineData);
+        
         currentEditContext = null;
         if (!selectedMachineData) {
+            console.warn('[WARN][openManualBorraModal] Nenhuma máquina selecionada');
             alert('Selecione uma máquina primeiro.');
             return;
         }
@@ -8354,13 +10065,34 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             hourInput.value = `${hours}:${minutes}`;
         }
 
-        openModal('manual-borra-modal');
+        const borraModal = document.getElementById('manual-borra-modal');
+        if (borraModal) {
+            console.log('[DEBUG] Portalizando manual-borra-modal antes da abertura');
+            modalManager.portalize(borraModal);
+        }
+
+        setTimeout(() => {
+            console.log('[TRACE][openManualBorraModal] abrindo modal manual-borra-modal');
+            openModal('manual-borra-modal');
+        }, 0);
     }
 
     function closeModal(modalId) {
-        document.getElementById(modalId).classList.add('hidden');
-        // Limpar formulários
-        const form = document.querySelector(`#${modalId} form`);
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+        modal.removeAttribute('data-modal-open');
+
+        modalManager.clearStyles(modal);
+        const modalContent = modal.querySelector('.bg-white, .modal-content, [class*="bg-white"]');
+        if (modalContent) {
+            modalManager.clearContentStyles(modalContent);
+        }
+
+        // Limpar formulários associados ao modal fechado
+        const form = modal.querySelector('form');
         if (form) form.reset();
         if (['quick-production-modal', 'quick-losses-modal', 'quick-downtime-modal', 'quick-rework-modal', 'manual-borra-modal'].includes(modalId)) {
             currentEditContext = null;
@@ -8384,24 +10116,84 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     }
 
     function openModal(modalId) {
+        console.error('🔴🔴🔴 OPENMODAL START, modalId=' + modalId + ' 🔴🔴🔴');
+
         const modal = document.getElementById(modalId);
-        if (!modal) return;
+        console.error('🔴 modal found:', !!modal, 'typeof:', typeof modal);
+
+        if (!modal) {
+            console.error('🔴 EARLY RETURN: Modal not found');
+            return;
+        }
+
+        modalManager.portalize(modal);
+        console.error('🔴 calling fillModalContext');
+
         // Atualizar faixa de contexto do modal, quando aplicável
-        try { fillModalContext(modal); } catch (e) { /* noop */ }
+        try {
+            fillModalContext(modal);
+            console.error('🔴 fillModalContext OK');
+        } catch (e) {
+            console.error('🔴 fillModalContext ERROR:', e.message);
+        }
+
+        modal.setAttribute('data-modal-open', 'true');
+        modal.setAttribute('aria-hidden', 'false');
         modal.classList.remove('hidden');
+        modalManager.applyStyles(modal);
+
+        const modalContent = modal.querySelector('.bg-white, .modal-content, [class*="bg-white"]');
+        if (modalContent) {
+            modalManager.applyContentStyles(modalContent);
+        } else {
+            console.warn('🔴 Nenhum container interno padrão (.bg-white/.modal-content) encontrado para', modalId);
+        }
+
+        const initialComputed = window.getComputedStyle(modal);
+        console.error('🔴 after force -> hidden:', modal.classList.contains('hidden'),
+            'display:', initialComputed.display,
+            'opacity:', initialComputed.opacity,
+            'visibility:', initialComputed.visibility,
+            'z-index:', initialComputed.zIndex);
+
+        const logState = (label) => {
+            if (!modal || !modal.isConnected) {
+                console.error(`🔴 ${label} modal desconectado do DOM`, { modalId });
+                return;
+            }
+            const style = window.getComputedStyle(modal);
+            const rect = modal.getBoundingClientRect();
+            console.error(`🔴 ${label} hidden=${modal.classList.contains('hidden')} display=${style.display} opacity=${style.opacity} visibility=${style.visibility} z-index=${style.zIndex} rect=${Math.round(rect.width)}x${Math.round(rect.height)} top=${Math.round(rect.top)} left=${Math.round(rect.left)}`);
+        };
+
+        requestAnimationFrame(() => {
+            modalManager.verify(modal);
+            logState('RAF check');
+        });
+
+        setTimeout(() => logState('100ms later'), 100);
+        setTimeout(() => logState('300ms later'), 300);
+        setTimeout(() => logState('500ms later'), 500);
+
+        console.error('🔴🔴🔴 OPENMODAL END 🔴🔴🔴');
     }
 
     // Função para toggle de parada (stop/start)
     function toggleDowntime() {
+        console.log('[TRACE][toggleDowntime] called, selectedMachineData:', selectedMachineData, 'machineStatus:', machineStatus);
+        
         if (!selectedMachineData) {
+            console.warn('[WARN][toggleDowntime] Nenhuma máquina selecionada');
             alert('Selecione uma máquina primeiro.');
             return;
         }
         
         if (machineStatus === 'running') {
+            console.log('[TRACE][toggleDowntime] Status running -> iniciando parada');
             // Parar máquina - registrar início da parada
             startMachineDowntime();
         } else {
+            console.log('[TRACE][toggleDowntime] Status stopped -> abrindo modal de motivo');
             // Retomar máquina - solicitar motivo e finalizar parada
             openDowntimeReasonModal();
         }
@@ -8409,17 +10201,72 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     
     // Função para abrir modal de lançamento manual de parada passada
     function openManualDowntimeModal() {
+        console.error('❌❌❌ DEBUG FORCE: openManualDowntimeModal START ❌❌❌');
+        console.log('[TRACE][openManualDowntimeModal] called, selectedMachineData:', selectedMachineData);
+        
         if (!selectedMachineData) {
+            console.warn('[WARN][openManualDowntimeModal] Nenhuma máquina selecionada');
             alert('Selecione uma máquina primeiro.');
             return;
         }
-        // Preencher datas padrão
-        const today = getProductionDateString();
-        const ds = document.getElementById('manual-downtime-date-start');
-        const de = document.getElementById('manual-downtime-date-end');
-        if (ds && !ds.value) ds.value = today;
-        if (de && !de.value) de.value = today;
-        openModal('manual-downtime-modal');
+        
+        try {
+            // Preencher datas padrão
+            const today = getProductionDateString();
+            console.error('❌ today:', today);
+            
+            const ds = document.getElementById('manual-downtime-date-start');
+            const de = document.getElementById('manual-downtime-date-end');
+            console.error('❌ ds exists:', !!ds, 'de exists:', !!de);
+            
+            if (ds && !ds.value) ds.value = today;
+            if (de && !de.value) de.value = today;
+            
+            const modal = document.getElementById('manual-downtime-modal');
+            if (modal) {
+                console.error('❌ MODAL DEBUG INFO (pré-abertura):');
+                console.error('  - id:', modal.id);
+                console.error('  - classList:', modal.classList.toString());
+                console.error('  - parent element:', modal.parentElement ? modal.parentElement.tagName : 'null');
+                console.error('  - is in document:', document.contains(modal));
+
+                const allModals = document.querySelectorAll('[id$="-modal"]');
+                console.error('❌ ALL MODALS STATUS:');
+                allModals.forEach((m) => {
+                    const style = window.getComputedStyle(m);
+                    console.error(`  - ${m.id}: hidden=${m.classList.contains('hidden')} display=${style.display} opacity=${style.opacity} visibility=${style.visibility}`);
+                });
+
+                modalManager.portalize(modal);
+
+                const computedBefore = window.getComputedStyle(modal);
+                console.error('❌ computed BEFORE open -> display:', computedBefore.display, 'opacity:', computedBefore.opacity, 'visibility:', computedBefore.visibility, 'z-index:', computedBefore.zIndex);
+
+                requestAnimationFrame(() => {
+                    if (!modal.isConnected) return;
+                    const rect = modal.getBoundingClientRect();
+                    console.error('❌ PRE-OPEN POSITION SNAPSHOT:', {
+                        top: rect.top,
+                        left: rect.left,
+                        width: rect.width,
+                        height: rect.height
+                    });
+                });
+            } else {
+                console.error('❌ modal element not found for manual-downtime-modal');
+            }
+
+            setTimeout(() => {
+                console.error('❌ calling openModal with:', 'manual-downtime-modal');
+                openModal('manual-downtime-modal');
+                console.error('❌ openModal called successfully');
+            }, 0);
+            
+        } catch (err) {
+            console.error('❌ CATCH BLOCK - exception:', err.message);
+            console.error('❌ Stack:', err.stack);
+        }
+        console.error('❌❌❌ DEBUG FORCE: openManualDowntimeModal END ❌❌❌');
     }
     
     // Função para iniciar parada da máquina
@@ -8464,13 +10311,17 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     
     // Função para abrir modal solicitando motivo da parada ao retomar
     function openDowntimeReasonModal() {
+        console.log('[TRACE][openDowntimeReasonModal] called, currentDowntimeStart:', currentDowntimeStart);
+        
         if (!currentDowntimeStart) {
-            console.warn('Nenhuma parada ativa para finalizar.');
+            console.warn('[WARN][openDowntimeReasonModal] Nenhuma parada ativa para finalizar.');
             machineStatus = 'running';
             updateMachineStatus();
             resumeProductionTimer();
             return;
         }
+        
+        console.log('[TRACE][openDowntimeReasonModal] abrindo modal quick-downtime-modal');
         openModal('quick-downtime-modal');
     }
     
@@ -12405,6 +14256,55 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
     }
 
+// Função de debug para modais
+window.debugModals = function() {
+    console.log('🔍 DEBUG MODALS - Checking all modals...');
+    
+    const allModals = document.querySelectorAll('[id$="-modal"]');
+    allModals.forEach(modal => {
+        const rect = modal.getBoundingClientRect();
+        const computed = window.getComputedStyle(modal);
+        
+        console.log(`📋 Modal: ${modal.id}`);
+        console.log(`  - Hidden class: ${modal.classList.contains('hidden')}`);
+        console.log(`  - Display: ${computed.display}`);
+        console.log(`  - Opacity: ${computed.opacity}`);
+        console.log(`  - Z-index: ${computed.zIndex}`);
+        console.log(`  - Visibility: ${computed.visibility}`);
+        console.log(`  - Position: ${rect.top}, ${rect.left} (${rect.width}x${rect.height})`);
+        console.log(`  - In viewport: ${rect.top >= 0 && rect.left >= 0 && rect.bottom <= window.innerHeight && rect.right <= window.innerWidth}`);
+        console.log('---');
+    });
+    
+    return 'Debug complete. Check console for details.';
+};
+
+// Função para forçar abertura de qualquer modal
+window.forceOpenModal = function(modalId) {
+    console.log(`🔧 FORCE OPEN MODAL: ${modalId}`);
+    
+    const modal = document.getElementById(modalId);
+    if (!modal) {
+        console.error(`❌ Modal ${modalId} not found`);
+        return false;
+    }
+
+    modalManager.portalize(modal);
+    modal.setAttribute('data-modal-open', 'true');
+    modal.setAttribute('aria-hidden', 'false');
+    modal.classList.remove('hidden');
+    modalManager.applyStyles(modal);
+
+    const modalContent = modal.querySelector('.bg-white, .modal-content, [class*="bg-white"]');
+    if (modalContent) {
+        modalManager.applyContentStyles(modalContent);
+    }
+
+    requestAnimationFrame(() => modalManager.verify(modal));
+    console.log(`✅ Modal ${modalId} forced open via modalManager`);
+    return true;
+};
+
     // Função para popular o modal de BORRA com máquinas e motivos do database.js
     function populateBorraModal() {
         // Popular máquinas no modal de BORRA
@@ -12440,6 +14340,172 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             });
             console.log('✅ Motivos do modal de BORRA populados via database.js');
         }
+    }
+
+    // ======================================
+    // QUALIDADE: Carregamento e renderização hora-a-hora
+    // ======================================
+
+    function loadQualityHourlyRecords() {
+        console.log(`🔍 loadQualityHourlyRecords() chamada`);
+        console.log(`  currentQualityContext:`, currentQualityContext);
+        
+        if (!currentQualityContext) {
+            console.log(`  ❌ currentQualityContext está vazio!`);
+            return;
+        }
+
+        const { plan, hourly_entries } = currentQualityContext;
+        console.log(`  plan:`, plan);
+        console.log(`  hourly_entries (${hourly_entries?.length || 0} items):`, hourly_entries);
+        
+        if (!plan || !hourly_entries || hourly_entries.length === 0) {
+            console.log(`  ⚠️ Sem dados - renderizando mensagem vazia`);
+            if (qualityHourlyContainer) {
+                qualityHourlyContainer.innerHTML = '<div id="quality-hourly-empty" class="py-6 text-center text-sm text-gray-500">Nenhum apontamento de produção registrado para este plano e data.</div>';
+            }
+            return;
+        }
+
+        // Agrupar por hora e calcular sacos
+        const hourlyGroups = {};
+        hourly_entries.forEach(entry => {
+            const hora = entry.hora || '00:00';
+            if (!hourlyGroups[hora]) {
+                hourlyGroups[hora] = [];
+            }
+            hourlyGroups[hora].push(entry);
+        });
+
+        console.log(`  ✅ Agrupado por hora:`, hourlyGroups);
+        renderQualityHourlyTable(hourlyGroups, plan);
+    }
+
+    function renderQualityHourlyTable(hourlyGroups, plan) {
+        if (!qualityHourlyContainer) return;
+
+        const cavitiesStandard = Number(plan?.mold_cavities) || 1;
+        const horas = Object.keys(hourlyGroups).sort();
+
+        let html = '<div class="overflow-x-auto">';
+        html += '<table class="min-w-full divide-y divide-gray-200 border rounded-lg">';
+        html += '<thead class="bg-gray-50"><tr>';
+        html += '<th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Hora</th>';
+        html += '<th class="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-600">Quantidade (pcs)</th>';
+        html += '<th class="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-600">Sacos</th>';
+        html += '<th class="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-600">Cavidades</th>';
+        html += '<th class="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Inspeção</th>';
+        html += '<th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Observações</th>';
+        html += '<th class="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Ação</th>';
+        html += '</tr></thead>';
+        html += '<tbody class="divide-y divide-gray-200">';
+
+        horas.forEach((hora, index) => {
+            const entries = hourlyGroups[hora];
+            const totalQty = entries.reduce((sum, e) => sum + (Number(e.quantidade) || 0), 0);
+            const totalEmbalagens = entries.reduce((sum, e) => sum + (Number(e.embalagem_fechada) || 0), 0);
+            const sacos = totalEmbalagens > 0 ? totalEmbalagens : Math.ceil(totalQty / cavitiesStandard);
+            const formId = `quality-hourly-form-${index}`;
+
+            html += `<tr class="hover:bg-emerald-50">`;
+            html += `<td class="px-4 py-3 text-sm font-medium text-gray-800">${hora}</td>`;
+            html += `<td class="px-4 py-3 text-right text-sm text-gray-600">${totalQty}</td>`;
+            html += `<td class="px-4 py-3 text-right text-sm font-semibold text-emerald-700">${sacos}</td>`;
+            html += `<td class="px-4 py-3 text-right text-sm text-gray-600">${cavitiesStandard}</td>`;
+            
+            // Coluna: OK / Não OK (radio buttons)
+            html += `<td class="px-4 py-3 text-center">`;
+            html += `<div class="flex items-center justify-center gap-3">`;
+            html += `<label class="inline-flex items-center gap-1 text-xs text-green-600 cursor-pointer">`;
+            html += `<input type="radio" name="quality-ok-${index}" value="ok" class="quality-inspection-radio" data-hora="${hora}" data-index="${index}">`;
+            html += `OK`;
+            html += `</label>`;
+            html += `<label class="inline-flex items-center gap-1 text-xs text-red-600 cursor-pointer">`;
+            html += `<input type="radio" name="quality-ok-${index}" value="nao-ok" class="quality-inspection-radio" data-hora="${hora}" data-index="${index}">`;
+            html += `Não OK`;
+            html += `</label>`;
+            html += `</div>`;
+            html += `</td>`;
+            
+            // Coluna: Observações
+            html += `<td class="px-4 py-3">`;
+            html += `<textarea id="quality-obs-${index}" class="quality-obs-textarea w-full px-2 py-1 text-xs rounded border border-gray-300 focus:border-emerald-500 focus:ring-emerald-500" placeholder="Observações..." rows="2"></textarea>`;
+            html += `</td>`;
+            
+            // Coluna: Botão Salvar
+            html += `<td class="px-4 py-3 text-center">`;
+            html += `<button type="button" class="quality-save-hourly-btn inline-flex items-center justify-center gap-1 rounded-lg bg-emerald-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500" data-hora="${hora}" data-index="${index}" data-qty="${totalQty}" data-sacos="${sacos}" data-cavities="${cavitiesStandard}">`;
+            html += `<i data-lucide="save" class="w-3 h-3"></i>`;
+            html += `Salvar`;
+            html += `</button>`;
+            html += `</td>`;
+            html += `</tr>`;
+        });
+
+        html += '</tbody></table></div>';
+        qualityHourlyContainer.innerHTML = html;
+
+        // Adicionar event listeners
+        document.querySelectorAll('.quality-save-hourly-btn').forEach(btn => {
+            btn.addEventListener('click', handleQualityHourlyRowSubmit);
+        });
+
+        lucide.createIcons();
+    }
+
+    function handleQualityHourlyRowSubmit(event) {
+        event.preventDefault();
+        const btn = event.currentTarget;
+        const index = btn.getAttribute('data-index');
+        const hora = btn.getAttribute('data-hora');
+        const qty = Number(btn.getAttribute('data-qty')) || 0;
+        const sacos = Number(btn.getAttribute('data-sacos')) || 0;
+        const cavities = Number(btn.getAttribute('data-cavities')) || 1;
+
+        // Capturar status de inspeção (OK / Não OK)
+        const inspectionRadio = document.querySelector(`input[name="quality-ok-${index}"]:checked`);
+        if (!inspectionRadio) {
+            showNotification('Por favor, marque OK ou Não OK para esta hora', 'warning');
+            return;
+        }
+        const inspectionStatus = inspectionRadio.value;
+
+        // Capturar observações
+        const obsTextarea = document.getElementById(`quality-obs-${index}`);
+        const observations = obsTextarea ? obsTextarea.value.trim() : '';
+
+        // Montar payload
+        const payload = {
+            planId: currentQualityContext.plan.id,
+            date: currentQualityContext.plan.date,
+            hora: hora,
+            turno: currentQualityContext.plan.turno || '1',
+            quantity: qty,
+            bags: sacos,
+            cavitiesStandard: cavities,
+            inspectionStatus: inspectionStatus, // 'ok' ou 'nao-ok'
+            observations: observations,
+            registeredBy: getCurrentUserName(),
+            createdAt: new Date().toISOString()
+        };
+
+        // Salvar no Firestore
+        if (!db) {
+            showNotification('Banco de dados não inicializado', 'error');
+            return;
+        }
+
+        db.collection('process_control_checks').add(payload)
+            .then(() => {
+                showNotification(`Inspeção de ${hora} salva com sucesso!`, 'success');
+                // Limpar o formulário da linha
+                if (obsTextarea) obsTextarea.value = '';
+                document.querySelectorAll(`input[name="quality-ok-${index}"]`).forEach(r => r.checked = false);
+            })
+            .catch((error) => {
+                console.error('Erro ao salvar inspeção:', error);
+                showNotification('Erro ao salvar a inspeção', 'error');
+            });
     }
 
 });
