@@ -236,6 +236,10 @@ document.addEventListener('DOMContentLoaded', function() {
     let machineCardData = {};
     const machineCardCharts = {};
     let activeMachineCard = null;
+    let ajustesPageInitialized = false;
+    let pilotTabInitialized = false;
+    let pilotReportsUnsubscribe = null;
+    let isSubmittingPilotReport = false;
 
     // Flags de configuração
     const QUALITY_AUTOFILL_ENABLED = false;
@@ -318,6 +322,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const recentEntriesEmpty = document.getElementById('recent-entries-empty');
     const refreshRecentEntriesBtn = document.getElementById('refresh-recent-entries');
 
+    // Elementos da aba Teste Piloto
+    const pilotReportForm = document.getElementById('pilot-report-form');
+    const pilotReportDateInput = document.getElementById('pilot-report-date');
+    const pilotReportTitleInput = document.getElementById('pilot-report-title');
+    const pilotReportDescriptionInput = document.getElementById('pilot-report-description');
+    const pilotReportStatus = document.getElementById('pilot-report-status');
+    const pilotReportList = document.getElementById('pilot-report-list');
+    const pilotReportEmpty = document.getElementById('pilot-report-empty');
+    const pilotReportLoading = document.getElementById('pilot-report-loading');
+    const pilotFilterDateInput = document.getElementById('pilot-filter-date');
+    const pilotRefreshBtn = document.getElementById('pilot-refresh-btn');
+    const pilotReportUserDisplay = document.getElementById('pilot-report-user-display');
+    const pilotReportSubmitBtn = document.getElementById('pilot-report-submit');
+
     // Elementos da aba de Ordens de Produção
     const productionOrderForm = document.getElementById('production-order-form');
     const productionOrderStatusMessage = document.getElementById('production-order-status-message');
@@ -357,6 +375,176 @@ document.addEventListener('DOMContentLoaded', function() {
     const qualityHistoryChip = document.getElementById('quality-history-chip');
     const qualityContextContainer = document.getElementById('quality-context-container');
     
+    // Elementos da aba Ajustes (restrita)
+    const ajustesPage = document.getElementById('ajustes-page');
+    const ajustesSearchForm = document.getElementById('ajustes-search-form');
+    const ajustesCollectionSelect = document.getElementById('ajustes-collection');
+    const ajustesDocIdInput = document.getElementById('ajustes-doc-id');
+    const ajustesMachineInput = document.getElementById('ajustes-machine');
+    const ajustesWorkdayInput = document.getElementById('ajustes-workday');
+    const ajustesRefreshBtn = document.getElementById('ajustes-refresh-btn');
+    const ajustesSearchStatus = document.getElementById('ajustes-search-status');
+    const ajustesResultsBody = document.getElementById('ajustes-results-body');
+    const ajustesEditForm = document.getElementById('ajustes-edit-form');
+    const ajustesEditId = document.getElementById('ajustes-edit-id');
+    const ajustesEditCollection = document.getElementById('ajustes-edit-collection');
+    const ajustesEditOriginal = document.getElementById('ajustes-edit-original');
+    const ajustesEditMachine = document.getElementById('ajustes-edit-machine');
+    const ajustesEditDate = document.getElementById('ajustes-edit-date');
+    const ajustesEditExecuted = document.getElementById('ajustes-edit-executed');
+    const ajustesEditPlanned = document.getElementById('ajustes-edit-planned');
+    const ajustesEditLossesKg = document.getElementById('ajustes-edit-losses-kg');
+    const ajustesEditLossesPcs = document.getElementById('ajustes-edit-losses-pcs');
+    const ajustesEditNotes = document.getElementById('ajustes-edit-notes');
+    const ajustesEditStatus = document.getElementById('ajustes-edit-status');
+    const ajustesCancelBtn = document.getElementById('ajustes-cancel-btn');
+    const ajustesLogBody = document.getElementById('ajustes-log-body');
+
+    const AJUSTES_DEFAULT_LIMIT = 25;
+    const AJUSTES_LOG_COLLECTION = 'ajustes_logs';
+    const AJUSTES_COLLECTIONS = {
+        production_entries: {
+            key: 'production_entries',
+            collection: 'production_entries',
+            label: 'Produção Executada',
+            machineField: 'machine',
+            altMachineFields: ['machine_id', 'maquina'],
+            dateFields: ['workDay', 'data'],
+            turnoField: 'turno',
+            executedField: 'produzido',
+            lossesKgField: 'refugo_kg',
+            lossesPcsField: 'refugo_qty',
+            plannedField: null,
+            orderCandidates: ['timestamp', 'createdAt', 'dataHoraInformada'],
+            supportsEditing: true,
+            editorConfig: { executed: true, planned: false, lossesKg: true, lossesPcs: true },
+            fieldLabels: {
+                produzido: 'Quantidade executada',
+                refugo_kg: 'Perdas (kg)',
+                refugo_qty: 'Perdas (peças)'
+            },
+            descriptionBuilder: (data) => {
+                const parts = [];
+                if (data.perdas) parts.push(`Motivo: ${data.perdas}`);
+                if (data.observacoes) parts.push(data.observacoes);
+                if (data.manual) parts.push('Origem: Manual');
+                if (data.horaInformada) parts.push(`Hora ${data.horaInformada}`);
+                return parts.filter(Boolean).join(' • ') || 'Lançamento de produção';
+            }
+        },
+        losses: {
+            key: 'losses',
+            collection: 'production_entries',
+            label: 'Perdas Registradas',
+            machineField: 'machine',
+            altMachineFields: ['machine_id', 'maquina'],
+            dateFields: ['workDay', 'data'],
+            turnoField: 'turno',
+            executedField: 'produzido',
+            lossesKgField: 'refugo_kg',
+            lossesPcsField: 'refugo_qty',
+            plannedField: null,
+            orderCandidates: ['timestamp', 'createdAt', 'dataHoraInformada'],
+            supportsEditing: true,
+            editorConfig: { executed: true, planned: false, lossesKg: true, lossesPcs: true },
+            fieldLabels: {
+                produzido: 'Quantidade executada',
+                refugo_kg: 'Perdas (kg)',
+                refugo_qty: 'Perdas (peças)'
+            },
+            filter: (data) => {
+                const lossesKg = Number(data?.refugo_kg) || 0;
+                const lossesQty = Number(data?.refugo_qty) || 0;
+                return lossesKg > 0 || lossesQty > 0 || Boolean((data?.perdas || '').trim());
+            },
+            descriptionBuilder: (data) => {
+                const parts = [];
+                if (data.perdas) parts.push(`Motivo: ${data.perdas}`);
+                if (data.observacoes) parts.push(data.observacoes);
+                if (data.manual) parts.push('Origem: Manual');
+                return parts.filter(Boolean).join(' • ') || 'Registro de perda';
+            }
+        },
+        planning: {
+            key: 'planning',
+            collection: 'planning',
+            label: 'Planejamento',
+            machineField: 'machine',
+            dateFields: ['date'],
+            turnoField: null,
+            executedField: null,
+            lossesKgField: null,
+            lossesPcsField: null,
+            plannedField: 'planned_quantity',
+            orderCandidates: ['updatedAt', 'createdAt'],
+            supportsEditing: true,
+            editorConfig: { executed: false, planned: true, lossesKg: false, lossesPcs: false },
+            fieldLabels: {
+                planned_quantity: 'Planejado (un)'
+            },
+            descriptionBuilder: (data) => {
+                const parts = [];
+                if (data.product) parts.push(`Produto: ${data.product}`);
+                if (data.client) parts.push(`Cliente: ${data.client}`);
+                if (data.order_number) parts.push(`OP ${data.order_number}`);
+                return parts.filter(Boolean).join(' • ') || 'Item do planejamento';
+            }
+        },
+        production_orders: {
+            key: 'production_orders',
+            collection: 'production_orders',
+            label: 'Ordens de Produção',
+            machineField: 'machine_id',
+            altMachineFields: ['machine', 'machineId'],
+            dateFields: ['planned_start', 'createdAt'],
+            turnoField: null,
+            executedField: null,
+            lossesKgField: null,
+            lossesPcsField: null,
+            plannedField: 'lot_size',
+            orderCandidates: ['updatedAt', 'createdAt'],
+            supportsEditing: false,
+            editorConfig: { executed: false, planned: false, lossesKg: false, lossesPcs: false },
+            fieldLabels: {
+                lot_size: 'Quantidade planejada'
+            },
+            descriptionBuilder: (data) => {
+                const parts = [];
+                if (data.product) parts.push(`Produto: ${data.product}`);
+                if (data.status) parts.push(`Status: ${data.status}`);
+                if (data.customer) parts.push(`Cliente: ${data.customer}`);
+                return parts.filter(Boolean).join(' • ') || 'Ordem de produção';
+            }
+        },
+        downtime_entries: {
+            key: 'downtime_entries',
+            collection: 'downtime_entries',
+            label: 'Paradas',
+            machineField: 'machine',
+            dateFields: ['date'],
+            turnoField: null,
+            executedField: null,
+            lossesKgField: null,
+            lossesPcsField: null,
+            plannedField: null,
+            orderCandidates: ['createdAt'],
+            supportsEditing: false,
+            editorConfig: { executed: false, planned: false, lossesKg: false, lossesPcs: false },
+            fieldLabels: {},
+            descriptionBuilder: (data) => {
+                const parts = [];
+                if (data.reason) parts.push(`Motivo: ${data.reason}`);
+                if (data.observations) parts.push(data.observations);
+                if (data.startTime && data.endTime) parts.push(`${data.startTime} - ${data.endTime}`);
+                return parts.filter(Boolean).join(' • ') || 'Registro de parada';
+            }
+        }
+    };
+
+    let currentAjustesResults = [];
+    let lastAjustesFilters = null;
+    let ajustesSearchInFlight = false;
+
     // Elementos de controle de processos (tabelas de turno)
     const qualityProcessHeader = document.getElementById('quality-process-header');
     const qualityHeaderProduct = document.getElementById('quality-header-product');
@@ -6061,6 +6249,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const todayString = getProductionDateString();
         if (planningDateSelector) planningDateSelector.value = todayString;
         if (resumoDateSelector) resumoDateSelector.value = todayString;
+        if (pilotReportDateInput && !pilotReportDateInput.value) pilotReportDateInput.value = todayString;
+        if (pilotFilterDateInput && !pilotFilterDateInput.value) pilotFilterDateInput.value = todayString;
         
         if (startDateSelector) startDateSelector.value = todayString;
         if (endDateSelector) endDateSelector.value = todayString;
@@ -6107,6 +6297,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
         if (productionModalForm) productionModalForm.addEventListener('submit', handleProductionEntrySubmit);
         if (refreshRecentEntriesBtn) refreshRecentEntriesBtn.addEventListener('click', () => loadRecentEntries());
+        if (pilotReportForm) pilotReportForm.addEventListener('submit', handlePilotReportSubmit);
+        if (pilotFilterDateInput) pilotFilterDateInput.addEventListener('change', () => refreshPilotReports());
+        if (pilotRefreshBtn) pilotRefreshBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            refreshPilotReports(true);
+        });
         if (recentEntriesList) recentEntriesList.addEventListener('click', handleRecentEntryAction);
         if (finalizeOrderBtn) finalizeOrderBtn.addEventListener('click', handleFinalizeOrderClick);
     if (activateOrderBtn) activateOrderBtn.addEventListener('click', handleActivateOrderFromPanel);
@@ -6139,6 +6335,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 e.currentTarget.classList.add('active');
                 setDateRange(e.currentTarget.dataset.range);
             });
+        });
+
+        if (ajustesSearchForm) ajustesSearchForm.addEventListener('submit', handleAjustesSearch);
+        if (ajustesRefreshBtn) ajustesRefreshBtn.addEventListener('click', handleAjustesRefresh);
+        if (ajustesEditForm) ajustesEditForm.addEventListener('submit', handleAjustesEditSubmit);
+        if (ajustesCancelBtn) ajustesCancelBtn.addEventListener('click', () => {
+            resetAjustesEditor();
+            updateAjustesEditStatus('Edição cancelada. Nenhuma alteração aplicada.', 'info');
         });
 
         // Confirm modal handlers are assigned dynamically inside showConfirmModal
@@ -6259,6 +6463,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             setupTestPage();
         }
 
+        if (page === 'teste-piloto') {
+            setupPilotTab();
+        }
+
+        if (page === 'ajustes') {
+            setupAjustesPage();
+        }
+
         if (window.innerWidth < 768) {
             closeSidebar();
         }
@@ -6357,6 +6569,1350 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         // Manter apenas as últimas 100 linhas
         while (container.children.length > 100) {
             container.removeChild(container.firstChild);
+        }
+    }
+
+    // --- ABA TESTE PILOTO ---
+    function setupPilotTab() {
+        updatePilotUserDisplay();
+        setPilotReportStatus('', 'info');
+
+        if (!pilotTabInitialized) {
+            const today = getProductionDateString();
+            if (pilotReportDateInput && !pilotReportDateInput.value) {
+                pilotReportDateInput.value = today;
+            }
+            if (pilotFilterDateInput && !pilotFilterDateInput.value) {
+                pilotFilterDateInput.value = today;
+            }
+            pilotTabInitialized = true;
+        }
+
+        refreshPilotReports();
+    }
+
+    function updatePilotUserDisplay() {
+        if (!pilotReportUserDisplay) return;
+        const userName = getCurrentUserName();
+        pilotReportUserDisplay.textContent = userName || 'Desconhecido';
+    }
+
+    async function handlePilotReportSubmit(event) {
+        event.preventDefault();
+
+        if (isSubmittingPilotReport) {
+            return;
+        }
+
+        const title = pilotReportTitleInput?.value?.trim() || '';
+        const description = pilotReportDescriptionInput?.value?.trim() || '';
+        let workDay = pilotReportDateInput?.value;
+
+        if (!title || !description) {
+            setPilotReportStatus('Informe o problema identificado e a descrição antes de registrar.', 'error');
+            return;
+        }
+
+        if (!workDay) {
+            workDay = getProductionDateString();
+            if (pilotReportDateInput) {
+                pilotReportDateInput.value = workDay;
+            }
+        }
+
+        const reporterName = getCurrentUserName() || 'Desconhecido';
+        const activeUser = getActiveUser();
+        const reporterIdentifier = activeUser?.username || activeUser?.email || activeUser?.id || null;
+        const payload = {
+            title,
+            description,
+            workDay,
+            reporterName,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            createdAtLocal: new Date().toISOString(),
+            status: 'aberto'
+        };
+
+        const currentShift = typeof getCurrentShift === 'function' ? getCurrentShift() : null;
+        if (currentShift) {
+            payload.shift = currentShift;
+        }
+        if (reporterIdentifier) {
+            payload.reporterIdentifier = reporterIdentifier;
+        }
+
+        try {
+            isSubmittingPilotReport = true;
+            if (pilotReportSubmitBtn) {
+                pilotReportSubmitBtn.disabled = true;
+                pilotReportSubmitBtn.classList.add('opacity-60', 'cursor-not-allowed');
+            }
+            setPilotReportStatus('Registrando problema...', 'info');
+
+            await db.collection('pilot_test_reports').add(payload);
+
+            setPilotReportStatus('Problema registrado com sucesso!', 'success');
+            if (pilotReportTitleInput) pilotReportTitleInput.value = '';
+            if (pilotReportDescriptionInput) pilotReportDescriptionInput.value = '';
+            updatePilotUserDisplay();
+
+            if (pilotFilterDateInput && pilotFilterDateInput.value !== workDay) {
+                pilotFilterDateInput.value = workDay;
+                refreshPilotReports();
+            }
+
+            setTimeout(() => setPilotReportStatus('', 'info'), 4000);
+        } catch (error) {
+            console.error('❌ Erro ao registrar problema do Teste Piloto:', error);
+            setPilotReportStatus('Erro ao registrar problema. Tente novamente.', 'error');
+        } finally {
+            isSubmittingPilotReport = false;
+            if (pilotReportSubmitBtn) {
+                pilotReportSubmitBtn.disabled = false;
+                pilotReportSubmitBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+            }
+        }
+    }
+
+    function refreshPilotReports(fromManualTrigger = false) {
+        if (!db) return;
+
+        const selectedDate = pilotFilterDateInput?.value || getProductionDateString();
+        if (pilotFilterDateInput && !pilotFilterDateInput.value) {
+            pilotFilterDateInput.value = selectedDate;
+        }
+
+        if (typeof pilotReportsUnsubscribe === 'function') {
+            pilotReportsUnsubscribe();
+        }
+
+        setPilotReportStatus(fromManualTrigger ? 'Atualizando registros...' : '', 'info');
+        setPilotLoadingState(true);
+        if (pilotReportEmpty) {
+            pilotReportEmpty.textContent = 'Nenhum registro encontrado para a data selecionada.';
+            pilotReportEmpty.classList.add('hidden');
+        }
+        if (pilotReportList) {
+            pilotReportList.innerHTML = '';
+        }
+
+        try {
+            const query = db.collection('pilot_test_reports').where('workDay', '==', selectedDate);
+            const unsubscribeFn = query.onSnapshot((snapshot) => {
+                setPilotLoadingState(false);
+
+                if (fromManualTrigger && !snapshot.metadata.hasPendingWrites) {
+                    setPilotReportStatus('Registros atualizados.', 'success');
+                    setTimeout(() => setPilotReportStatus('', 'info'), 2500);
+                } else if (!fromManualTrigger) {
+                    setPilotReportStatus('', 'info');
+                }
+
+                const orderedDocs = [...snapshot.docs].sort((a, b) => {
+                    const aData = a.data();
+                    const bData = b.data();
+                    const aMs = getPilotReportTimestamp(aData, a);
+                    const bMs = getPilotReportTimestamp(bData, b);
+                    return bMs - aMs;
+                });
+
+                renderPilotReports(orderedDocs);
+            }, (error) => {
+                console.error('❌ Erro ao escutar registros do Teste Piloto:', error);
+                setPilotLoadingState(false);
+                setPilotReportStatus('Erro ao carregar registros. Tente novamente mais tarde.', 'error');
+                if (pilotReportEmpty) {
+                    pilotReportEmpty.textContent = 'Erro ao carregar registros para esta data.';
+                    pilotReportEmpty.classList.remove('hidden');
+                }
+                if (pilotReportList) {
+                    pilotReportList.innerHTML = '';
+                }
+                pilotReportsUnsubscribe = null;
+                activeListenerUnsubscribe = null;
+            });
+
+            pilotReportsUnsubscribe = () => {
+                if (typeof unsubscribeFn === 'function') {
+                    unsubscribeFn();
+                }
+                pilotReportsUnsubscribe = null;
+            };
+            activeListenerUnsubscribe = pilotReportsUnsubscribe;
+        } catch (error) {
+            console.error('❌ Erro ao configurar listener do Teste Piloto:', error);
+            setPilotLoadingState(false);
+            setPilotReportStatus('Erro ao carregar registros. Tente novamente mais tarde.', 'error');
+        }
+    }
+
+    function renderPilotReports(docSnapshots) {
+        if (!pilotReportList) return;
+
+        pilotReportList.innerHTML = '';
+        if (pilotReportEmpty) {
+            pilotReportEmpty.textContent = 'Nenhum registro encontrado para a data selecionada.';
+        }
+
+        if (!docSnapshots || docSnapshots.length === 0) {
+            if (pilotReportEmpty) {
+                pilotReportEmpty.classList.remove('hidden');
+            }
+            return;
+        }
+
+        if (pilotReportEmpty) {
+            pilotReportEmpty.classList.add('hidden');
+        }
+
+        docSnapshots.forEach((docSnap) => {
+            const data = docSnap.data() || {};
+            const card = document.createElement('div');
+            card.className = 'p-5 rounded-lg border border-gray-200 shadow-sm hover:border-teal-300 transition';
+
+            const header = document.createElement('div');
+            header.className = 'flex flex-col md:flex-row md:items-start md:justify-between gap-3';
+
+            const titleEl = document.createElement('h4');
+            titleEl.className = 'text-lg font-semibold text-gray-900 flex items-center gap-2';
+            const titleIcon = document.createElement('i');
+            titleIcon.setAttribute('data-lucide', 'alert-circle');
+            titleIcon.className = 'text-teal-500';
+            const titleText = document.createElement('span');
+            titleText.textContent = data.title || 'Problema sem título';
+            titleEl.appendChild(titleIcon);
+            titleEl.appendChild(titleText);
+
+            const meta = document.createElement('div');
+            meta.className = 'text-sm text-gray-500 flex flex-col items-start';
+            const reporterLine = document.createElement('span');
+            reporterLine.textContent = `Registrado por ${data.reporterName || 'Desconhecido'}`;
+            meta.appendChild(reporterLine);
+            if (data.reporterIdentifier) {
+                const identifierLine = document.createElement('span');
+                identifierLine.className = 'text-xs text-gray-400';
+                identifierLine.textContent = data.reporterIdentifier;
+                meta.appendChild(identifierLine);
+            }
+            const createdAtLine = document.createElement('span');
+            createdAtLine.textContent = formatPilotReportDate(data.createdAt, data.createdAtLocal, docSnap);
+            meta.appendChild(createdAtLine);
+
+            header.appendChild(titleEl);
+            header.appendChild(meta);
+
+            const descriptionEl = document.createElement('p');
+            descriptionEl.className = 'mt-4 text-sm text-gray-700 whitespace-pre-line';
+            descriptionEl.textContent = data.description || '-';
+
+            const footer = document.createElement('div');
+            footer.className = 'mt-4 flex flex-wrap items-center gap-3 text-xs text-gray-500';
+            const badge = document.createElement('span');
+            badge.className = 'inline-flex items-center gap-1 px-3 py-1 bg-teal-50 text-teal-700 rounded-full font-semibold';
+            const badgeIcon = document.createElement('i');
+            badgeIcon.setAttribute('data-lucide', 'calendar');
+            const badgeText = document.createElement('span');
+            badgeText.textContent = data.workDay ? `Dia ${data.workDay}` : 'Dia não informado';
+            badge.appendChild(badgeIcon);
+            badge.appendChild(badgeText);
+            footer.appendChild(badge);
+
+            if (data.shift) {
+                const shiftBadge = document.createElement('span');
+                shiftBadge.className = 'inline-flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-600 rounded-full font-semibold';
+                const shiftIcon = document.createElement('i');
+                shiftIcon.setAttribute('data-lucide', 'clock');
+                const shiftText = document.createElement('span');
+                shiftText.textContent = `Turno ${data.shift}`;
+                shiftBadge.appendChild(shiftIcon);
+                shiftBadge.appendChild(shiftText);
+                footer.appendChild(shiftBadge);
+            }
+
+            card.appendChild(header);
+            card.appendChild(descriptionEl);
+            card.appendChild(footer);
+
+            pilotReportList.appendChild(card);
+        });
+
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+
+    function setPilotLoadingState(isLoading) {
+        if (pilotReportLoading) {
+            pilotReportLoading.classList.toggle('hidden', !isLoading);
+        }
+        if (pilotReportList) {
+            pilotReportList.classList.toggle('opacity-50', isLoading);
+        }
+    }
+
+    function setPilotReportStatus(message, variant = 'info') {
+        if (!pilotReportStatus) return;
+        pilotReportStatus.textContent = message || '';
+        pilotReportStatus.className = 'text-sm font-semibold h-5';
+        if (!message) {
+            return;
+        }
+        const variantClass = variant === 'success' ? 'text-teal-600'
+            : variant === 'error' ? 'text-red-600'
+            : 'text-gray-600';
+        pilotReportStatus.classList.add(variantClass);
+    }
+
+    function getPilotReportTimestamp(data, docSnap) {
+        if (data?.createdAt && typeof data.createdAt.toMillis === 'function') {
+            return data.createdAt.toMillis();
+        }
+        if (typeof data?.createdAt === 'number') {
+            return data.createdAt;
+        }
+        if (data?.createdAtLocal) {
+            const parsed = Date.parse(data.createdAtLocal);
+            if (!Number.isNaN(parsed)) {
+                return parsed;
+            }
+        }
+        if (docSnap?.updateTime?.toMillis) {
+            return docSnap.updateTime.toMillis();
+        }
+        if (docSnap?.readTime?.toMillis) {
+            return docSnap.readTime.toMillis();
+        }
+        if (docSnap?.metadata?.hasPendingWrites) {
+            return Date.now();
+        }
+        return 0;
+    }
+
+    function formatPilotReportDate(createdAt, createdAtLocal, docSnap) {
+        let date = null;
+        if (createdAt && typeof createdAt.toDate === 'function') {
+            date = createdAt.toDate();
+        } else if (createdAt && typeof createdAt.toMillis === 'function') {
+            date = new Date(createdAt.toMillis());
+        } else if (createdAtLocal) {
+            const parsed = new Date(createdAtLocal);
+            if (!Number.isNaN(parsed.getTime())) {
+                date = parsed;
+            }
+        } else if (docSnap?.updateTime?.toMillis) {
+            date = new Date(docSnap.updateTime.toMillis());
+        }
+
+        if (!date || Number.isNaN(date.getTime())) {
+            return 'Data não disponível';
+        }
+
+        return date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+    }
+
+    // --- ABA DE AJUSTES (MESTRE) ---
+    function setupAjustesPage() {
+        if (!ajustesPage) return;
+
+        if (!ajustesPageInitialized) {
+            attachAjustesTableListener();
+            resetAjustesResults();
+            resetAjustesEditor();
+            updateAjustesEditStatus('Selecione um registro para habilitar o formulário.', 'info');
+            ajustesPageInitialized = true;
+            
+            // Carregar lista de máquinas para o datalist
+            loadAjustesMachinesList().catch((error) => {
+                console.warn('[AJUSTES] Falha ao carregar lista de máquinas:', error);
+            });
+        }
+
+        if (lastAjustesFilters) {
+            performAjustesSearch(lastAjustesFilters, { silent: true }).catch((error) => {
+                console.warn('[AJUSTES] Falha ao recarregar resultados anteriores:', error);
+            });
+        }
+
+        lucide.createIcons();
+    }
+
+    function handleAjustesSearch(event) {
+        event?.preventDefault();
+
+        if (ajustesSearchInFlight) {
+            updateAjustesSearchStatus('Já existe uma busca em andamento. Aguarde finalizar.', 'warning');
+            return;
+        }
+
+        const filters = buildAjustesFiltersFromForm();
+        lastAjustesFilters = filters;
+
+        performAjustesSearch(filters).catch((error) => {
+            console.error('[AJUSTES] Erro ao executar busca:', error);
+            updateAjustesSearchStatus('Erro ao buscar registros. Verifique os filtros e tente novamente.', 'error');
+            renderAjustesPlaceholderRow('Não foi possível carregar os registros. Consulte o console para detalhes.', 'error');
+        });
+    }
+
+    function handleAjustesRefresh(event) {
+        event?.preventDefault();
+
+        if (ajustesSearchInFlight) {
+            updateAjustesSearchStatus('Uma busca está em execução. Aguarde antes de recarregar.', 'warning');
+            return;
+        }
+
+        if (lastAjustesFilters) {
+            performAjustesSearch(lastAjustesFilters, { fromRefresh: true }).catch((error) => {
+                console.error('[AJUSTES] Erro ao atualizar resultados:', error);
+                updateAjustesSearchStatus('Erro ao atualizar a lista. Tente novamente.', 'error');
+            });
+        } else {
+            resetAjustesResults();
+            resetAjustesEditor();
+            updateAjustesSearchStatus('Lista reiniciada. Informe os filtros desejados e clique em Buscar.', 'info');
+            updateAjustesEditStatus('Selecione um registro para habilitar o formulário.', 'info');
+        }
+    }
+
+    async function handleAjustesEditSubmit(event) {
+        event?.preventDefault();
+
+        if (ajustesEditForm?.dataset.busy === 'true') {
+            updateAjustesEditStatus('Um ajuste já está em andamento. Aguarde.', 'warning');
+            return;
+        }
+
+        const docId = ajustesEditId?.value?.trim();
+        const collectionKey = ajustesEditCollection?.value?.trim();
+        if (!docId || !collectionKey) {
+            updateAjustesEditStatus('Selecione um registro válido antes de salvar.', 'warning');
+            return;
+        }
+
+        const config = AJUSTES_COLLECTIONS[collectionKey];
+        if (!config) {
+            updateAjustesEditStatus('Coleção não suportada para ajustes.', 'error');
+            return;
+        }
+
+        if (!config.supportsEditing) {
+            updateAjustesEditStatus('Este registro é somente leitura nesta ferramenta.', 'warning');
+            return;
+        }
+
+        const observation = (ajustesEditNotes?.value || '').trim();
+        if (!observation) {
+            updateAjustesEditStatus('Informe o motivo do ajuste nas observações.', 'warning');
+            ajustesEditNotes?.focus();
+            return;
+        }
+
+        let originalSnapshot = {};
+        try {
+            originalSnapshot = JSON.parse(ajustesEditOriginal?.value || '{}');
+        } catch (error) {
+            console.warn('[AJUSTES] Snapshot original inválido:', error);
+        }
+
+        const payload = extractAjustesPayloadFromForm(config);
+    const diff = computeAjustesDiff(originalSnapshot, payload);
+        if (!diff || diff.changedFields.length === 0) {
+            updateAjustesEditStatus('Nenhum campo alterado. Ajuste não aplicado.', 'warning');
+            return;
+        }
+
+        try {
+            ajustesEditForm.dataset.busy = 'true';
+            setAjustesFormDisabled(true);
+            updateAjustesEditStatus('Aplicando ajuste...', 'info');
+
+            const result = await applyAjusteTransaction(config, docId, payload, diff, observation);
+            let auditError = null;
+            try {
+                await registerAjusteLog(config, docId, diff, observation, result.beforeState, result.afterState);
+            } catch (logError) {
+                auditError = logError;
+                console.error('[AJUSTES] Erro ao registrar log de auditoria:', logError);
+            }
+
+            if (auditError) {
+                updateAjustesEditStatus('Ajuste aplicado, porém falhou ao registrar a auditoria. Verifique os logs.', 'warning');
+            } else {
+                updateAjustesEditStatus('Ajuste aplicado com sucesso!', 'success');
+            }
+
+            if (lastAjustesFilters) {
+                await performAjustesSearch(lastAjustesFilters, { silent: true, preserveDocId: docId });
+            }
+
+            const updatedRecord = currentAjustesResults.find(
+                (item) => item.id === docId && item.collectionKey === collectionKey
+            );
+            if (updatedRecord) {
+                loadAjustesRecordForEditing(updatedRecord);
+            }
+        } catch (error) {
+            console.error('[AJUSTES] Erro ao aplicar ajuste:', error);
+            updateAjustesEditStatus(getFriendlyErrorMessage(error), 'error');
+        } finally {
+            ajustesEditForm.dataset.busy = 'false';
+            setAjustesFormDisabled(false);
+        }
+    }
+
+    function resetAjustesResults() {
+        currentAjustesResults = [];
+        renderAjustesPlaceholderRow('Nenhum registro carregado. Use os filtros acima para iniciar uma busca.', 'info');
+        updateAjustesSearchStatus('Informe os filtros desejados e clique em Buscar.', 'info');
+    }
+
+    function resetAjustesEditor() {
+        if (ajustesEditForm) ajustesEditForm.reset();
+        if (ajustesEditForm) ajustesEditForm.dataset.busy = 'false';
+        if (ajustesEditId) ajustesEditId.value = '';
+        if (ajustesEditCollection) ajustesEditCollection.value = '';
+        if (ajustesEditOriginal) ajustesEditOriginal.value = '';
+        if (ajustesEditMachine) ajustesEditMachine.value = '--';
+        if (ajustesEditDate) ajustesEditDate.value = '--';
+        if (ajustesEditExecuted) ajustesEditExecuted.value = '';
+        if (ajustesEditPlanned) ajustesEditPlanned.value = '';
+        if (ajustesEditLossesKg) ajustesEditLossesKg.value = '';
+        if (ajustesEditLossesPcs) ajustesEditLossesPcs.value = '';
+        if (ajustesEditNotes) ajustesEditNotes.value = '';
+        renderAjustesLogPlaceholder('Nenhum ajuste registrado ainda.');
+        toggleAjustesInputsByConfig(null);
+        highlightSelectedAjustesRow(-1);
+    }
+
+    function renderAjustesPlaceholderRow(message, tone = 'info') {
+        if (!ajustesResultsBody) return;
+
+        ajustesResultsBody.innerHTML = '';
+    const row = document.createElement('tr');
+    row.className = 'bg-white';
+        const cell = document.createElement('td');
+        cell.colSpan = 9;
+        cell.className = `px-4 py-6 text-center text-sm ${resolveToneClass(tone)}`;
+        cell.textContent = message;
+        row.appendChild(cell);
+        ajustesResultsBody.appendChild(row);
+    }
+
+    function updateAjustesSearchStatus(message, tone = 'info') {
+        if (!ajustesSearchStatus) return;
+        ajustesSearchStatus.className = `text-sm font-medium ${resolveToneClass(tone, 'text-gray-600')}`;
+        ajustesSearchStatus.textContent = message;
+    }
+
+    function updateAjustesEditStatus(message, tone = 'info') {
+        if (!ajustesEditStatus) return;
+        ajustesEditStatus.className = `text-sm font-medium ${resolveToneClass(tone, 'text-gray-600')}`;
+        ajustesEditStatus.textContent = message;
+    }
+
+    function resolveToneClass(tone, fallback = 'text-gray-500') {
+        const toneMap = {
+            info: 'text-gray-500',
+            warning: 'text-amber-600',
+            success: 'text-emerald-600',
+            error: 'text-red-600'
+        };
+        return toneMap[tone] || fallback;
+    }
+
+    function buildAjustesFiltersFromForm() {
+        const collectionKey = ajustesCollectionSelect?.value || 'production_entries';
+        const docId = ajustesDocIdInput?.value?.trim() || '';
+        const machineRaw = ajustesMachineInput?.value?.trim() || '';
+        const machine = machineRaw ? normalizeMachineId(machineRaw) : '';
+        const workday = ajustesWorkdayInput?.value || '';
+
+        return {
+            collectionKey,
+            docId,
+            machine,
+            workday
+        };
+    }
+
+    async function performAjustesSearch(filters, options = {}) {
+        const { silent = false, fromRefresh = false, preserveDocId = null } = options;
+        const config = AJUSTES_COLLECTIONS[filters.collectionKey] || AJUSTES_COLLECTIONS.production_entries;
+
+        if (!silent) {
+            updateAjustesSearchStatus('Buscando registros...', 'info');
+            renderAjustesPlaceholderRow('Consultando dados. Aguarde...', 'info');
+        }
+
+        ajustesSearchInFlight = true;
+
+        try {
+            const records = await fetchAjustesRecords(filters, config);
+            currentAjustesResults = records;
+
+            if (!records.length) {
+                renderAjustesPlaceholderRow('Nenhum registro encontrado com os filtros informados.', 'warning');
+                updateAjustesSearchStatus('Nenhum registro encontrado.', 'warning');
+                resetAjustesEditor();
+                return;
+            }
+
+            renderAjustesResults(records, preserveDocId);
+            updateAjustesSearchStatus(`${records.length} registro(s) carregado(s) da coleção ${config.label || config.collection}.`, 'success');
+
+            if (fromRefresh) {
+                updateAjustesEditStatus('Registros atualizados. Se necessário, selecione novamente para revisar os campos.', 'info');
+            }
+        } finally {
+            ajustesSearchInFlight = false;
+        }
+    }
+
+    async function fetchAjustesRecords(filters, config) {
+        const { docId, machine, workday } = filters;
+
+        if (docId) {
+            const docRef = db.collection(config.collection).doc(docId);
+            const snapshot = await docRef.get();
+            if (!snapshot.exists) {
+                throw new Error('Documento não encontrado.');
+            }
+            const record = buildAjustesResult(snapshot, config, filters.collectionKey);
+            if (config.filter && !config.filter(record.data)) {
+                return [];
+            }
+            if (machine && record.machine !== machine) {
+                return [];
+            }
+            if (workday && record.workday !== workday) {
+                return [];
+            }
+            return [record];
+        }
+
+        // Estratégia: se houver máquina ou workday, tenta filtrar. Caso contrário, carrega tudo.
+        let query = db.collection(config.collection);
+        let appliedFilter = false;
+
+        // Tenta filtrar por máquina (com fallback para campos alternativos)
+        if (machine && config.machineField) {
+            try {
+                const altQuery = db.collection(config.collection).where(config.machineField, '==', machine).limit(AJUSTES_DEFAULT_LIMIT);
+                const altSnapshot = await altQuery.get();
+                if (!altSnapshot.empty) {
+                    let altRecords = altSnapshot.docs.map((doc) => buildAjustesResult(doc, config, filters.collectionKey));
+                    if (config.filter) {
+                        altRecords = altRecords.filter((item) => config.filter(item.data));
+                    }
+                    if (workday) {
+                        altRecords = altRecords.filter((item) => item.workday === workday);
+                    }
+                    console.log(`[AJUSTES] Encontrados ${altRecords.length} registros para máquina ${machine} via campo ${config.machineField}`);
+                    return altRecords;
+                }
+            } catch (error) {
+                console.warn(`[AJUSTES] Falha ao consultar ${config.machineField}:`, error);
+            }
+
+            // Tenta campos alternativos de máquina
+            if (Array.isArray(config.altMachineFields) && config.altMachineFields.length) {
+                for (const altField of config.altMachineFields) {
+                    try {
+                        const altQuery = db.collection(config.collection).where(altField, '==', machine).limit(AJUSTES_DEFAULT_LIMIT);
+                        const altSnapshot = await altQuery.get();
+                        if (!altSnapshot.empty) {
+                            let altRecords = altSnapshot.docs.map((doc) => buildAjustesResult(doc, config, filters.collectionKey));
+                            if (config.filter) {
+                                altRecords = altRecords.filter((item) => config.filter(item.data));
+                            }
+                            if (workday) {
+                                altRecords = altRecords.filter((item) => item.workday === workday);
+                            }
+                            console.log(`[AJUSTES] Encontrados ${altRecords.length} registros para máquina ${machine} via campo alternativo ${altField}`);
+                            return altRecords;
+                        }
+                    } catch (error) {
+                        console.warn(`[AJUSTES] Falha ao consultar campo alternativo ${altField}:`, error);
+                    }
+                }
+            }
+        }
+
+        // Se houver workday, tenta filtrar por data
+        if (workday && Array.isArray(config.dateFields) && config.dateFields.length) {
+            try {
+                query = query.where(config.dateFields[0], '==', workday);
+                appliedFilter = true;
+            } catch (error) {
+                console.warn('[AJUSTES] Falha ao aplicar filtro de data:', error);
+            }
+        }
+
+        // Aplica ordenação se disponível
+        if (Array.isArray(config.orderCandidates) && config.orderCandidates.length) {
+            try {
+                query = query.orderBy(config.orderCandidates[0], 'desc');
+            } catch (error) {
+                console.warn('[AJUSTES] Não foi possível aplicar ordenação:', error);
+            }
+        }
+
+        query = query.limit(AJUSTES_DEFAULT_LIMIT);
+
+        const snapshot = await query.get();
+        let records = snapshot.docs.map((doc) => buildAjustesResult(doc, config, filters.collectionKey));
+
+        if (config.filter) {
+            records = records.filter((item) => config.filter(item.data));
+        }
+
+        // Filtros adicionais em memória
+        if (machine) {
+            records = records.filter((item) => item.machine === machine);
+        }
+
+        if (workday) {
+            records = records.filter((item) => item.workday === workday);
+        }
+
+        console.log(`[AJUSTES] Carregados ${records.length} registros após filtros adicionais`);
+        return records;
+    }
+
+    function buildAjustesResult(docSnapshot, config, collectionKey) {
+        const data = docSnapshot.data() || {};
+        const machine = resolveMachineFromData(data, config);
+        const workday = resolveWorkdayFromData(data, config);
+        const turno = resolveShiftLabel(data, config);
+        const executed = resolveNumericField(data, config.executedField);
+        const planned = resolveNumericField(data, config.plannedField);
+        const lossesKg = resolveNumericField(data, config.lossesKgField);
+        const lossesPcs = resolveNumericField(data, config.lossesPcsField);
+        const description = typeof config.descriptionBuilder === 'function' ? config.descriptionBuilder(data) : '';
+        const timestamp = resolveTimestampFromData(data, config);
+
+        return {
+            id: docSnapshot.id,
+            collection: config.collection,
+            collectionKey,
+            label: config.label || config.collection,
+            data,
+            machine,
+            workday,
+            turno,
+            executed,
+            planned,
+            lossesKg,
+            lossesPcs,
+            description,
+            timestamp
+        };
+    }
+
+    function renderAjustesResults(records, preserveDocId = null) {
+        if (!ajustesResultsBody) return;
+        ajustesResultsBody.innerHTML = '';
+
+        records.forEach((record, index) => {
+            const qtySegments = [];
+            if (record.executed !== null && !Number.isNaN(record.executed)) {
+                qtySegments.push(`${formatPieces(record.executed)} pcs`);
+            }
+            if (record.lossesKg !== null && !Number.isNaN(record.lossesKg)) {
+                qtySegments.push(`${formatKg(record.lossesKg)} kg refugo`);
+            }
+            if (record.lossesPcs !== null && !Number.isNaN(record.lossesPcs)) {
+                qtySegments.push(`${formatPieces(record.lossesPcs)} peças refugo`);
+            }
+            const qtyDisplay = qtySegments.length ? qtySegments.join(' • ') : '-';
+            const plannedDisplay = record.planned !== null && !Number.isNaN(record.planned)
+                ? `${formatPieces(record.planned)} un`
+                : '-';
+            const timestampDisplay = record.timestamp ? formatTimestamp(record.timestamp) : '-';
+
+            const row = document.createElement('tr');
+            row.className = 'ajustes-result-row hover:bg-amber-50 transition';
+            row.dataset.index = index;
+
+            row.innerHTML = `
+                <td class="px-3 py-2 text-left font-medium text-gray-700">${escapeHtml(record.label)}</td>
+                <td class="px-3 py-2 text-left text-xs break-all text-gray-600">${escapeHtml(record.id)}</td>
+                <td class="px-3 py-2 text-left text-gray-700">${escapeHtml(record.machine || '-')}</td>
+                <td class="px-3 py-2 text-left text-gray-700">${escapeHtml(record.workday || '-')}<div class="text-xs text-gray-400">${escapeHtml(timestampDisplay)}</div></td>
+                <td class="px-3 py-2 text-left text-gray-700">${escapeHtml(record.turno || '-')}</td>
+                <td class="px-3 py-2 text-left text-sm text-gray-700">${escapeHtml(record.description || '-')}</td>
+                <td class="px-3 py-2 text-right text-gray-700">${qtyDisplay}</td>
+                <td class="px-3 py-2 text-right text-gray-700">${plannedDisplay}</td>
+                <td class="px-3 py-2 text-left">
+                    <button type="button" class="ajustes-select-record inline-flex items-center gap-1 px-3 py-1.5 bg-amber-600 text-white rounded-md text-xs font-semibold hover:bg-amber-700 transition" data-index="${index}">
+                        <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                        Ajustar
+                    </button>
+                </td>
+            `;
+
+            ajustesResultsBody.appendChild(row);
+        });
+
+        lucide.createIcons();
+
+        if (preserveDocId) {
+            const selectedIndex = records.findIndex((item) => item.id === preserveDocId);
+            if (selectedIndex >= 0) {
+                loadAjustesRecordForEditing(records[selectedIndex]);
+            }
+        }
+    }
+
+    function handleAjustesResultClick(event) {
+        const trigger = event.target.closest('.ajustes-select-record');
+        if (!trigger) return;
+
+        const index = Number(trigger.dataset.index);
+        if (!Number.isFinite(index) || index < 0 || index >= currentAjustesResults.length) {
+            console.warn('[AJUSTES] Índice inválido selecionado:', index);
+            return;
+        }
+
+        loadAjustesRecordForEditing(currentAjustesResults[index]);
+    }
+
+    function loadAjustesRecordForEditing(record) {
+        if (!record) return;
+        const config = AJUSTES_COLLECTIONS[record.collectionKey];
+        toggleAjustesInputsByConfig(config);
+
+        ajustesEditId.value = record.id;
+        ajustesEditCollection.value = record.collectionKey;
+        ajustesEditOriginal.value = JSON.stringify(record.data || {});
+        ajustesEditMachine.value = record.machine || '--';
+        ajustesEditDate.value = record.workday || '-';
+
+        if (config?.editorConfig?.executed && ajustesEditExecuted) {
+            ajustesEditExecuted.value = record.executed !== null && !Number.isNaN(record.executed) ? record.executed : '';
+        } else if (ajustesEditExecuted) {
+            ajustesEditExecuted.value = '';
+        }
+
+        if (config?.editorConfig?.planned && ajustesEditPlanned) {
+            ajustesEditPlanned.value = record.planned !== null && !Number.isNaN(record.planned) ? record.planned : '';
+        } else if (ajustesEditPlanned) {
+            ajustesEditPlanned.value = '';
+        }
+
+        if (config?.editorConfig?.lossesKg && ajustesEditLossesKg) {
+            ajustesEditLossesKg.value = record.lossesKg !== null && !Number.isNaN(record.lossesKg) ? record.lossesKg : '';
+        } else if (ajustesEditLossesKg) {
+            ajustesEditLossesKg.value = '';
+        }
+
+        if (config?.editorConfig?.lossesPcs && ajustesEditLossesPcs) {
+            ajustesEditLossesPcs.value = record.lossesPcs !== null && !Number.isNaN(record.lossesPcs) ? record.lossesPcs : '';
+        } else if (ajustesEditLossesPcs) {
+            ajustesEditLossesPcs.value = '';
+        }
+
+        if (ajustesEditNotes) ajustesEditNotes.value = '';
+
+        updateAjustesEditStatus(
+            config?.supportsEditing
+                ? 'Revise os campos, descreva o motivo e clique em Salvar ajuste.'
+                : 'Este registro é apenas para consulta. Ajustes indisponíveis.',
+            config?.supportsEditing ? 'info' : 'warning'
+        );
+
+        highlightSelectedAjustesRow(record);
+        loadAjustesLogsForRecord(record).catch((error) => {
+            console.warn('[AJUSTES] Falha ao carregar logs de auditoria:', error);
+            renderAjustesLogPlaceholder('Erro ao carregar logs de auditoria. Verifique o console.', 'error');
+        });
+    }
+
+    function attachAjustesTableListener() {
+        if (ajustesResultsBody && !ajustesResultsBody.dataset.listenerAttached) {
+            ajustesResultsBody.addEventListener('click', handleAjustesResultClick);
+            ajustesResultsBody.dataset.listenerAttached = 'true';
+        }
+    }
+
+    function toggleAjustesInputsByConfig(config) {
+        const controls = [
+            { el: ajustesEditExecuted, enabled: Boolean(config?.editorConfig?.executed) },
+            { el: ajustesEditPlanned, enabled: Boolean(config?.editorConfig?.planned) },
+            { el: ajustesEditLossesKg, enabled: Boolean(config?.editorConfig?.lossesKg) },
+            { el: ajustesEditLossesPcs, enabled: Boolean(config?.editorConfig?.lossesPcs) }
+        ];
+
+        controls.forEach(({ el, enabled }) => {
+            if (!el) return;
+            el.dataset.disabledByConfig = enabled ? 'false' : 'true';
+            el.disabled = !enabled;
+            el.classList.toggle('bg-gray-100', !enabled);
+        });
+
+        if (ajustesEditNotes) {
+            ajustesEditNotes.disabled = false;
+            ajustesEditNotes.classList.remove('bg-gray-100');
+        }
+    }
+
+    function setAjustesFormDisabled(state) {
+        const controls = [
+            ajustesEditExecuted,
+            ajustesEditPlanned,
+            ajustesEditLossesKg,
+            ajustesEditLossesPcs,
+            ajustesEditNotes
+        ];
+
+        controls.forEach((el) => {
+            if (!el) return;
+            const lockedByConfig = el.dataset.disabledByConfig === 'true';
+            el.disabled = state || lockedByConfig;
+        });
+    }
+
+    function resolveMachineFromData(data, config) {
+        if (!data || !config) return null;
+        if (config.machineField && data[config.machineField]) {
+            return normalizeMachineId(data[config.machineField]);
+        }
+        if (Array.isArray(config.altMachineFields)) {
+            for (const field of config.altMachineFields) {
+                if (data[field]) return normalizeMachineId(data[field]);
+            }
+        }
+        if (data.machine) return normalizeMachineId(data.machine);
+        if (data.machine_id) return normalizeMachineId(data.machine_id);
+        return null;
+    }
+
+    function resolveWorkdayFromData(data, config) {
+        if (!data) return null;
+        const candidates = [...(config?.dateFields || []), 'workDay', 'data', 'date'];
+        for (const field of candidates) {
+            const value = data[field];
+            if (typeof value === 'string' && value.length >= 8) return value;
+            if (value instanceof Date && !Number.isNaN(value.getTime())) {
+                return formatDateYMD(value);
+            }
+            if (value && typeof value.toDate === 'function') {
+                try {
+                    return formatDateYMD(value.toDate());
+                } catch (error) {
+                    console.warn('[AJUSTES] Falha ao converter campo de data:', field, error);
+                }
+            }
+        }
+        return null;
+    }
+
+    function resolveShiftLabel(data, config) {
+        if (!data) return null;
+        const field = config?.turnoField || 'turno';
+        const value = data[field];
+        if (value === undefined || value === null) return null;
+        const numeric = Number(value);
+        if (Number.isFinite(numeric) && numeric >= 1 && numeric <= 3) {
+            return `${numeric}º Turno`;
+        }
+        if (typeof value === 'string' && value.trim()) return value.trim();
+        return null;
+    }
+
+    function resolveNumericField(data, field) {
+        if (!data || !field) return null;
+        const value = data[field];
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) return null;
+        return numeric;
+    }
+
+    function resolveTimestampFromData(data, config) {
+        const candidates = [...(config?.orderCandidates || []), 'timestamp', 'createdAt', 'updatedAt'];
+        for (const field of candidates) {
+            const value = data[field];
+            if (value && typeof value.toDate === 'function') {
+                try {
+                    return value.toDate();
+                } catch (error) {
+                    console.warn('[AJUSTES] Não foi possível converter timestamp:', field, error);
+                }
+            }
+        }
+        return null;
+    }
+
+    function formatPieces(value) {
+        return Number(value).toLocaleString('pt-BR');
+    }
+
+    function formatKg(value) {
+        return Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+    }
+
+    function formatTimestamp(date) {
+        if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '-';
+        return date.toLocaleString('pt-BR');
+    }
+
+    function highlightSelectedAjustesRow(recordOrIndex) {
+        const rows = ajustesResultsBody?.querySelectorAll('tr.ajustes-result-row') || [];
+        rows.forEach((row) => row.classList.remove('ring', 'ring-amber-400', 'bg-amber-50/60'));
+
+        let targetIndex = -1;
+        if (typeof recordOrIndex === 'number') {
+            targetIndex = recordOrIndex;
+        } else if (recordOrIndex && typeof recordOrIndex === 'object') {
+            targetIndex = currentAjustesResults.findIndex(
+                (item) => item.id === recordOrIndex.id && item.collectionKey === recordOrIndex.collectionKey
+            );
+        }
+
+        if (targetIndex >= 0 && targetIndex < rows.length) {
+            const row = rows[targetIndex];
+            row.classList.add('ring', 'ring-amber-400', 'bg-amber-50/60');
+        }
+    }
+
+    function extractAjustesPayloadFromForm(config) {
+        const payload = {};
+
+        if (config?.editorConfig?.executed && ajustesEditExecuted) {
+            payload[config.executedField || 'produzido'] = parseOptionalNumber(ajustesEditExecuted.value);
+        }
+
+        if (config?.editorConfig?.planned && ajustesEditPlanned) {
+            payload[config.plannedField || 'planned_quantity'] = parseOptionalNumber(ajustesEditPlanned.value);
+        }
+
+        if (config?.editorConfig?.lossesKg && ajustesEditLossesKg) {
+            payload[config.lossesKgField || 'refugo_kg'] = parseOptionalFloat(ajustesEditLossesKg.value, 3);
+        }
+
+        if (config?.editorConfig?.lossesPcs && ajustesEditLossesPcs) {
+            payload[config.lossesPcsField || 'refugo_qty'] = parseOptionalNumber(ajustesEditLossesPcs.value);
+        }
+
+        return payload;
+    }
+
+    function parseOptionalFloat(value, decimals = 2) {
+        if (value === null || value === undefined || value === '') return null;
+        const numeric = parseFloat(value);
+        if (!Number.isFinite(numeric)) return null;
+        return Number(numeric.toFixed(decimals));
+    }
+
+    function computeAjustesDiff(originalData, newPayload) {
+        const changedFields = [];
+        const updates = {};
+
+        Object.entries(newPayload).forEach(([field, value]) => {
+            const originalValue = originalData ? originalData[field] : undefined;
+            const normalizedOriginal = normalizeValueForComparison(originalValue);
+            const normalizedNew = normalizeValueForComparison(value);
+
+            if (normalizedOriginal === normalizedNew) {
+                return;
+            }
+
+            changedFields.push(field);
+            updates[field] = value === null ? firebase.firestore.FieldValue.delete() : value;
+        });
+
+        return { changedFields, updates };
+    }
+
+    function normalizeValueForComparison(value) {
+        if (value === undefined || value === null) return null;
+        if (typeof value === 'number') return Number(value.toFixed(6));
+        if (typeof value === 'string') return value.trim();
+        if (value instanceof Date) return value.getTime();
+        if (value && typeof value.toDate === 'function') {
+            try {
+                return value.toDate().getTime();
+            } catch (error) {
+                console.warn('[AJUSTES] Falha ao normalizar valor para comparação:', error);
+            }
+        }
+        return value;
+    }
+
+    async function applyAjusteTransaction(config, docId, payload, diff, observation) {
+        const docRef = db.collection(config.collection).doc(docId);
+        const currentUser = getActiveUser();
+        const userName = getCurrentUserName();
+
+        return db.runTransaction(async (transaction) => {
+            const snapshot = await transaction.get(docRef);
+            if (!snapshot.exists) {
+                throw new Error('Documento não encontrado durante o ajuste.');
+            }
+
+            const beforeState = snapshot.data() || {};
+            const afterState = { ...beforeState };
+
+            diff.changedFields.forEach((field) => {
+                const newValue = payload[field];
+                if (newValue === null || newValue === undefined) {
+                    delete afterState[field];
+                } else {
+                    afterState[field] = newValue;
+                }
+            });
+
+            const updates = {
+                ...diff.updates,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                lastManualAdjustment: {
+                    executedBy: currentUser?.username || currentUser?.email || 'desconhecido',
+                    executedByName: userName || 'Desconhecido',
+                    executedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    notes: observation,
+                    fields: diff.changedFields
+                }
+            };
+
+            transaction.update(docRef, updates);
+
+            return { beforeState, afterState };
+        });
+    }
+
+    async function registerAjusteLog(config, docId, diff, observation, beforeState, afterState) {
+        if (!diff || diff.changedFields.length === 0) return;
+
+        const currentUser = getActiveUser();
+        const userName = getCurrentUserName();
+
+        const logEntry = {
+            docPath: `${config.collection}/${docId}`,
+            docId,
+            collection: config.collection,
+            collectionKey: config.key,
+            changedFields: diff.changedFields,
+            notes: observation,
+            executedBy: currentUser?.username || currentUser?.email || 'desconhecido',
+            executedByName: userName || 'Desconhecido',
+            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            beforeSnapshot: beforeState || null,
+            afterSnapshot: afterState || null
+        };
+
+        const beforeFields = {};
+        const afterFields = {};
+        diff.changedFields.forEach((field) => {
+            beforeFields[field] = sanitizeLogValue(beforeState ? beforeState[field] : null);
+            afterFields[field] = sanitizeLogValue(afterState ? afterState[field] : null);
+        });
+        logEntry.beforeFields = beforeFields;
+        logEntry.afterFields = afterFields;
+
+        await db.collection(AJUSTES_LOG_COLLECTION).add(logEntry);
+    }
+
+    async function loadAjustesLogsForRecord(record) {
+        renderAjustesLogPlaceholder('Carregando auditoria...');
+        const docPath = `${record.collection}/${record.id}`;
+
+        try {
+            let query = db.collection(AJUSTES_LOG_COLLECTION)
+                .where('docPath', '==', docPath)
+                .orderBy('timestamp', 'desc')
+                .limit(20);
+
+            let snapshot;
+            try {
+                snapshot = await query.get();
+            } catch (error) {
+                console.warn('[AJUSTES] Falha ao ordenar logs (possível índice ausente). Tentando fallback.', error);
+                query = db.collection(AJUSTES_LOG_COLLECTION)
+                    .where('docPath', '==', docPath)
+                    .limit(20);
+                snapshot = await query.get();
+            }
+
+            const logs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+            if (!logs.length) {
+                renderAjustesLogPlaceholder('Nenhum ajuste registrado ainda para este documento.');
+                return;
+            }
+
+            renderAjustesLogEntries(logs);
+        } catch (error) {
+            console.error('[AJUSTES] Erro ao carregar logs de auditoria:', error);
+            renderAjustesLogPlaceholder('Erro ao carregar logs de auditoria. Verifique o console.', 'error');
+        }
+    }
+
+    function renderAjustesLogEntries(logs) {
+        if (!ajustesLogBody) return;
+        ajustesLogBody.innerHTML = '';
+
+        logs.forEach((log) => {
+            const timestamp = log.timestamp && typeof log.timestamp.toDate === 'function'
+                ? formatTimestamp(log.timestamp.toDate())
+                : '-';
+            const fields = Array.isArray(log.changedFields) ? log.changedFields.join(', ') : '-';
+            const beforeFields = formatLogFields(log.beforeFields);
+            const afterFields = formatLogFields(log.afterFields);
+            const notes = log.notes ? escapeHtml(log.notes) : '-';
+
+            const row = document.createElement('tr');
+            row.className = 'bg-white hover:bg-gray-50';
+            row.innerHTML = `
+                <td class="px-3 py-2 text-sm text-gray-700">${escapeHtml(timestamp)}</td>
+                <td class="px-3 py-2 text-sm text-gray-700">${escapeHtml(log.executedByName || log.executedBy || '-')}</td>
+                <td class="px-3 py-2 text-sm text-gray-700">${escapeHtml(log.collectionKey || '-')}</td>
+                <td class="px-3 py-2 text-sm text-gray-700">${escapeHtml(log.docId || '-')}</td>
+                <td class="px-3 py-2 text-sm text-gray-700">${escapeHtml(fields)}</td>
+                <td class="px-3 py-2 text-xs text-gray-600">${beforeFields}</td>
+                <td class="px-3 py-2 text-xs text-gray-600">${afterFields}</td>
+                <td class="px-3 py-2 text-xs text-gray-600">${notes}</td>
+            `;
+            ajustesLogBody.appendChild(row);
+        });
+    }
+
+    function formatLogFields(fields) {
+        if (!fields || typeof fields !== 'object') return '-';
+        return Object.entries(fields)
+            .map(([field, value]) => `${field}: ${value === null || value === undefined ? '∅' : escapeHtml(String(value))}`)
+            .join(' • ');
+    }
+
+    function renderAjustesLogPlaceholder(message, tone = 'info') {
+        if (!ajustesLogBody) return;
+        ajustesLogBody.innerHTML = '';
+        const row = document.createElement('tr');
+        const cell = document.createElement('td');
+        cell.colSpan = 8;
+        cell.className = `px-4 py-6 text-center text-sm ${resolveToneClass(tone)}`;
+        cell.textContent = message;
+        row.appendChild(cell);
+        ajustesLogBody.appendChild(row);
+    }
+
+    function getFriendlyErrorMessage(error) {
+        if (!error) return 'Erro desconhecido. Verifique o console.';
+        if (typeof error === 'string') return error;
+        if (error.code === 'permission-denied') {
+            return 'Permissão negada para ajustar este registro.';
+        }
+        if (error.message) return error.message;
+        return 'Erro inesperado. Consulte o console para detalhes.';
+    }
+
+    function sanitizeLogValue(value) {
+        if (value === undefined || value === null) return null;
+        if (typeof value === 'number') return Number(value.toFixed(6));
+        if (typeof value === 'string') return value.trim();
+        if (value instanceof Date) return value.toISOString();
+        if (value && typeof value.toDate === 'function') {
+            try {
+                return value.toDate().toISOString();
+            } catch (error) {
+                console.warn('[AJUSTES] Falha ao converter timestamp para log:', error);
+                return null;
+            }
+        }
+        if (typeof value === 'object') {
+            try {
+                return JSON.stringify(value);
+            } catch (error) {
+                console.warn('[AJUSTES] Falha ao serializar valor para log:', error);
+            }
+        }
+        return value;
+    }
+
+    async function loadAjustesMachinesList() {
+        const datalist = document.getElementById('ajustes-machines-list');
+        if (!datalist) return;
+
+        try {
+            const machinesSet = new Set();
+
+            // Buscar máquinas de production_entries
+            try {
+                const prodSnapshot = await db.collection('production_entries').limit(50).get();
+                prodSnapshot.docs.forEach((doc) => {
+                    const data = doc.data();
+                    const machine = resolveMachineFromData(data, AJUSTES_COLLECTIONS.production_entries);
+                    if (machine) machinesSet.add(machine);
+                });
+            } catch (error) {
+                console.warn('[AJUSTES] Erro ao carregar máquinas de production_entries:', error);
+            }
+
+            // Buscar máquinas de planning
+            try {
+                const planSnapshot = await db.collection('planning').limit(50).get();
+                planSnapshot.docs.forEach((doc) => {
+                    const data = doc.data();
+                    if (data.machine) machinesSet.add(normalizeMachineId(data.machine));
+                });
+            } catch (error) {
+                console.warn('[AJUSTES] Erro ao carregar máquinas de planning:', error);
+            }
+
+            // Buscar máquinas de production_orders
+            try {
+                const ordersSnapshot = await db.collection('production_orders').limit(50).get();
+                ordersSnapshot.docs.forEach((doc) => {
+                    const data = doc.data();
+                    const machine = resolveMachineFromData(data, AJUSTES_COLLECTIONS.production_orders);
+                    if (machine) machinesSet.add(machine);
+                });
+            } catch (error) {
+                console.warn('[AJUSTES] Erro ao carregar máquinas de production_orders:', error);
+            }
+
+            // Popular datalist
+            datalist.innerHTML = '';
+            Array.from(machinesSet).sort().forEach((machine) => {
+                const option = document.createElement('option');
+                option.value = machine;
+                datalist.appendChild(option);
+            });
+
+            console.log(`[AJUSTES] Carregadas ${machinesSet.size} máquinas únicas disponíveis`);
+        } catch (error) {
+            console.error('[AJUSTES] Erro ao carregar lista de máquinas:', error);
+        }
+    }
+
+    async function diagnosticAjustesMachines() {
+        console.log('[AJUSTES-DIAG] Iniciando diagnóstico de máquinas disponíveis...');
+
+        try {
+            console.log('[AJUSTES-DIAG] === PRODUCTION ENTRIES ===');
+            const prodSnapshot = await db.collection('production_entries').limit(10).get();
+            console.log(`Encontrados ${prodSnapshot.size} documentos. Máquinas (raw):`);
+            prodSnapshot.docs.forEach((doc) => {
+                const data = doc.data();
+                console.log(`  ID: ${doc.id}, machine: ${data.machine}, machine_id: ${data.machine_id}, maquina: ${data.maquina}`);
+            });
+
+            console.log('[AJUSTES-DIAG] === PLANNING ===');
+            const planSnapshot = await db.collection('planning').limit(10).get();
+            console.log(`Encontrados ${planSnapshot.size} documentos. Máquinas (raw):`);
+            planSnapshot.docs.forEach((doc) => {
+                const data = doc.data();
+                console.log(`  ID: ${doc.id}, machine: ${data.machine}`);
+            });
+
+            console.log('[AJUSTES-DIAG] === PRODUCTION ORDERS ===');
+            const ordersSnapshot = await db.collection('production_orders').limit(10).get();
+            console.log(`Encontrados ${ordersSnapshot.size} documentos. Máquinas (raw):`);
+            ordersSnapshot.docs.forEach((doc) => {
+                const data = doc.data();
+                console.log(`  ID: ${doc.id}, machine_id: ${data.machine_id}, machine: ${data.machine}, machineId: ${data.machineId}`);
+            });
+        } catch (error) {
+            console.error('[AJUSTES-DIAG] Erro no diagnóstico:', error);
         }
     }
 
@@ -7903,6 +9459,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (sidebar && sidebarOverlay) {
             sidebar.classList.remove('-translate-x-full');
             sidebarOverlay.classList.remove('hidden');
+            sidebar.setAttribute('aria-hidden', 'false');
+            sidebarOverlay.setAttribute('aria-hidden', 'false');
             if (sidebarOpenBtn) {
                 sidebarOpenBtn.classList.add('is-active');
                 sidebarOpenBtn.setAttribute('aria-expanded', 'true');
@@ -7914,6 +9472,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (sidebar && sidebarOverlay) {
             sidebar.classList.add('-translate-x-full');
             sidebarOverlay.classList.add('hidden');
+            sidebar.setAttribute('aria-hidden', 'true');
+            sidebarOverlay.setAttribute('aria-hidden', 'true');
             if (sidebarOpenBtn) {
                 sidebarOpenBtn.classList.remove('is-active');
                 sidebarOpenBtn.setAttribute('aria-expanded', 'false');
@@ -11994,35 +13554,236 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         const currentShift = getCurrentShift();
         const dataReferencia = getProductionDateString();
-    const currentUser = getActiveUser();
+        const currentUser = getActiveUser();
 
-        const reworkData = {
-            planId,
-            data: dataReferencia,
-            turno: currentShift,
-            quantidade: quantity,
-            peso_kg: weight > 0 ? weight : null,
-            motivo: reason,
-            observacoes: observations,
-            machine: selectedMachineData.machine || null,
-            mp: selectedMachineData.mp || '',
-            registradoPor: currentUser.username || null,
-            registradoPorNome: getCurrentUserName(),
-            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        };
-
-        console.log('[TRACE][handleReworkSubmit] prepared rework data', reworkData);
+        console.log('[TRACE][handleReworkSubmit] starting rework submission');
 
         try {
-            await db.collection('rework_entries').add(reworkData);
+            const machineId = selectedMachineData.machine || '';
+            const shiftKey = `T${currentShift}`;
+            const productionDocsMap = new Map();
+            const dateFields = ['data', 'workDay'];
+            const shiftVariants = [currentShift, shiftKey, String(currentShift)];
+
+            for (const field of dateFields) {
+                for (const shiftVariant of shiftVariants) {
+                    try {
+                        const snapshot = await db.collection('production_entries')
+                            .where('machine', '==', machineId)
+                            .where(field, '==', dataReferencia)
+                            .where('turno', '==', shiftVariant)
+                            .get();
+
+                        if (!snapshot.empty) {
+                            console.log(`[TRACE][handleReworkSubmit] found ${snapshot.size} production entries via ${field}/${shiftVariant}`);
+                            snapshot.docs.forEach((doc) => productionDocsMap.set(doc.id, doc));
+                        }
+                    } catch (queryError) {
+                        console.warn(`[TRACE][handleReworkSubmit] query failed for ${field}/${shiftVariant}`, queryError);
+                    }
+                }
+            }
+
+            const productionDocs = Array.from(productionDocsMap.values());
+            console.log(`[TRACE][handleReworkSubmit] total candidate production docs: ${productionDocs.length}`);
+
+            const transactionResult = await db.runTransaction(async (transaction) => {
+                const reworkRef = db.collection('rework_entries').doc();
+                let totalDeducted = 0;
+                let adjustedDocs = 0;
+
+                for (const doc of productionDocs) {
+                    const freshSnapshot = await transaction.get(doc.ref);
+                    if (!freshSnapshot.exists) {
+                        console.warn(`[TRACE][handleReworkSubmit] skipping missing production doc ${doc.id}`);
+                        continue;
+                    }
+
+                    const prodData = freshSnapshot.data() || {};
+                    const docShiftKey = normalizeShiftValue(prodData.turno);
+                    if (docShiftKey && docShiftKey !== shiftKey) {
+                        console.log(`[TRACE][handleReworkSubmit] skipping production doc ${doc.id} for shift ${docShiftKey}`);
+                        continue;
+                    }
+
+                    const currentQty = Number(prodData.produzido ?? prodData.quantity ?? prodData.quantidade ?? 0) || 0;
+                    if (currentQty <= 0) {
+                        console.log(`[TRACE][handleReworkSubmit] skipping production doc ${doc.id} (current quantity <= 0)`);
+                        continue;
+                    }
+
+                    const newQty = Math.max(0, currentQty - quantity);
+                    const deducted = currentQty - newQty;
+                    if (deducted <= 0) {
+                        console.log(`[TRACE][handleReworkSubmit] no deduction applied to doc ${doc.id} (current=${currentQty}, requested=${quantity})`);
+                        continue;
+                    }
+
+                    totalDeducted += deducted;
+                    adjustedDocs += 1;
+
+                    const updatePayload = {
+                        produzido: newQty,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        lastAdjustment: {
+                            type: 'rework_deduction',
+                            requestedQty: quantity,
+                            appliedQty: deducted,
+                            previousQty: currentQty,
+                            newQty,
+                            shift: shiftKey,
+                            reworkTurn: currentShift,
+                            reworkWorkDay: dataReferencia,
+                            adjustedBy: currentUser.username || currentUser.email || 'sistema',
+                            adjustedByName: getCurrentUserName(),
+                            adjustedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                            reason: reason,
+                            observations: observations
+                        }
+                    };
+
+                    const aliasFields = ['quantity', 'quantidade', 'executed', 'executedQty', 'executedQuantity', 'finalQuantity'];
+                    aliasFields.forEach((field) => {
+                        if (Object.prototype.hasOwnProperty.call(prodData, field)) {
+                            updatePayload[field] = newQty;
+                        }
+                    });
+
+                    transaction.update(doc.ref, updatePayload);
+                    console.log(`[TRACE][handleReworkSubmit] adjusted production doc ${doc.id}: ${currentQty} -> ${newQty} (deducted ${deducted})`);
+                }
+
+                if (totalDeducted > 0) {
+                    try {
+                        const planRef = db.collection('planning').doc(planId);
+                        const planSnapshot = await transaction.get(planRef);
+                        if (planSnapshot.exists) {
+                            const planData = planSnapshot.data() || {};
+                            const planUpdate = {};
+                            const planShiftData = planData[shiftKey];
+
+                            if (planShiftData && typeof planShiftData === 'object') {
+                                const planShiftCurrent = Number(planShiftData.produzido ?? planShiftData.quantity ?? planShiftData.quantidade ?? 0) || 0;
+                                const planShiftNew = Math.max(0, planShiftCurrent - totalDeducted);
+                                planUpdate[`${shiftKey}.produzido`] = planShiftNew;
+                                if (Object.prototype.hasOwnProperty.call(planShiftData, 'quantity')) {
+                                    planUpdate[`${shiftKey}.quantity`] = planShiftNew;
+                                }
+                                if (Object.prototype.hasOwnProperty.call(planShiftData, 'quantidade')) {
+                                    planUpdate[`${shiftKey}.quantidade`] = planShiftNew;
+                                }
+                            }
+
+                            ['total_produzido', 'totalProduced', 'executed_total', 'produzido_total'].forEach((field) => {
+                                if (planData[field] !== undefined) {
+                                    const currentTotal = Number(planData[field]) || 0;
+                                    planUpdate[field] = Math.max(0, currentTotal - totalDeducted);
+                                }
+                            });
+
+                            if (Object.keys(planUpdate).length > 0) {
+                                planUpdate.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+                                transaction.update(planRef, planUpdate);
+                                console.log(`[TRACE][handleReworkSubmit] plan ${planId} updated (deducted ${totalDeducted})`);
+                            }
+                        }
+                    } catch (planError) {
+                        console.warn('[TRACE][handleReworkSubmit] failed to update plan totals during rework', planError);
+                    }
+
+                    const resolveOrderId = () => {
+                        const candidates = [
+                            selectedMachineData.order_id,
+                            selectedMachineData.production_order_id,
+                            selectedMachineData.production_order,
+                            selectedMachineData.orderId
+                        ];
+                        for (const candidate of candidates) {
+                            if (!candidate) continue;
+                            const trimmed = String(candidate).trim();
+                            if (trimmed) return trimmed;
+                        }
+                        return null;
+                    };
+
+                    const linkedOrderId = resolveOrderId();
+                    if (linkedOrderId) {
+                        try {
+                            const orderRef = db.collection('production_orders').doc(linkedOrderId);
+                            const orderSnapshot = await transaction.get(orderRef);
+                            if (orderSnapshot.exists) {
+                                const orderData = orderSnapshot.data() || {};
+                                const orderUpdate = {};
+                                const currentOrderTotal = Number(orderData.total_produzido ?? orderData.totalProduced ?? 0) || 0;
+                                const newOrderTotal = Math.max(0, currentOrderTotal - totalDeducted);
+
+                                if ('total_produzido' in orderData || !('totalProduced' in orderData)) {
+                                    orderUpdate.total_produzido = newOrderTotal;
+                                }
+                                if ('totalProduced' in orderData) {
+                                    orderUpdate.totalProduced = newOrderTotal;
+                                }
+
+                                if (orderData.last_progress && typeof orderData.last_progress === 'object') {
+                                    const lastProgressExecuted = Number(orderData.last_progress.executed ?? orderData.last_progress.total ?? 0) || 0;
+                                    const newLastExecuted = Math.max(0, lastProgressExecuted - totalDeducted);
+                                    orderUpdate['last_progress.executed'] = newLastExecuted;
+                                    orderUpdate['last_progress.updatedAt'] = firebase.firestore.FieldValue.serverTimestamp();
+                                }
+
+                                if (Object.keys(orderUpdate).length > 0) {
+                                    orderUpdate.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+                                    transaction.update(orderRef, orderUpdate);
+                                    console.log(`[TRACE][handleReworkSubmit] production order ${linkedOrderId} updated (deducted ${totalDeducted})`);
+                                }
+                            }
+                        } catch (orderError) {
+                            console.warn('[TRACE][handleReworkSubmit] failed to update production order totals during rework', orderError);
+                        }
+                    }
+                }
+
+                const reworkData = {
+                    planId,
+                    data: dataReferencia,
+                    turno: currentShift,
+                    shiftKey,
+                    quantidade: quantity,
+                    appliedQuantity: totalDeducted,
+                    documentosAjustados: adjustedDocs,
+                    peso_kg: weight > 0 ? weight : null,
+                    motivo: reason,
+                    observacoes: observations,
+                    machine: selectedMachineData.machine || null,
+                    mp: selectedMachineData.mp || '',
+                    registradoPor: currentUser.username || null,
+                    registradoPorNome: getCurrentUserName(),
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+
+                transaction.set(reworkRef, reworkData);
+                console.log(`[TRACE][handleReworkSubmit] rework document prepared (adjustedDocs=${adjustedDocs}, totalDeducted=${totalDeducted})`);
+
+                return { totalDeducted, adjustedDocs };
+            });
 
             closeModal('quick-rework-modal');
-            await loadRecentEntries(false);
-            await refreshAnalysisIfActive();
+            await populateMachineSelector();
+            await Promise.all([
+                loadTodayStats(),
+                refreshLaunchCharts(),
+                loadRecentEntries(false),
+                refreshAnalysisIfActive()
+            ]);
 
-            showNotification('Retrabalho registrado com sucesso!', 'success');
-            console.log('[TRACE][handleReworkSubmit] success path completed');
+            if (transactionResult?.totalDeducted > 0) {
+                showNotification('Retrabalho registrado e quantidade ajustada com sucesso!', 'success');
+            } else {
+                showNotification('Retrabalho registrado. Nenhum lançamento de produção foi ajustado para este turno.', 'warning');
+            }
+
+            console.log('[TRACE][handleReworkSubmit] success path completed', transactionResult);
         } catch (error) {
             console.error('Erro ao registrar retrabalho:', error);
             alert('Erro ao registrar retrabalho. Tente novamente.');
