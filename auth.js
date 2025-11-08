@@ -121,20 +121,17 @@ class AuthSystem {
     canAccessTab(tabName) {
         if (!this.currentUser) return false;
         
-        // ⚙️ ACESSO EXCLUSIVO: Aba Qualidade apenas para Leandro Camargo
-        if (tabName === 'qualidade') {
-            const isLeandroCamargo = this.currentUser.name === 'Leandro Camargo' || this.currentUser.email === 'leandro@hokkaido.com.br';
-            if (!isLeandroCamargo) {
-                return false;
-            }
-        }
+        const isLeandroCamargo = this.currentUser.name === 'Leandro Camargo' || this.currentUser.email === 'leandro@hokkaido.com.br';
         
-        // ⚙️ ACESSO EXCLUSIVO: Aba Teste apenas para Leandro Camargo
-        if (tabName === 'teste') {
-            const isLeandroCamargo = this.currentUser.name === 'Leandro Camargo' || this.currentUser.email === 'leandro@hokkaido.com.br';
-            if (!isLeandroCamargo) {
-                return false;
-            }
+        // ⚙️ ACESSO EXCLUSIVO: Abas restritas apenas para Leandro Camargo
+        if (tabName === 'qualidade' && !isLeandroCamargo) {
+            return false;
+        }
+        if (tabName === 'teste' && !isLeandroCamargo) {
+            return false;
+        }
+        if (tabName === 'ajustes' && !isLeandroCamargo) {
+            return false;
         }
         
         const tabPermissions = {
@@ -143,7 +140,9 @@ class AuthSystem {
             lancamento: ['lancamento'],
             analise: ['analise'],
             qualidade: ['analise', 'lancamento'],
-            teste: ['admin', 'lancamento']
+            teste: ['admin', 'lancamento'],
+            ajustes: ['planejamento', 'lancamento', 'analise'],
+            'teste-piloto': ['lancamento', 'planejamento', 'analise']
         };
         
         const requiredPermissions = tabPermissions[tabName];
