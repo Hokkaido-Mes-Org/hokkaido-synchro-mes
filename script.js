@@ -4810,7 +4810,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const aggregated = {};
         lossesData.forEach(item => {
             const reason = item?.reason || item?.category || item?.type || 'Sem classificação';
-            const quantity = Number(item?.quantity) || 0;
+            // Usar refugo_kg para perdas, não quantity
+            const quantity = Number(item?.raw?.refugo_kg || item?.quantity || 0);
             aggregated[reason] = (aggregated[reason] || 0) + quantity;
         });
 
@@ -4912,7 +4913,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const machineLosses = {};
         lossesData.forEach(item => {
             const machine = item.machine || 'Sem máquina';
-            machineLosses[machine] = (machineLosses[machine] || 0) + (item.quantity || 0);
+            // Usar refugo_kg para perdas, não quantity
+            machineLosses[machine] = (machineLosses[machine] || 0) + (item.raw?.refugo_kg || item.quantity || 0);
         });
 
         const labels = Object.keys(machineLosses);
@@ -4980,7 +4982,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const materialLosses = {};
         lossesData.forEach(item => {
             const mpType = item.mp_type || 'Não especificado';
-            materialLosses[mpType] = (materialLosses[mpType] || 0) + (item.quantity || 0);
+            // Usar refugo_kg para perdas em kg, não quantity (que é em peças)
+            materialLosses[mpType] = (materialLosses[mpType] || 0) + (item.raw?.refugo_kg || item.quantity || 0);
         });
 
         const labels = Object.keys(materialLosses);
@@ -6452,6 +6455,37 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             qualityPrintBtn.addEventListener('click', handleQualityChecklistPrint);
             qualityPrintBtn.dataset.listenerAttached = 'true';
         }
+
+        if (moldCloseAddRowBtn && !moldCloseAddRowBtn.dataset.listenerAttached) {
+            moldCloseAddRowBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                addMoldClosureRow();
+            });
+            moldCloseAddRowBtn.dataset.listenerAttached = 'true';
+        }
+
+        if (moldOpenAddRowBtn && !moldOpenAddRowBtn.dataset.listenerAttached) {
+            moldOpenAddRowBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                addMoldOpeningRow();
+            });
+            moldOpenAddRowBtn.dataset.listenerAttached = 'true';
+        }
+
+        if (moldHistoryAddRowBtn && !moldHistoryAddRowBtn.dataset.listenerAttached) {
+            moldHistoryAddRowBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                addMoldHistoryRow();
+            });
+            moldHistoryAddRowBtn.dataset.listenerAttached = 'true';
+        }
+
+        [moldCloseTbody, moldOpenTbody, moldHistoryTbody].forEach(tbody => {
+            if (tbody && !tbody.dataset.moldListenerAttached) {
+                tbody.addEventListener('click', handleMoldRowRemoval);
+                tbody.dataset.moldListenerAttached = 'true';
+            }
+        });
 
         // Tentar carregar dados de hoje automaticamente
         autoLoadQualityDataForToday(today);
@@ -12791,7 +12825,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const enrichedPlan = { id: plan.id, ...plan };
             machineCardData[plan.machine] = enrichedPlan;
             planById[plan.id] = enrichedPlan;
-            machineOrder.push(plan.machine);
+            if (!machineOrder.includes(plan.machine)) {
+                machineOrder.push(plan.machine);
+            }
         });
 
         machineOrder.sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
@@ -12882,31 +12918,93 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     const oeeByMachine = oeeSummary?.oeeByMachine || {};
     const currentShiftKey = oeeSummary?.currentShift || fallbackShiftKey;
 
-        const formatQty = (value) => {
-            const parsed = coerceToNumber(value, 0);
-            return Math.round(parsed).toLocaleString('pt-BR');
-        };
-        const machineProgressInfo = {};
+    const resolvePackagingMultiple = (plan) => {
+        if (!plan || typeof plan !== 'object') return 0;
 
-        machineCardGrid.innerHTML = machineOrder.map(machine => {
+        const flatCandidates = [
+            'bag_capacity', 'bagCapacity', 'package_quantity', 'packageQuantity',
+            'package_qty', 'packaging_qty', 'packagingQuantity', 'packagingQty',
+            'units_per_bag', 'unitsPerBag', 'unit_per_bag', 'unitPerBag',
+            'units_per_package', 'unitsPerPackage', 'pieces_per_bag', 'piecesPerBag',
+            'pecas_por_saco', 'quantidade_por_saco', 'quantidadePorSaco',
+            'qtd_por_saco', 'qtdPorSaco', 'quantidade_saco', 'quantidadeSaco',
+            'capacidade_saco', 'capacidadeSaco', 'capacidade_embalagem', 'capacidadeEmbalagem'
+        ];
+
+        for (const key of flatCandidates) {
+            if (Object.prototype.hasOwnProperty.call(plan, key)) {
+                const value = parseOptionalNumber(plan[key]);
+                if (Number.isFinite(value) && value > 0) {
+                    return Math.round(value);
+                }
+            }
+        }
+
+        const nestedCandidates = [
+            plan.packaging,
+            plan.packaging_info,
+            plan.packagingInfo,
+            plan.embalagem,
+            plan.embalagem_info,
+            plan.embalagemInfo
+        ];
+
+        for (const nested of nestedCandidates) {
+            if (!nested || typeof nested !== 'object') continue;
+            for (const key of flatCandidates) {
+                if (Object.prototype.hasOwnProperty.call(nested, key)) {
+                    const value = parseOptionalNumber(nested[key]);
+                    if (Number.isFinite(value) && value > 0) {
+                        return Math.round(value);
+                    }
+                }
+            }
+            if (Object.prototype.hasOwnProperty.call(nested, 'quantity') || Object.prototype.hasOwnProperty.call(nested, 'quantidade')) {
+                const fallbackValue = parseOptionalNumber(nested.quantity ?? nested.quantidade);
+                if (Number.isFinite(fallbackValue) && fallbackValue > 0) {
+                    return Math.round(fallbackValue);
+                }
+            }
+        }
+
+        return 0;
+    };
+
+    const formatQty = (value) => {
+        const parsed = coerceToNumber(value, 0);
+        return Math.round(parsed).toLocaleString('pt-BR');
+    };
+    const machineProgressInfo = {};
+
+    machineCardGrid.innerHTML = machineOrder.map(machine => {
             const data = aggregated[machine];
             const plan = data.plan || {};
             // Usar APENAS lot_size da OP (quantidade total planejada da ordem)
             // Não use planned_quantity - esse é apenas meta diária
             const plannedQtyPrimary = parseOptionalNumber(plan.order_lot_size);
             const plannedQtyFallback = parseOptionalNumber(plan.lot_size);
-            const plannedQty = (plannedQtyPrimary ?? plannedQtyFallback ?? 0);
+            const plannedQty = Math.round(plannedQtyPrimary ?? plannedQtyFallback ?? 0);
             
             // Calcular produção total acumulada da OP (não apenas do dia atual)
-            const totalAccumulatedProduced = (parseOptionalNumber(plan.total_produzido) ?? data.totalProduced ?? 0);
-            const lossesKg = coerceToNumber(data.totalLossesKg, 0);
+            const totalAccumulatedProduced = Math.round(parseOptionalNumber(plan.total_produzido) ?? data.totalProduced ?? 0);
+            const lossesKg = Math.round(coerceToNumber(data.totalLossesKg, 0));
             const pieceWeight = coerceToNumber(plan.piece_weight, 0);
             const scrapPcs = pieceWeight > 0 ? Math.round((lossesKg * 1000) / pieceWeight) : 0;
             const goodProductionRaw = Math.max(0, totalAccumulatedProduced - scrapPcs);
             const goodProduction = Math.round(goodProductionRaw); // Executado = produção boa total
             const progressPercentRaw = plannedQty > 0 ? (goodProduction / plannedQty) * 100 : 0;
-            
-            console.log(`Card ${machine} - Lot Size: ${plan.order_lot_size}, Planned Qty: ${plan.planned_quantity}, Planejado Final: ${plannedQty}, Total Produzido: ${totalAccumulatedProduced}, Produção Boa: ${goodProduction}`);
+            const packagingMultiple = resolvePackagingMultiple(plan);
+            const executedDisplayQty = packagingMultiple > 0 ? Math.floor(goodProduction / packagingMultiple) * packagingMultiple : goodProduction;
+            const displayRemainingQty = Math.max(0, plannedQty - executedDisplayQty);
+
+            console.log(`Card ${machine}:
+  plan.order_lot_size=${plan.order_lot_size}, plan.lot_size=${plan.lot_size}, plannedQty=${plannedQty}
+  plan.total_produzido=${plan.total_produzido}, data.totalProduced=${data.totalProduced}, totalAccumulatedProduced=${totalAccumulatedProduced}
+  lossesKg=${lossesKg}, pieceWeight=${pieceWeight}, scrapPcs=${scrapPcs}
+  goodProduction=${goodProduction}, packagingMultiple=${packagingMultiple}, displayExec=${executedDisplayQty}, displayRemaining=${displayRemainingQty}
+  progressPercent=${progressPercentRaw.toFixed(1)}%
+  data.byShift.T1=${data.byShift.T1}, data.byShift.T2=${data.byShift.T2}, data.byShift.T3=${data.byShift.T3}`);
+
             const normalizedProgress = Math.max(0, Math.min(progressPercentRaw, 100));
             const progressPalette = resolveProgressPalette(progressPercentRaw);
             const progressTextClass = progressPalette.textClass || 'text-slate-600';
@@ -12938,8 +13036,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 }
             }
             let qualityPct = 100;
-            if (data.totalProduced > 0) {
-                qualityPct = Math.max(0, Math.min(100, (goodProduction / data.totalProduced) * 100));
+            if (totalAccumulatedProduced > 0) {
+                qualityPct = Math.max(0, Math.min(100, (goodProduction / totalAccumulatedProduced) * 100));
             } else if (lossesKg > 0) {
                 qualityPct = 0;
             }
@@ -12970,7 +13068,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     <!-- Indicadores principais em linha -->
                     <div class="grid grid-cols-3 gap-2 mb-3">
                         <div class="text-center">
-                            <div class="text-sm font-semibold text-slate-900">${formatQty(goodProduction)}</div>
+                            <div class="text-sm font-semibold text-slate-900">${formatQty(executedDisplayQty)}</div>
                             <div class="text-[10px] text-slate-500 uppercase">Exec. OP</div>
                         </div>
                         <div class="text-center">
@@ -12978,7 +13076,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                             <div class="text-[10px] text-slate-500 uppercase">Qualidade</div>
                         </div>
                         <div class="text-center">
-                            <div class="text-sm font-semibold text-slate-900">${formatQty(remainingQty)}</div>
+                            <div class="text-sm font-semibold text-slate-900">${formatQty(displayRemainingQty)}</div>
                             <div class="text-[10px] text-slate-500 uppercase">Faltante</div>
                         </div>
                     </div>
