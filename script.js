@@ -142,6 +142,211 @@ document.addEventListener('DOMContentLoaded', function() {
         return s; // devolve como veio se não reconhecer
     }
 
+    // ================================
+    // FUNÇÕES DE TARA DAS CAIXAS PLÁSTICAS
+    // ================================
+    
+    // Obter peso da tara para uma máquina específica
+    function getTareWeightForMachine(machine) {
+        if (!machine) return 0;
+        
+        const normalizedMachine = machine.replace('H', 'H-'); // Converter H01 para H-01
+        
+        const tareData = window.databaseModule?.tareBoxesDatabase || [];
+        const tareEntry = tareData.find(entry => entry.machine === normalizedMachine);
+        
+        return tareEntry ? tareEntry.weight : 0;
+    }
+    
+    // Configurar campos de tara nos formulários
+    function setupTareControls() {
+        // Limpar estados antigos na inicialização
+        cleanOldTareStates();
+        
+        // Formulário de produção rápida
+        const quickUseTareCheckbox = document.getElementById('quick-production-use-tare');
+        const quickTareInfo = document.getElementById('quick-production-tare-info');
+        const quickTareWeight = document.getElementById('quick-production-tare-weight');
+        
+        if (quickUseTareCheckbox) {
+            quickUseTareCheckbox.addEventListener('change', function() {
+                updateTareDisplay('quick', this.checked);
+                // Salvar estado quando mudado
+                if (selectedMachineData?.machine) {
+                    saveTareState(selectedMachineData.machine, this.checked);
+                }
+            });
+        }
+        
+        // Formulário de produção manual
+        const manualUseTareCheckbox = document.getElementById('manual-production-use-tare');
+        const manualTareInfo = document.getElementById('manual-production-tare-info');
+        const manualTareWeight = document.getElementById('manual-production-tare-weight');
+        
+        if (manualUseTareCheckbox) {
+            manualUseTareCheckbox.addEventListener('change', function() {
+                updateTareDisplay('manual', this.checked);
+                // Salvar estado quando mudado
+                if (selectedMachineData?.machine) {
+                    saveTareState(selectedMachineData.machine, this.checked);
+                }
+            });
+        }
+        
+        // Formulário de perdas
+        const lossesUseTareCheckbox = document.getElementById('quick-losses-use-tare');
+        const lossesTareInfo = document.getElementById('quick-losses-tare-info');
+        const lossesTareWeight = document.getElementById('quick-losses-tare-weight');
+        
+        if (lossesUseTareCheckbox) {
+            lossesUseTareCheckbox.addEventListener('change', function() {
+                updateTareDisplay('losses', this.checked);
+                // Salvar estado quando mudado
+                if (selectedMachineData?.machine) {
+                    saveTareState(selectedMachineData.machine, this.checked);
+                }
+            });
+        }
+    }
+    
+    // Verificar se a máquina tem tara cadastrada
+    function machineHasTare(machine) {
+        return getTareWeightForMachine(machine) > 0;
+    }
+    
+    // ================================
+    // SISTEMA DE PERSISTÊNCIA DA TARA
+    // ================================
+    
+    // Obter data atual no formato YYYY-MM-DD
+    function getCurrentDateString() {
+        const today = new Date();
+        return today.getFullYear() + '-' + 
+               String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+               String(today.getDate()).padStart(2, '0');
+    }
+    
+    // Salvar estado da tara para uma máquina específica
+    function saveTareState(machine, useTare) {
+        if (!machine) return;
+        
+        const dateKey = getCurrentDateString();
+        const storageKey = `tare_state_${dateKey}`;
+        
+        try {
+            let tareStates = JSON.parse(localStorage.getItem(storageKey) || '{}');
+            tareStates[machine] = {
+                useTare: useTare,
+                timestamp: Date.now()
+            };
+            localStorage.setItem(storageKey, JSON.stringify(tareStates));
+            
+            console.log(`[TARE] Estado salvo para ${machine}: ${useTare}`);
+        } catch (error) {
+            console.error('[TARE] Erro ao salvar estado:', error);
+        }
+    }
+    
+    // Recuperar estado da tara para uma máquina específica
+    function loadTareState(machine) {
+        if (!machine) return false;
+        
+        const dateKey = getCurrentDateString();
+        const storageKey = `tare_state_${dateKey}`;
+        
+        try {
+            const tareStates = JSON.parse(localStorage.getItem(storageKey) || '{}');
+            const machineState = tareStates[machine];
+            
+            if (machineState && machineState.useTare !== undefined) {
+                console.log(`[TARE] Estado recuperado para ${machine}: ${machineState.useTare}`);
+                return machineState.useTare;
+            }
+        } catch (error) {
+            console.error('[TARE] Erro ao carregar estado:', error);
+        }
+        
+        return false;
+    }
+    
+    // Limpar estados de tara de dias anteriores (limpeza automática)
+    function cleanOldTareStates() {
+        try {
+            const currentDate = getCurrentDateString();
+            const keysToRemove = [];
+            
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('tare_state_') && !key.includes(currentDate)) {
+                    keysToRemove.push(key);
+                }
+            }
+            
+            keysToRemove.forEach(key => {
+                localStorage.removeItem(key);
+                console.log(`[TARE] Estado antigo removido: ${key}`);
+            });
+        } catch (error) {
+            console.error('[TARE] Erro na limpeza de estados antigos:', error);
+        }
+    }
+    
+    // Carregar estado persistente da tara para todos os formulários
+    function loadTareStateForAllForms(machine) {
+        if (!machine) return;
+        
+        const savedState = loadTareState(machine);
+        const hasTare = machineHasTare(machine);
+        
+        // Aplicar estado salvo apenas se a máquina tem tara cadastrada
+        if (hasTare && savedState) {
+            const formTypes = ['quick-production', 'manual-production', 'quick-losses'];
+            
+            formTypes.forEach(formType => {
+                const checkbox = document.getElementById(`${formType}-use-tare`);
+                if (checkbox) {
+                    checkbox.checked = savedState;
+                    console.log(`[TARE] Estado restaurado para ${formType}: ${savedState}`);
+                }
+            });
+        }
+    }
+    
+    // Atualizar exibição das informações de tara
+    function updateTareDisplay(formType, useTare) {
+        // Determinar IDs corretos baseado no tipo de formulário
+        const isLosses = formType === 'losses';
+        const prefix = isLosses ? 'quick-losses' : `${formType}-production`;
+        
+        const tareCheckbox = document.getElementById(`${prefix}-use-tare`);
+        const tareInfo = document.getElementById(`${prefix}-tare-info`);
+        const tareWeightSpan = document.getElementById(`${prefix}-tare-weight`);
+        
+        if (!tareInfo || !tareWeightSpan || !tareCheckbox) return;
+        
+        // Mostrar/esconder checkbox baseado na disponibilidade de tara
+        const hasTare = selectedMachineData?.machine && machineHasTare(selectedMachineData.machine);
+        const tareContainer = tareCheckbox.closest('div');
+        
+        if (tareContainer) {
+            if (hasTare) {
+                tareContainer.style.display = 'block';
+            } else {
+                tareContainer.style.display = 'none';
+                tareCheckbox.checked = false;
+                useTare = false;
+            }
+        }
+        
+        if (useTare && hasTare) {
+            const tareWeight = getTareWeightForMachine(selectedMachineData.machine);
+            tareWeightSpan.textContent = tareWeight;
+            tareInfo.classList.remove('hidden');
+        } else {
+            tareInfo.classList.add('hidden');
+        }
+    }
+
     // Lista de máquinas padronizada via database.js quando disponível
     const machineList = (window.databaseModule && window.databaseModule.machineDatabase)
         ? window.databaseModule.machineDatabase.map(m => normalizeMachineId(m.id))
@@ -11784,6 +11989,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         } catch (err) {
             console.error('[ERROR][setupEventListeners] setupModals failed:', err);
         }
+        
+        // Setup tare controls
+        try {
+            setupTareControls();
+            console.log('[TRACE][setupEventListeners] setupTareControls completed successfully');
+        } catch (err) {
+            console.error('[ERROR][setupEventListeners] setupTareControls failed:', err);
+        }
     }
 
     async function handleFinalizeOrderClick(event) {
@@ -12515,8 +12728,19 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const shiftRaw = shiftSelect?.value || '';
         const hourValue = hourInput?.value || '';
         const quantityValue = parseInt(qtyInput?.value || '0', 10);
-        const weightValue = parseFloat(weightInput?.value || '0');
+        let weightValue = parseFloat(weightInput?.value || '0');
         const observations = (obsInput?.value || '').trim();
+        
+        // Verificar se deve aplicar tara da caixa plástica
+        const useTare = document.getElementById('manual-production-use-tare').checked;
+        if (useTare && weightValue > 0) {
+            const tareWeight = getTareWeightForMachine(selectedMachineData?.machine);
+            if (tareWeight > 0) {
+                const tareInKg = tareWeight / 1000; // Converter de gramas para kg
+                weightValue = Math.max(0, weightValue - tareInKg);
+                console.log(`[TRACE][handleManualProductionSubmit] Tara aplicada: ${tareInKg}kg descontados. Peso líquido: ${weightValue}kg`);
+            }
+        }
 
         if (!dateValue) {
             alert('Informe a data referente à produção.');
@@ -12798,10 +13022,21 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         });
 
     const qty = parseInt(document.getElementById('quick-production-qty').value, 10) || 0;
-    const weight = parseFloat(document.getElementById('quick-production-weight').value) || 0;
+    let weight = parseFloat(document.getElementById('quick-production-weight').value) || 0;
         const obs = (document.getElementById('quick-production-obs').value || '').trim();
         
-        console.log('[TRACE][handleProductionSubmit] parsed form values', { qty, weight, obs });
+        // Verificar se deve aplicar tara da caixa plástica
+        const useTare = document.getElementById('quick-production-use-tare').checked;
+        if (useTare && weight > 0) {
+            const tareWeight = getTareWeightForMachine(selectedMachineData?.machine);
+            if (tareWeight > 0) {
+                const tareInKg = tareWeight / 1000; // Converter de gramas para kg
+                weight = Math.max(0, weight - tareInKg);
+                console.log(`[TRACE][handleProductionSubmit] Tara aplicada: ${tareInKg}kg descontados. Peso líquido: ${weight}kg`);
+            }
+        }
+        
+        console.log('[TRACE][handleProductionSubmit] parsed form values', { qty, weight, obs, useTare });
 
         // Aceitar quantidade OU peso (um ou outro)
         const hasQty = Number.isFinite(qty) && qty > 0;
@@ -12956,11 +13191,22 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const quantityInput = document.getElementById('quick-losses-qty');
         const weightInput = document.getElementById('quick-losses-weight');
         const quantity = parseInt(quantityInput.value, 10) || 0;
-        const weight = parseNumberPtBR(weightInput.value);
+        let weight = parseNumberPtBR(weightInput.value);
         const reason = document.getElementById('quick-losses-reason').value;
         const obs = (document.getElementById('quick-losses-obs').value || '').trim();
+        
+        // Verificar se deve aplicar tara da caixa plástica
+        const useTare = document.getElementById('quick-losses-use-tare').checked;
+        if (useTare && weight > 0) {
+            const tareWeight = getTareWeightForMachine(selectedMachineData?.machine);
+            if (tareWeight > 0) {
+                const tareInKg = tareWeight / 1000; // Converter de gramas para kg
+                weight = Math.max(0, weight - tareInKg);
+                console.log(`[TRACE][handleLossesSubmit] Tara aplicada: ${tareInKg}kg descontados. Peso líquido: ${weight}kg`);
+            }
+        }
 
-        console.log('[TRACE][handleLossesSubmit] parsed form values', { quantity, weight, reason, obs });
+        console.log('[TRACE][handleLossesSubmit] parsed form values', { quantity, weight, reason, obs, useTare });
 
         if (quantity <= 0 && weight <= 0) {
             alert('Informe a quantidade ou o peso da perda.');
@@ -15150,6 +15396,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             machineSelector.value = machine;
         }
         setActiveMachineCard(machine);
+        
+        // Carregar estado persistente da tara
+        loadTareStateForAllForms(selectedMachineData.machine);
+        
+        // Atualizar informações de tara nos formulários
+        updateTareDisplay('quick', document.getElementById('quick-production-use-tare')?.checked || false);
+        updateTareDisplay('manual', document.getElementById('manual-production-use-tare')?.checked || false);
+        updateTareDisplay('losses', document.getElementById('quick-losses-use-tare')?.checked || false);
 
         if (previousMachine !== selectedMachineData.machine) {
             resetProductionTimer();
