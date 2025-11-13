@@ -278,6 +278,35 @@ const machineDatabase = [
     { id: "H32", model: "ROMI PRÁTICA CM8" }
 ];
 
+// ================================
+// TARA DAS CAIXAS PLÁSTICAS (em gramas)
+// ================================
+const tareBoxesDatabase = [
+    { "machine": "H-01", "weight": 3010 },
+    { "machine": "H-02", "weight": 3165 },
+    { "machine": "H-03", "weight": 3005 },
+    { "machine": "H-04", "weight": 3425 },
+    { "machine": "H-05", "weight": 3030 },
+    { "machine": "H-07", "weight": 3210 },
+    { "machine": "H-08", "weight": 3415 },
+    { "machine": "H-09", "weight": 3030 },
+    { "machine": "H-10", "weight": 3230 },
+    { "machine": "H-11", "weight": 3015 },
+    { "machine": "H-12", "weight": 2985 },
+    { "machine": "H-13", "weight": 3305 },
+    { "machine": "H-14", "weight": 3115 },
+    { "machine": "H-15", "weight": 3240 },
+    { "machine": "H-17", "weight": 3020 },
+    { "machine": "H-20", "weight": 3255 },
+    { "machine": "H-26", "weight": 2985 },
+    { "machine": "H-27", "weight": 3025 },
+    { "machine": "H-28", "weight": 3060 },
+    { "machine": "H-29", "weight": 3265 },
+    { "machine": "H-30", "weight": 2965 },
+    { "machine": "H-31", "weight": 3110 },
+    { "machine": "H-32", "weight": 2910 }
+];
+
 // Motivos de perdas (agrupados)
 const groupedLossReasons = {
     "PROCESSO": [
@@ -336,6 +365,7 @@ function atualizarDatabase(novosDados) {
         productDatabase,
         atualizarDatabase,
         machineDatabase,
+        tareBoxesDatabase,
         groupedLossReasons,
         groupedDowntimeReasons
     };
