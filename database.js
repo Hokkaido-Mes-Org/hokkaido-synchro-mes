@@ -22,7 +22,7 @@ const productDatabase = [
     { "cod": 77, "client": "SILGAN", "name": "ATUADOR P2000 SATIN OURO CB101 PP", "cavities": 23, "cycle": 19, "weight": 1.45, "pieces_per_hour_goal": 4358, "mp": "" },
     { "cod": 78, "client": "SILGAN", "name": "ATUADOR P2000 SATIN OURO CB149 PP", "cavities": 23, "cycle": 19, "weight": 1.45, "pieces_per_hour_goal": 4358, "mp": "" },
     { "cod": 80, "client": "SILGAN", "name": "ATUADOR P2000 SATIN PRETO 17 PP", "cavities": 23, "cycle": 19, "weight": 1.45, "pieces_per_hour_goal": 4358, "mp": "" },
-    { "cod": 91, "client": "SILGAN", "name": "BUCHA P2000 2ML NATURAL PP", "cavities": 29, "cycle": 16, "weight": 0.83, "pieces_per_hour_goal": 6525, "mp": "" },
+    { "cod": 91, "client": "SILGAN", "name": "BUCHA P2000 2ML NATURAL PP", "cavities": 29, "cycle": 16, "weight": 0.55, "pieces_per_hour_goal": 6525, "mp": "" },
     { "cod": 92, "client": "SILGAN", "name": "ACUMULADOR P2000 28MM NAT PP EF045", "cavities": 32, "cycle": 19, "weight": 1.25, "pieces_per_hour_goal": 6063, "mp": "" },
     { "cod": 93, "client": "SILGAN", "name": "ACUMULADOR P2000 JUNTA-A NATURAL EF045", "cavities": 32, "cycle": 19, "weight": 1.25, "pieces_per_hour_goal": 6063, "mp": "" },
     { "cod": 94, "client": "SILGAN", "name": "TAMPA MKIV MD STD NATURAL PP PD06001", "cavities": 14, "cycle": 10.5, "weight": 0.95, "pieces_per_hour_goal": 4800, "mp": "" },
@@ -112,7 +112,7 @@ const productDatabase = [
     { "cod": 5083, "client": "APTAR", "name": "ATUADOR-SENTIDOS-PP--5,75-LILA---LOT", "cavities": 22, "cycle": 25.5, "weight": 2.15, "pieces_per_hour_goal": 3106, "mp": "" },
     { "cod": 5302, "client": "APTAR", "name": "ATUADOR-K2-PP---NATU-----RRNA00004", "cavities": 16, "cycle": 19.2, "weight": 1.45, "pieces_per_hour_goal": 3000, "mp": "" },
     { "cod": 5313, "client": "APTAR", "name": "ATUADOR-A03LV1-PP---NATU-----RRNA00003", "cavities": 56, "cycle": 18, "weight": 0.85, "pieces_per_hour_goal": 11200, "mp": "" },
-    { "cod": 5328, "client": "APTAR", "name": "ATUADOR-A46V1-PP---NATU-----RRNA00003", "cavities": 32, "cycle": 21, "weight": 0,19, "pieces_per_hour_goal": 5486, "mp": "" },
+    { "cod": 5328, "client": "APTAR", "name": "ATUADOR-A46V1-PP---NATU-----RRNA00003", "cavities": 32, "cycle": 21, "weight": 1.25, "pieces_per_hour_goal": 5486, "mp": "" },
     { "cod": 5332, "client": "APTAR", "name": "ACTU-A03LV1-PP---GREY-SHNY------P228", "cavities": 56, "cycle": 18, "weight": 0.85, "pieces_per_hour_goal": 11200, "mp": "" },
     { "cod": 5382, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-GOLD---SPRAY-13017", "cavities": 30, "cycle": 20, "weight": 1.85, "pieces_per_hour_goal": 5400, "mp": "" },
     { "cod": 5412, "client": "APTAR", "name": "ACTU-K2-PP---BLUE-------P322", "cavities": 16, "cycle": 19.2, "weight": 1.45, "pieces_per_hour_goal": 3000, "mp": "" },
@@ -279,32 +279,32 @@ const machineDatabase = [
 ];
 
 // ================================
-// TARA DAS CAIXAS PLÁSTICAS (em gramas)
+// TARA DAS CAIXAS PLÁSTICAS (em kilos)
 // ================================
 const tareBoxesDatabase = [
-    { "machine": "H-01", "weight": 3010 },
-    { "machine": "H-02", "weight": 3165 },
-    { "machine": "H-03", "weight": 3005 },
-    { "machine": "H-04", "weight": 3425 },
-    { "machine": "H-05", "weight": 3030 },
-    { "machine": "H-07", "weight": 3210 },
-    { "machine": "H-08", "weight": 3415 },
-    { "machine": "H-09", "weight": 3030 },
-    { "machine": "H-10", "weight": 3230 },
-    { "machine": "H-11", "weight": 3015 },
-    { "machine": "H-12", "weight": 2985 },
-    { "machine": "H-13", "weight": 3305 },
-    { "machine": "H-14", "weight": 3115 },
-    { "machine": "H-15", "weight": 3240 },
-    { "machine": "H-17", "weight": 3020 },
-    { "machine": "H-20", "weight": 3255 },
-    { "machine": "H-26", "weight": 2985 },
-    { "machine": "H-27", "weight": 3025 },
-    { "machine": "H-28", "weight": 3060 },
-    { "machine": "H-29", "weight": 3265 },
-    { "machine": "H-30", "weight": 2965 },
-    { "machine": "H-31", "weight": 3110 },
-    { "machine": "H-32", "weight": 2910 }
+    { "machine": "H-01", "weight": 3.010 },
+    { "machine": "H-02", "weight": 3.165 },
+    { "machine": "H-03", "weight": 3.005 },
+    { "machine": "H-04", "weight": 3.425 },
+    { "machine": "H-05", "weight": 3.030 },
+    { "machine": "H-07", "weight": 3.210 },
+    { "machine": "H-08", "weight": 3.415 },
+    { "machine": "H-09", "weight": 3.030 },
+    { "machine": "H-10", "weight": 3.230 },
+    { "machine": "H-11", "weight": 3.015 },
+    { "machine": "H-12", "weight": 2.985 },
+    { "machine": "H-13", "weight": 3.305 },
+    { "machine": "H-14", "weight": 3.115 },
+    { "machine": "H-15", "weight": 3.240 },
+    { "machine": "H-17", "weight": 3.020 },
+    { "machine": "H-20", "weight": 3.255 },
+    { "machine": "H-26", "weight": 2.985 },
+    { "machine": "H-27", "weight": 3.025 },
+    { "machine": "H-28", "weight": 3.060 },
+    { "machine": "H-29", "weight": 3.265 },
+    { "machine": "H-30", "weight": 2.965 },
+    { "machine": "H-31", "weight": 3.110 },
+    { "machine": "H-32", "weight": 2.910 }
 ];
 
 // Motivos de perdas (agrupados)
@@ -351,6 +351,38 @@ function atualizarDatabase(novosDados) {
     return productDatabase;
 }
 
+// ================================
+// ÍNDICES PARA BUSCA RÁPIDA
+// ================================
+// Criar Map para O(1) lookups em vez de O(n) array searches
+const productByCode = new Map();
+const productByClient = new Map();
+const machineById = new Map();
+const tareByMachine = new Map();
+
+// Indexar produtos por código
+productDatabase.forEach(product => {
+    productByCode.set(product.cod, product);
+});
+
+// Indexar produtos por cliente
+productDatabase.forEach(product => {
+    if (!productByClient.has(product.client)) {
+        productByClient.set(product.client, []);
+    }
+    productByClient.get(product.client).push(product);
+});
+
+// Indexar máquinas por ID
+machineDatabase.forEach(machine => {
+    machineById.set(machine.id, machine);
+});
+
+// Indexar tara por máquina
+tareBoxesDatabase.forEach(tare => {
+    tareByMachine.set(tare.machine, tare.weight);
+});
+
 // Suporte a Node (tests) e browser
 (function(root, factory) {
     if (typeof module !== 'undefined' && module.exports) {
@@ -367,8 +399,11 @@ function atualizarDatabase(novosDados) {
         machineDatabase,
         tareBoxesDatabase,
         groupedLossReasons,
-        groupedDowntimeReasons
+        groupedDowntimeReasons,
+        // Expor os índices para busca rápida
+        productByCode,
+        productByClient,
+        machineById,
+        tareByMachine
     };
 }));
-
-
