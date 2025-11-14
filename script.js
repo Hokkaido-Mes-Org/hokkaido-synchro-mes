@@ -25,6 +25,63 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let db;
     let storage = null;
+    
+    // Sistema de gerenciamento de listeners Firestore
+    const listenerManager = {
+        listeners: new Map(),
+        
+        subscribe(name, query, onSnapshot, onError) {
+            // Desinscrever anterior se existir
+            this.unsubscribe(name);
+            
+            try {
+                const unsubscribe = query.onSnapshot(
+                    snapshot => {
+                        try {
+                            onSnapshot(snapshot);
+                        } catch (error) {
+                            console.error(`Erro ao processar snapshot ${name}:`, error);
+                        }
+                    },
+                    error => {
+                        console.error(`Erro no listener ${name}:`, error);
+                        if (onError) onError(error);
+                    }
+                );
+                
+                this.listeners.set(name, unsubscribe);
+                console.log(`✅ Listener "${name}" inscrito`);
+            } catch (error) {
+                console.error(`Erro ao criar listener ${name}:`, error);
+                if (onError) onError(error);
+            }
+        },
+        
+        unsubscribe(name) {
+            const unsubscribe = this.listeners.get(name);
+            if (unsubscribe) {
+                try {
+                    unsubscribe();
+                    this.listeners.delete(name);
+                    console.log(`✅ Listener "${name}" desinscritos`);
+                } catch (error) {
+                    console.error(`Erro ao desinscrever listener ${name}:`, error);
+                }
+            }
+        },
+        
+        unsubscribeAll() {
+            for (const name of this.listeners.keys()) {
+                this.unsubscribe(name);
+            }
+        }
+    };
+    
+    // Limpar listeners quando a página está se descarregando
+    window.addEventListener('beforeunload', () => {
+        listenerManager.unsubscribeAll();
+    });
+    
     try {
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
@@ -394,7 +451,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const preparadores = ['Daniel', 'João', 'Luis', 'Manaus', 'Rafael', 'Stanley', 'Wagner', 'Yohan'].sort();
     
     // Global Variables
-    let activeListenerUnsubscribe = null;
     let currentAnalysisView = 'resumo';
     let docIdToDelete = null;
     let collectionToDelete = null;
@@ -444,7 +500,6 @@ document.addEventListener('DOMContentLoaded', function() {
     let activeMachineCard = null;
     let ajustesPageInitialized = false;
     let pilotTabInitialized = false;
-    let pilotReportsUnsubscribe = null;
     let isSubmittingPilotReport = false;
 
     // Flags de configuração
@@ -464,7 +519,6 @@ document.addEventListener('DOMContentLoaded', function() {
     let machines = [];
     let currentAnalysisFilters = {};
 
-    let productionOrdersUnsubscribe = null;
     let productionOrdersCache = [];
     let currentSelectedOrderForAnalysis = null;
     let currentActiveOrder = null;
@@ -2077,6 +2131,10 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
+        if (machineSelector) {
+            machineSelector.addEventListener('change', updateAnalysisInfoPanel);
+        }
+
         if (applyFiltersBtn) {
             applyFiltersBtn.addEventListener('click', applyAnalysisFilters);
         }
@@ -2571,6 +2629,24 @@ document.addEventListener('DOMContentLoaded', function() {
             lossesSample: lossesAll.slice(0, 2),
             downtimeSample: downtimeAll.slice(0, 2)
         });
+
+        // Atualizar informações do produto se uma máquina específica foi selecionada
+        if (machine && machine !== 'all' && productionAll.length > 0) {
+            const firstProduction = productionAll[0];
+            if (firstProduction.product_code) {
+                const productInfo = window.databaseModule?.productByCode?.get(Number(firstProduction.product_code)) || 
+                                   window.databaseModule?.productByCode?.get(firstProduction.product_code);
+                if (productInfo) {
+                    updateAnalysisProductInfo(
+                        firstProduction.product_code,
+                        productInfo.cycle,
+                        productInfo.cavities,
+                        productInfo.weight,
+                        productInfo.name
+                    );
+                }
+            }
+        }
 
         const normalizeShiftFilter = (value) => {
             if (value === undefined || value === null || value === 'all') return 'all';
@@ -4036,6 +4112,54 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 orderMachineSelect.value = currentValue;
             }
         }
+    }
+
+    // Função para atualizar o painel de informações da máquina na análise
+    function updateAnalysisInfoPanel() {
+        const machineSelector = document.getElementById('analysis-machine');
+        const infoPanel = document.getElementById('analysis-info-panel');
+        
+        if (!machineSelector || !infoPanel) return;
+        
+        const selectedMachineId = machineSelector.value;
+        
+        // Se nenhuma máquina específica foi selecionada, ocultar o painel
+        if (selectedMachineId === 'all') {
+            infoPanel.classList.add('hidden');
+            return;
+        }
+        
+        // Encontrar a máquina
+        const machineInfo = machineDatabase.find(m => normalizeMachineId(m.id) === selectedMachineId);
+        
+        if (machineInfo) {
+            infoPanel.classList.remove('hidden');
+            
+            // Atualizar apenas nome e modelo da máquina
+            document.getElementById('analysis-info-machine').textContent = selectedMachineId;
+            document.getElementById('analysis-info-machine-model').textContent = machineInfo.model || '-';
+        }
+    }
+    
+    // Função para limpar informações do produto
+    function clearAnalysisProductInfo() {
+        // Função simplificada - não usada mais
+    }
+    
+    // Função para atualizar o painel com informações do produto
+    function updateAnalysisProductInfo(productCode, cycle, cavities, weight, productName) {
+        const infoPanel = document.getElementById('analysis-info-panel');
+        
+        if (!infoPanel) return;
+        
+        if (productCode) {
+            document.getElementById('analysis-info-product').textContent = productName || `Produto ${productCode}`;
+            document.getElementById('analysis-info-product-code').textContent = `Código: ${productCode}`;
+        }
+        
+        if (cycle) document.getElementById('analysis-info-cycle').textContent = cycle.toFixed(2);
+        if (cavities) document.getElementById('analysis-info-cavities').textContent = cavities;
+        if (weight) document.getElementById('analysis-info-weight').textContent = weight.toFixed(3);
     }
 
     function setAnalysisDefaultDates() {
@@ -6587,16 +6711,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
     // --- GESTÃO DE LISTENERS ---
     function detachActiveListener() {
-        if (activeListenerUnsubscribe) {
-            if (typeof activeListenerUnsubscribe === 'function') {
-                activeListenerUnsubscribe();
-            } else if (typeof activeListenerUnsubscribe === 'object') {
-                Object.values(activeListenerUnsubscribe).forEach(unsub => {
-                    if (typeof unsub === 'function') unsub();
-                });
-            }
-            activeListenerUnsubscribe = null;
-        }
+        // O gerenciador de listeners cuida automaticamente de desinscrições
+        // Esta função é mantida para compatibilidade
+        console.log('✅ Listeners ativos desinscritos pelo listenerManager');
     }
 
     // --- NAVEGAÇÃO ---
@@ -6888,9 +7005,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             pilotFilterDateInput.value = selectedDate;
         }
 
-        if (typeof pilotReportsUnsubscribe === 'function') {
-            pilotReportsUnsubscribe();
-        }
+        // Limpar listener anterior se existir
+        listenerManager.unsubscribe('pilotReports');
 
         setPilotReportStatus(fromManualTrigger ? 'Atualizando registros...' : '', 'info');
         setPilotLoadingState(true);
@@ -6904,47 +7020,40 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         try {
             const query = db.collection('pilot_test_reports').where('workDay', '==', selectedDate);
-            const unsubscribeFn = query.onSnapshot((snapshot) => {
-                setPilotLoadingState(false);
+            listenerManager.subscribe('pilotReports', query,
+                (snapshot) => {
+                    setPilotLoadingState(false);
 
-                if (fromManualTrigger && !snapshot.metadata.hasPendingWrites) {
-                    setPilotReportStatus('Registros atualizados.', 'success');
-                    setTimeout(() => setPilotReportStatus('', 'info'), 2500);
-                } else if (!fromManualTrigger) {
-                    setPilotReportStatus('', 'info');
-                }
+                    if (fromManualTrigger && !snapshot.metadata.hasPendingWrites) {
+                        setPilotReportStatus('Registros atualizados.', 'success');
+                        setTimeout(() => setPilotReportStatus('', 'info'), 2500);
+                    } else if (!fromManualTrigger) {
+                        setPilotReportStatus('', 'info');
+                    }
 
-                const orderedDocs = [...snapshot.docs].sort((a, b) => {
-                    const aData = a.data();
-                    const bData = b.data();
-                    const aMs = getPilotReportTimestamp(aData, a);
-                    const bMs = getPilotReportTimestamp(bData, b);
-                    return bMs - aMs;
-                });
+                    const orderedDocs = [...snapshot.docs].sort((a, b) => {
+                        const aData = a.data();
+                        const bData = b.data();
+                        const aMs = getPilotReportTimestamp(aData, a);
+                        const bMs = getPilotReportTimestamp(bData, b);
+                        return bMs - aMs;
+                    });
 
-                renderPilotReports(orderedDocs);
-            }, (error) => {
-                console.error('❌ Erro ao escutar registros do Teste Piloto:', error);
-                setPilotLoadingState(false);
-                setPilotReportStatus('Erro ao carregar registros. Tente novamente mais tarde.', 'error');
-                if (pilotReportEmpty) {
-                    pilotReportEmpty.textContent = 'Erro ao carregar registros para esta data.';
-                    pilotReportEmpty.classList.remove('hidden');
+                    renderPilotReports(orderedDocs);
+                },
+                (error) => {
+                    console.error('❌ Erro ao escutar registros do Teste Piloto:', error);
+                    setPilotLoadingState(false);
+                    setPilotReportStatus('Erro ao carregar registros. Tente novamente mais tarde.', 'error');
+                    if (pilotReportEmpty) {
+                        pilotReportEmpty.textContent = 'Erro ao carregar registros para esta data.';
+                        pilotReportEmpty.classList.remove('hidden');
+                    }
+                    if (pilotReportList) {
+                        pilotReportList.innerHTML = '';
+                    }
                 }
-                if (pilotReportList) {
-                    pilotReportList.innerHTML = '';
-                }
-                pilotReportsUnsubscribe = null;
-                activeListenerUnsubscribe = null;
-            });
-
-            pilotReportsUnsubscribe = () => {
-                if (typeof unsubscribeFn === 'function') {
-                    unsubscribeFn();
-                }
-                pilotReportsUnsubscribe = null;
-            };
-            activeListenerUnsubscribe = pilotReportsUnsubscribe;
+            );
         } catch (error) {
             console.error('❌ Erro ao configurar listener do Teste Piloto:', error);
             setPilotLoadingState(false);
@@ -10607,25 +10716,23 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     function listenToProductionOrders() {
         if (!db || !productionOrderTableBody) return;
 
-        if (typeof productionOrdersUnsubscribe === 'function') {
-            productionOrdersUnsubscribe();
-        }
-
         try {
-            productionOrdersUnsubscribe = db.collection('production_orders')
-                .orderBy('createdAt', 'desc')
-                .onSnapshot(snapshot => {
+            const query = db.collection('production_orders').orderBy('createdAt', 'desc');
+            listenerManager.subscribe('productionOrders', query,
+                (snapshot) => {
                     productionOrdersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     renderProductionOrdersTable(productionOrdersCache);
                     populatePlanningOrderSelect();
                     if (productionOrderStatusMessage && productionOrderStatusMessage.className.includes('text-status-error')) {
                         setProductionOrderStatus('', 'info');
                     }
-                }, error => {
+                },
+                (error) => {
                     console.error('Erro ao carregar ordens de produção:', error);
                     renderProductionOrdersTable([]);
                     setProductionOrderStatus('Não foi possível carregar as ordens de produção.', 'error');
-                });
+                }
+            );
         } catch (error) {
             console.error('Erro ao inicializar listener de ordens de produção:', error);
             setProductionOrderStatus('Erro ao iniciar monitoramento das ordens.', 'error');
@@ -10997,8 +11104,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             showLoadingState('leader-panel', false, planningItems.length === 0);
         };
 
-        const planningListener = db.collection('planning').where('date', '==', date)
-            .onSnapshot(snapshot => {
+        // Limpar listeners anteriores se existirem
+        listenerManager.unsubscribe('planning');
+        listenerManager.unsubscribe('productionEntries');
+        listenerManager.unsubscribe('downtime');
+
+        const planningQuery = db.collection('planning').where('date', '==', date);
+        listenerManager.subscribe('planning', planningQuery,
+            (snapshot) => {
                 planningItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 planningItems.sort((a, b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0));
                 if (machineSelector) {
@@ -11027,29 +11140,38 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     }
                 }
                 render();
-            }, error => {
+            },
+            (error) => {
                 console.error("Erro ao carregar planejamentos:", error);
                 if(leaderLaunchPanel) leaderLaunchPanel.innerHTML = `<div class="col-span-full text-center text-red-600">Erro ao carregar dados.</div>`;
                 showLoadingState('leader-panel', false, true);
-            });
+            }
+        );
 
-        const entriesListener = db.collection('production_entries').where('data', '==', date)
-            .onSnapshot(snapshot => {
+        const entriesQuery = db.collection('production_entries').where('data', '==', date);
+        listenerManager.subscribe('productionEntries', entriesQuery,
+            (snapshot) => {
                 productionEntries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 render();
-            }, error => console.error("Erro ao carregar lançamentos de produção:", error));
+            },
+            (error) => console.error("Erro ao carregar lançamentos de produção:", error)
+        );
+
         // Listener de paradas do dia selecionado e próximo dia (para cobrir T3 após 00:00)
         const base = new Date(`${date}T12:00:00`);
-        const next = new Date(base); next.setDate(next.getDate() + 1);
+        const next = new Date(base);
+        next.setDate(next.getDate() + 1);
         const nextStr = new Date(next.getTime() - next.getTimezoneOffset()*60000).toISOString().split('T')[0];
-        const downtimeListener = db.collection('downtime_entries')
-            .where('date', 'in', [date, nextStr])
-            .onSnapshot(snapshot => {
+        
+        const downtimeQuery = db.collection('downtime_entries')
+            .where('date', 'in', [date, nextStr]);
+        listenerManager.subscribe('downtime', downtimeQuery,
+            (snapshot) => {
                 downtimeEntries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 render();
-            }, error => console.error('Erro ao carregar paradas:', error));
-
-        activeListenerUnsubscribe = { planningListener, entriesListener, downtimeListener };
+            },
+            (error) => console.error('Erro ao carregar paradas:', error)
+        );
     }
 
     function renderPlanningTable(items) {
@@ -11363,22 +11485,28 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             showLoadingState('launch-panel', false, planningItems.length === 0);
         };
 
-        const planningListener = db.collection('planning')
-            .where('date', '==', date)
-            .onSnapshot(snapshot => {
+        // Limpar listeners anteriores se existirem
+        listenerManager.unsubscribe('launchPlanning');
+        listenerManager.unsubscribe('launchProductions');
+
+        const planningQuery = db.collection('planning').where('date', '==', date);
+        listenerManager.subscribe('launchPlanning', planningQuery,
+            (snapshot) => {
                 planningItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 planningItems.sort((a, b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0));
                 render();
-            }, error => {
-                 console.error("Erro ao carregar plano de produção: ", error);
-                 if (launchPanelContainer) {
+            },
+            (error) => {
+                console.error("Erro ao carregar plano de produção: ", error);
+                if (launchPanelContainer) {
                     launchPanelContainer.innerHTML = `<div class="col-span-full text-center text-red-600 bg-red-50 p-4 rounded-lg"><p class="font-bold">Falha ao carregar dados.</p></div>`;
-                 }
-            });
+                }
+            }
+        );
         
-        const entriesListener = db.collection('production_entries')
-            .where('data', '==', date)
-            .onSnapshot(snapshot => {
+        const entriesQuery = db.collection('production_entries').where('data', '==', date);
+        listenerManager.subscribe('launchProductions', entriesQuery,
+            (snapshot) => {
                 launchedEntries = new Set();
                 productionEntries = snapshot.docs.map(doc => doc.data());
                 snapshot.forEach(doc => {
@@ -11388,11 +11516,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     }
                 });
                 render();
-            }, error => {
+            },
+            (error) => {
                 console.error("Erro ao carregar lançamentos de produção: ", error);
-            });
-
-        activeListenerUnsubscribe = { planningListener, entriesListener };
+            }
+        );
     }
 
     function renderLaunchPanel(planItems, launchedEntries, productionEntries) {
