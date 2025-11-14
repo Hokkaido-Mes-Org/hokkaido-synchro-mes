@@ -146,16 +146,17 @@ document.addEventListener('DOMContentLoaded', function() {
     // FUNÇÕES DE TARA DAS CAIXAS PLÁSTICAS
     // ================================
     
-    // Obter peso da tara para uma máquina específica
+    // Obter peso da tara para uma máquina específica (em kg)
     function getTareWeightForMachine(machine) {
         if (!machine) return 0;
         
         const normalizedMachine = machine.replace('H', 'H-'); // Converter H01 para H-01
         
-        const tareData = window.databaseModule?.tareBoxesDatabase || [];
-        const tareEntry = tareData.find(entry => entry.machine === normalizedMachine);
+        // Usar índice Map para O(1) lookup em vez de O(n) search
+        const tareWeight = window.databaseModule?.tareByMachine?.get(normalizedMachine);
         
-        return tareEntry ? tareEntry.weight : 0;
+        // Retorna diretamente em kg (já vem em kg do database)
+        return tareWeight || 0;
     }
     
     // Configurar campos de tara nos formulários
@@ -340,7 +341,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (useTare && hasTare) {
             const tareWeight = getTareWeightForMachine(selectedMachineData.machine);
-            tareWeightSpan.textContent = tareWeight;
+            tareWeightSpan.textContent = tareWeight.toFixed(3);
             tareInfo.classList.remove('hidden');
         } else {
             tareInfo.classList.add('hidden');
@@ -1876,7 +1877,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const totalPecasEl = document.getElementById('total-pecas');
         const produzidoInput = document.getElementById('production-entry-produzido');
         
-        if (totalPesoLiquidoEl) totalPesoLiquidoEl.textContent = `${totalPesoLiquido.toFixed(2)} kg`;
+        if (totalPesoLiquidoEl) totalPesoLiquidoEl.textContent = `${totalPesoLiquido.toFixed(3)} kg`;
         if (totalPecasEl) totalPecasEl.textContent = totalPecas.toLocaleString('pt-BR');
         if (produzidoInput) produzidoInput.value = totalPecas;
     }
@@ -2443,8 +2444,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const statusDisplay = statusColorMap[status] || statusColorMap['planejada'];
             const isActive = status === 'ativa';
 
-            // Buscar modelo da máquina
-            const machineInfo = machineDatabase.find(m => m.id === order.machine_id);
+            // Buscar modelo da máquina usando índice para O(1) lookup
+            const machineInfo = window.databaseModule.machineById.get(order.machine_id);
             const machineDisplay = machineInfo 
                 ? `<br><strong>Máquina:</strong> ${escapeHtml(order.machine_id)} - ${escapeHtml(machineInfo.model)}`
                 : '';
@@ -3279,7 +3280,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         // Atualizar interface
         document.getElementById('total-losses').textContent = totalLosses.toLocaleString();
         document.getElementById('losses-percentage').textContent = `${lossesPercentage.toFixed(1)}%`;
-        document.getElementById('total-borra').textContent = `${totalBorraKg.toFixed(1)}`;
+        document.getElementById('total-borra').textContent = `${totalBorraKg.toFixed(3)}`;
         document.getElementById('main-loss-reason').textContent = mainReason;
         document.getElementById('main-loss-material').textContent = mainMaterial;
         
@@ -5406,7 +5407,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             tooltipFormatter: (context) => {
                 const value = Number(context.parsed || 0);
                 const percentage = totalLosses > 0 ? ((value / totalLosses) * 100).toFixed(1) : '0.0';
-                return `${context.label}: ${value.toFixed(2)} kg (${percentage}%)`;
+                return `${context.label}: ${value.toFixed(3)} kg (${percentage}%)`;
             }
         });
     }
@@ -9191,7 +9192,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 const sortedHourly = [...hourlyEntries].sort((a, b) => (a.hora || '').localeCompare(b.hora || ''));
                 qualityHourlyTableBody.innerHTML = sortedHourly.map(entry => {
                     const hour = entry.hora || '--:--';
-                    const peso = formatLocaleNumber(Number(entry.peso_bruto || 0), 2);
+                    const peso = formatLocaleNumber(Number(entry.peso_bruto || 0), 3);
                     const embalagens = formatLocaleNumber(Number(entry.embalagem_fechada || 0));
                     const tara = entry.usar_tara ? 'Sim' : 'Não';
                     return `
@@ -9902,7 +9903,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
 
-        const product = productDatabase.find(item => String(item.cod) === rawCode);
+        // Usar índice Map para O(1) lookup em vez de O(n) search
+        const product = window.databaseModule.productByCode.get(Number(rawCode)) || 
+                       window.databaseModule.productByCode.get(rawCode);
 
         if (product) {
             fillProductionOrderFields(product);
@@ -10650,7 +10653,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const normalizedOrderNumber = orderNumber.toUpperCase();
 
         const partCode = (rawData.part_code || '').trim();
-        const matchedProduct = partCode ? productDatabase.find(item => String(item.cod) === partCode) : null;
+        // Usar índice Map para O(1) lookup
+        const matchedProduct = partCode ? (window.databaseModule.productByCode.get(Number(partCode)) || window.databaseModule.productByCode.get(partCode)) : null;
 
         const submitButton = productionOrderForm.querySelector('button[type="submit"]');
         const originalButtonContent = submitButton ? submitButton.innerHTML : '';
@@ -10751,7 +10755,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (!input) return;
 
         const rawCode = (input.value || '').trim();
-        const product = productDatabase.find(p => String(p.cod) === rawCode);
+        // Usar índice Map para O(1) lookup
+        const product = window.databaseModule.productByCode.get(Number(rawCode)) || window.databaseModule.productByCode.get(rawCode);
 
         const cycleInput = document.getElementById('budgeted-cycle');
         const cavitiesInput = document.getElementById('mold-cavities');
@@ -10830,7 +10835,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         // Buscar dados completos do produto selecionado
         const productCod = data.product_cod;
-        const product = productDatabase.find(p => p.cod == productCod);
+        // Usar índice Map para O(1) lookup
+        const product = window.databaseModule.productByCode.get(Number(productCod)) || window.databaseModule.productByCode.get(productCod);
         
         if (!product) {
             alert('Produto não encontrado!');
@@ -12736,9 +12742,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (useTare && weightValue > 0) {
             const tareWeight = getTareWeightForMachine(selectedMachineData?.machine);
             if (tareWeight > 0) {
-                const tareInKg = tareWeight / 1000; // Converter de gramas para kg
-                weightValue = Math.max(0, weightValue - tareInKg);
-                console.log(`[TRACE][handleManualProductionSubmit] Tara aplicada: ${tareInKg}kg descontados. Peso líquido: ${weightValue}kg`);
+                weightValue = Math.max(0, weightValue - tareWeight);
+                console.log(`[TRACE][handleManualProductionSubmit] Tara aplicada: ${tareWeight.toFixed(3)}kg descontados. Peso líquido: ${weightValue.toFixed(3)}kg`);
             }
         }
 
@@ -13030,9 +13035,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (useTare && weight > 0) {
             const tareWeight = getTareWeightForMachine(selectedMachineData?.machine);
             if (tareWeight > 0) {
-                const tareInKg = tareWeight / 1000; // Converter de gramas para kg
-                weight = Math.max(0, weight - tareInKg);
-                console.log(`[TRACE][handleProductionSubmit] Tara aplicada: ${tareInKg}kg descontados. Peso líquido: ${weight}kg`);
+                weight = Math.max(0, weight - tareWeight);
+                console.log(`[TRACE][handleProductionSubmit] Tara aplicada: ${tareWeight.toFixed(3)}kg descontados. Peso líquido: ${weight.toFixed(3)}kg`);
             }
         }
         
@@ -13200,9 +13204,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (useTare && weight > 0) {
             const tareWeight = getTareWeightForMachine(selectedMachineData?.machine);
             if (tareWeight > 0) {
-                const tareInKg = tareWeight / 1000; // Converter de gramas para kg
-                weight = Math.max(0, weight - tareInKg);
-                console.log(`[TRACE][handleLossesSubmit] Tara aplicada: ${tareInKg}kg descontados. Peso líquido: ${weight}kg`);
+                weight = Math.max(0, weight - tareWeight);
+                console.log(`[TRACE][handleLossesSubmit] Tara aplicada: ${tareWeight.toFixed(3)}kg descontados. Peso líquido: ${weight.toFixed(3)}kg`);
             }
         }
 
@@ -14342,11 +14345,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             details.push(`<span class="font-semibold text-gray-800">${produzido} peça(s)</span>`);
             const pesoBruto = parseNumber(entry.data.peso_bruto ?? entry.data.weight ?? 0);
             if (pesoBruto > 0) {
-                details.push(`${pesoBruto.toFixed(2)} kg`);
+                details.push(`${pesoBruto.toFixed(3)} kg`);
             }
         } else if (entry.type === 'loss') {
             const refugoKg = parseNumber(entry.data.refugo_kg ?? entry.data.weight ?? 0);
-            details.push(`<span class="font-semibold text-gray-800">${refugoKg.toFixed(2)} kg</span>`);
+            details.push(`<span class="font-semibold text-gray-800">${refugoKg.toFixed(3)} kg</span>`);
             if (entry.data.perdas) {
                 details.push(`Motivo: ${entry.data.perdas}`);
             }
@@ -14394,7 +14397,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             details.push(`<span class="font-semibold text-gray-800">${quantidade} peça(s)</span>`);
             const pesoKg = parseNumber(entry.data.peso_kg ?? entry.data.weight ?? 0);
             if (pesoKg > 0) {
-                details.push(`${pesoKg.toFixed(2)} kg`);
+                details.push(`${pesoKg.toFixed(3)} kg`);
             }
             if (entry.data.motivo) {
                 details.push(`Motivo: ${entry.data.motivo}`);
