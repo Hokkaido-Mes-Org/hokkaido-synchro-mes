@@ -2,7 +2,9 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="true">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Hokkaido Synchro v8.0</title>
     <link rel="icon" href="https://i.postimg.cc/B6w5mWry/Design-sem-nome-3.png" type="image/png">
     
@@ -50,6 +52,146 @@
         .chart-container {
           min-height: 250px;
         }
+        
+        /* Reduzir padding em painéis mobile */
+        .bg-white.p-6.md\:p-8 {
+          padding: 1rem !important;
+        }
+        
+        /* Ajustar espaçamento entre elementos */
+        .gap-4 {
+          gap: 0.75rem;
+        }
+        
+        .gap-6 {
+          gap: 1rem;
+        }
+        
+        /* Melhorar legibilidade em formulários mobile */
+        input[type="text"],
+        input[type="number"],
+        input[type="date"],
+        input[type="email"],
+        select,
+        textarea {
+          font-size: 16px !important; /* Previne zoom automático em iOS */
+          padding: 0.5rem 0.75rem !important;
+        }
+        
+        /* Botões com melhor toque em mobile */
+        button {
+          min-height: 44px;
+          padding: 0.625rem 1rem;
+        }
+        
+        /* Painéis com overflow ajustado */
+        .overflow-x-auto {
+          -webkit-overflow-scrolling: touch;
+          scroll-behavior: smooth;
+        }
+        
+        /* Melhorar scroll de tabelas */
+        table {
+          display: block;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          max-width: 100%;
+        }
+        
+        /* Evitar que elementos fixos obstuam conteúdo */
+        .fixed {
+          z-index: 30;
+        }
+      }
+      
+      /* Para dispositivos muito pequenos (< 480px) */
+      @media (max-width: 480px) {
+        /* Stack vertical de colunas */
+        .grid {
+          gap: 0.5rem !important;
+        }
+        
+        /* Reduzir ainda mais o padding */
+        .bg-white.p-6.md\:p-8 {
+          padding: 0.75rem !important;
+        }
+        
+        /* Headers menores em mobile */
+        h1, h2, h3, h4, h5, h6 {
+          font-size: 0.875rem !important;
+        }
+        
+        /* Reduzir tamanho dos títulos */
+        .text-2xl {
+          font-size: 1.25rem !important;
+        }
+        
+        .text-3xl {
+          font-size: 1.5rem !important;
+        }
+        
+        /* Texto menor para economizar espaço */
+        .text-sm {
+          font-size: 0.75rem;
+        }
+        
+        .text-xs {
+          font-size: 0.625rem;
+        }
+      }
+      
+      /* Para tablet (entre 481px e 768px) */
+      @media (min-width: 481px) and (max-width: 768px) {
+        /* Ajustar títulos em tablet */
+        .text-2xl {
+          font-size: 1.5rem;
+        }
+        
+        .text-3xl {
+          font-size: 1.875rem;
+        }
+      }
+      
+      /* Melhorar responsividade de modais em mobile */
+      @media (max-width: 640px) {
+        /* Modais ocupando a tela inteira ou quase */
+        .w-full.max-w-lg,
+        .w-full.max-w-md,
+        .w-full.max-w-sm {
+          max-width: 95vw !important;
+          margin: 0 auto !important;
+        }
+        
+        /* Reduzir padding dentro de modais */
+        .bg-white.rounded-lg.shadow-xl.p-6,
+        .bg-white.rounded-xl.shadow-2xl.p-6 {
+          padding: 1rem !important;
+        }
+        
+        /* Inputs melhor em mobile */
+        input[type="text"]:focus,
+        input[type="number"]:focus,
+        input[type="date"]:focus,
+        select:focus,
+        textarea:focus {
+          font-size: 16px !important;
+        }
+        
+        /* Botões com padding adequado */
+        button.w-full {
+          min-height: 48px;
+        }
+      }
+      
+      /* Prevenir zoom automático de inputs em iOS */
+      input[type="text"],
+      input[type="email"],
+      input[type="number"],
+      input[type="date"],
+      input[type="tel"],
+      select,
+      textarea {
+        font-size: 16px;
       }
       
       /* Timeline de progresso com animações suaves */
@@ -172,7 +314,7 @@
                             <i data-lucide="keyboard" class="w-6 h-6"></i>
                         </div>
                         <div>
-                            <h1 id="page-title" class="text-2xl font-semibold text-gray-900 leading-tight">Lançamento</h1>
+                            <h1 id="page-title" class="text-xl sm:text-2xl font-semibold text-gray-900 leading-tight">Lançamento</h1>
                             <p class="text-sm font-medium text-gray-500">Registro operacional em tempo real</p>
                         </div>
                     </div>
@@ -247,7 +389,7 @@
                                     <option value="Outros">Outros</option>
                                 </select>
                             </div>
-                            <div class="grid grid-cols-3 gap-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
                                 <div>
                                     <label for="budgeted-cycle" class="block text-sm font-medium">Ciclo Padrão (s)</label>
                                     <input type="number" id="budgeted-cycle" name="budgeted_cycle" required class="mt-1 w-full p-2 border-gray-300 rounded-md bg-gray-50" readonly>
@@ -697,7 +839,7 @@
 
                             <!-- Cabeçalho com informações do produto -->
                             <div id="quality-process-header" class="hidden mb-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
-                                <div class="grid grid-cols-3 gap-3">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3">
                                     <div>
                                         <p class="text-xs text-gray-600 uppercase tracking-wide font-semibold">Produto</p>
                                         <p id="quality-header-product" class="text-xs font-bold text-gray-800">-</p>
@@ -1706,6 +1848,17 @@
                                 <div>
                                     <label class="block text-xs md:text-sm font-medium text-gray-700 mb-1">Data Final</label>
                                     <input type="date" id="analysis-end-date" class="w-full border-gray-300 rounded-md p-2 text-sm">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Painel de Informações da Máquina/Produto Selecionado -->
+                        <div id="analysis-info-panel" class="hidden p-4 md:p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-200">
+                            <div class="flex items-center gap-4">
+                                <div class="bg-white rounded-lg p-4 md:p-6 border-l-4 border-blue-500 shadow-sm flex-1">
+                                    <p class="text-xs text-gray-600 uppercase tracking-wide font-semibold mb-2">Analisando</p>
+                                    <p id="analysis-info-machine" class="text-lg md:text-xl font-bold text-gray-900">-</p>
+                                    <p id="analysis-info-machine-model" class="text-sm text-gray-500 mt-1">-</p>
                                 </div>
                             </div>
                         </div>
