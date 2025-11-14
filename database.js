@@ -112,7 +112,7 @@ const productDatabase = [
     { "cod": 5083, "client": "APTAR", "name": "ATUADOR-SENTIDOS-PP--5,75-LILA---LOT", "cavities": 22, "cycle": 25.5, "weight": 2.15, "pieces_per_hour_goal": 3106, "mp": "" },
     { "cod": 5302, "client": "APTAR", "name": "ATUADOR-K2-PP---NATU-----RRNA00004", "cavities": 16, "cycle": 19.2, "weight": 1.45, "pieces_per_hour_goal": 3000, "mp": "" },
     { "cod": 5313, "client": "APTAR", "name": "ATUADOR-A03LV1-PP---NATU-----RRNA00003", "cavities": 56, "cycle": 18, "weight": 0.85, "pieces_per_hour_goal": 11200, "mp": "" },
-    { "cod": 5328, "client": "APTAR", "name": "ATUADOR-A46V1-PP---NATU-----RRNA00003", "cavities": 32, "cycle": 21, "weight": 1.25, "pieces_per_hour_goal": 5486, "mp": "" },
+    { "cod": 5328, "client": "APTAR", "name": "ATUADOR-A46V1-PP---NATU-----RRNA00003", "cavities": 32, "cycle": 21, "weight": 0.19, "pieces_per_hour_goal": 5486, "mp": "" },
     { "cod": 5332, "client": "APTAR", "name": "ACTU-A03LV1-PP---GREY-SHNY------P228", "cavities": 56, "cycle": 18, "weight": 0.85, "pieces_per_hour_goal": 11200, "mp": "" },
     { "cod": 5382, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-GOLD---SPRAY-13017", "cavities": 30, "cycle": 20, "weight": 1.85, "pieces_per_hour_goal": 5400, "mp": "" },
     { "cod": 5412, "client": "APTAR", "name": "ACTU-K2-PP---BLUE-------P322", "cavities": 16, "cycle": 19.2, "weight": 1.45, "pieces_per_hour_goal": 3000, "mp": "" },
@@ -407,3 +407,4 @@ tareBoxesDatabase.forEach(tare => {
         tareByMachine
     };
 }));
+
