@@ -22,7 +22,7 @@ const productDatabase = [
     { "cod": 77, "client": "SILGAN", "name": "ATUADOR P2000 SATIN OURO CB101 PP", "cavities": 23, "cycle": 19, "weight": 1.45, "pieces_per_hour_goal": 4358, "mp": "" },
     { "cod": 78, "client": "SILGAN", "name": "ATUADOR P2000 SATIN OURO CB149 PP", "cavities": 23, "cycle": 19, "weight": 1.45, "pieces_per_hour_goal": 4358, "mp": "" },
     { "cod": 80, "client": "SILGAN", "name": "ATUADOR P2000 SATIN PRETO 17 PP", "cavities": 23, "cycle": 19, "weight": 1.45, "pieces_per_hour_goal": 4358, "mp": "" },
-    { "cod": 91, "client": "SILGAN", "name": "BUCHA P2000 2ML NATURAL PP", "cavities": 29, "cycle": 16, "weight": 0.55, "pieces_per_hour_goal": 6525, "mp": "" },
+    { "cod": 91, "client": "SILGAN", "name": "BUCHA P2000 2ML NATURAL PP", "cavities": 29, "cycle": 16, "weight": 0.83, "pieces_per_hour_goal": 6525, "mp": "" },
     { "cod": 92, "client": "SILGAN", "name": "ACUMULADOR P2000 28MM NAT PP EF045", "cavities": 32, "cycle": 19, "weight": 1.25, "pieces_per_hour_goal": 6063, "mp": "" },
     { "cod": 93, "client": "SILGAN", "name": "ACUMULADOR P2000 JUNTA-A NATURAL EF045", "cavities": 32, "cycle": 19, "weight": 1.25, "pieces_per_hour_goal": 6063, "mp": "" },
     { "cod": 94, "client": "SILGAN", "name": "TAMPA MKIV MD STD NATURAL PP PD06001", "cavities": 14, "cycle": 10.5, "weight": 0.95, "pieces_per_hour_goal": 4800, "mp": "" },
@@ -370,4 +370,5 @@ function atualizarDatabase(novosDados) {
         groupedDowntimeReasons
     };
 }));
+
 
