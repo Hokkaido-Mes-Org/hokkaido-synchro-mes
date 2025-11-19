@@ -1,3 +1,93 @@
+// Popular o select de MP no cadastro de ordem de produção
+document.addEventListener('DOMContentLoaded', function() {
+    // Ocultar subaba Analytics IA para todos, exceto Leandro Camargo
+    setTimeout(() => {
+        try {
+            const user = window.authSystem?.getCurrentUser?.();
+            const analyticsBtn = document.querySelector('.analysis-tab-btn[data-view="predictive"]');
+            if (analyticsBtn && (!user || (user.name !== 'Leandro Camargo' && user.username !== 'leandro.camargo'))) {
+                analyticsBtn.style.display = 'none';
+            }
+        } catch (e) {
+            console.warn('Não foi possível aplicar restrição da subaba Analytics IA:', e);
+        }
+    }, 300);
+    function popularSelectMPOrdem() {
+        const select = document.getElementById('order-raw-material');
+        if (!select) return;
+        select.innerHTML = '<option value="">Selecione a matéria-prima...</option>';
+        materiaPrimaDatabase.forEach(mp => {
+            const opt = document.createElement('option');
+            opt.value = mp.codigo;
+            opt.textContent = `${mp.codigo} - ${mp.descricao}`;
+            select.appendChild(opt);
+        });
+    }
+    carregarBancoMateriaPrima(popularSelectMPOrdem);
+});
+// Utilitário para obter descrição da MP pelo código
+function getDescricaoMP(codigo) {
+    const cod = Number(codigo);
+    const mp = materiaPrimaDatabase.find(mp => Number(mp.codigo) === cod);
+    return mp ? mp.descricao : String(codigo);
+}
+
+// Exemplo de uso em análises de perda:
+// Em qualquer local que exibe ou processa MP de perda, use getDescricaoMP(codigo) para mostrar a descrição padronizada.
+
+// Exemplo para gráficos e relatórios:
+// const descricao = getDescricaoMP(loss.mp_codigo);
+// Popular o select de MP na tela de planejamento
+document.addEventListener('DOMContentLoaded', function() {
+    function popularSelectMPPlanejamento() {
+        const select = document.getElementById('planning-mp');
+        if (!select) return;
+        select.innerHTML = '<option value="">Selecione a matéria-prima...</option>';
+        materiaPrimaDatabase.forEach(mp => {
+            const opt = document.createElement('option');
+            opt.value = mp.codigo;
+            opt.textContent = `${mp.codigo} - ${mp.descricao}`;
+            select.appendChild(opt);
+        });
+    }
+    carregarBancoMateriaPrima(popularSelectMPPlanejamento);
+});
+// --- Integração do banco de Matéria-prima no modal de edição de ordem ---
+// Carregar banco de matéria-prima
+function carregarBancoMateriaPrima(callback) {
+    if (window.materiaPrimaDatabase && Array.isArray(window.materiaPrimaDatabase)) {
+        if (callback) callback();
+    }
+}
+
+function popularSelectMP() {
+    const select = document.getElementById('edit-order-mp');
+    if (!select) return;
+    select.innerHTML = '<option value="">Selecione a matéria-prima...</option>';
+    materiaPrimaDatabase.forEach(mp => {
+        const opt = document.createElement('option');
+        opt.value = mp.codigo;
+        opt.textContent = `${mp.codigo} - ${mp.descricao}`;
+        select.appendChild(opt);
+    });
+}
+
+// Popular o select de MP ao abrir o modal de edição
+document.addEventListener('DOMContentLoaded', function() {
+    const editOrderModal = document.getElementById('edit-order-modal');
+    if (editOrderModal) {
+        editOrderModal.addEventListener('show', function() {
+            carregarBancoMateriaPrima(popularSelectMP);
+        });
+    }
+    // Fallback: popular ao abrir o modal manualmente
+    const btns = document.querySelectorAll('[data-edit-order]');
+    btns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            carregarBancoMateriaPrima(popularSelectMP);
+        });
+    });
+});
 // This file contains the full and correct JavaScript code for the Hokkaido Synchro MES application.
 // All functionalities, including the new database with product codes, are implemented here.
 
@@ -88,7 +178,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Configurações de Firestore para melhorar estabilidade
-        db = firebase.firestore();
+    db = firebase.firestore();
+    window.db = db;
         
         // Tentar desabilitar QUIC se disponível (evita ERR_QUIC_PROTOCOL_ERROR)
         if (db.settings) {
@@ -200,20 +291,92 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // ================================
-    // FUNÇÕES DE TARA DAS CAIXAS PLÁSTICAS
+    // FUNÇÕES DE TARA E PESOS - TUDO EM GRAMAS
     // ================================
     
-    // Obter peso da tara para uma máquina específica (em kg)
+    // Obter peso da tara para uma máquina específica (retorna em GRAMAS)
     function getTareWeightForMachine(machine) {
         if (!machine) return 0;
         
-        const normalizedMachine = machine.replace('H', 'H-'); // Converter H01 para H-01
+        const normalizedMachine = normalizeMachineId(machine);
+        const tareWeightKg = window.databaseModule?.tareByMachine?.get(normalizedMachine);
         
-        // Usar índice Map para O(1) lookup em vez de O(n) search
-        const tareWeight = window.databaseModule?.tareByMachine?.get(normalizedMachine);
+        if (!tareWeightKg) return 0;
         
-        // Retorna diretamente em kg (já vem em kg do database)
-        return tareWeight || 0;
+        // Converter kg para gramas - sempre retornar em gramas!
+        return Math.round(tareWeightKg * 1000);
+    }
+    
+    // Converter kg para gramas com validação
+    function kgToGrams(kg) {
+        const num = parseFloat(kg);
+        if (!Number.isFinite(num) || num < 0) return 0;
+        return Math.round(num * 1000);
+    }
+    
+    // Converter gramas para kg com precisão
+    function gramsToKg(grams) {
+        const num = parseFloat(grams);
+        if (!Number.isFinite(num) || num < 0) return 0;
+        return num / 1000;
+    }
+    
+    // Calcular quantidade de peças baseado em peso em gramas
+    // Retorna { quantity: número, remainder: gramas restantes, error: null | string }
+    function calculateQuantityFromGrams(weightGrams, pieceWeightGrams) {
+        const weight = parseFloat(weightGrams) || 0;
+        const pieceWeight = parseFloat(pieceWeightGrams) || 0;
+        
+        if (weight <= 0 || pieceWeight <= 0) {
+            return { quantity: 0, remainder: weight, error: 'Peso da peça ou peso total inválido' };
+        }
+        
+        const quantity = Math.floor(weight / pieceWeight);
+        const remainder = weight % pieceWeight;
+        
+        return { 
+            quantity: Math.max(0, quantity), 
+            remainder: Math.max(0, remainder),
+            error: null 
+        };
+    }
+    
+    // Calcular peso total esperado para quantidade de peças em gramas
+    function calculateExpectedWeightGrams(quantity, pieceWeightGrams) {
+        const qty = parseInt(quantity) || 0;
+        const pieceWeight = parseFloat(pieceWeightGrams) || 0;
+        
+        if (qty < 0 || pieceWeight <= 0) return 0;
+        
+        return qty * pieceWeight;
+    }
+    
+    // Validar consistência: se tem quantidade E peso, verificar se são coerentes
+    // Retorna { valid: boolean, message: string, suggestedQty: number }
+    function validateWeightQuantityConsistency(weightGrams, quantity, pieceWeightGrams, tolerancePercent = 5) {
+        const weight = parseFloat(weightGrams) || 0;
+        const qty = parseInt(quantity) || 0;
+        const pieceWeight = parseFloat(pieceWeightGrams) || 0;
+        
+        if (weight <= 0 || qty <= 0 || pieceWeight <= 0) {
+            return { valid: true, message: '', suggestedQty: qty };
+        }
+        
+        const expectedWeight = qty * pieceWeight;
+        const tolerance = (expectedWeight * tolerancePercent) / 100;
+        const difference = Math.abs(weight - expectedWeight);
+        
+        const suggestedQty = Math.round(weight / pieceWeight);
+        
+        if (difference > tolerance) {
+            return {
+                valid: false,
+                message: `⚠️ Inconsistência detectada! Peso: ${(weight/1000).toFixed(3)}kg | Peças: ${qty} | Peso esperado: ${(expectedWeight/1000).toFixed(3)}kg | Sugestão: ${suggestedQty} peças`,
+                suggestedQty: suggestedQty
+            };
+        }
+        
+        return { valid: true, message: '', suggestedQty: qty };
     }
     
     // Configurar campos de tara nos formulários
@@ -397,8 +560,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         if (useTare && hasTare) {
-            const tareWeight = getTareWeightForMachine(selectedMachineData.machine);
-            tareWeightSpan.textContent = tareWeight.toFixed(3);
+            const tareWeightGrams = getTareWeightForMachine(selectedMachineData.machine);
+            // Exibir em gramas (getTareWeightForMachine retorna gramas)
+            tareWeightSpan.textContent = `${tareWeightGrams}`;
             tareInfo.classList.remove('hidden');
         } else {
             tareInfo.classList.add('hidden');
@@ -504,6 +668,132 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Flags de configuração
     const QUALITY_AUTOFILL_ENABLED = false;
+    const PIECE_WEIGHT_TOLERANCE_PERCENT = 1;
+
+    // Estados auxiliares
+    let quickProductionUpdateFeedback = null;
+
+    function parseWeightInputToGrams(value) {
+        if (value === undefined || value === null || value === '') return 0;
+        let numValue = parseFloat(String(value).replace(',', '.'));
+        if (!Number.isFinite(numValue) || numValue <= 0) return 0;
+        // Valores grandes são considerados gramas. Valores pequenos (ex: 1.5) são kg.
+        if (numValue >= 100) {
+            return Math.round(numValue);
+        }
+        return Math.round(numValue * 1000);
+    }
+
+    function parsePieceWeightInput(value) {
+        // Parser específico para peso da peça no planejamento
+        // Admite que o usuário pode digitar em gramas (como 0,194 ou 194)
+        // NÃO converte valores para evitar ambiguidade
+        if (value === undefined || value === null || value === '') return 0;
+        const normalized = typeof normalizeNumericString === 'function' 
+            ? normalizeNumericString(value)
+            : String(value).replace(',', '.');
+        const parsed = parseFloat(normalized);
+        if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+        // Retornar como-está (assumir que já está em gramas)
+        return parsed;
+    }
+
+    function parsePieceWeightGrams(value) {
+        if (value === undefined || value === null || value === '') return 0;
+        const parsed = typeof parseOptionalNumber === 'function'
+            ? parseOptionalNumber(value)
+            : Number(value);
+        if (parsed === null || parsed === undefined) return 0;
+        if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+        
+        // Se o valor estiver **extremamente** pequeno (< 0.001 kg = menos de 1 miligrama),
+        // então provavelmente é kg e precisa converter para gramas
+        if (parsed < 0.001) {
+            return parsed * 1000;
+        }
+        
+        // Caso contrário, assume que já está em gramas
+        return parsed;
+    }
+
+    function resolvePieceWeightGrams(...sources) {
+        for (const source of sources) {
+            const grams = parsePieceWeightGrams(source);
+            if (grams > 0) {
+                return grams;
+            }
+        }
+        return 0;
+    }
+
+    function getPlanPieceWeightInfo() {
+        const latestMeasured = parsePieceWeightGrams(selectedMachineData?.latest_piece_weight_grams);
+        if (latestMeasured > 0) {
+            return {
+                grams: latestMeasured,
+                source: 'quality_release',
+                label: 'Última liberação da qualidade',
+                updatedAt: selectedMachineData?.latest_piece_weight_updated_at || null,
+                updatedBy: selectedMachineData?.latest_piece_weight_user || null
+            };
+        }
+
+        const planningWeight = resolvePieceWeightGrams(
+            selectedMachineData?.piece_weight_grams,
+            selectedMachineData?.piece_weight,
+            selectedMachineData?.weight,
+            selectedMachineData?.produto?.weight
+        );
+        if (planningWeight > 0) {
+            return {
+                grams: planningWeight,
+                source: 'planning',
+                label: 'Peso planejado',
+                updatedAt: null,
+                updatedBy: null
+            };
+        }
+
+        return { grams: 0, source: 'undefined', label: 'Indefinido', updatedAt: null, updatedBy: null };
+    }
+
+    function formatPieceWeightInfo(info) {
+        if (!info || !info.grams) return 'Peso da peça não definido';
+        const parts = [`${(info.grams).toFixed(3)} g`];
+        if (info.source === 'quality_release') {
+            parts.push('(Qualidade)');
+        } else if (info.source === 'planning') {
+            parts.push('(Planejamento)');
+        }
+        return parts.join(' ');
+    }
+
+    function updateQuickProductionPieceWeightUI({ forceUpdateInput = false } = {}) {
+        const info = getPlanPieceWeightInfo();
+        const sourceLabel = document.getElementById('quick-production-weight-source');
+        const historyInfo = document.getElementById('quick-production-weight-history');
+
+        if (sourceLabel) {
+            sourceLabel.textContent = formatPieceWeightInfo(info);
+        }
+
+        if (historyInfo) {
+            if (info.updatedAt) {
+                const updatedDate = typeof info.updatedAt.toDate === 'function'
+                    ? info.updatedAt.toDate()
+                    : new Date(info.updatedAt);
+                historyInfo.textContent = `Atualizado em ${updatedDate.toLocaleString('pt-BR')} por ${info.updatedBy || 'Qualidade'}`;
+                historyInfo.classList.remove('hidden');
+            } else {
+                historyInfo.textContent = '';
+                historyInfo.classList.add('hidden');
+            }
+        }
+
+        if (typeof quickProductionUpdateFeedback === 'function') {
+            quickProductionUpdateFeedback();
+        }
+    }
 
     let cachedProductionDataset = {
         productionData: [],
@@ -2313,6 +2603,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 case 'orders':
                     await loadOrdersAnalysis();
                     break;
+                case 'predictive':
+                    await loadPredictiveAnalysis();
+                    break;
             }
         } catch (error) {
             console.error('Erro ao carregar dados de análise:', error);
@@ -2508,6 +2801,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 ? `<br><strong>Máquina:</strong> ${escapeHtml(order.machine_id)} - ${escapeHtml(machineInfo.model)}`
                 : '';
 
+            // ...existing code...
+            const isReactivatable = ['concluida','finalizada','encerrada'].includes(status);
             return `
                 <div class="bg-white p-6 rounded-lg shadow border-l-4 border-primary-blue ${isActive ? 'ring-2 ring-blue-400' : ''}">
                     <div class="flex items-start justify-between mb-4">
@@ -2551,6 +2846,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
 
                         ${order.raw_material ? `<div class="bg-blue-50 p-2 rounded text-xs"><strong>MP:</strong> ${escapeHtml(order.raw_material)}</div>` : ''}
+                        ${isReactivatable ? `<button class=\"reactivate-order-btn mt-4 px-4 py-2 bg-blue-600 text-white rounded font-semibold text-sm\" data-order-id=\"${order.id}\"><i data-lucide=\"rotate-ccw\" class=\"w-4 h-4 mr-1 inline\"></i>Reativar Ordem</button>` : ''}
+                        <button class=\"edit-order-btn mt-2 px-4 py-2 bg-yellow-500 text-white rounded font-semibold text-sm\" data-order-id=\"${order.id}\"><i data-lucide=\"edit-3\" class=\"w-4 h-4 mr-1 inline\"></i>Editar</button>
                     </div>
                 </div>
             `;
@@ -2599,6 +2896,132 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         lucide.createIcons();
+
+        // Adicionar event listener para botões de reativação
+        document.querySelectorAll('.reactivate-order-btn').forEach(btn => {
+            if (!btn.dataset.listenerAttached) {
+                btn.addEventListener('click', async (e) => {
+                    const orderId = btn.getAttribute('data-order-id');
+                    if (!orderId) return;
+                    if (!confirm('Deseja realmente reativar esta ordem? Ela voltará ao status ATIVA.')) return;
+                    try {
+                        await db.collection('production_orders').doc(orderId).update({ status: 'ativa' });
+                        showNotification('Ordem reativada com sucesso!', 'success');
+                        await loadOrdersAnalysis();
+                    } catch (err) {
+                        showNotification('Erro ao reativar ordem. Tente novamente.', 'error');
+                        console.error('Erro ao reativar ordem:', err);
+                    }
+                });
+                btn.dataset.listenerAttached = 'true';
+            }
+        });
+
+        // Adicionar event listener para botões de edição
+        document.querySelectorAll('.edit-order-btn').forEach(btn => {
+            if (!btn.dataset.listenerAttached) {
+                btn.addEventListener('click', async (e) => {
+                    const orderId = btn.getAttribute('data-order-id');
+                    if (!orderId) return;
+                    // Buscar dados da ordem
+                    let orderData = null;
+                    if (Array.isArray(productionOrdersCache)) {
+                        orderData = productionOrdersCache.find(o => o.id === orderId);
+                    }
+                    if (!orderData) {
+                        try {
+                            const doc = await db.collection('production_orders').doc(orderId).get();
+                            if (doc.exists) orderData = { id: doc.id, ...doc.data() };
+                        } catch (err) { orderData = null; }
+                    }
+                    if (!orderData) {
+                        showNotification('Ordem não encontrada.', 'error');
+                        return;
+                    }
+                    // Preencher campos do modal
+                    document.getElementById('edit-order-id').value = orderData.id;
+                    // Preencher select de produtos
+                    const productSelect = document.getElementById('edit-order-product');
+                    productSelect.innerHTML = '';
+                    if (window.databaseModule && window.databaseModule.productByCode) {
+                        const products = Array.from(window.databaseModule.productByCode.values());
+                        products.forEach(prod => {
+                            const opt = document.createElement('option');
+                            opt.value = prod.cod;
+                            opt.textContent = `${prod.cod} - ${prod.name} (${prod.client})`;
+                            if ((orderData.product_cod || orderData.part_code || orderData.product) == prod.cod || orderData.product == prod.name) opt.selected = true;
+                            productSelect.appendChild(opt);
+                        });
+                    } else {
+                        const opt = document.createElement('option');
+                        opt.value = orderData.product || '';
+                        opt.textContent = orderData.product || '';
+                        opt.selected = true;
+                        productSelect.appendChild(opt);
+                    }
+
+                    // Preencher select de máquinas
+                    const machineSelect = document.getElementById('edit-order-machine');
+                    machineSelect.innerHTML = '';
+                    if (window.databaseModule && window.databaseModule.machineById) {
+                        const machines = Array.from(window.databaseModule.machineById.values());
+                        machines.forEach(mac => {
+                            const opt = document.createElement('option');
+                            opt.value = mac.id;
+                            opt.textContent = `${mac.id} - ${mac.model}`;
+                            if ((orderData.machine_id || orderData.machine) == mac.id) opt.selected = true;
+                            machineSelect.appendChild(opt);
+                        });
+                    } else {
+                        const opt = document.createElement('option');
+                        opt.value = orderData.machine_id || orderData.machine || '';
+                        opt.textContent = orderData.machine_id || orderData.machine || '';
+                        opt.selected = true;
+                        machineSelect.appendChild(opt);
+                    }
+
+                    document.getElementById('edit-order-customer').value = orderData.customer || orderData.client || '';
+                    document.getElementById('edit-order-lot').value = orderData.lot || orderData.lot_size || '';
+                    document.getElementById('edit-order-planned').value = orderData.lot_size || '';
+                    document.getElementById('edit-order-executed').value = orderData.total_produzido || orderData.totalProduced || '';
+                    document.getElementById('edit-order-modal').classList.remove('hidden');
+                });
+                btn.dataset.listenerAttached = 'true';
+            }
+        });
+// Modal de edição de ordem
+document.getElementById('close-edit-order-modal').onclick = () => {
+    document.getElementById('edit-order-modal').classList.add('hidden');
+};
+document.getElementById('cancel-edit-order').onclick = () => {
+    document.getElementById('edit-order-modal').classList.add('hidden');
+};
+document.getElementById('edit-order-form').onsubmit = async function(e) {
+    e.preventDefault();
+    const id = document.getElementById('edit-order-id').value;
+    const product = document.getElementById('edit-order-product').value;
+    const machine = document.getElementById('edit-order-machine').value;
+    const customer = document.getElementById('edit-order-customer').value;
+    const lot = document.getElementById('edit-order-lot').value;
+    const planned = Number(document.getElementById('edit-order-planned').value);
+    const executed = Number(document.getElementById('edit-order-executed').value);
+    if (!id) return;
+    try {
+        await db.collection('production_orders').doc(id).update({
+            product,
+            machine_id: machine,
+            customer,
+            lot_size: planned,
+            total_produzido: executed
+        });
+        showNotification('Ordem atualizada com sucesso!', 'success');
+        document.getElementById('edit-order-modal').classList.add('hidden');
+        await loadOrdersAnalysis();
+    } catch (err) {
+        showNotification('Erro ao atualizar ordem.', 'error');
+        console.error('Erro ao atualizar ordem:', err);
+    }
+};
     }
 
     // Função para carregar visão geral
@@ -3425,6 +3848,98 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         // Mostrar mensagem inicial
         showNoDataMessage('comparison-chart', 'Selecione os filtros e clique em "Gerar Comparação"');
+    }
+
+    // Função para carregar análise preditiva
+    async function loadPredictiveAnalysis() {
+        console.log('[PREDICTIVE] Carregando view de analytics preditivos');
+        
+        try {
+            // Inicializar sistema de analytics preditivos se não estiver ativo
+            if (!window.predictiveAnalytics || !window.predictiveAnalytics.predictions) {
+                console.log('[PREDICTIVE] Inicializando sistema preditivo...');
+                await window.predictiveAnalytics.initialize();
+            } else {
+                // Se já estiver inicializado, apenas atualizar as previsões
+                console.log('[PREDICTIVE] Atualizando previsões existentes...');
+                await window.predictiveAnalytics.generatePredictions();
+            }
+
+            // Inicializar KPIs avançados se não estiver ativo
+            if (!window.advancedKPIs || !window.advancedKPIs.cache.lastUpdate) {
+                console.log('[ADVANCED-KPIs] Inicializando KPIs avançados...');
+                await window.advancedKPIs.initialize();
+            } else {
+                // Se já estiver inicializado, apenas atualizar se necessário
+                const lastUpdate = window.advancedKPIs.cache.lastUpdate;
+                const hoursSinceUpdate = (new Date() - lastUpdate) / (1000 * 60 * 60);
+                
+                if (hoursSinceUpdate > 1) { // Atualizar se foi há mais de 1 hora
+                    console.log('[ADVANCED-KPIs] Atualizando KPIs avançados...');
+                    await window.advancedKPIs.calculateAllKPIs();
+                }
+            }
+
+            // Inicializar análise Pareto automática
+            if (!window.autoParetoAnalysis || !window.autoParetoAnalysis.analytics.lastUpdate) {
+                console.log('[AUTO-PARETO] Inicializando análise Pareto automática...');
+                await window.autoParetoAnalysis.initialize();
+            } else {
+                // Se já estiver inicializado, verificar se precisa atualizar
+                const lastUpdate = window.autoParetoAnalysis.analytics.lastUpdate;
+                const hoursSinceUpdate = (new Date() - lastUpdate) / (1000 * 60 * 60);
+                
+                if (hoursSinceUpdate > 2) { // Atualizar se foi há mais de 2 horas
+                    console.log('[AUTO-PARETO] Atualizando análise Pareto...');
+                    await window.autoParetoAnalysis.performCompleteAnalysis();
+                }
+            }
+
+            // Inicializar sistema SPC (não automaticamente - usuário deve clicar)
+            if (!window.spcController || !window.spcController.spcData.lastUpdate) {
+                console.log('[SPC] Sistema SPC disponível - aguardando inicialização manual');
+                // Atualizar status para mostrar que está pronto
+                const spcStatus = document.getElementById('spc-process-status');
+                if (spcStatus) {
+                    spcStatus.textContent = 'Pronto para Iniciar';
+                    spcStatus.className = 'px-3 py-1 rounded-full text-sm font-medium text-blue-600 bg-blue-50';
+                }
+            }
+
+            // Inicializar sistema de rastreabilidade total
+            if (!window.traceabilitySystem || !window.traceabilitySystem.traceabilityData.lastUpdate) {
+                console.log('[TRACEABILITY] Inicializando sistema de rastreabilidade total...');
+                await window.traceabilitySystem.initialize();
+            } else {
+                // Se já estiver inicializado, verificar se precisa atualizar
+                const lastUpdate = window.traceabilitySystem.traceabilityData.lastUpdate;
+                const hoursSinceUpdate = (new Date() - lastUpdate) / (1000 * 60 * 60);
+                
+                if (hoursSinceUpdate > 6) { // Atualizar se foi há mais de 6 horas
+                    console.log('[TRACEABILITY] Atualizando dados de rastreabilidade...');
+                    await window.traceabilitySystem.loadTraceabilityData();
+                    window.traceabilitySystem.buildGenealogyTree();
+                    window.traceabilitySystem.updateTraceabilityInterface();
+                }
+            }
+            
+            console.log('[PREDICTIVE] Todos os sistemas avançados carregados com sucesso');
+            
+        } catch (error) {
+            console.error('[PREDICTIVE] Erro ao carregar analytics preditivos:', error);
+            
+            // Mostrar interface de erro
+            const alertsContainer = document.getElementById('proactive-alerts');
+            if (alertsContainer) {
+                alertsContainer.innerHTML = `
+                    <div class="text-center text-red-500 py-8">
+                        <i data-lucide="alert-circle" class="w-12 h-12 mx-auto text-red-400 mb-2"></i>
+                        <p class="font-semibold">Erro ao carregar sistema preditivo</p>
+                        <p class="text-sm text-gray-600 mt-1">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
     }
 
     // Função para gerar comparação
@@ -5191,38 +5706,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         };
 
         return new Chart(ctx, {
-            type: 'bar',
+            type: 'line',
             data: {
                 labels,
                 datasets: [
-                    {
-                        type: 'bar',
-                        label: 'Executado por Hora',
-                        data: executed,
-                        backgroundColor: barBackground,
-                        borderRadius: 8,
-                        borderSkipped: false,
-                        maxBarThickness: 22,
-                        order: 2,
-                        yAxisID: 'y'
-                    },
-                    {
-                        type: 'line',
-                        label: 'Planejado por Hora',
-                        data: planned,
-                        borderColor: '#3B82F6',
-                        backgroundColor: 'transparent',
-                        borderWidth: 2.5,
-                        tension: 0.35,
-                        pointRadius: 2,
-                        pointHoverRadius: 5,
-                        pointBackgroundColor: '#ffffff',
-                        pointBorderColor: '#3B82F6',
-                        yAxisID: 'y',
-                        order: 3,
-                        fill: false,
-                        borderDash: [6, 6]
-                    },
                     {
                         type: 'line',
                         label: 'Produção Acumulada',
@@ -6563,6 +7050,15 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         return results.sort((a, b) => b.value - a.value);
     }
+
+    // Expor o serviço de dados analíticos para módulos externos (ex.: predictive-analytics)
+    if (!window.analyticsDataService) {
+        window.analyticsDataService = {};
+    }
+    window.analyticsDataService.getFilteredData = getFilteredData;
+
+    // Compatibilidade: garantir que outros módulos (Advanced KPIs, SPC, etc.) encontrem a versão completa
+    window.getFilteredData = getFilteredData;
         
     // Final da inicialização  
     init();
@@ -10088,6 +10584,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const thousandPatternPtBr = /^\d{1,3}(\.\d{3})+(,\d+)?$/;
         const thousandPatternEn = /^\d{1,3}(,\d{3})+(\.\d+)?$/;
 
+        const hasComma = trimmed.includes(',');
+        const hasDot = trimmed.includes('.');
+
+        // Se possuir apenas vírgula (formato típico pt-BR), tratar como decimal
+        if (hasComma && !hasDot) {
+            return trimmed.replace(/\s+/g, '').replace(',', '.');
+        }
+
         if (thousandPatternPtBr.test(trimmed)) {
             return trimmed.replace(/\./g, '').replace(',', '.');
         }
@@ -10984,7 +11488,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const resolvedMp = (data.mp || linkedOrder?.raw_material || snapshot.mp || product.mp || '').trim();
             const resolvedCycle = parseFloat(data.budgeted_cycle) || Number(product.cycle) || Number(snapshot.cycle) || 0;
             const resolvedCavities = parseFloat(data.mold_cavities) || Number(product.cavities) || Number(snapshot.cavities) || 0;
-            const resolvedWeight = parseFloat(data.piece_weight) || Number(snapshot.weight) || Number(product.weight) || 0;
+            
+            // Converter peso da peça usando parser específico para peças (não converte kg->g)
+            let resolvedWeight = 0;
+            if (data.piece_weight) {
+                resolvedWeight = parsePieceWeightInput(data.piece_weight);
+                console.log('[PLANNING] piece_weight from input:', { raw: data.piece_weight, converted: resolvedWeight });
+            }
+            // Se não tiver peso, usar fallback do produto/snapshot
+            if (!resolvedWeight && (snapshot.weight || product.weight)) {
+                resolvedWeight = parsePieceWeightInput(snapshot.weight || product.weight);
+                console.log('[PLANNING] piece_weight from fallback:', { snapshot: snapshot.weight, product: product.weight, resolved: resolvedWeight });
+            }
             const resolvedQuantidadeEmbalagem = parseFloat(data.quantidade_da_embalagem) || null;
             const resolvedPlannedQuantity = (() => {
                 const parsed = parseInt(data.planned_quantity, 10);
@@ -11003,12 +11518,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 budgeted_cycle: resolvedCycle || null,
                 mold_cavities: resolvedCavities || null,
                 piece_weight: resolvedWeight || null,
+                piece_weight_grams: resolvedWeight || null,
                 quantidade_da_embalagem: resolvedQuantidadeEmbalagem,
                 planned_quantity: resolvedPlannedQuantity,
                 mp: resolvedMp,
                 mp_type: data.mp_type || linkedOrder?.mp_type || '',
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             };
+            console.log('[PLANNING] docData to be saved:', { piece_weight: docData.piece_weight, piece_weight_grams: docData.piece_weight_grams });
 
             if (linkedOrder) {
                 docData.order_id = linkedOrder.id;
@@ -11126,6 +11643,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     const updatedSelected = planningItems.find(item => item.id === selectedMachineData.id);
                     if (updatedSelected) {
                         selectedMachineData = { ...selectedMachineData, ...updatedSelected };
+                        updateQuickProductionPieceWeightUI();
                         if (productName) {
                             productName.textContent = selectedMachineData.product || 'Produto não definido';
                         }
@@ -11192,6 +11710,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const key = `${item.machine}||${item.product_cod || item.product || ''}`;
             if (!grouped.has(key)) {
                 grouped.set(key, {
+                    id: item.id, // Guardar ID do primeiro item do grupo
                     machine: item.machine,
                     product: item.product,
                     product_cod: item.product_cod,
@@ -11257,7 +11776,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
                 <td class="px-2 py-2 whitespace-nowrap border font-bold">${orDashNum(item.total_produzido)}</td>
                 <td class="px-2 py-2 whitespace-nowrap border">${item.machine}</td>
-                <td class="px-2 py-2 whitespace-nowrap border no-print"></td>
+                <td class="px-2 py-2 whitespace-nowrap border no-print text-center">
+                    <button class="delete-plan-btn text-status-error hover:text-red-700 p-1 transition-colors" data-id="${item.id}" title="Deletar planejamento"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                </td>
             </tr>
         `).join('');
 
@@ -11615,7 +12136,16 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 // Configurar informações do produto
                 const productWeightInfo = document.getElementById('product-weight-info');
                 if (productWeightInfo) {
-                    const infoParts = [`Peso da peça: ${planData.piece_weight || 0}g`];
+                    const pieceWeightGrams = resolvePieceWeightGrams(
+                        planData.piece_weight_grams,
+                        planData.piece_weight,
+                        planData.weight
+                    );
+                    const infoParts = [
+                        pieceWeightGrams > 0
+                            ? `Peso da peça: ${pieceWeightGrams.toFixed(3)}g`
+                            : 'Peso da peça: -'
+                    ];
                     if (planData.mp) infoParts.push(`MP: ${planData.mp}`);
                     productWeightInfo.textContent = infoParts.join(' • ');
                 }
@@ -12245,6 +12775,160 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     }
     
     function setupModals() {
+    // ================================
+    // VALIDAÇÃO EM TEMPO REAL (POKA-YOKE)
+    // ================================
+    
+    // Validar campos de lançamento de produção em tempo real
+    function setupProductionFormValidation() {
+        const qtyInput = document.getElementById('quick-production-qty');
+        const weightInput = document.getElementById('quick-production-weight');
+        const useTareCheckbox = document.getElementById('quick-production-use-tare');
+        const submitBtn = document.getElementById('quick-production-submit');
+        const measuredFeedback = document.getElementById('quick-production-piece-weight-feedback');
+        const measuredVariation = document.getElementById('quick-production-piece-weight-variation');
+        
+        if (!qtyInput || !weightInput) return;
+        
+        // Função para atualizar feedback
+        const updateFeedback = () => {
+            const qty = qtyInput.value ? parseInt(qtyInput.value, 10) : 0;
+            const weightInput_value = weightInput.value || '';
+            const weightGrams = parseWeightInputToGrams(weightInput_value);
+            const planInfo = getPlanPieceWeightInfo();
+            const activePieceWeight = planInfo.grams;
+            
+            // Atualizar display de conversão
+            const convertedDisplay = document.getElementById('quick-production-weight-converted');
+            if (weightGrams > 0) {
+                if (parseFloat(weightInput_value) > 0 && parseFloat(weightInput_value) < 100) {
+                    convertedDisplay.textContent = `= ${weightGrams}g`;
+                } else {
+                    convertedDisplay.textContent = `= ${(weightGrams/1000).toFixed(3)}kg`;
+                }
+            } else {
+                convertedDisplay.textContent = '';
+            }
+            
+            if (measuredVariation) {
+                measuredVariation.textContent = '';
+                measuredVariation.classList.add('hidden');
+            }
+
+            // Validar tara
+            if (useTareCheckbox && useTareCheckbox.checked && weightGrams > 0) {
+                const tareGrams = getTareWeightForMachine(selectedMachineData?.machine);
+                if (tareGrams > 0) {
+                    const netWeightGrams = Math.max(0, weightGrams - tareGrams);
+                    if (convertedDisplay.textContent) {
+                        convertedDisplay.textContent += ` → ${(netWeightGrams/1000).toFixed(3)}kg (após tara)`;
+                    }
+                }
+            }
+            
+            // Validar consistência se ambos preenchidos
+            const consistencyAlert = document.getElementById('quick-production-consistency-alert');
+            const consistencyMsg = document.getElementById('quick-production-consistency-message');
+            
+            if (qty > 0 && weightGrams > 0 && selectedMachineData) {
+                if (activePieceWeight > 0) {
+                    const consistency = validateWeightQuantityConsistency(weightGrams, qty, activePieceWeight, PIECE_WEIGHT_TOLERANCE_PERCENT);
+                    if (!consistency.valid) {
+                        consistencyAlert.classList.remove('hidden');
+                        consistencyMsg.textContent = consistency.message;
+                        submitBtn.classList.add('opacity-75');
+                    } else {
+                        consistencyAlert.classList.add('hidden');
+                        submitBtn.classList.remove('opacity-75');
+                    }
+                }
+            } else {
+                consistencyAlert.classList.add('hidden');
+                submitBtn.classList.remove('opacity-75');
+            }
+            
+            // Validar que pelo menos um campo está preenchido
+            if ((qty === 0 || !qtyInput.value) && (weightGrams === 0 || !weightInput.value)) {
+                submitBtn.disabled = true;
+                submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        };
+
+        quickProductionUpdateFeedback = updateFeedback;
+        
+        // Event listeners
+        qtyInput.addEventListener('input', updateFeedback);
+        qtyInput.addEventListener('blur', updateFeedback);
+        qtyInput.addEventListener('change', updateFeedback);
+
+        weightInput.addEventListener('input', updateFeedback);
+        weightInput.addEventListener('blur', updateFeedback);
+        weightInput.addEventListener('change', updateFeedback);
+        
+        if (measuredInput) {
+            measuredInput.addEventListener('input', () => {
+                if (measuredInput.value && measuredFeedback) {
+                    measuredFeedback.textContent = '';
+                }
+                updateFeedback();
+            });
+            measuredInput.addEventListener('blur', () => {
+                const val = measuredInput.value;
+                if (val && (isNaN(parseFloat(val)) || parseFloat(val) <= 0)) {
+                    measuredInput.classList.add('border-red-500', 'border-2');
+                    if (measuredFeedback) {
+                        measuredFeedback.textContent = '❌ Informe um peso válido em gramas';
+                        measuredFeedback.classList.add('text-red-600');
+                    }
+                } else {
+                    measuredInput.classList.remove('border-red-500', 'border-2');
+                    if (measuredFeedback) {
+                        measuredFeedback.textContent = 'Se vazio, será usado o peso padrão do planejamento.';
+                        measuredFeedback.classList.remove('text-red-600');
+                    }
+                }
+            });
+        }
+        
+        if (useTareCheckbox) {
+            useTareCheckbox.addEventListener('change', updateFeedback);
+        }
+        
+        // Validar que quantidade é inteiro positivo
+        qtyInput.addEventListener('blur', function() {
+            const val = this.value;
+            if (val && (isNaN(parseInt(val, 10)) || parseInt(val, 10) < 0)) {
+                this.classList.add('border-red-500', 'border-2');
+                document.getElementById('quick-production-qty-feedback').textContent = '❌ Deve ser um número inteiro positivo';
+                document.getElementById('quick-production-qty-feedback').classList.add('text-red-600');
+            } else {
+                this.classList.remove('border-red-500', 'border-2');
+                document.getElementById('quick-production-qty-feedback').textContent = '';
+                document.getElementById('quick-production-qty-feedback').classList.remove('text-red-600');
+            }
+        });
+        
+        // Validar que peso é número positivo
+        weightInput.addEventListener('blur', function() {
+            const val = this.value;
+            if (val && (isNaN(parseFloat(val)) || parseFloat(val) < 0)) {
+                this.classList.add('border-red-500', 'border-2');
+                document.getElementById('quick-production-weight-feedback').textContent = '❌ Deve ser um número positivo';
+                document.getElementById('quick-production-weight-feedback').classList.add('text-red-600');
+            } else {
+                this.classList.remove('border-red-500', 'border-2');
+                document.getElementById('quick-production-weight-feedback').textContent = 'Aceita valores em gramas ou kg (Ex: 1,5 kg = 1500g)';
+                document.getElementById('quick-production-weight-feedback').classList.remove('text-red-600');
+            }
+        });
+        
+        // Primeiro update
+        updateFeedback();
+    }
+
         // Modal de produção
         const quickProductionModal = document.getElementById('quick-production-modal');
         const quickProductionClose = document.getElementById('quick-production-close');
@@ -12253,7 +12937,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         if (quickProductionClose) quickProductionClose.addEventListener('click', () => closeModal('quick-production-modal'));
         if (quickProductionCancel) quickProductionCancel.addEventListener('click', () => closeModal('quick-production-modal'));
-        if (quickProductionForm) quickProductionForm.addEventListener('submit', handleProductionSubmit);
+        if (quickProductionForm) {
+            quickProductionForm.addEventListener('submit', handleProductionSubmit);
+            // Inicializar validação quando o modal abre
+            setupProductionFormValidation();
+        }
         
         // Modal de perdas
         const quickLossesClose = document.getElementById('quick-losses-close');
@@ -12346,6 +13034,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             alert('Selecione uma máquina primeiro.');
             return;
         }
+        updateQuickProductionPieceWeightUI({ forceUpdateInput: true });
         openModal('quick-production-modal');
     }
     
@@ -12629,6 +13318,16 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     }
 
     function openModal(modalId) {
+        if (modalId === 'quick-downtime-modal') {
+            // Forçar re-vinculação do submit do formulário de parada
+            const quickDowntimeForm = document.getElementById('quick-downtime-form');
+            if (quickDowntimeForm) {
+                quickDowntimeForm.onsubmit = null;
+                quickDowntimeForm.removeEventListener('submit', handleDowntimeSubmit);
+                quickDowntimeForm.addEventListener('submit', handleDowntimeSubmit);
+                console.log('[DEBUG] Evento de submit vinculado ao quick-downtime-form (openModal)');
+            }
+        }
         console.error('🔴🔴🔴 OPENMODAL START, modalId=' + modalId + ' 🔴🔴🔴');
 
         const modal = document.getElementById(modalId);
@@ -12969,6 +13668,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             if (selectedMachineData && selectedMachineData.machine && machineCardData[selectedMachineData.machine]) {
                 selectedMachineData = machineCardData[selectedMachineData.machine];
                 updateMachineInfo();
+                updateQuickProductionPieceWeightUI();
             }
             
             await refreshLaunchCharts();
@@ -13127,6 +13827,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             if (selectedMachineData && selectedMachineData.machine && machineCardData[selectedMachineData.machine]) {
                 selectedMachineData = machineCardData[selectedMachineData.machine];
                 updateMachineInfo();
+                updateQuickProductionPieceWeightUI();
             }
             
             await refreshLaunchCharts();
@@ -13149,106 +13850,197 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
         
-        console.log('[TRACE][handleProductionSubmit] triggered', {
-            selectedMachineData,
-            currentEditContext
-        });
+        console.log('[WEIGHT-CALC] Iniciando handleProductionSubmit com validação em gramas');
 
-    const qty = parseInt(document.getElementById('quick-production-qty').value, 10) || 0;
-    let weight = parseFloat(document.getElementById('quick-production-weight').value) || 0;
+        const qtyInputEl = document.getElementById('quick-production-qty');
+        const weightInputEl = document.getElementById('quick-production-weight');
+        const measuredPieceInputEl = document.getElementById('quick-production-piece-weight');
+
+        const qtyInput = qtyInputEl?.value || '';
+        const weightInputRaw = weightInputEl?.value || '';
         const obs = (document.getElementById('quick-production-obs').value || '').trim();
-        
-        // Verificar se deve aplicar tara da caixa plástica
         const useTare = document.getElementById('quick-production-use-tare').checked;
-        if (useTare && weight > 0) {
-            const tareWeight = getTareWeightForMachine(selectedMachineData?.machine);
-            if (tareWeight > 0) {
-                weight = Math.max(0, weight - tareWeight);
-                console.log(`[TRACE][handleProductionSubmit] Tara aplicada: ${tareWeight.toFixed(3)}kg descontados. Peso líquido: ${weight.toFixed(3)}kg`);
+        
+        // Converter entradas para números
+        const qty = qtyInput ? parseInt(qtyInput, 10) : 0;
+        let weightGrams = parseWeightInputToGrams(weightInputRaw);
+        const planPieceInfo = typeof getPlanPieceWeightInfo === 'function' ? getPlanPieceWeightInfo() : null;
+        
+        console.log('[WEIGHT-CALC] Entradas:', { qtyInput, weightInputRaw, qty, weightGrams });
+        
+        // POKA-YOKE #1: Aplicar tara em gramas
+        if (useTare && weightGrams > 0) {
+            const tareGrams = getTareWeightForMachine(selectedMachineData?.machine);
+            if (tareGrams > 0) {
+                weightGrams = Math.max(0, weightGrams - tareGrams);
+                console.log(`[WEIGHT-CALC] Tara aplicada: -${tareGrams}g. Peso líquido: ${weightGrams}g`);
             }
         }
         
-        console.log('[TRACE][handleProductionSubmit] parsed form values', { qty, weight, obs, useTare });
-
-        // Aceitar quantidade OU peso (um ou outro)
+        // POKA-YOKE #2: Validar que pelo menos quantidade OU peso foi informado
         const hasQty = Number.isFinite(qty) && qty > 0;
-        const hasWeight = Number.isFinite(weight) && weight > 0;
+        const hasWeight = Number.isFinite(weightGrams) && weightGrams > 0;
+        
         if (!hasQty && !hasWeight) {
-            alert('Informe a quantidade produzida OU o peso bruto (um dos dois).');
+            alert('⚠️ Informe a quantidade de peças OU o peso bruto (em kg ou gramas). Um dos dois é obrigatório.');
+            if (qtyInputEl) {
+                qtyInputEl.focus();
+            } else if (weightInputEl) {
+                weightInputEl.focus();
+            }
             return;
         }
-
+        
+        // Recuperar dados de planejamento
         const isEditing = currentEditContext && currentEditContext.type === 'production' && currentEditContext.id;
         const originalData = isEditing ? currentEditContext.original : null;
-
-        console.log('[TRACE][handleProductionSubmit] context info', { isEditing, originalData });
-
         const fallbackPlan = selectedMachineData ? selectedMachineData.id : originalData?.planId;
         const planId = isEditing ? (originalData?.planId || fallbackPlan) : fallbackPlan;
-
-        console.log('[TRACE][handleProductionSubmit] resolved plan', { fallbackPlan, planId });
-
+        
         if (!planId) {
-            alert('Não foi possível identificar o planejamento associado ao lançamento.');
+            alert('❌ Erro: Não foi possível identificar o planejamento.');
             return;
         }
+        
+        // Buscar peso médio da peça (em gramas)
+        let resolvedPieceWeightGrams = 0;
+        let resolvedPieceWeightSource = 'undefined';
 
+        const pieceWeightCandidates = [
+            planPieceInfo?.grams ? { grams: planPieceInfo.grams, source: planPieceInfo.source || 'planning' } : null,
+            { grams: parsePieceWeightGrams(selectedMachineData?.piece_weight_grams), source: 'planning_piece_weight_grams' },
+            { grams: parsePieceWeightGrams(selectedMachineData?.piece_weight), source: 'planning_piece_weight' },
+            { grams: parsePieceWeightGrams(selectedMachineData?.weight), source: 'planning_weight' },
+            { grams: parsePieceWeightGrams(selectedMachineData?.produto?.weight), source: 'product_weight' },
+            { grams: parsePieceWeightGrams(selectedMachineData?.mp_weight), source: 'mp_weight' },
+            { grams: parsePieceWeightGrams(currentEditContext?.original?._piece_weight_grams), source: currentEditContext?.original?._piece_weight_source || 'historic_entry' }
+        ];
+
+        for (const candidate of pieceWeightCandidates) {
+            if (candidate && candidate.grams > 0) {
+                resolvedPieceWeightGrams = candidate.grams;
+                resolvedPieceWeightSource = candidate.source;
+                break;
+            }
+        }
+        
+        console.log('[WEIGHT-CALC] Peso da peça:', { resolvedPieceWeightGrams, kg: gramsToKg(resolvedPieceWeightGrams), source: resolvedPieceWeightSource });
+        
+        // POKA-YOKE #3: Se ambos quantidade E peso foram fornecidos, validar consistência
+        let finalQty = qty;
+        let finalWeightGrams = weightGrams;
+        
+        if (hasQty && hasWeight && resolvedPieceWeightGrams > 0) {
+            const consistency = validateWeightQuantityConsistency(weightGrams, qty, resolvedPieceWeightGrams, PIECE_WEIGHT_TOLERANCE_PERCENT);
+            
+            if (!consistency.valid) {
+                console.warn('[WEIGHT-CALC] Inconsistência detectada:', consistency.message);
+                
+                const confirmUse = confirm(
+                    consistency.message + '\n\n' +
+                    `Usar ${consistency.suggestedQty} peças (baseado no peso)?\n\n` +
+                    'SIM = Usar quantidade sugerida\nNÃO = Cancelar e revisar'
+                );
+                
+                if (confirmUse) {
+                    finalQty = consistency.suggestedQty;
+                    console.log('[WEIGHT-CALC] Quantidade ajustada para:', finalQty);
+                } else {
+                    return;
+                }
+            }
+        }
+        
+        // POKA-YOKE #4: Se apenas peso foi informado, converter para quantidade
+        if (!hasQty && hasWeight) {
+            if (resolvedPieceWeightGrams <= 0) {
+                alert('❌ Peso da peça não configurado. Não é possível converter peso em quantidade.\n' +
+                      'Informe a quantidade manualmente ou configure o peso da peça no planejamento.');
+                return;
+            }
+            
+            const result = calculateQuantityFromGrams(weightGrams, resolvedPieceWeightGrams);
+            if (result.error) {
+                alert(`❌ Erro no cálculo: ${result.error}`);
+                return;
+            }
+            
+            finalQty = result.quantity;
+            
+            if (result.remainder > 0) {
+                const confirmRemainder = confirm(
+                    `Peso convertido: ${weightGrams}g ÷ ${resolvedPieceWeightGrams}g/peça = ${finalQty} peças\n\n` +
+                    `Resto: ${result.remainder}g (${(result.remainder/resolvedPieceWeightGrams).toFixed(1)}% de uma peça)\n\n` +
+                    `Confirmar ${finalQty} peças?`
+                );
+                
+                if (!confirmRemainder) return;
+            }
+            
+            console.log(`[WEIGHT-CALC] Peso convertido: ${weightGrams}g → ${finalQty} peças`);
+            showNotification(`✅ Convertido: ${(weightGrams/1000).toFixed(3)}kg = ${finalQty} peças`, 'success');
+        }
+        
+        // POKA-YOKE #5: Se apenas quantidade foi informada, calcular peso esperado para referência
+        if (hasQty && !hasWeight && resolvedPieceWeightGrams > 0) {
+            const expectedWeightGrams = calculateExpectedWeightGrams(qty, resolvedPieceWeightGrams);
+            finalWeightGrams = expectedWeightGrams;
+            console.log(`[WEIGHT-CALC] Peso calculado: ${finalQty} peças × ${resolvedPieceWeightGrams}g = ${finalWeightGrams}g`);
+        }
+        
+        // POKA-YOKE #6: Validação final de sanidade
+        if (!Number.isFinite(finalQty) || finalQty < 0) {
+            alert('❌ Quantidade inválida após cálculos. Revise os valores.');
+            return;
+        }
+        
+        if (finalQty === 0) {
+            alert('❌ Nenhuma quantidade válida para lançar.');
+            return;
+        }
+        
+        // Preparar dados para salvar
         const currentShift = getCurrentShift();
         const turno = isEditing ? (originalData?.turno || currentShift) : currentShift;
         const dataReferencia = isEditing ? (originalData?.data || getProductionDateString()) : getProductionDateString();
         const machineRef = isEditing ? (originalData?.machine || selectedMachineData?.machine) : selectedMachineData?.machine;
         const mpValue = isEditing ? (originalData?.mp || selectedMachineData?.mp || '') : (selectedMachineData?.mp || '');
 
-        // Se apenas peso foi informado, tentar converter para peças (usar peso médio da peça)
-        let finalQty = hasQty ? qty : 0;
-        let finalWeight = hasWeight ? weight : 0;
-        if (!hasQty && hasWeight) {
-            let pesoMedio = 0;
-            if (selectedMachineData) {
-                pesoMedio = parseFloat(selectedMachineData.piece_weight) || 0;
-                if (!pesoMedio) pesoMedio = parseFloat(selectedMachineData.weight) || 0;
-                if (!pesoMedio && selectedMachineData.produto) pesoMedio = parseFloat(selectedMachineData.produto.weight) || 0;
-                if (!pesoMedio && selectedMachineData.mp_weight) pesoMedio = parseFloat(selectedMachineData.mp_weight) || 0;
-            }
-            if (pesoMedio > 0) {
-                finalQty = Math.max(1, Math.round((finalWeight * 1000) / pesoMedio));
-                console.log(`[TRACE][handleProductionSubmit] Conversão: ${finalWeight}kg ÷ ${pesoMedio}g/peça = ${finalQty} peças`);
-                showNotification(`Convertido: ${finalWeight}kg = ${finalQty} peças`, 'info');
-            } else {
-                alert('Não foi possível converter peso para peças. O peso médio da peça não está configurado. Informe a quantidade diretamente.');
-                return;
-            }
-        }
-
         const payloadBase = {
             planId,
             data: dataReferencia,
             turno,
             produzido: finalQty,
-            peso_bruto: finalWeight,
+            peso_bruto: gramsToKg(finalWeightGrams), // Salvar em kg no banco
             refugo_kg: 0,
             perdas: '',
-            observacoes: obs,
+            observacoes: obs + (hasQty && hasWeight ? ' [Qtd+Peso validados]' : ''),
             machine: machineRef || null,
             mp: mpValue,
             orderId: selectedMachineData?.order_id || null,
-            orderNumber: selectedMachineData?.order_number || null
+            orderNumber: selectedMachineData?.order_number || null,
+            // Novo: Rastreabilidade dos cálculos
+            _calculation_method: (hasQty && hasWeight) ? 'qty_and_weight_validated' : (hasQty ? 'qty_only' : 'weight_to_qty'),
+            _piece_weight_grams: resolvedPieceWeightGrams,
+            _piece_weight_source: resolvedPieceWeightSource || 'undefined',
+            _piece_weight_measured_input: measuredPieceWeightGrams > 0 ? measuredPieceWeightGrams : null,
+            _weight_gross_grams: finalWeightGrams
         };
         
-        console.log('[TRACE][handleProductionSubmit] payloadBase prepared', payloadBase);
+        console.log('[WEIGHT-CALC] Payload final:', payloadBase);
 
         const collectionRef = db.collection('production_entries');
-        const successMessage = isEditing ? 'Produção atualizada com sucesso!' : 'Produção registrada com sucesso!';
+        const successMessage = isEditing ? 'Produção atualizada!' : 'Produção registrada!';
 
         try {
             if (isEditing) {
-                console.log('[TRACE][handleProductionSubmit] updating existing entry', currentEditContext.id);
+                console.log('[WEIGHT-CALC] Atualizando entrada:', currentEditContext.id);
                 await collectionRef.doc(currentEditContext.id).update({
                     ...payloadBase,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
             } else {
-                console.log('[TRACE][handleProductionSubmit] creating new entry');
+                console.log('[WEIGHT-CALC] Criando nova entrada');
                 await collectionRef.add({
                     ...payloadBase,
                     timestamp: firebase.firestore.FieldValue.serverTimestamp(),
@@ -13259,23 +14051,22 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             closeModal('quick-production-modal');
             await populateMachineSelector();
             
-            // Atualizar selectedMachineData com os dados mais recentes
             if (selectedMachineData && selectedMachineData.machine && machineCardData[selectedMachineData.machine]) {
                 selectedMachineData = machineCardData[selectedMachineData.machine];
                 updateMachineInfo();
+                updateQuickProductionPieceWeightUI();
             }
             
             await refreshLaunchCharts();
             await loadTodayStats();
             await loadRecentEntries(false);
-            // Atualizar aba de análise se estiver ativa (para refletir barra de progresso da OP)
             await refreshAnalysisIfActive();
             showNotification(successMessage, 'success');
 
-            console.log('[TRACE][handleProductionSubmit] success path completed');
+            console.log('[WEIGHT-CALC] Sucesso: Lançamento concluído');
         } catch (error) {
-            console.error('Erro ao registrar produção: ', error);
-            alert('Erro ao registrar produção. Tente novamente.');
+            console.error('[WEIGHT-CALC] Erro ao registrar produção:', error);
+            alert('❌ Erro ao registrar produção. Tente novamente.');
         }
     }
     
@@ -13478,6 +14269,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             if (selectedMachineData && selectedMachineData.machine && machineCardData[selectedMachineData.machine]) {
                 selectedMachineData = machineCardData[selectedMachineData.machine];
                 updateMachineInfo();
+                updateQuickProductionPieceWeightUI();
             }
             
             await loadTodayStats();
@@ -13521,26 +14313,31 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (!currentDowntimeStart) {
             alert('Nenhuma parada ativa para finalizar.');
             closeModal('quick-downtime-modal');
+            // Garante que o status da máquina volte para running e a UI seja atualizada
+            machineStatus = 'running';
+            updateMachineStatus();
+            resumeProductionTimer();
+            stopDowntimeTimer();
+            await loadTodayStats();
+            await loadRecentEntries(false);
+            await refreshAnalysisIfActive();
             return;
         }
         
+        let erroFinal = null;
         try {
             const now = new Date();
             const endTime = now.toTimeString().substr(0, 5);
-            
             // Determinar datas de início e fim (fim = data atual de produção)
-            const startDateStr = currentDowntimeStart.date || formatDateYMD(currentDowntimeStart.startTimestamp || new Date());
+            const startDateStr = currentDowntimeStart?.date || formatDateYMD(currentDowntimeStart?.startTimestamp || new Date());
             const endDateStr = getProductionDateString();
-
             // Quebrar em segmentos por dia
-            const segments = splitDowntimeIntoDailySegments(startDateStr, currentDowntimeStart.startTime, endDateStr, endTime);
+            const segments = splitDowntimeIntoDailySegments(startDateStr, currentDowntimeStart?.startTime, endDateStr, endTime);
             if (!segments.length) {
                 alert('Intervalo de parada inválido. Verifique os horários.');
                 return;
             }
-
             const currentUser = getActiveUser();
-
             for (const seg of segments) {
                 const downtimeData = {
                     machine: currentDowntimeStart.machine,
@@ -13554,10 +14351,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     registradoPorNome: getCurrentUserName(),
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
-
                 console.log('[TRACE][handleDowntimeSubmit] saving segment', downtimeData);
                 await db.collection('downtime_entries').add(downtimeData);
             }
+        } catch (error) {
+            erroFinal = error;
+            console.error("Erro ao registrar parada: ", error);
+            alert('Erro ao registrar parada. Tente novamente.');
+        } finally {
             // Remover parada ativa dessa máquina (evita restauração automática na troca de máquina/reload)
             try {
                 if (currentDowntimeStart?.machine) {
@@ -13566,32 +14367,23 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 }
             } catch (err) {
                 console.warn('[WARN][handleDowntimeSubmit] failed to delete active_downtime doc', err);
-                // Não bloquear o fluxo do usuário se a exclusão falhar
             }
-            
-            // Resetar status
+            // Resetar status e timers (sempre)
             currentDowntimeStart = null;
             machineStatus = 'running';
             updateMachineStatus();
             stopDowntimeTimer();
             resumeProductionTimer();
-            
             closeModal('quick-downtime-modal');
-            
-            // Atualizar dados
             await loadTodayStats();
             await loadRecentEntries(false);
-            // Atualizar aba de análise se estiver aberta
             await refreshAnalysisIfActive();
-            
-            // Mostrar sucesso
-            showNotification('Parada finalizada e registrada com sucesso!', 'success');
-
-            console.log('[TRACE][handleDowntimeSubmit] success path completed');
-            
-        } catch (error) {
-            console.error("Erro ao registrar parada: ", error);
-            alert('Erro ao registrar parada. Tente novamente.');
+            if (!erroFinal) {
+                showNotification('Parada finalizada e registrada com sucesso!', 'success');
+                console.log('[TRACE][handleDowntimeSubmit] success path completed');
+            } else {
+                showNotification('Parada finalizada localmente, mas houve erro ao registrar no banco.', 'warning');
+            }
         }
     }
 
@@ -14197,6 +14989,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     }
     
     function updateMachineStatus() {
+    console.log('[DEBUG] updateMachineStatus: machineStatus=', machineStatus, 'currentDowntimeStart=', currentDowntimeStart);
+    console.log('[DEBUG] toggleDowntime: chamado, machineStatus=', machineStatus, 'currentDowntimeStart=', currentDowntimeStart);
+    console.log('[DEBUG] handleDowntimeSubmit: início, machineStatus=', machineStatus, 'currentDowntimeStart=', currentDowntimeStart);
         const btnDowntime = document.getElementById('btn-downtime');
         const downtimeIcon = document.getElementById('downtime-icon');
         const downtimeText = document.getElementById('downtime-text');
@@ -15115,154 +15910,148 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     const machineProgressInfo = {};
 
     machineCardGrid.innerHTML = machineOrder.map(machine => {
-            const data = aggregated[machine];
-            const plan = data.plan || {};
-            // Usar APENAS lot_size da OP (quantidade total planejada da ordem)
-            // Não use planned_quantity - esse é apenas meta diária
-            const plannedQtyPrimary = parseOptionalNumber(plan.order_lot_size);
-            const plannedQtyFallback = parseOptionalNumber(plan.lot_size);
-            const plannedQty = Math.round(plannedQtyPrimary ?? plannedQtyFallback ?? 0);
-            
-            // Calcular produção total acumulada da OP (não apenas do dia atual)
-            const totalAccumulatedProduced = Math.round(parseOptionalNumber(plan.total_produzido) ?? data.totalProduced ?? 0);
-            const lossesKg = Math.round(coerceToNumber(data.totalLossesKg, 0));
-            const pieceWeight = coerceToNumber(plan.piece_weight, 0);
-            const scrapPcs = pieceWeight > 0 ? Math.round((lossesKg * 1000) / pieceWeight) : 0;
-            const goodProductionRaw = Math.max(0, totalAccumulatedProduced - scrapPcs);
-            const goodProduction = Math.round(goodProductionRaw); // Executado = produção boa total
-            const progressPercentRaw = plannedQty > 0 ? (goodProduction / plannedQty) * 100 : 0;
-            const packagingMultiple = resolvePackagingMultiple(plan);
-            const executedDisplayQty = packagingMultiple > 0 ? Math.floor(goodProduction / packagingMultiple) * packagingMultiple : goodProduction;
-            const displayRemainingQty = Math.max(0, plannedQty - executedDisplayQty);
+        const data = aggregated[machine];
+        const plan = data.plan || {};
+        const plannedQtyPrimary = parseOptionalNumber(plan.order_lot_size);
+        const plannedQtyFallback = parseOptionalNumber(plan.lot_size);
+        const plannedQty = Math.round(plannedQtyPrimary ?? plannedQtyFallback ?? 0);
+        const totalAccumulatedProduced = Math.round(parseOptionalNumber(plan.total_produzido) ?? data.totalProduced ?? 0);
+        const lossesKg = Math.round(coerceToNumber(data.totalLossesKg, 0));
+        const pieceWeight = coerceToNumber(plan.piece_weight, 0);
+        const scrapPcs = pieceWeight > 0 ? Math.round((lossesKg * 1000) / pieceWeight) : 0;
+        const goodProductionRaw = Math.max(0, totalAccumulatedProduced - scrapPcs);
+        const goodProduction = Math.round(goodProductionRaw);
+        const progressPercentRaw = plannedQty > 0 ? (goodProduction / plannedQty) * 100 : 0;
+        const packagingMultiple = resolvePackagingMultiple(plan);
+        const executedDisplayQty = packagingMultiple > 0 ? Math.floor(goodProduction / packagingMultiple) * packagingMultiple : goodProduction;
+        const displayRemainingQty = Math.max(0, plannedQty - executedDisplayQty);
 
-            console.log(`Card ${machine}:
-  plan.order_lot_size=${plan.order_lot_size}, plan.lot_size=${plan.lot_size}, plannedQty=${plannedQty}
-  plan.total_produzido=${plan.total_produzido}, data.totalProduced=${data.totalProduced}, totalAccumulatedProduced=${totalAccumulatedProduced}
-  lossesKg=${lossesKg}, pieceWeight=${pieceWeight}, scrapPcs=${scrapPcs}
-  goodProduction=${goodProduction}, packagingMultiple=${packagingMultiple}, displayExec=${executedDisplayQty}, displayRemaining=${displayRemainingQty}
-  progressPercent=${progressPercentRaw.toFixed(1)}%
-  data.byShift.T1=${data.byShift.T1}, data.byShift.T2=${data.byShift.T2}, data.byShift.T3=${data.byShift.T3}`);
+        const normalizedProgress = Math.max(0, Math.min(progressPercentRaw, 100));
+        const progressPalette = resolveProgressPalette(progressPercentRaw);
+        const progressTextClass = progressPalette.textClass || 'text-slate-600';
+        const progressText = `${Math.max(0, progressPercentRaw).toFixed(progressPercentRaw >= 100 ? 0 : 1)}%`;
+        const remainingQty = Math.max(0, plannedQty - goodProduction);
+        const lotCompleted = plannedQty > 0 && goodProduction >= plannedQty;
 
-            const normalizedProgress = Math.max(0, Math.min(progressPercentRaw, 100));
-            const progressPalette = resolveProgressPalette(progressPercentRaw);
-            const progressTextClass = progressPalette.textClass || 'text-slate-600';
-            const progressText = `${Math.max(0, progressPercentRaw).toFixed(progressPercentRaw >= 100 ? 0 : 1)}%`;
-            const remainingQty = Math.max(0, plannedQty - goodProduction); // Restante baseado na produção boa
-            const lotCompleted = plannedQty > 0 && goodProduction >= plannedQty;
+        machineProgressInfo[machine] = {
+            normalizedProgress,
+            progressPercent: progressPercentRaw,
+            palette: progressPalette
+        };
 
-            machineProgressInfo[machine] = {
-                normalizedProgress,
-                progressPercent: progressPercentRaw,
-                palette: progressPalette
-            };
-
-            const oeeShiftData = oeeByMachine[machine]?.[currentShiftKey];
-            const oeePercent = Math.max(0, Math.min((oeeShiftData?.oee || 0) * 100, 100));
-            const oeePercentText = oeePercent ? oeePercent.toFixed(1) : '0.0';
-            const oeeColorClass = oeePercent >= 85 ? 'text-emerald-600' : oeePercent >= 70 ? 'text-amber-500' : 'text-red-500';
-            // Cálculos de KPIs (Tempo rodando/paradas, Qualidade/Perdas)
-            const nowRef = new Date();
-            const shiftStart = getShiftStartDateTime(nowRef);
-            let runtimeHours = 0, downtimeHours = 0;
-            if (shiftStart instanceof Date && !Number.isNaN(shiftStart.getTime())) {
-                const elapsedSec = Math.max(0, Math.floor((nowRef.getTime() - shiftStart.getTime()) / 1000));
-                if (elapsedSec > 0) {
-                    const dts = filteredDowntimeEntries.filter(dt => dt && dt.machine === machine);
-                    const runtimeSec = calculateProductionRuntimeSeconds({ shiftStart, now: nowRef, downtimes: dts });
-                    runtimeHours = Math.max(0, runtimeSec / 3600);
-                    downtimeHours = Math.max(0, (elapsedSec / 3600) - runtimeHours);
-                }
+        const oeeShiftData = oeeByMachine[machine]?.[currentShiftKey];
+        const oeePercent = Math.max(0, Math.min((oeeShiftData?.oee || 0) * 100, 100));
+        const oeePercentText = oeePercent ? oeePercent.toFixed(1) : '0.0';
+        const oeeColorClass = oeePercent >= 85 ? 'text-emerald-600' : oeePercent >= 70 ? 'text-amber-500' : 'text-red-500';
+        const nowRef = new Date();
+        const shiftStart = getShiftStartDateTime(nowRef);
+        let runtimeHours = 0, downtimeHours = 0;
+        if (shiftStart instanceof Date && !Number.isNaN(shiftStart.getTime())) {
+            const elapsedSec = Math.max(0, Math.floor((nowRef.getTime() - shiftStart.getTime()) / 1000));
+            if (elapsedSec > 0) {
+                const dts = filteredDowntimeEntries.filter(dt => dt && dt.machine === machine);
+                const runtimeSec = calculateProductionRuntimeSeconds({ shiftStart, now: nowRef, downtimes: dts });
+                runtimeHours = Math.max(0, runtimeSec / 3600);
+                downtimeHours = Math.max(0, (elapsedSec / 3600) - runtimeHours);
             }
-            let qualityPct = 100;
-            if (totalAccumulatedProduced > 0) {
-                qualityPct = Math.max(0, Math.min(100, (goodProduction / totalAccumulatedProduced) * 100));
-            } else if (lossesKg > 0) {
-                qualityPct = 0;
-            }
-            const qualityColorClass = qualityPct >= 98 ? 'text-emerald-600' : (qualityPct >= 95 ? 'text-amber-600' : 'text-red-600');
-            const productLine = plan.product ? `<p class="mt-1 text-sm text-slate-600">${plan.product}</p>` : '<p class="mt-1 text-sm text-slate-400">Produto não definido</p>';
-            const mpLine = plan.mp ? `<p class="text-xs text-slate-400 mt-1">MP: ${plan.mp}</p>` : '';
-            const shiftProduced = data.byShift[currentShiftKey] ?? data.byShift[fallbackShiftKey] ?? 0;
+        }
+        let qualityPct = 100;
+        if (totalAccumulatedProduced > 0) {
+            qualityPct = Math.max(0, Math.min(100, (goodProduction / totalAccumulatedProduced) * 100));
+        } else if (lossesKg > 0) {
+            qualityPct = 0;
+        }
+        const qualityColorClass = qualityPct >= 98 ? 'text-emerald-600' : (qualityPct >= 95 ? 'text-amber-600' : 'text-red-600');
+        const productLine = plan.product ? `<p class=\"mt-1 text-sm text-slate-600\">${plan.product}</p>` : '<p class=\"mt-1 text-sm text-slate-400\">Produto não definido</p>';
+        const mpLine = plan.mp ? `<p class=\"text-xs text-slate-400 mt-1\">MP: ${plan.mp}</p>` : '';
+        const shiftProduced = data.byShift[currentShiftKey] ?? data.byShift[fallbackShiftKey] ?? 0;
 
-            return `
-                <div class="machine-card group relative bg-white rounded-lg border border-slate-200 hover:border-blue-300 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer p-3 ${lotCompleted && String(plan.status||'').toLowerCase()!=='concluida' ? 'completed-blink' : ''}" data-machine="${machine}" data-plan-id="${plan.id}" data-order-id="${plan.order_id||''}" data-part-code="${plan.product_cod||''}">
-                    <!-- Header compacto -->
-                    <div class="flex items-center justify-between mb-2">
-                        <div class="flex items-center gap-2">
-                            <div class="machine-identifier w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                                ${machine.slice(-2)}
-                            </div>
-                            <div>
-                                <h3 class="text-sm font-bold text-slate-900">${machine}</h3>
-                                <p class="text-xs text-slate-500 truncate max-w-[120px]" title="${plan.product || 'Produto não definido'}">${plan.product || 'Produto não definido'}</p>
-                            </div>
+        // Lógica de cor do card
+        let cardColorClass = '';
+        if (downtimeHours > 0) {
+            cardColorClass = 'machine-stopped'; // vermelho sempre que houver parada
+        }
+        // O card selecionado será tratado via classe .selected, mas vamos garantir o estilo
+
+        return `
+            <div class="machine-card group relative bg-white rounded-lg border border-slate-200 hover:border-blue-300 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer p-3 ${lotCompleted && String(plan.status||'').toLowerCase()!=='concluida' ? 'completed-blink' : ''} ${cardColorClass}" data-machine="${machine}" data-plan-id="${plan.id}" data-order-id="${plan.order_id||''}" data-part-code="${plan.product_cod||''}">
+                <!-- Header compacto -->
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                        <div class="machine-identifier w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                            ${machine.slice(-2)}
                         </div>
-                        <div class="text-right">
-                            <div class="text-xs font-semibold ${oeeColorClass}">${oeePercentText}%</div>
-                            <div class="text-[10px] text-slate-400 uppercase">OEE</div>
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900">${machine}</h3>
+                            <p class="text-xs text-slate-500 truncate max-w-[120px]" title="${plan.product || 'Produto não definido'}">${plan.product || 'Produto não definido'}</p>
                         </div>
                     </div>
-
-                    <!-- Indicadores principais em linha -->
-                    <div class="grid grid-cols-3 gap-2 mb-3">
-                        <div class="text-center">
-                            <div class="text-sm font-semibold text-slate-900">${formatQty(executedDisplayQty)}</div>
-                            <div class="text-[10px] text-slate-500 uppercase">Exec. OP</div>
-                        </div>
-                        <div class="text-center">
-                            <div class="text-sm font-semibold ${qualityColorClass}">${qualityPct.toFixed(0)}%</div>
-                            <div class="text-[10px] text-slate-500 uppercase">Qualidade</div>
-                        </div>
-                        <div class="text-center">
-                            <div class="text-sm font-semibold text-slate-900">${formatQty(displayRemainingQty)}</div>
-                            <div class="text-[10px] text-slate-500 uppercase">Faltante</div>
-                        </div>
+                    <div class="text-right">
+                        <div class="text-xs font-semibold ${oeeColorClass}">${oeePercentText}%</div>
+                        <div class="text-[10px] text-slate-400 uppercase">OEE</div>
                     </div>
-
-                    <!-- Barra de progresso compacta -->
-                    <div class="mb-2">
-                        <div class="flex items-center justify-between mb-1">
-                            <span class="text-xs text-slate-500">OP Total (${formatQty(plannedQty)})</span>
-                            <span class="text-xs font-semibold ${progressTextClass}">${progressText}</span>
-                        </div>
-                        <div class="w-full bg-slate-100 rounded-full h-2">
-                            <div class="h-2 rounded-full transition-all duration-300 ${progressPalette.bgClass || 'bg-blue-500'}" style="width: ${normalizedProgress}%"></div>
-                        </div>
-                    </div>
-
-                    <!-- Status compacto -->
-                    <div class="flex items-center justify-between text-xs">
-                        <div class="flex gap-1">
-                            <span class="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[10px]" title="Tempo rodando">${runtimeHours.toFixed(1)}h</span>
-                            ${downtimeHours > 0 ? `<span class="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px]" title="Tempo parado">${downtimeHours.toFixed(1)}h</span>` : ''}
-                        </div>
-                        <div class="text-slate-500">
-                            <span class="font-medium">${formatShiftLabel(currentShiftKey)}</span>
-                        </div>
-                    </div>
-
-                    <!-- Indicador visual de status (máquina ativa/parada) -->
-                    <div class="absolute top-2 right-2 w-2 h-2 rounded-full ${downtimeHours > runtimeHours ? 'bg-red-400' : 'bg-green-400'}" title="${downtimeHours > runtimeHours ? 'Máquina com paradas' : 'Máquina produzindo'}"></div>
-
-                                        ${lotCompleted ? `
-                                            <div class="card-actions flex gap-2 mt-3">
-                                                ${String(plan.status||'').toLowerCase()!=='concluida' && plan.order_id ? `
-                                                    <button type="button" class="btn btn-finalize card-finalize-btn" data-plan-id="${plan.id}" data-order-id="${plan.order_id}" title="Finalizar OP">
-                                                         <i data-lucide="check-circle"></i>
-                                                         <span>Finalizar OP</span>
-                                                    </button>
-                                                ` : ''}
-                                                ${String(plan.status||'').toLowerCase()==='concluida' ? `
-                                                    <button type="button" class="btn btn-activate card-activate-next-btn" data-plan-id="${plan.id}" data-machine="${machine}" data-part-code="${plan.product_cod||''}" title="Ativar próxima OP">
-                                                         <i data-lucide="play-circle"></i>
-                                                         <span>Ativar próxima OP</span>
-                                                    </button>
-                                                ` : ''}
-                                            </div>
-                                        ` : ''}
                 </div>
-            `;
-        }).join('');
+
+                <!-- Indicadores principais em linha -->
+                <div class="grid grid-cols-3 gap-2 mb-3">
+                    <div class="text-center">
+                        <div class="text-sm font-semibold text-slate-900">${formatQty(executedDisplayQty)}</div>
+                        <div class="text-[10px] text-slate-500 uppercase">Exec. OP</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-sm font-semibold ${qualityColorClass}">${qualityPct.toFixed(0)}%</div>
+                        <div class="text-[10px] text-slate-500 uppercase">Qualidade</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-sm font-semibold text-slate-900">${formatQty(displayRemainingQty)}</div>
+                        <div class="text-[10px] text-slate-500 uppercase">Faltante</div>
+                    </div>
+                </div>
+
+                <!-- Barra de progresso compacta -->
+                <div class="mb-2">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-xs text-slate-500">OP Total (${formatQty(plannedQty)})</span>
+                        <span class="text-xs font-semibold ${progressTextClass}">${progressText}</span>
+                    </div>
+                    <div class="w-full bg-slate-100 rounded-full h-2">
+                        <div class="h-2 rounded-full transition-all duration-300 ${progressPalette.bgClass || 'bg-blue-500'}" style="width: ${normalizedProgress}%"></div>
+                    </div>
+                </div>
+
+                <!-- Status compacto -->
+                <div class="flex items-center justify-between text-xs">
+                    <div class="flex gap-1">
+                        <span class="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[10px]" title="Tempo rodando">${runtimeHours.toFixed(1)}h</span>
+                        ${downtimeHours > 0 ? `<span class="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px]" title="Tempo parado">${downtimeHours.toFixed(1)}h</span>` : ''}
+                    </div>
+                    <div class="text-slate-500">
+                        <span class="font-medium">${formatShiftLabel(currentShiftKey)}</span>
+                    </div>
+                </div>
+
+                <!-- Indicador visual de status (máquina ativa/parada) -->
+                <div class="absolute top-2 right-2 w-2 h-2 rounded-full ${downtimeHours > runtimeHours ? 'bg-red-400' : 'bg-green-400'}" title="${downtimeHours > runtimeHours ? 'Máquina com paradas' : 'Máquina produzindo'}"></div>
+
+                ${lotCompleted ? `
+                    <div class="card-actions flex gap-2 mt-3">
+                        ${String(plan.status||'').toLowerCase()!=='concluida' && plan.order_id ? `
+                            <button type="button" class="btn btn-finalize card-finalize-btn" data-plan-id="${plan.id}" data-order-id="${plan.order_id}" title="Finalizar OP">
+                                 <i data-lucide="check-circle"></i>
+                                 <span>Finalizar OP</span>
+                            </button>
+                        ` : ''}
+                        ${String(plan.status||'').toLowerCase()==='concluida' ? `
+                            <button type="button" class="btn btn-activate card-activate-next-btn" data-plan-id="${plan.id}" data-machine="${machine}" data-part-code="${plan.product_cod||''}" title="Ativar próxima OP">
+                                 <i data-lucide="play-circle"></i>
+                                 <span>Ativar próxima OP</span>
+                            </button>
+                        ` : ''}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }).join('');
 
         machineOrder.forEach(machine => {
             renderMachineCardProgress(machine, machineProgressInfo[machine]);
@@ -15527,6 +16316,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             machineSelector.value = machine;
         }
         setActiveMachineCard(machine);
+        updateQuickProductionPieceWeightUI({ forceUpdateInput: true });
         
         // Carregar estado persistente da tara
         loadTareStateForAllForms(selectedMachineData.machine);
@@ -15565,7 +16355,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         productionControlPanel.classList.remove('hidden');
         
         // Carregar dados
-    await refreshLaunchCharts();
+        await refreshLaunchCharts();
         await loadTodayStats();
         await loadRecentEntries(false);
         
@@ -17318,17 +18108,103 @@ window.forceOpenModal = function(modalId) {
             return;
         }
 
-        db.collection('process_control_checks').add(payload)
-            .then(() => {
-                showNotification(`Inspeção de ${hora} salva com sucesso!`, 'success');
-                // Limpar o formulário da linha
-                if (obsTextarea) obsTextarea.value = '';
-                document.querySelectorAll(`input[name="quality-ok-${index}"]`).forEach(r => r.checked = false);
-            })
-            .catch((error) => {
-                console.error('Erro ao salvar inspeção:', error);
-                showNotification('Erro ao salvar a inspeção', 'error');
-            });
+        // Bloquear botão durante salvamento
+        btn.disabled = true;
+        btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin mr-1"></i>Salvando...';
+
+        db.collection('qualityHourly').add(payload).then(docRef => {
+            console.log('Controle de qualidade salvo com sucesso:', docRef.id);
+            showNotification('Controle de qualidade registrado com sucesso!', 'success');
+            
+            // Recarregar dados de qualidade
+            loadQualityHourlyControls();
+            
+        }).catch(error => {
+            console.error('Erro ao salvar controle de qualidade:', error);
+            showNotification('Erro ao salvar controle de qualidade: ' + error.message, 'error');
+        }).finally(() => {
+            // Reativar botão
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="save" class="w-4 h-4 mr-1"></i>Salvar';
+            lucide.createIcons();
+        });
+    }
+});
+
+// Funções globais para navegação de subtabs Analytics IA
+window.showPredictiveSubtab = function(subtabName) {
+    // Esconder todas as subtabs
+    const subtabs = document.querySelectorAll('.predictive-subtab-content');
+    subtabs.forEach(tab => tab.classList.add('hidden'));
+    
+    // Remover classe ativa de todos os botões
+    const buttons = document.querySelectorAll('.predictive-subtab-btn');
+    buttons.forEach(btn => {
+        btn.classList.remove('bg-purple-600', 'text-white');
+        btn.classList.add('bg-gray-200', 'text-gray-700');
+    });
+    
+    // Mostrar subtab selecionada
+    const targetTab = document.getElementById(`predictive-${subtabName}-content`);
+    if (targetTab) {
+        targetTab.classList.remove('hidden');
+    }
+    
+    // Ativar botão clicado
+    const clickedButton = event.target.closest('.predictive-subtab-btn');
+    if (clickedButton) {
+        clickedButton.classList.remove('bg-gray-200', 'text-gray-700');
+        clickedButton.classList.add('bg-purple-600', 'text-white');
     }
 
+    const refreshBtn = document.getElementById('traceability-refresh-btn');
+    if (refreshBtn) {
+        if (subtabName === 'traceability') {
+            refreshBtn.classList.remove('hidden');
+        } else {
+            refreshBtn.classList.add('hidden');
+            refreshBtn.disabled = false;
+            refreshBtn.innerHTML = refreshBtn.dataset.defaultLabel || refreshBtn.innerHTML;
+            refreshBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+        }
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+    
+    console.log(`[PREDICTIVE-NAV] Navegando para subtab: ${subtabName}`);
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    const refreshBtn = document.getElementById('traceability-refresh-btn');
+    if (!refreshBtn) return;
+
+    refreshBtn.dataset.defaultLabel = refreshBtn.innerHTML;
+
+    refreshBtn.addEventListener('click', async () => {
+        if (!window.traceabilitySystem) {
+            console.warn('[TRACEABILITY] Sistema não inicializado');
+            return;
+        }
+
+        refreshBtn.disabled = true;
+        refreshBtn.classList.add('opacity-60', 'cursor-not-allowed');
+        refreshBtn.innerHTML = '<span class="flex items-center gap-2"><i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>Atualizando...</span>';
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+
+        try {
+            await window.traceabilitySystem.initialize();
+        } catch (error) {
+            console.error('[TRACEABILITY] Erro ao atualizar via botão:', error);
+        } finally {
+            refreshBtn.disabled = false;
+            refreshBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+            refreshBtn.innerHTML = refreshBtn.dataset.defaultLabel;
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        }
+    });
 });
