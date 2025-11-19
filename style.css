@@ -1,3 +1,12 @@
+/* Cores para o status dos cards de máquina */
+.machine-card.machine-stopped {
+    background-color: #fee2e2 !important; /* vermelho claro */
+    border-color: #ef4444 !important;
+}
+.machine-card.selected {
+    background-color: #d1fae5 !important; /* verde claro */
+    border-color: #10b981 !important;
+}
 body { 
     font-family: 'Inter', sans-serif; 
 }
@@ -14,6 +23,82 @@ body {
 img {
     max-width: 100%;
     height: auto;
+}
+
+/* ==================== SUBTABS ANALYTICS IA ==================== */
+
+.predictive-subtab-content {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.predictive-subtab-btn {
+    transition: all 0.2s ease-in-out;
+}
+
+.predictive-subtab-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ==================== CAMPOS DE ENTRADA (POKA-YOKE) ==================== */
+
+/* Validação em tempo real */
+input[type="number"]:invalid {
+    border-color: #ef4444;
+    background-color: #fef2f2;
+}
+
+input[type="number"]:valid:not(:placeholder-shown) {
+    border-color: #10b981;
+    background-color: #f0fdf4;
+}
+
+input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #f3f4f6;
+}
+
+/* Feedback de validação */
+.text-red-600 {
+    color: #dc2626;
+    font-weight: 500;
+}
+
+.text-blue-600 {
+    color: #2563eb;
+}
+
+.text-green-600 {
+    color: #16a34a;
+}
+
+.border-red-500 {
+    border-color: #ef4444 !important;
+}
+
+/* Alerta de inconsistência */
+.bg-yellow-50 {
+    background-color: #fffbeb;
+}
+
+.border-yellow-200 {
+    border-color: #fcd34d;
+}
+
+.text-yellow-800 {
+    color: #92400e;
 }
 
 /* ==================== SIDEBAR RETRÁTIL ==================== */
