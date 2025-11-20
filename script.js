@@ -1,3 +1,103 @@
+// Popular o select de MP no cadastro de ordem de produção
+document.addEventListener('DOMContentLoaded', function() {
+    // Ocultar subaba Analytics IA para todos, exceto Leandro Camargo
+    setTimeout(() => {
+        try {
+            const user = window.authSystem?.getCurrentUser?.();
+            const analyticsBtn = document.querySelector('.analysis-tab-btn[data-view="predictive"]');
+            if (analyticsBtn && (!user || (user.name !== 'Leandro Camargo' && user.username !== 'leandro.camargo'))) {
+                analyticsBtn.style.display = 'none';
+            }
+        } catch (e) {
+            console.warn('Não foi possível aplicar restrição da subaba Analytics IA:', e);
+        }
+    }, 300);
+    function popularSelectMPOrdem() {
+        const select = document.getElementById('order-raw-material');
+        if (!select) return;
+        select.innerHTML = '<option value="">Selecione a matéria-prima...</option>';
+        materiaPrimaDatabase.forEach(mp => {
+            const opt = document.createElement('option');
+            opt.value = mp.codigo;
+            opt.textContent = `${mp.codigo} - ${mp.descricao}`;
+            select.appendChild(opt);
+        });
+    }
+    carregarBancoMateriaPrima(popularSelectMPOrdem);
+});
+// Utilitário para obter descrição da MP pelo código
+function getDescricaoMP(codigo) {
+    const cod = Number(codigo);
+    const mp = materiaPrimaDatabase.find(mp => Number(mp.codigo) === cod);
+    return mp ? mp.descricao : String(codigo);
+}
+
+// Exemplo de uso em análises de perda:
+// Em qualquer local que exibe ou processa MP de perda, use getDescricaoMP(codigo) para mostrar a descrição padronizada.
+
+// Exemplo para gráficos e relatórios:
+// const descricao = getDescricaoMP(loss.mp_codigo);
+// Popular o select de MP na tela de planejamento
+document.addEventListener('DOMContentLoaded', function() {
+    function popularSelectMPPlanejamento() {
+        const select = document.getElementById('planning-mp');
+        if (!select) return;
+        select.innerHTML = '<option value="">Selecione a matéria-prima...</option>';
+        materiaPrimaDatabase.forEach(mp => {
+            const opt = document.createElement('option');
+            opt.value = mp.codigo;
+            opt.textContent = `${mp.codigo} - ${mp.descricao}`;
+            select.appendChild(opt);
+        });
+    }
+    carregarBancoMateriaPrima(popularSelectMPPlanejamento);
+});
+// --- Integração do banco de Matéria-prima no modal de edição de ordem ---
+// Carregar banco de matéria-prima
+function carregarBancoMateriaPrima(callback) {
+    if (window.materiaPrimaDatabase && Array.isArray(window.materiaPrimaDatabase)) {
+          if (callback) callback(); // Callback to populate the select
+    }
+}
+
+function popularSelectMP() {
+    const select = document.getElementById('edit-order-mp');
+    if (!select) return;
+    select.innerHTML = '<option value="">Selecione a matéria-prima...</option>';
+    materiaPrimaDatabase.forEach(mp => {
+          const opt = document.createElement('option');
+          opt.value = mp.codigo;
+          opt.textContent = `${mp.codigo} - ${mp.descricao}`;
+          select.appendChild(opt); // Append option to select
+    });
+}
+
+// Popular o select de MP ao abrir o modal de edição
+document.addEventListener('DOMContentLoaded', function() {
+    const editOrderModal = document.getElementById('edit-order-modal');
+    // Sempre popular o select de MP ao exibir o modal
+    if (editOrderModal) {
+        // Usar MutationObserver para detectar exibição do modal
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach(mutation => {
+                if (mutation.attributeName === 'class') {
+                    const isVisible = !editOrderModal.classList.contains('hidden');
+                    if (isVisible) {
+                        carregarBancoMateriaPrima(popularSelectMP);
+                    }
+                }
+            });
+        });
+        observer.observe(editOrderModal, { attributes: true });
+    }
+    // Fallback: popular ao abrir o modal manualmente
+    const btns = document.querySelectorAll('[data-edit-order]');
+    btns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            carregarBancoMateriaPrima(popularSelectMP);
+        });
+    });
+});
 // This file contains the full and correct JavaScript code for the Hokkaido Synchro MES application.
 // All functionalities, including the new database with product codes, are implemented here.
 
@@ -564,6 +664,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let productionTimerResumeTimestamp = null;
     let currentDowntimeStart = null;
     let downtimeTimer = null;
+    let downtimeNotificationSent = false;
     let machineStatus = 'running'; // 'running' ou 'stopped'
     let recentEntriesCache = new Map();
     let allRecentEntries = []; // Armazenar todas as entradas para filtro
@@ -2711,6 +2812,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 ? `<br><strong>Máquina:</strong> ${escapeHtml(order.machine_id)} - ${escapeHtml(machineInfo.model)}`
                 : '';
 
+            // ...existing code...
+            const isReactivatable = ['concluida','finalizada','encerrada'].includes(status);
             return `
                 <div class="bg-white p-6 rounded-lg shadow border-l-4 border-primary-blue ${isActive ? 'ring-2 ring-blue-400' : ''}">
                     <div class="flex items-start justify-between mb-4">
@@ -2754,6 +2857,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
 
                         ${order.raw_material ? `<div class="bg-blue-50 p-2 rounded text-xs"><strong>MP:</strong> ${escapeHtml(order.raw_material)}</div>` : ''}
+                        ${isReactivatable ? `<button class=\"reactivate-order-btn mt-4 px-4 py-2 bg-blue-600 text-white rounded font-semibold text-sm\" data-order-id=\"${order.id}\"><i data-lucide=\"rotate-ccw\" class=\"w-4 h-4 mr-1 inline\"></i>Reativar Ordem</button>` : ''}
+                        <button class=\"edit-order-btn mt-2 px-4 py-2 bg-yellow-500 text-white rounded font-semibold text-sm\" data-order-id=\"${order.id}\"><i data-lucide=\"edit-3\" class=\"w-4 h-4 mr-1 inline\"></i>Editar</button>
                     </div>
                 </div>
             `;
@@ -2802,6 +2907,132 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         lucide.createIcons();
+
+        // Adicionar event listener para botões de reativação
+        document.querySelectorAll('.reactivate-order-btn').forEach(btn => {
+            if (!btn.dataset.listenerAttached) {
+                btn.addEventListener('click', async (e) => {
+                    const orderId = btn.getAttribute('data-order-id');
+                    if (!orderId) return;
+                    if (!confirm('Deseja realmente reativar esta ordem? Ela voltará ao status ATIVA.')) return;
+                    try {
+                        await db.collection('production_orders').doc(orderId).update({ status: 'ativa' });
+                        showNotification('Ordem reativada com sucesso!', 'success');
+                        await loadOrdersAnalysis();
+                    } catch (err) {
+                        showNotification('Erro ao reativar ordem. Tente novamente.', 'error');
+                        console.error('Erro ao reativar ordem:', err);
+                    }
+                });
+                btn.dataset.listenerAttached = 'true';
+            }
+        });
+
+        // Adicionar event listener para botões de edição
+        document.querySelectorAll('.edit-order-btn').forEach(btn => {
+            if (!btn.dataset.listenerAttached) {
+                btn.addEventListener('click', async (e) => {
+                    const orderId = btn.getAttribute('data-order-id');
+                    if (!orderId) return;
+                    // Buscar dados da ordem
+                    let orderData = null;
+                    if (Array.isArray(productionOrdersCache)) {
+                        orderData = productionOrdersCache.find(o => o.id === orderId);
+                    }
+                    if (!orderData) {
+                        try {
+                            const doc = await db.collection('production_orders').doc(orderId).get();
+                            if (doc.exists) orderData = { id: doc.id, ...doc.data() };
+                        } catch (err) { orderData = null; }
+                    }
+                    if (!orderData) {
+                        showNotification('Ordem não encontrada.', 'error');
+                        return;
+                    }
+                    // Preencher campos do modal
+                    document.getElementById('edit-order-id').value = orderData.id;
+                    // Preencher select de produtos
+                    const productSelect = document.getElementById('edit-order-product');
+                    productSelect.innerHTML = '';
+                    if (window.databaseModule && window.databaseModule.productByCode) {
+                        const products = Array.from(window.databaseModule.productByCode.values());
+                        products.forEach(prod => {
+                            const opt = document.createElement('option');
+                            opt.value = prod.cod;
+                            opt.textContent = `${prod.cod} - ${prod.name} (${prod.client})`;
+                            if ((orderData.product_cod || orderData.part_code || orderData.product) == prod.cod || orderData.product == prod.name) opt.selected = true;
+                            productSelect.appendChild(opt);
+                        });
+                    } else {
+                        const opt = document.createElement('option');
+                        opt.value = orderData.product || '';
+                        opt.textContent = orderData.product || '';
+                        opt.selected = true;
+                        productSelect.appendChild(opt);
+                    }
+
+                    // Preencher select de máquinas
+                    const machineSelect = document.getElementById('edit-order-machine');
+                    machineSelect.innerHTML = '';
+                    if (window.databaseModule && window.databaseModule.machineById) {
+                        const machines = Array.from(window.databaseModule.machineById.values());
+                        machines.forEach(mac => {
+                            const opt = document.createElement('option');
+                            opt.value = mac.id;
+                            opt.textContent = `${mac.id} - ${mac.model}`;
+                            if ((orderData.machine_id || orderData.machine) == mac.id) opt.selected = true;
+                            machineSelect.appendChild(opt);
+                        });
+                    } else {
+                        const opt = document.createElement('option');
+                        opt.value = orderData.machine_id || orderData.machine || '';
+                        opt.textContent = orderData.machine_id || orderData.machine || '';
+                        opt.selected = true;
+                        machineSelect.appendChild(opt);
+                    }
+
+                    document.getElementById('edit-order-customer').value = orderData.customer || orderData.client || '';
+                    document.getElementById('edit-order-lot').value = orderData.lot || orderData.lot_size || '';
+                    document.getElementById('edit-order-planned').value = orderData.lot_size || '';
+                    document.getElementById('edit-order-executed').value = orderData.total_produzido || orderData.totalProduced || '';
+                    document.getElementById('edit-order-modal').classList.remove('hidden');
+                });
+                btn.dataset.listenerAttached = 'true';
+            }
+        });
+// Modal de edição de ordem
+document.getElementById('close-edit-order-modal').onclick = () => {
+    document.getElementById('edit-order-modal').classList.add('hidden');
+};
+document.getElementById('cancel-edit-order').onclick = () => {
+    document.getElementById('edit-order-modal').classList.add('hidden');
+};
+document.getElementById('edit-order-form').onsubmit = async function(e) {
+    e.preventDefault();
+    const id = document.getElementById('edit-order-id').value;
+    const product = document.getElementById('edit-order-product').value;
+    const machine = document.getElementById('edit-order-machine').value;
+    const customer = document.getElementById('edit-order-customer').value;
+    const lot = document.getElementById('edit-order-lot').value;
+    const planned = Number(document.getElementById('edit-order-planned').value);
+    const executed = Number(document.getElementById('edit-order-executed').value);
+    if (!id) return;
+    try {
+        await db.collection('production_orders').doc(id).update({
+            product,
+            machine_id: machine,
+            customer,
+            lot_size: planned,
+            total_produzido: executed
+        });
+        showNotification('Ordem atualizada com sucesso!', 'success');
+        document.getElementById('edit-order-modal').classList.add('hidden');
+        await loadOrdersAnalysis();
+    } catch (err) {
+        showNotification('Erro ao atualizar ordem.', 'error');
+        console.error('Erro ao atualizar ordem:', err);
+    }
+};
     }
 
     // Função para carregar visão geral
@@ -5486,38 +5717,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         };
 
         return new Chart(ctx, {
-            type: 'bar',
+            type: 'line',
             data: {
                 labels,
                 datasets: [
-                    {
-                        type: 'bar',
-                        label: 'Executado por Hora',
-                        data: executed,
-                        backgroundColor: barBackground,
-                        borderRadius: 8,
-                        borderSkipped: false,
-                        maxBarThickness: 22,
-                        order: 2,
-                        yAxisID: 'y'
-                    },
-                    {
-                        type: 'line',
-                        label: 'Planejado por Hora',
-                        data: planned,
-                        borderColor: '#3B82F6',
-                        backgroundColor: 'transparent',
-                        borderWidth: 2.5,
-                        tension: 0.35,
-                        pointRadius: 2,
-                        pointHoverRadius: 5,
-                        pointBackgroundColor: '#ffffff',
-                        pointBorderColor: '#3B82F6',
-                        yAxisID: 'y',
-                        order: 3,
-                        fill: false,
-                        borderDash: [6, 6]
-                    },
                     {
                         type: 'line',
                         label: 'Produção Acumulada',
@@ -12745,11 +12948,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         if (quickProductionClose) quickProductionClose.addEventListener('click', () => closeModal('quick-production-modal'));
         if (quickProductionCancel) quickProductionCancel.addEventListener('click', () => closeModal('quick-production-modal'));
-        if (quickProductionForm) {
-            quickProductionForm.addEventListener('submit', handleProductionSubmit);
-            // Inicializar validação quando o modal abre
-            setupProductionFormValidation();
-        }
+        // Listeners serão adicionados em openProductionModal() quando o modal abre
         
         // Modal de perdas
         const quickLossesClose = document.getElementById('quick-losses-close');
@@ -12784,28 +12983,24 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const manualProductionClose = document.getElementById('manual-production-close');
         const manualProductionCancel = document.getElementById('manual-production-cancel');
         const manualProductionForm = document.getElementById('manual-production-form');
+        const manualProductionSubmitBtn = document.getElementById('manual-production-submit');
 
         if (manualProductionClose) manualProductionClose.addEventListener('click', () => closeModal('manual-production-modal'));
         if (manualProductionCancel) manualProductionCancel.addEventListener('click', () => closeModal('manual-production-modal'));
-        if (manualProductionForm) manualProductionForm.addEventListener('submit', handleManualProductionSubmit);
-
+        
         // Modal de perdas manual
         const manualLossesClose = document.getElementById('manual-losses-close');
         const manualLossesCancel = document.getElementById('manual-losses-cancel');
-        const manualLossesForm = document.getElementById('manual-losses-form');
 
         if (manualLossesClose) manualLossesClose.addEventListener('click', () => closeModal('manual-losses-modal'));
         if (manualLossesCancel) manualLossesCancel.addEventListener('click', () => closeModal('manual-losses-modal'));
-        if (manualLossesForm) manualLossesForm.addEventListener('submit', handleManualLossesSubmit);
 
         // Modal de parada manual
         const manualDowntimeClose = document.getElementById('manual-downtime-close');
         const manualDowntimeCancel = document.getElementById('manual-downtime-cancel');
-        const manualDowntimeForm = document.getElementById('manual-downtime-form');
         
         if (manualDowntimeClose) manualDowntimeClose.addEventListener('click', () => closeModal('manual-downtime-modal'));
         if (manualDowntimeCancel) manualDowntimeCancel.addEventListener('click', () => closeModal('manual-downtime-modal'));
-        if (manualDowntimeForm) manualDowntimeForm.addEventListener('submit', handleManualDowntimeSubmit);
 
         // Modal de retrabalho
         const quickReworkClose = document.getElementById('quick-rework-close');
@@ -12843,6 +13038,21 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
         updateQuickProductionPieceWeightUI({ forceUpdateInput: true });
+        
+        // ⚠️ ADICIONAR LISTENERS QUANDO O MODAL ABRE
+        const form = document.getElementById('quick-production-form');
+        const submitBtn = document.getElementById('quick-production-submit');
+        
+        if (form) {
+            form.removeEventListener('submit', handleQuickProductionSubmit);
+            form.addEventListener('submit', handleQuickProductionSubmit);
+        }
+        
+        if (submitBtn) {
+            submitBtn.removeEventListener('click', handleQuickProductionSubmit);
+            submitBtn.addEventListener('click', handleQuickProductionSubmit);
+        }
+        
         openModal('quick-production-modal');
     }
     
@@ -12877,6 +13087,32 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             // Adicionar listener para validação ao sair
             weightInput.removeEventListener('blur', validateWeightInput);
             weightInput.addEventListener('blur', validateWeightInput);
+        }
+
+        // ⚠️ ADICIONAR LISTENERS QUANDO O MODAL ABRE
+        const form = document.getElementById('quick-losses-form');
+        const submitBtn = document.getElementById('quick-losses-submit');
+        const closeBtn = document.getElementById('quick-losses-close');
+        const cancelBtn = document.getElementById('quick-losses-cancel');
+        
+        if (form) {
+            form.removeEventListener('submit', handleLossesSubmit);
+            form.addEventListener('submit', handleLossesSubmit);
+        }
+        
+        if (submitBtn) {
+            submitBtn.removeEventListener('click', handleLossesSubmit);
+            submitBtn.addEventListener('click', handleLossesSubmit);
+        }
+
+        if (closeBtn) {
+            closeBtn.removeEventListener('click', () => closeModal('quick-losses-modal'));
+            closeBtn.addEventListener('click', () => closeModal('quick-losses-modal'));
+        }
+
+        if (cancelBtn) {
+            cancelBtn.removeEventListener('click', () => closeModal('quick-losses-modal'));
+            cancelBtn.addEventListener('click', () => closeModal('quick-losses-modal'));
         }
         
         openModal('quick-losses-modal');
@@ -12971,6 +13207,20 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
         
+        // ⚠️ ADICIONAR LISTENERS QUANDO O MODAL ABRE
+        const form = document.getElementById('quick-rework-form');
+        const submitBtn = document.getElementById('quick-rework-submit');
+        
+        if (form) {
+            form.removeEventListener('submit', handleReworkSubmit);
+            form.addEventListener('submit', handleReworkSubmit);
+        }
+        
+        if (submitBtn) {
+            submitBtn.removeEventListener('click', handleReworkSubmit);
+            submitBtn.addEventListener('click', handleReworkSubmit);
+        }
+        
         const reworkModal = document.getElementById('quick-rework-modal');
         if (reworkModal) {
             console.log('[DEBUG] Portalizando quick-rework-modal antes da abertura');
@@ -12990,6 +13240,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
 
+        // Preenchimento do contexto (máquina e produto)
+        const contextMachine = document.querySelector('#manual-production-modal .context-machine');
+        const contextProduct = document.querySelector('#manual-production-modal .context-product');
+        if (contextMachine) contextMachine.textContent = selectedMachineData.machine || '-';
+        if (contextProduct) contextProduct.textContent = selectedMachineData.product || '-';
+
         const dateInput = document.getElementById('manual-production-date');
         if (dateInput) {
             dateInput.value = getProductionDateString();
@@ -13007,6 +13263,20 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const minutes = String(now.getMinutes()).padStart(2, '0');
             hourInput.value = `${hours}:${minutes}`;
         }
+        
+        // ⚠️ ADICIONAR LISTENERS QUANDO O MODAL ABRE
+        const form = document.getElementById('manual-production-form');
+        const submitBtn = document.getElementById('manual-production-submit');
+        
+        if (form) {
+            form.removeEventListener('submit', handleManualProductionSubmit);
+            form.addEventListener('submit', handleManualProductionSubmit);
+        }
+        
+        if (submitBtn) {
+            submitBtn.removeEventListener('click', handleManualProductionSubmit);
+            submitBtn.addEventListener('click', handleManualProductionSubmit);
+        }
 
         openModal('manual-production-modal');
     }
@@ -13017,6 +13287,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             alert('Selecione uma máquina primeiro.');
             return;
         }
+
+        // Preenchimento do contexto (máquina e produto)
+        const contextMachine = document.querySelector('#manual-losses-modal .context-machine');
+        const contextProduct = document.querySelector('#manual-losses-modal .context-product');
+        if (contextMachine) contextMachine.textContent = selectedMachineData.machine || '-';
+        if (contextProduct) contextProduct.textContent = selectedMachineData.product || '-';
 
         const dateInput = document.getElementById('manual-losses-date');
         if (dateInput) {
@@ -13036,6 +13312,20 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             hourInput.value = `${hours}:${minutes}`;
         }
 
+        // ⚠️ ADICIONAR LISTENERS QUANDO O MODAL ABRE
+        const form = document.getElementById('manual-losses-form');
+        const submitBtn = document.getElementById('manual-losses-submit');
+        
+        if (form) {
+            form.removeEventListener('submit', handleManualLossesSubmit);
+            form.addEventListener('submit', handleManualLossesSubmit);
+        }
+        
+        if (submitBtn) {
+            submitBtn.removeEventListener('click', handleManualLossesSubmit);
+            submitBtn.addEventListener('click', handleManualLossesSubmit);
+        }
+
         openModal('manual-losses-modal');
     }
 
@@ -13048,6 +13338,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             alert('Selecione uma máquina primeiro.');
             return;
         }
+
+        // Preenchimento do contexto (máquina e produto)
+        const contextMachine = document.querySelector('#manual-borra-modal .context-machine');
+        const contextProduct = document.querySelector('#manual-borra-modal .context-product');
+        if (contextMachine) contextMachine.textContent = selectedMachineData.machine || '-';
+        if (contextProduct) contextProduct.textContent = selectedMachineData.product || '-';
 
         // Popular os selects do modal com máquinas e motivos do database.js
         populateBorraModal();
@@ -13073,6 +13369,20 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const hours = String(now.getHours()).padStart(2, '0');
             const minutes = String(now.getMinutes()).padStart(2, '0');
             hourInput.value = `${hours}:${minutes}`;
+        }
+
+        // ⚠️ ADICIONAR LISTENERS QUANDO O MODAL ABRE
+        const form = document.getElementById('manual-borra-form');
+        const submitBtn = document.getElementById('manual-borra-submit');
+        
+        if (form) {
+            form.removeEventListener('submit', handleManualBorraSubmit);
+            form.addEventListener('submit', handleManualBorraSubmit);
+        }
+        
+        if (submitBtn) {
+            submitBtn.removeEventListener('click', handleManualBorraSubmit);
+            submitBtn.addEventListener('click', handleManualBorraSubmit);
         }
 
         const borraModal = document.getElementById('manual-borra-modal');
@@ -13126,6 +13436,16 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     }
 
     function openModal(modalId) {
+        if (modalId === 'quick-downtime-modal') {
+            // Forçar re-vinculação do submit do formulário de parada
+            const quickDowntimeForm = document.getElementById('quick-downtime-form');
+            if (quickDowntimeForm) {
+                quickDowntimeForm.onsubmit = null;
+                quickDowntimeForm.removeEventListener('submit', handleDowntimeSubmit);
+                quickDowntimeForm.addEventListener('submit', handleDowntimeSubmit);
+                console.log('[DEBUG] Evento de submit vinculado ao quick-downtime-form (openModal)');
+            }
+        }
         console.error('🔴🔴🔴 OPENMODAL START, modalId=' + modalId + ' 🔴🔴🔴');
 
         const modal = document.getElementById(modalId);
@@ -13211,7 +13531,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     
     // Função para abrir modal de lançamento manual de parada passada
     function openManualDowntimeModal() {
-        console.error('❌❌❌ DEBUG FORCE: openManualDowntimeModal START ❌❌❌');
         console.log('[TRACE][openManualDowntimeModal] called, selectedMachineData:', selectedMachineData);
         
         if (!selectedMachineData) {
@@ -13219,64 +13538,35 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             alert('Selecione uma máquina primeiro.');
             return;
         }
+
+        // Preenchimento do contexto (máquina)
+        const contextMachine = document.querySelector('#manual-downtime-modal .context-machine');
+        if (contextMachine) contextMachine.textContent = selectedMachineData.machine || '-';
         
-        try {
-            // Preencher datas padrão
-            const today = getProductionDateString();
-            console.error('❌ today:', today);
-            
-            const ds = document.getElementById('manual-downtime-date-start');
-            const de = document.getElementById('manual-downtime-date-end');
-            console.error('❌ ds exists:', !!ds, 'de exists:', !!de);
-            
-            if (ds && !ds.value) ds.value = today;
-            if (de && !de.value) de.value = today;
-            
-            const modal = document.getElementById('manual-downtime-modal');
-            if (modal) {
-                console.error('❌ MODAL DEBUG INFO (pré-abertura):');
-                console.error('  - id:', modal.id);
-                console.error('  - classList:', modal.classList.toString());
-                console.error('  - parent element:', modal.parentElement ? modal.parentElement.tagName : 'null');
-                console.error('  - is in document:', document.contains(modal));
+        // Preencher datas padrão
+        const today = getProductionDateString();
+        const ds = document.getElementById('manual-downtime-date-start');
+        const de = document.getElementById('manual-downtime-date-end');
+        
+        if (ds && !ds.value) ds.value = today;
+        if (de && !de.value) de.value = today;
 
-                const allModals = document.querySelectorAll('[id$="-modal"]');
-                console.error('❌ ALL MODALS STATUS:');
-                allModals.forEach((m) => {
-                    const style = window.getComputedStyle(m);
-                    console.error(`  - ${m.id}: hidden=${m.classList.contains('hidden')} display=${style.display} opacity=${style.opacity} visibility=${style.visibility}`);
-                });
-
-                modalManager.portalize(modal);
-
-                const computedBefore = window.getComputedStyle(modal);
-                console.error('❌ computed BEFORE open -> display:', computedBefore.display, 'opacity:', computedBefore.opacity, 'visibility:', computedBefore.visibility, 'z-index:', computedBefore.zIndex);
-
-                requestAnimationFrame(() => {
-                    if (!modal.isConnected) return;
-                    const rect = modal.getBoundingClientRect();
-                    console.error('❌ PRE-OPEN POSITION SNAPSHOT:', {
-                        top: rect.top,
-                        left: rect.left,
-                        width: rect.width,
-                        height: rect.height
-                    });
-                });
-            } else {
-                console.error('❌ modal element not found for manual-downtime-modal');
-            }
-
-            setTimeout(() => {
-                console.error('❌ calling openModal with:', 'manual-downtime-modal');
-                openModal('manual-downtime-modal');
-                console.error('❌ openModal called successfully');
-            }, 0);
-            
-        } catch (err) {
-            console.error('❌ CATCH BLOCK - exception:', err.message);
-            console.error('❌ Stack:', err.stack);
+        // ⚠️ ADICIONAR LISTENERS QUANDO O MODAL ABRE
+        const form = document.getElementById('manual-downtime-form');
+        const submitBtn = document.getElementById('manual-downtime-submit');
+        
+        if (form) {
+            form.removeEventListener('submit', handleManualDowntimeSubmit);
+            form.addEventListener('submit', handleManualDowntimeSubmit);
         }
-        console.error('❌❌❌ DEBUG FORCE: openManualDowntimeModal END ❌❌❌');
+        
+        if (submitBtn) {
+            submitBtn.removeEventListener('click', handleManualDowntimeSubmit);
+            submitBtn.addEventListener('click', handleManualDowntimeSubmit);
+        }
+
+        openModal('manual-downtime-modal');
+        console.log('[TRACE][openManualDowntimeModal] completed');
     }
     
     // Função para iniciar parada da máquina
@@ -13338,159 +13628,200 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     // Handlers dos formulários
     async function handleManualProductionSubmit(e) {
         e.preventDefault();
-
+        e.stopPropagation();
+        
+        if (!window.authSystem || !window.authSystem.checkPermissionForAction) {
+            showNotification('Erro de permissão', 'error');
+            return;
+        }
+        
         if (!window.authSystem.checkPermissionForAction('add_production')) {
+            showNotification('Permissão negada para registrar produção', 'error');
             return;
         }
-
+        
         if (!selectedMachineData) {
-            alert('Nenhuma máquina selecionada. Selecione uma máquina para registrar a produção.');
+            showNotification('Selecione uma máquina', 'warning');
             return;
         }
-
+        
         const dateInput = document.getElementById('manual-production-date');
-        const shiftSelect = document.getElementById('manual-production-shift');
         const hourInput = document.getElementById('manual-production-hour');
+        const shiftSelect = document.getElementById('manual-production-shift');
         const qtyInput = document.getElementById('manual-production-qty');
         const weightInput = document.getElementById('manual-production-weight');
         const obsInput = document.getElementById('manual-production-obs');
 
         const dateValue = dateInput?.value || '';
-        const shiftRaw = shiftSelect?.value || '';
         const hourValue = hourInput?.value || '';
+        const shiftRaw = shiftSelect?.value || '';
         const quantityValue = parseInt(qtyInput?.value || '0', 10);
         let weightValue = parseFloat(weightInput?.value || '0');
         const observations = (obsInput?.value || '').trim();
         
-        // Verificar se deve aplicar tara da caixa plástica
-        const useTare = document.getElementById('manual-production-use-tare').checked;
-        if (useTare && weightValue > 0) {
-            const tareWeight = getTareWeightForMachine(selectedMachineData?.machine);
-            if (tareWeight > 0) {
-                weightValue = Math.max(0, weightValue - tareWeight);
-                console.log(`[TRACE][handleManualProductionSubmit] Tara aplicada: ${tareWeight.toFixed(3)}kg descontados. Peso líquido: ${weightValue.toFixed(3)}kg`);
-            }
-        }
-
         if (!dateValue) {
-            alert('Informe a data referente à produção.');
-            if (dateInput) dateInput.focus();
+            showNotification('Informe a data da produção', 'warning');
+            dateInput?.focus();
             return;
         }
-
-        // Aceitar quantidade OU peso (um ou outro)
+        
         const hasQty = Number.isFinite(quantityValue) && quantityValue > 0;
         const hasWeight = Number.isFinite(weightValue) && weightValue > 0;
+        
         if (!hasQty && !hasWeight) {
-            alert('Informe a quantidade produzida OU o peso bruto (um dos dois).');
-            if (qtyInput && (!qtyInput.value || qtyInput.value === '')) {
-                qtyInput.focus();
-            } else if (weightInput) {
-                weightInput.focus();
-            }
+            showNotification('Informe quantidade OU peso', 'warning');
             return;
         }
-
-        const shiftNumeric = parseInt(shiftRaw, 10);
-        const turno = [1, 2, 3].includes(shiftNumeric) ? shiftNumeric : getCurrentShift();
-
-        const planId = selectedMachineData?.id || null;
-        if (!planId) {
-            alert('Não foi possível identificar o planejamento associado a esta máquina.');
-            return;
-        }
-
-    const currentUser = getActiveUser();
-        const horaInformada = hourValue && /^\d{2}:\d{2}$/.test(hourValue) ? hourValue : null;
-
-        // Se só o peso foi informado, tentar converter para peças usando peso médio da peça
-        let finalQuantity = hasQty ? quantityValue : 0;
-        let finalWeightKg = hasWeight ? Number(weightValue) : 0;
-        if (!hasQty && hasWeight) {
-            const resolveAveragePieceWeight = () => {
-                if (!selectedMachineData) return 0;
-                const candidates = [
-                    selectedMachineData.piece_weight,
-                    selectedMachineData.weight,
-                    selectedMachineData.produto?.weight,
-                    selectedMachineData.mp_weight
-                ];
-                for (const candidate of candidates) {
-                    const parsed = parseFloat(candidate);
-                    if (Number.isFinite(parsed) && parsed > 0) return parsed;
-                }
-                return 0;
+        
+        try {
+            const shiftNumeric = parseInt(shiftRaw, 10);
+            const turno = [1, 2, 3].includes(shiftNumeric) ? shiftNumeric : getCurrentShift();
+            const planId = selectedMachineData?.id || null;
+            const currentUser = getActiveUser();
+            
+            const payloadBase = {
+                planId,
+                data: dateValue,
+                turno,
+                produzido: quantityValue || Math.round((weightValue * 1000) / 10),
+                peso_bruto: weightValue,
+                refugo_kg: 0,
+                perdas: '',
+                observacoes: observations,
+                machine: selectedMachineData.machine || null,
+                mp: selectedMachineData.mp || '',
+                orderId: selectedMachineData.order_id || null,
+                manual: true,
+                horaInformada: hourValue || null,
+                registradoPor: currentUser?.username || null,
+                registradoPorNome: getCurrentUserName()
             };
-            const pieceWeightGrams = resolveAveragePieceWeight();
-            if (pieceWeightGrams > 0) {
-                finalQuantity = Math.max(1, Math.round((finalWeightKg * 1000) / pieceWeightGrams));
-                showNotification(`Convertido: ${finalWeightKg}kg = ${finalQuantity} peças`, 'info');
-            } else {
-                alert('Não foi possível converter o peso em peças porque o peso médio não está configurado. Informe a quantidade manualmente.');
-                if (qtyInput) qtyInput.focus();
-                return;
-            }
+            
+            await db.collection('production_entries').add({
+                ...payloadBase,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            closeModal('manual-production-modal');
+            await populateMachineSelector();
+            await refreshLaunchCharts();
+            await loadTodayStats();
+            await loadRecentEntries(false);
+            
+            showNotification('✅ Produção manual registrada com sucesso!', 'success');
+        } catch (error) {
+            console.error('Erro ao registrar produção:', error);
+            showNotification('❌ Erro ao registrar produção: ' + error.message, 'error');
+        }
+    }
+
+    async function handleQuickProductionSubmit(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!window.authSystem || !window.authSystem.checkPermissionForAction) {
+            showNotification('Erro de permissão', 'error');
+            return;
         }
 
-        const payloadBase = {
-            planId,
-            data: dateValue,
-            turno,
-            produzido: finalQuantity,
-            peso_bruto: Number.isFinite(finalWeightKg) ? finalWeightKg : 0,
-            refugo_kg: 0,
-            perdas: '',
-            observacoes: observations,
-            machine: selectedMachineData.machine || null,
-            mp: selectedMachineData.mp || '',
-            orderId: selectedMachineData.order_id || null,
-            orderNumber: selectedMachineData.order_number || null,
-            manual: true,
-            horaInformada,
-            dataHoraInformada: horaInformada ? `${dateValue}T${horaInformada}` : null,
-            registradoPor: currentUser.username || null,
-            registradoPorNome: getCurrentUserName()
-        };
+        if (!window.authSystem.checkPermissionForAction('add_production')) {
+            showNotification('Permissão negada para registrar produção', 'error');
+            return;
+        }
+
+        if (!selectedMachineData) {
+            showNotification('Selecione uma máquina', 'warning');
+            return;
+        }
+
+        const qtyInput = document.getElementById('quick-production-qty');
+        const weightInput = document.getElementById('quick-production-weight');
+        const obsInput = document.getElementById('quick-production-obs');
+        const useTareCheckbox = document.getElementById('quick-production-use-tare');
+
+        const quantityValue = parseInt(qtyInput?.value || '0', 10);
+        let weightValue = parseFloat(weightInput?.value || '0');
+        const observations = (obsInput?.value || '').trim();
+
+        const hasQty = Number.isFinite(quantityValue) && quantityValue > 0;
+        const hasWeight = Number.isFinite(weightValue) && weightValue > 0;
+
+        if (!hasQty && !hasWeight) {
+            showNotification('Informe quantidade OU peso', 'warning');
+            return;
+        }
 
         try {
+            // Aplicar tara se selecionada
+            if (useTareCheckbox?.checked && hasWeight) {
+                const tareWeight = getTareWeightForMachine(selectedMachineData?.machine);
+                if (tareWeight > 0) {
+                    weightValue = Math.max(0, weightValue - tareWeight);
+                }
+            }
+
+            const planId = selectedMachineData?.id || null;
+            if (!planId) {
+                showNotification('Não foi possível identificar o planejamento', 'error');
+                return;
+            }
+
+            const turno = getCurrentShift();
+            const currentUser = getActiveUser();
+
+            const payloadBase = {
+                planId,
+                data: getProductionDateString(),
+                turno,
+                produzido: quantityValue || Math.round((weightValue * 1000) / 10),
+                peso_bruto: weightValue,
+                refugo_kg: 0,
+                perdas: '',
+                observacoes: observations,
+                machine: selectedMachineData.machine || null,
+                mp: selectedMachineData.mp || '',
+                orderId: selectedMachineData.order_id || null,
+                manual: false,
+                registradoPor: currentUser?.username || null,
+                registradoPorNome: getCurrentUserName()
+            };
+
             await db.collection('production_entries').add({
                 ...payloadBase,
                 timestamp: firebase.firestore.FieldValue.serverTimestamp(),
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
-            closeModal('manual-production-modal');
+            closeModal('quick-production-modal');
             await populateMachineSelector();
-            
-            // Atualizar selectedMachineData com os dados mais recentes
-            if (selectedMachineData && selectedMachineData.machine && machineCardData[selectedMachineData.machine]) {
-                selectedMachineData = machineCardData[selectedMachineData.machine];
-                updateMachineInfo();
-                updateQuickProductionPieceWeightUI();
-            }
-            
             await refreshLaunchCharts();
             await loadTodayStats();
             await loadRecentEntries(false);
-            // Atualizar aba de análise se estiver ativa (para refletir barra de progresso da OP)
-            await refreshAnalysisIfActive();
 
-            showNotification('Produção manual registrada com sucesso!', 'success');
+            showNotification('✅ Produção rápida registrada com sucesso!', 'success');
         } catch (error) {
-            console.error('Erro ao registrar produção manual: ', error);
-            alert('Erro ao registrar produção manual. Tente novamente.');
+            console.error('Erro ao registrar produção rápida:', error);
+            showNotification('❌ Erro ao registrar produção: ' + error.message, 'error');
         }
     }
 
     async function handleManualLossesSubmit(e) {
         e.preventDefault();
+        e.stopPropagation();
+
+        if (!window.authSystem || !window.authSystem.checkPermissionForAction) {
+            showNotification('Erro de permissão', 'error');
+            return;
+        }
 
         if (!window.authSystem.checkPermissionForAction('add_losses')) {
+            showNotification('Permissão negada para registrar perdas', 'error');
             return;
         }
 
         if (!selectedMachineData) {
-            alert('Nenhuma máquina selecionada. Selecione uma máquina para registrar as perdas.');
+            showNotification('Selecione uma máquina', 'warning');
             return;
         }
 
@@ -13511,107 +13842,88 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const observations = (obsInput?.value || '').trim();
 
         if (!dateValue) {
-            alert('Informe a data referente à perda.');
-            if (dateInput) dateInput.focus();
+            showNotification('Informe a data da perda', 'warning');
+            dateInput?.focus();
             return;
         }
 
         const hasQuantity = Number.isFinite(quantityValue) && quantityValue > 0;
         const hasWeight = Number.isFinite(weightValue) && weightValue > 0;
 
-        // CORREÇÃO: Aceitar pelo menos um dos campos (quantidade OU peso)
         if (!hasQuantity && !hasWeight) {
-            alert('Informe pelo menos a quantidade de peças perdidas OU o peso em borras (kg). Não é necessário preencher ambos.');
-            if (qtyInput && (!qtyInput.value || qtyInput.value === '')) {
-                qtyInput.focus();
-            } else if (weightInput) {
-                weightInput.focus();
-            }
+            showNotification('Informe quantidade OU peso', 'warning');
             return;
         }
 
         if (!reasonValue) {
-            alert('Selecione o motivo da perda.');
-            if (reasonSelect) reasonSelect.focus();
+            showNotification('Selecione o motivo da perda', 'warning');
+            reasonSelect?.focus();
             return;
         }
-
-        const planId = selectedMachineData?.id || null;
-        if (!planId) {
-            alert('Não foi possível identificar o planejamento associado a esta máquina.');
-            return;
-        }
-
-        const resolveAveragePieceWeight = () => {
-            if (!selectedMachineData) return 0;
-            const candidates = [
-                selectedMachineData.piece_weight,
-                selectedMachineData.weight,
-                selectedMachineData.produto?.weight,
-                selectedMachineData.mp_weight
-            ];
-            for (const candidate of candidates) {
-                const parsed = parseFloat(candidate);
-                if (Number.isFinite(parsed) && parsed > 0) {
-                    return parsed;
-                }
-            }
-            return 0;
-        };
-
-        let refugoQty = hasQuantity ? quantityValue : 0;
-        let pesoTotalKg = hasWeight ? weightValue : 0;
-        const pieceWeightGrams = resolveAveragePieceWeight();
-
-        if (refugoQty <= 0 && pesoTotalKg > 0) {
-            if (pieceWeightGrams > 0) {
-                refugoQty = Math.max(1, Math.round((pesoTotalKg * 1000) / pieceWeightGrams));
-                showNotification(`Convertido: ${pesoTotalKg}kg = ${refugoQty} peças`, 'info');
-            } else {
-                alert('Não foi possível converter o peso em peças porque o peso médio não está configurado. Informe a quantidade manualmente.');
-                return;
-            }
-        }
-
-        if (pesoTotalKg <= 0 && refugoQty > 0 && pieceWeightGrams > 0) {
-            pesoTotalKg = (refugoQty * pieceWeightGrams) / 1000;
-        }
-
-        if (refugoQty <= 0) {
-            alert('Não foi possível determinar a quantidade de peças perdidas. Verifique os valores informados.');
-            return;
-        }
-
-        const shiftNumeric = parseInt(shiftRaw, 10);
-        const turno = [1, 2, 3].includes(shiftNumeric) ? shiftNumeric : getCurrentShift();
-        const horaInformada = hourValue && /^\d{2}:\d{2}$/.test(hourValue) ? hourValue : null;
-        const dataHoraInformada = horaInformada ? `${dateValue}T${horaInformada}` : null;
-    const currentUser = getActiveUser();
-
-        const payloadBase = {
-            planId,
-            data: dateValue,
-            turno,
-            produzido: 0,
-            peso_bruto: 0,
-            refugo_kg: Number.isFinite(pesoTotalKg) && pesoTotalKg > 0 ? Number(pesoTotalKg) : 0,
-            refugo_qty: refugoQty,
-            perdas: reasonValue,
-            observacoes: observations,
-            machine: selectedMachineData.machine || null,
-            mp: selectedMachineData.mp || '',
-            orderId: selectedMachineData.order_id || null,
-            orderNumber: selectedMachineData.order_number || null,
-            manual: true,
-            horaInformada,
-            dataHoraInformada,
-            registradoPor: currentUser.username || null,
-            registradoPorNome: getCurrentUserName()
-        };
-
-        console.log('[TRACE][handleManualLossesSubmit] prepared payload', payloadBase);
 
         try {
+            const planId = selectedMachineData?.id || null;
+            if (!planId) {
+                showNotification('Não foi possível identificar o planejamento', 'error');
+                return;
+            }
+
+            const resolveAveragePieceWeight = () => {
+                if (!selectedMachineData) return 0;
+                const candidates = [
+                    selectedMachineData.piece_weight,
+                    selectedMachineData.weight,
+                    selectedMachineData.produto?.weight,
+                    selectedMachineData.mp_weight
+                ];
+                for (const candidate of candidates) {
+                    const parsed = parseFloat(candidate);
+                    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+                }
+                return 0;
+            };
+
+            let refugoQty = hasQuantity ? quantityValue : 0;
+            let pesoTotalKg = hasWeight ? weightValue : 0;
+            const pieceWeightGrams = resolveAveragePieceWeight();
+
+            if (refugoQty <= 0 && pesoTotalKg > 0) {
+                if (pieceWeightGrams > 0) {
+                    refugoQty = Math.max(1, Math.round((pesoTotalKg * 1000) / pieceWeightGrams));
+                } else {
+                    showNotification('Informe a quantidade (peso médio não configurado)', 'warning');
+                    qtyInput?.focus();
+                    return;
+                }
+            }
+
+            if (pesoTotalKg <= 0 && refugoQty > 0 && pieceWeightGrams > 0) {
+                pesoTotalKg = (refugoQty * pieceWeightGrams) / 1000;
+            }
+
+            const shiftNumeric = parseInt(shiftRaw, 10);
+            const turno = [1, 2, 3].includes(shiftNumeric) ? shiftNumeric : getCurrentShift();
+            const currentUser = getActiveUser();
+
+            const payloadBase = {
+                planId,
+                data: dateValue,
+                turno,
+                produzido: 0,
+                peso_bruto: 0,
+                refugo_kg: Number.isFinite(pesoTotalKg) && pesoTotalKg > 0 ? Number(pesoTotalKg) : 0,
+                refugo_qty: refugoQty,
+                perdas: reasonValue,
+                observacoes: observations,
+                machine: selectedMachineData.machine || null,
+                mp: selectedMachineData.mp || '',
+                orderId: selectedMachineData.order_id || null,
+                manual: true,
+                horaInformada: hourValue || null,
+                registradoPor: currentUser?.username || null,
+                registradoPorNome: getCurrentUserName()
+            };
+
             await db.collection('production_entries').add({
                 ...payloadBase,
                 timestamp: firebase.firestore.FieldValue.serverTimestamp(),
@@ -13620,251 +13932,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
             closeModal('manual-losses-modal');
             await populateMachineSelector();
-            
-            // Atualizar selectedMachineData com os dados mais recentes
-            if (selectedMachineData && selectedMachineData.machine && machineCardData[selectedMachineData.machine]) {
-                selectedMachineData = machineCardData[selectedMachineData.machine];
-                updateMachineInfo();
-                updateQuickProductionPieceWeightUI();
-            }
-            
             await refreshLaunchCharts();
             await loadTodayStats();
             await loadRecentEntries(false);
-            await refreshAnalysisIfActive();
 
-            showNotification('Perda manual registrada com sucesso!', 'success');
+            showNotification('✅ Perda manual registrada com sucesso!', 'success');
         } catch (error) {
-            console.error('Erro ao registrar perda manual: ', error);
-            alert('Erro ao registrar perda manual. Tente novamente.');
-        }
-    }
-
-    async function handleProductionSubmit(e) {
-        e.preventDefault();
-        
-        // Verificar permissão
-        if (!window.authSystem.checkPermissionForAction('add_production')) {
-            return;
-        }
-        
-        console.log('[WEIGHT-CALC] Iniciando handleProductionSubmit com validação em gramas');
-
-        const qtyInputEl = document.getElementById('quick-production-qty');
-        const weightInputEl = document.getElementById('quick-production-weight');
-        const measuredPieceInputEl = document.getElementById('quick-production-piece-weight');
-
-        const qtyInput = qtyInputEl?.value || '';
-        const weightInputRaw = weightInputEl?.value || '';
-        const obs = (document.getElementById('quick-production-obs').value || '').trim();
-        const useTare = document.getElementById('quick-production-use-tare').checked;
-        
-        // Converter entradas para números
-        const qty = qtyInput ? parseInt(qtyInput, 10) : 0;
-        let weightGrams = parseWeightInputToGrams(weightInputRaw);
-        const planPieceInfo = typeof getPlanPieceWeightInfo === 'function' ? getPlanPieceWeightInfo() : null;
-        
-        console.log('[WEIGHT-CALC] Entradas:', { qtyInput, weightInputRaw, qty, weightGrams });
-        
-        // POKA-YOKE #1: Aplicar tara em gramas
-        if (useTare && weightGrams > 0) {
-            const tareGrams = getTareWeightForMachine(selectedMachineData?.machine);
-            if (tareGrams > 0) {
-                weightGrams = Math.max(0, weightGrams - tareGrams);
-                console.log(`[WEIGHT-CALC] Tara aplicada: -${tareGrams}g. Peso líquido: ${weightGrams}g`);
-            }
-        }
-        
-        // POKA-YOKE #2: Validar que pelo menos quantidade OU peso foi informado
-        const hasQty = Number.isFinite(qty) && qty > 0;
-        const hasWeight = Number.isFinite(weightGrams) && weightGrams > 0;
-        
-        if (!hasQty && !hasWeight) {
-            alert('⚠️ Informe a quantidade de peças OU o peso bruto (em kg ou gramas). Um dos dois é obrigatório.');
-            if (qtyInputEl) {
-                qtyInputEl.focus();
-            } else if (weightInputEl) {
-                weightInputEl.focus();
-            }
-            return;
-        }
-        
-        // Recuperar dados de planejamento
-        const isEditing = currentEditContext && currentEditContext.type === 'production' && currentEditContext.id;
-        const originalData = isEditing ? currentEditContext.original : null;
-        const fallbackPlan = selectedMachineData ? selectedMachineData.id : originalData?.planId;
-        const planId = isEditing ? (originalData?.planId || fallbackPlan) : fallbackPlan;
-        
-        if (!planId) {
-            alert('❌ Erro: Não foi possível identificar o planejamento.');
-            return;
-        }
-        
-        // Buscar peso médio da peça (em gramas)
-        let resolvedPieceWeightGrams = 0;
-        let resolvedPieceWeightSource = 'undefined';
-
-        const pieceWeightCandidates = [
-            planPieceInfo?.grams ? { grams: planPieceInfo.grams, source: planPieceInfo.source || 'planning' } : null,
-            { grams: parsePieceWeightGrams(selectedMachineData?.piece_weight_grams), source: 'planning_piece_weight_grams' },
-            { grams: parsePieceWeightGrams(selectedMachineData?.piece_weight), source: 'planning_piece_weight' },
-            { grams: parsePieceWeightGrams(selectedMachineData?.weight), source: 'planning_weight' },
-            { grams: parsePieceWeightGrams(selectedMachineData?.produto?.weight), source: 'product_weight' },
-            { grams: parsePieceWeightGrams(selectedMachineData?.mp_weight), source: 'mp_weight' },
-            { grams: parsePieceWeightGrams(currentEditContext?.original?._piece_weight_grams), source: currentEditContext?.original?._piece_weight_source || 'historic_entry' }
-        ];
-
-        for (const candidate of pieceWeightCandidates) {
-            if (candidate && candidate.grams > 0) {
-                resolvedPieceWeightGrams = candidate.grams;
-                resolvedPieceWeightSource = candidate.source;
-                break;
-            }
-        }
-        
-        console.log('[WEIGHT-CALC] Peso da peça:', { resolvedPieceWeightGrams, kg: gramsToKg(resolvedPieceWeightGrams), source: resolvedPieceWeightSource });
-        
-        // POKA-YOKE #3: Se ambos quantidade E peso foram fornecidos, validar consistência
-        let finalQty = qty;
-        let finalWeightGrams = weightGrams;
-        
-        if (hasQty && hasWeight && resolvedPieceWeightGrams > 0) {
-            const consistency = validateWeightQuantityConsistency(weightGrams, qty, resolvedPieceWeightGrams, PIECE_WEIGHT_TOLERANCE_PERCENT);
-            
-            if (!consistency.valid) {
-                console.warn('[WEIGHT-CALC] Inconsistência detectada:', consistency.message);
-                
-                const confirmUse = confirm(
-                    consistency.message + '\n\n' +
-                    `Usar ${consistency.suggestedQty} peças (baseado no peso)?\n\n` +
-                    'SIM = Usar quantidade sugerida\nNÃO = Cancelar e revisar'
-                );
-                
-                if (confirmUse) {
-                    finalQty = consistency.suggestedQty;
-                    console.log('[WEIGHT-CALC] Quantidade ajustada para:', finalQty);
-                } else {
-                    return;
-                }
-            }
-        }
-        
-        // POKA-YOKE #4: Se apenas peso foi informado, converter para quantidade
-        if (!hasQty && hasWeight) {
-            if (resolvedPieceWeightGrams <= 0) {
-                alert('❌ Peso da peça não configurado. Não é possível converter peso em quantidade.\n' +
-                      'Informe a quantidade manualmente ou configure o peso da peça no planejamento.');
-                return;
-            }
-            
-            const result = calculateQuantityFromGrams(weightGrams, resolvedPieceWeightGrams);
-            if (result.error) {
-                alert(`❌ Erro no cálculo: ${result.error}`);
-                return;
-            }
-            
-            finalQty = result.quantity;
-            
-            if (result.remainder > 0) {
-                const confirmRemainder = confirm(
-                    `Peso convertido: ${weightGrams}g ÷ ${resolvedPieceWeightGrams}g/peça = ${finalQty} peças\n\n` +
-                    `Resto: ${result.remainder}g (${(result.remainder/resolvedPieceWeightGrams).toFixed(1)}% de uma peça)\n\n` +
-                    `Confirmar ${finalQty} peças?`
-                );
-                
-                if (!confirmRemainder) return;
-            }
-            
-            console.log(`[WEIGHT-CALC] Peso convertido: ${weightGrams}g → ${finalQty} peças`);
-            showNotification(`✅ Convertido: ${(weightGrams/1000).toFixed(3)}kg = ${finalQty} peças`, 'success');
-        }
-        
-        // POKA-YOKE #5: Se apenas quantidade foi informada, calcular peso esperado para referência
-        if (hasQty && !hasWeight && resolvedPieceWeightGrams > 0) {
-            const expectedWeightGrams = calculateExpectedWeightGrams(qty, resolvedPieceWeightGrams);
-            finalWeightGrams = expectedWeightGrams;
-            console.log(`[WEIGHT-CALC] Peso calculado: ${finalQty} peças × ${resolvedPieceWeightGrams}g = ${finalWeightGrams}g`);
-        }
-        
-        // POKA-YOKE #6: Validação final de sanidade
-        if (!Number.isFinite(finalQty) || finalQty < 0) {
-            alert('❌ Quantidade inválida após cálculos. Revise os valores.');
-            return;
-        }
-        
-        if (finalQty === 0) {
-            alert('❌ Nenhuma quantidade válida para lançar.');
-            return;
-        }
-        
-        // Preparar dados para salvar
-        const currentShift = getCurrentShift();
-        const turno = isEditing ? (originalData?.turno || currentShift) : currentShift;
-        const dataReferencia = isEditing ? (originalData?.data || getProductionDateString()) : getProductionDateString();
-        const machineRef = isEditing ? (originalData?.machine || selectedMachineData?.machine) : selectedMachineData?.machine;
-        const mpValue = isEditing ? (originalData?.mp || selectedMachineData?.mp || '') : (selectedMachineData?.mp || '');
-
-        const payloadBase = {
-            planId,
-            data: dataReferencia,
-            turno,
-            produzido: finalQty,
-            peso_bruto: gramsToKg(finalWeightGrams), // Salvar em kg no banco
-            refugo_kg: 0,
-            perdas: '',
-            observacoes: obs + (hasQty && hasWeight ? ' [Qtd+Peso validados]' : ''),
-            machine: machineRef || null,
-            mp: mpValue,
-            orderId: selectedMachineData?.order_id || null,
-            orderNumber: selectedMachineData?.order_number || null,
-            // Novo: Rastreabilidade dos cálculos
-            _calculation_method: (hasQty && hasWeight) ? 'qty_and_weight_validated' : (hasQty ? 'qty_only' : 'weight_to_qty'),
-            _piece_weight_grams: resolvedPieceWeightGrams,
-            _piece_weight_source: resolvedPieceWeightSource || 'undefined',
-            _piece_weight_measured_input: measuredPieceWeightGrams > 0 ? measuredPieceWeightGrams : null,
-            _weight_gross_grams: finalWeightGrams
-        };
-        
-        console.log('[WEIGHT-CALC] Payload final:', payloadBase);
-
-        const collectionRef = db.collection('production_entries');
-        const successMessage = isEditing ? 'Produção atualizada!' : 'Produção registrada!';
-
-        try {
-            if (isEditing) {
-                console.log('[WEIGHT-CALC] Atualizando entrada:', currentEditContext.id);
-                await collectionRef.doc(currentEditContext.id).update({
-                    ...payloadBase,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-            } else {
-                console.log('[WEIGHT-CALC] Criando nova entrada');
-                await collectionRef.add({
-                    ...payloadBase,
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-            }
-
-            closeModal('quick-production-modal');
-            await populateMachineSelector();
-            
-            if (selectedMachineData && selectedMachineData.machine && machineCardData[selectedMachineData.machine]) {
-                selectedMachineData = machineCardData[selectedMachineData.machine];
-                updateMachineInfo();
-                updateQuickProductionPieceWeightUI();
-            }
-            
-            await refreshLaunchCharts();
-            await loadTodayStats();
-            await loadRecentEntries(false);
-            await refreshAnalysisIfActive();
-            showNotification(successMessage, 'success');
-
-            console.log('[WEIGHT-CALC] Sucesso: Lançamento concluído');
-        } catch (error) {
-            console.error('[WEIGHT-CALC] Erro ao registrar produção:', error);
-            alert('❌ Erro ao registrar produção. Tente novamente.');
+            console.error('Erro ao registrar perda:', error);
+            showNotification('❌ Erro ao registrar perda: ' + error.message, 'error');
         }
     }
     
@@ -14111,26 +14186,31 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (!currentDowntimeStart) {
             alert('Nenhuma parada ativa para finalizar.');
             closeModal('quick-downtime-modal');
+            // Garante que o status da máquina volte para running e a UI seja atualizada
+            machineStatus = 'running';
+            updateMachineStatus();
+            resumeProductionTimer();
+            stopDowntimeTimer();
+            await loadTodayStats();
+            await loadRecentEntries(false);
+            await refreshAnalysisIfActive();
             return;
         }
         
+        let erroFinal = null;
         try {
             const now = new Date();
             const endTime = now.toTimeString().substr(0, 5);
-            
             // Determinar datas de início e fim (fim = data atual de produção)
-            const startDateStr = currentDowntimeStart.date || formatDateYMD(currentDowntimeStart.startTimestamp || new Date());
+            const startDateStr = currentDowntimeStart?.date || formatDateYMD(currentDowntimeStart?.startTimestamp || new Date());
             const endDateStr = getProductionDateString();
-
             // Quebrar em segmentos por dia
-            const segments = splitDowntimeIntoDailySegments(startDateStr, currentDowntimeStart.startTime, endDateStr, endTime);
+            const segments = splitDowntimeIntoDailySegments(startDateStr, currentDowntimeStart?.startTime, endDateStr, endTime);
             if (!segments.length) {
                 alert('Intervalo de parada inválido. Verifique os horários.');
                 return;
             }
-
             const currentUser = getActiveUser();
-
             for (const seg of segments) {
                 const downtimeData = {
                     machine: currentDowntimeStart.machine,
@@ -14144,10 +14224,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     registradoPorNome: getCurrentUserName(),
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
-
                 console.log('[TRACE][handleDowntimeSubmit] saving segment', downtimeData);
                 await db.collection('downtime_entries').add(downtimeData);
             }
+        } catch (error) {
+            erroFinal = error;
+            console.error("Erro ao registrar parada: ", error);
+            alert('Erro ao registrar parada. Tente novamente.');
+        } finally {
             // Remover parada ativa dessa máquina (evita restauração automática na troca de máquina/reload)
             try {
                 if (currentDowntimeStart?.machine) {
@@ -14156,32 +14240,23 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 }
             } catch (err) {
                 console.warn('[WARN][handleDowntimeSubmit] failed to delete active_downtime doc', err);
-                // Não bloquear o fluxo do usuário se a exclusão falhar
             }
-            
-            // Resetar status
+            // Resetar status e timers (sempre)
             currentDowntimeStart = null;
             machineStatus = 'running';
             updateMachineStatus();
             stopDowntimeTimer();
             resumeProductionTimer();
-            
             closeModal('quick-downtime-modal');
-            
-            // Atualizar dados
             await loadTodayStats();
             await loadRecentEntries(false);
-            // Atualizar aba de análise se estiver aberta
             await refreshAnalysisIfActive();
-            
-            // Mostrar sucesso
-            showNotification('Parada finalizada e registrada com sucesso!', 'success');
-
-            console.log('[TRACE][handleDowntimeSubmit] success path completed');
-            
-        } catch (error) {
-            console.error("Erro ao registrar parada: ", error);
-            alert('Erro ao registrar parada. Tente novamente.');
+            if (!erroFinal) {
+                showNotification('Parada finalizada e registrada com sucesso!', 'success');
+                console.log('[TRACE][handleDowntimeSubmit] success path completed');
+            } else {
+                showNotification('Parada finalizada localmente, mas houve erro ao registrar no banco.', 'warning');
+            }
         }
     }
 
@@ -14323,50 +14398,59 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     // Função para lançamento manual de parada passada
     async function handleManualDowntimeSubmit(e) {
         e.preventDefault();
+        e.stopPropagation();
         
-        console.log('[TRACE][handleManualDowntimeSubmit] triggered', { selectedMachineData });
-        const dateStartInput = document.getElementById('manual-downtime-date-start');
-        const dateEndInput = document.getElementById('manual-downtime-date-end');
-        const startTime = document.getElementById('manual-downtime-start').value;
-        const endTime = document.getElementById('manual-downtime-end').value;
-        const reason = document.getElementById('manual-downtime-reason').value;
-        const obs = (document.getElementById('manual-downtime-obs').value || '').trim();
-        
-        console.log('[TRACE][handleManualDowntimeSubmit] parsed form values', { startTime, endTime, reason, obs });
-
-        if (!startTime || !endTime) {
-            alert('Por favor, informe os horários de início e fim da parada.');
+        if (!window.authSystem || !window.authSystem.checkPermissionForAction) {
+            showNotification('Erro de permissão', 'error');
             return;
         }
 
-        if (!reason) {
-            alert('Por favor, selecione o motivo da parada.');
+        if (!window.authSystem.checkPermissionForAction('add_downtime')) {
+            showNotification('Permissão negada para registrar paradas', 'error');
             return;
         }
 
         if (!selectedMachineData) {
-            alert('Nenhuma máquina selecionada.');
+            showNotification('Selecione uma máquina', 'warning');
             return;
         }
 
-        // Datas (opcionais). Se não informadas, assume a data de produção atual
-        const todayStr = getProductionDateString();
-        const dateStartStr = (dateStartInput?.value || todayStr);
-        const dateEndStr = (dateEndInput?.value || dateStartStr);
+        const dateStartInput = document.getElementById('manual-downtime-date-start');
+        const dateEndInput = document.getElementById('manual-downtime-date-end');
+        const startTimeInput = document.getElementById('manual-downtime-start');
+        const endTimeInput = document.getElementById('manual-downtime-end');
+        const reasonSelect = document.getElementById('manual-downtime-reason');
+        const obsInput = document.getElementById('manual-downtime-obs');
 
-        // Validar coerência temporal
-        const dtStart = new Date(`${dateStartStr}T${startTime}:00`);
-        const dtEnd = new Date(`${dateEndStr}T${endTime}:00`);
-        if (Number.isNaN(dtStart.getTime()) || Number.isNaN(dtEnd.getTime()) || dtEnd <= dtStart) {
-            alert('Intervalo de parada inválido. Verifique as datas/horas informadas.');
+        const dateStartStr = (dateStartInput?.value || '').trim();
+        const dateEndStr = (dateEndInput?.value || '').trim();
+        const startTime = (startTimeInput?.value || '').trim();
+        const endTime = (endTimeInput?.value || '').trim();
+        const reason = reasonSelect?.value || '';
+        const obs = (obsInput?.value || '').trim();
+
+        if (!dateStartStr || !startTime || !endTime || !reason) {
+            showNotification('Preencha data inicial, horários e motivo', 'warning');
             return;
         }
-        
+
         try {
+            const todayStr = getProductionDateString();
+            const finalDateEnd = dateEndStr || dateStartStr;
+
+            // Validar coerência temporal
+            const dtStart = new Date(`${dateStartStr}T${startTime}:00`);
+            const dtEnd = new Date(`${finalDateEnd}T${endTime}:00`);
+            
+            if (Number.isNaN(dtStart.getTime()) || Number.isNaN(dtEnd.getTime()) || dtEnd <= dtStart) {
+                showNotification('Intervalo de parada inválido', 'warning');
+                return;
+            }
+
             // Quebrar em segmentos por dia
-            const segments = splitDowntimeIntoDailySegments(dateStartStr, startTime, dateEndStr, endTime);
+            const segments = splitDowntimeIntoDailySegments(dateStartStr, startTime, finalDateEnd, endTime);
             if (!segments.length) {
-                alert('Não foi possível interpretar o período informado.');
+                showNotification('Não foi possível processar o período informado', 'error');
                 return;
             }
 
@@ -14381,28 +14465,22 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     duration: seg.duration,
                     reason: reason,
                     observations: obs,
-                    registradoPor: currentUser.username || null,
+                    registradoPor: currentUser?.username || null,
                     registradoPorNome: getCurrentUserName(),
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
-                console.log('[TRACE][handleManualDowntimeSubmit] saving segment', downtimeData);
+
                 await db.collection('downtime_entries').add(downtimeData);
             }
-            
+
             closeModal('manual-downtime-modal');
-            
-            // Atualizar dados
             await loadTodayStats();
             await loadRecentEntries(false);
-            
-            // Mostrar sucesso
-            showNotification('Parada manual registrada com sucesso! (período possivelmente multi-dia)', 'success');
 
-            console.log('[TRACE][handleManualDowntimeSubmit] success path completed');
-            
+            showNotification('✅ Parada manual registrada com sucesso!', 'success');
         } catch (error) {
-            console.error("Erro ao registrar parada manual: ", error);
-            alert('Erro ao registrar parada. Tente novamente.');
+            console.error('Erro ao registrar parada:', error);
+            showNotification('❌ Erro ao registrar parada: ' + error.message, 'error');
         }
     }
     
@@ -14787,6 +14865,41 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     }
     
     function updateMachineStatus() {
+        // Notificação Web Push se máquina parada > 10 minutos
+        if (machineStatus === 'stopped' && currentDowntimeStart) {
+            const now = new Date();
+            const startDateTime = combineDateAndTime(currentDowntimeStart.date, currentDowntimeStart.startTime);
+            if (startDateTime instanceof Date && !Number.isNaN(startDateTime.getTime())) {
+                const elapsedMs = now - startDateTime;
+                if (elapsedMs > 10 * 60 * 1000 && !downtimeNotificationSent) {
+                    sendDowntimeNotification();
+                    downtimeNotificationSent = true;
+                }
+                if (elapsedMs <= 10 * 60 * 1000) {
+                    downtimeNotificationSent = false;
+                }
+            }
+        } else {
+            downtimeNotificationSent = false;
+        }
+// Envia notificação Web Push se permitido
+function sendDowntimeNotification() {
+    if ('serviceWorker' in navigator && 'Notification' in window && Notification.permission === 'granted') {
+        navigator.serviceWorker.getRegistration().then(function(reg) {
+            if (reg) {
+                reg.showNotification('Atenção: Máquina parada', {
+                    body: 'Uma máquina está parada há mais de 10 minutos.',
+                    icon: 'https://i.postimg.cc/5jdHwhF9/hokkaido-logo-110.png',
+                    badge: 'https://i.postimg.cc/5jdHwhF9/hokkaido-logo-110.png',
+                    data: '/'
+                });
+            }
+        });
+    }
+}
+    console.log('[DEBUG] updateMachineStatus: machineStatus=', machineStatus, 'currentDowntimeStart=', currentDowntimeStart);
+    console.log('[DEBUG] toggleDowntime: chamado, machineStatus=', machineStatus, 'currentDowntimeStart=', currentDowntimeStart);
+    console.log('[DEBUG] handleDowntimeSubmit: início, machineStatus=', machineStatus, 'currentDowntimeStart=', currentDowntimeStart);
         const btnDowntime = document.getElementById('btn-downtime');
         const downtimeIcon = document.getElementById('downtime-icon');
         const downtimeText = document.getElementById('downtime-text');
@@ -15705,154 +15818,164 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     const machineProgressInfo = {};
 
     machineCardGrid.innerHTML = machineOrder.map(machine => {
-            const data = aggregated[machine];
-            const plan = data.plan || {};
-            // Usar APENAS lot_size da OP (quantidade total planejada da ordem)
-            // Não use planned_quantity - esse é apenas meta diária
-            const plannedQtyPrimary = parseOptionalNumber(plan.order_lot_size);
-            const plannedQtyFallback = parseOptionalNumber(plan.lot_size);
-            const plannedQty = Math.round(plannedQtyPrimary ?? plannedQtyFallback ?? 0);
-            
-            // Calcular produção total acumulada da OP (não apenas do dia atual)
-            const totalAccumulatedProduced = Math.round(parseOptionalNumber(plan.total_produzido) ?? data.totalProduced ?? 0);
-            const lossesKg = Math.round(coerceToNumber(data.totalLossesKg, 0));
-            const pieceWeight = coerceToNumber(plan.piece_weight, 0);
-            const scrapPcs = pieceWeight > 0 ? Math.round((lossesKg * 1000) / pieceWeight) : 0;
-            const goodProductionRaw = Math.max(0, totalAccumulatedProduced - scrapPcs);
-            const goodProduction = Math.round(goodProductionRaw); // Executado = produção boa total
-            const progressPercentRaw = plannedQty > 0 ? (goodProduction / plannedQty) * 100 : 0;
-            const packagingMultiple = resolvePackagingMultiple(plan);
-            const executedDisplayQty = packagingMultiple > 0 ? Math.floor(goodProduction / packagingMultiple) * packagingMultiple : goodProduction;
-            const displayRemainingQty = Math.max(0, plannedQty - executedDisplayQty);
+        const data = aggregated[machine];
+        const plan = data.plan || {};
+        const plannedQtyPrimary = parseOptionalNumber(plan.order_lot_size);
+        const plannedQtyFallback = parseOptionalNumber(plan.lot_size);
+        const plannedQty = Math.round(plannedQtyPrimary ?? plannedQtyFallback ?? 0);
+        const totalAccumulatedProduced = Math.round(parseOptionalNumber(plan.total_produzido) ?? data.totalProduced ?? 0);
+        const lossesKg = Math.round(coerceToNumber(data.totalLossesKg, 0));
+        const pieceWeight = coerceToNumber(plan.piece_weight, 0);
+        const scrapPcs = pieceWeight > 0 ? Math.round((lossesKg * 1000) / pieceWeight) : 0;
+        const goodProductionRaw = Math.max(0, totalAccumulatedProduced - scrapPcs);
+        const goodProduction = Math.round(goodProductionRaw);
+        const progressPercentRaw = plannedQty > 0 ? (goodProduction / plannedQty) * 100 : 0;
+        const packagingMultiple = resolvePackagingMultiple(plan);
+        const executedDisplayQty = packagingMultiple > 0 ? Math.floor(goodProduction / packagingMultiple) * packagingMultiple : goodProduction;
+        const displayRemainingQty = Math.max(0, plannedQty - executedDisplayQty);
 
-            console.log(`Card ${machine}:
-  plan.order_lot_size=${plan.order_lot_size}, plan.lot_size=${plan.lot_size}, plannedQty=${plannedQty}
-  plan.total_produzido=${plan.total_produzido}, data.totalProduced=${data.totalProduced}, totalAccumulatedProduced=${totalAccumulatedProduced}
-  lossesKg=${lossesKg}, pieceWeight=${pieceWeight}, scrapPcs=${scrapPcs}
-  goodProduction=${goodProduction}, packagingMultiple=${packagingMultiple}, displayExec=${executedDisplayQty}, displayRemaining=${displayRemainingQty}
-  progressPercent=${progressPercentRaw.toFixed(1)}%
-  data.byShift.T1=${data.byShift.T1}, data.byShift.T2=${data.byShift.T2}, data.byShift.T3=${data.byShift.T3}`);
+        const normalizedProgress = Math.max(0, Math.min(progressPercentRaw, 100));
+        const progressPalette = resolveProgressPalette(progressPercentRaw);
+        const progressTextClass = progressPalette.textClass || 'text-slate-600';
+        const progressText = `${Math.max(0, progressPercentRaw).toFixed(progressPercentRaw >= 100 ? 0 : 1)}%`;
+        const remainingQty = Math.max(0, plannedQty - goodProduction);
+        const lotCompleted = plannedQty > 0 && goodProduction >= plannedQty;
 
-            const normalizedProgress = Math.max(0, Math.min(progressPercentRaw, 100));
-            const progressPalette = resolveProgressPalette(progressPercentRaw);
-            const progressTextClass = progressPalette.textClass || 'text-slate-600';
-            const progressText = `${Math.max(0, progressPercentRaw).toFixed(progressPercentRaw >= 100 ? 0 : 1)}%`;
-            const remainingQty = Math.max(0, plannedQty - goodProduction); // Restante baseado na produção boa
-            const lotCompleted = plannedQty > 0 && goodProduction >= plannedQty;
+        machineProgressInfo[machine] = {
+            normalizedProgress,
+            progressPercent: progressPercentRaw,
+            palette: progressPalette
+        };
 
-            machineProgressInfo[machine] = {
-                normalizedProgress,
-                progressPercent: progressPercentRaw,
-                palette: progressPalette
-            };
-
-            const oeeShiftData = oeeByMachine[machine]?.[currentShiftKey];
-            const oeePercent = Math.max(0, Math.min((oeeShiftData?.oee || 0) * 100, 100));
-            const oeePercentText = oeePercent ? oeePercent.toFixed(1) : '0.0';
-            const oeeColorClass = oeePercent >= 85 ? 'text-emerald-600' : oeePercent >= 70 ? 'text-amber-500' : 'text-red-500';
-            // Cálculos de KPIs (Tempo rodando/paradas, Qualidade/Perdas)
-            const nowRef = new Date();
-            const shiftStart = getShiftStartDateTime(nowRef);
-            let runtimeHours = 0, downtimeHours = 0;
-            if (shiftStart instanceof Date && !Number.isNaN(shiftStart.getTime())) {
-                const elapsedSec = Math.max(0, Math.floor((nowRef.getTime() - shiftStart.getTime()) / 1000));
-                if (elapsedSec > 0) {
-                    const dts = filteredDowntimeEntries.filter(dt => dt && dt.machine === machine);
-                    const runtimeSec = calculateProductionRuntimeSeconds({ shiftStart, now: nowRef, downtimes: dts });
-                    runtimeHours = Math.max(0, runtimeSec / 3600);
-                    downtimeHours = Math.max(0, (elapsedSec / 3600) - runtimeHours);
-                }
+        const oeeShiftData = oeeByMachine[machine]?.[currentShiftKey];
+        const oeePercent = Math.max(0, Math.min((oeeShiftData?.oee || 0) * 100, 100));
+        const oeePercentText = oeePercent ? oeePercent.toFixed(1) : '0.0';
+        const oeeColorClass = oeePercent >= 85 ? 'text-emerald-600' : oeePercent >= 70 ? 'text-amber-500' : 'text-red-500';
+        const nowRef = new Date();
+        const shiftStart = getShiftStartDateTime(nowRef);
+        let runtimeHours = 0, downtimeHours = 0;
+        if (shiftStart instanceof Date && !Number.isNaN(shiftStart.getTime())) {
+            const elapsedSec = Math.max(0, Math.floor((nowRef.getTime() - shiftStart.getTime()) / 1000));
+            if (elapsedSec > 0) {
+                const dts = filteredDowntimeEntries.filter(dt => dt && dt.machine === machine);
+                const runtimeSec = calculateProductionRuntimeSeconds({ shiftStart, now: nowRef, downtimes: dts });
+                runtimeHours = Math.max(0, runtimeSec / 3600);
+                downtimeHours = Math.max(0, (elapsedSec / 3600) - runtimeHours);
             }
-            let qualityPct = 100;
-            if (totalAccumulatedProduced > 0) {
-                qualityPct = Math.max(0, Math.min(100, (goodProduction / totalAccumulatedProduced) * 100));
-            } else if (lossesKg > 0) {
-                qualityPct = 0;
-            }
-            const qualityColorClass = qualityPct >= 98 ? 'text-emerald-600' : (qualityPct >= 95 ? 'text-amber-600' : 'text-red-600');
-            const productLine = plan.product ? `<p class="mt-1 text-sm text-slate-600">${plan.product}</p>` : '<p class="mt-1 text-sm text-slate-400">Produto não definido</p>';
-            const mpLine = plan.mp ? `<p class="text-xs text-slate-400 mt-1">MP: ${plan.mp}</p>` : '';
-            const shiftProduced = data.byShift[currentShiftKey] ?? data.byShift[fallbackShiftKey] ?? 0;
+        }
+        let qualityPct = 100;
+        if (totalAccumulatedProduced > 0) {
+            qualityPct = Math.max(0, Math.min(100, (goodProduction / totalAccumulatedProduced) * 100));
+        } else if (lossesKg > 0) {
+            qualityPct = 0;
+        }
+        const qualityColorClass = qualityPct >= 98 ? 'text-emerald-600' : (qualityPct >= 95 ? 'text-amber-600' : 'text-red-600');
+        const productLine = plan.product ? `<p class=\"mt-1 text-sm text-slate-600\">${plan.product}</p>` : '<p class=\"mt-1 text-sm text-slate-400\">Produto não definido</p>';
+        const mpLine = plan.mp ? `<p class=\"text-xs text-slate-400 mt-1\">MP: ${plan.mp}</p>` : '';
+        const shiftProduced = data.byShift[currentShiftKey] ?? data.byShift[fallbackShiftKey] ?? 0;
 
-            return `
-                <div class="machine-card group relative bg-white rounded-lg border border-slate-200 hover:border-blue-300 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer p-3 ${lotCompleted && String(plan.status||'').toLowerCase()!=='concluida' ? 'completed-blink' : ''}" data-machine="${machine}" data-plan-id="${plan.id}" data-order-id="${plan.order_id||''}" data-part-code="${plan.product_cod||''}">
-                    <!-- Header compacto -->
-                    <div class="flex items-center justify-between mb-2">
-                        <div class="flex items-center gap-2">
-                            <div class="machine-identifier w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                                ${machine.slice(-2)}
-                            </div>
-                            <div>
-                                <h3 class="text-sm font-bold text-slate-900">${machine}</h3>
-                                <p class="text-xs text-slate-500 truncate max-w-[120px]" title="${plan.product || 'Produto não definido'}">${plan.product || 'Produto não definido'}</p>
-                            </div>
+        // Lógica de cor do card: vermelho apenas se houver parada ativa (downtime sem fim)
+        let cardColorClass = '';
+        const paradaAtiva = filteredDowntimeEntries.some(dt => dt && dt.machine === machine && (!dt.endTime && !dt.endDate));
+        if (paradaAtiva) {
+            cardColorClass = 'machine-stopped'; // vermelho apenas se parada ativa
+        }
+        // O card selecionado será tratado via classe .selected, mas vamos garantir o estilo
+
+        return `
+            <div class="machine-card group relative bg-white rounded-lg border border-slate-200 hover:border-blue-300 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer p-3 ${lotCompleted && String(plan.status||'').toLowerCase()!=='concluida' ? 'completed-blink' : ''} ${cardColorClass}" data-machine="${machine}" data-plan-id="${plan.id}" data-order-id="${plan.order_id||''}" data-part-code="${plan.product_cod||''}">
+                <!-- Header compacto -->
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                        <div class="machine-identifier w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                            ${machine.slice(-2)}
                         </div>
-                        <div class="text-right">
-                            <div class="text-xs font-semibold ${oeeColorClass}">${oeePercentText}%</div>
-                            <div class="text-[10px] text-slate-400 uppercase">OEE</div>
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900">${machine}</h3>
+                            <p class="text-xs text-slate-500 truncate max-w-[120px]" title="${plan.product || 'Produto não definido'}">${plan.product || 'Produto não definido'}</p>
                         </div>
                     </div>
-
-                    <!-- Indicadores principais em linha -->
-                    <div class="grid grid-cols-3 gap-2 mb-3">
-                        <div class="text-center">
-                            <div class="text-sm font-semibold text-slate-900">${formatQty(executedDisplayQty)}</div>
-                            <div class="text-[10px] text-slate-500 uppercase">Exec. OP</div>
-                        </div>
-                        <div class="text-center">
-                            <div class="text-sm font-semibold ${qualityColorClass}">${qualityPct.toFixed(0)}%</div>
-                            <div class="text-[10px] text-slate-500 uppercase">Qualidade</div>
-                        </div>
-                        <div class="text-center">
-                            <div class="text-sm font-semibold text-slate-900">${formatQty(displayRemainingQty)}</div>
-                            <div class="text-[10px] text-slate-500 uppercase">Faltante</div>
-                        </div>
+                    <div class="text-right">
+                        <div class="text-xs font-semibold ${oeeColorClass}">${oeePercentText}%</div>
+                        <div class="text-[10px] text-slate-400 uppercase">OEE</div>
                     </div>
-
-                    <!-- Barra de progresso compacta -->
-                    <div class="mb-2">
-                        <div class="flex items-center justify-between mb-1">
-                            <span class="text-xs text-slate-500">OP Total (${formatQty(plannedQty)})</span>
-                            <span class="text-xs font-semibold ${progressTextClass}">${progressText}</span>
-                        </div>
-                        <div class="w-full bg-slate-100 rounded-full h-2">
-                            <div class="h-2 rounded-full transition-all duration-300 ${progressPalette.bgClass || 'bg-blue-500'}" style="width: ${normalizedProgress}%"></div>
-                        </div>
-                    </div>
-
-                    <!-- Status compacto -->
-                    <div class="flex items-center justify-between text-xs">
-                        <div class="flex gap-1">
-                            <span class="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[10px]" title="Tempo rodando">${runtimeHours.toFixed(1)}h</span>
-                            ${downtimeHours > 0 ? `<span class="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px]" title="Tempo parado">${downtimeHours.toFixed(1)}h</span>` : ''}
-                        </div>
-                        <div class="text-slate-500">
-                            <span class="font-medium">${formatShiftLabel(currentShiftKey)}</span>
-                        </div>
-                    </div>
-
-                    <!-- Indicador visual de status (máquina ativa/parada) -->
-                    <div class="absolute top-2 right-2 w-2 h-2 rounded-full ${downtimeHours > runtimeHours ? 'bg-red-400' : 'bg-green-400'}" title="${downtimeHours > runtimeHours ? 'Máquina com paradas' : 'Máquina produzindo'}"></div>
-
-                                        ${lotCompleted ? `
-                                            <div class="card-actions flex gap-2 mt-3">
-                                                ${String(plan.status||'').toLowerCase()!=='concluida' && plan.order_id ? `
-                                                    <button type="button" class="btn btn-finalize card-finalize-btn" data-plan-id="${plan.id}" data-order-id="${plan.order_id}" title="Finalizar OP">
-                                                         <i data-lucide="check-circle"></i>
-                                                         <span>Finalizar OP</span>
-                                                    </button>
-                                                ` : ''}
-                                                ${String(plan.status||'').toLowerCase()==='concluida' ? `
-                                                    <button type="button" class="btn btn-activate card-activate-next-btn" data-plan-id="${plan.id}" data-machine="${machine}" data-part-code="${plan.product_cod||''}" title="Ativar próxima OP">
-                                                         <i data-lucide="play-circle"></i>
-                                                         <span>Ativar próxima OP</span>
-                                                    </button>
-                                                ` : ''}
-                                            </div>
-                                        ` : ''}
                 </div>
-            `;
-        }).join('');
+
+                <!-- Indicadores principais em linha -->
+                <div class="grid grid-cols-3 gap-2 mb-3">
+                    <div class="text-center">
+                        <div class="text-sm font-semibold text-slate-900">${formatQty(executedDisplayQty)}</div>
+                        <div class="text-[10px] text-slate-500 uppercase">Exec. OP</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-sm font-semibold ${qualityColorClass}">${qualityPct.toFixed(0)}%</div>
+                        <div class="text-[10px] text-slate-500 uppercase">Qualidade</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-sm font-semibold text-slate-900">${formatQty(displayRemainingQty)}</div>
+                        <div class="text-[10px] text-slate-500 uppercase">Faltante</div>
+                    </div>
+                </div>
+
+                <!-- Barra de progresso compacta -->
+                <div class="mb-2">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-xs text-slate-500">OP Total (${formatQty(plannedQty)})</span>
+                        <span class="text-xs font-semibold ${progressTextClass}">${progressText}</span>
+                    </div>
+                    <div class="w-full bg-slate-100 rounded-full h-2">
+                        <div class="h-2 rounded-full transition-all duration-300 ${progressPalette.bgClass || 'bg-blue-500'}" style="width: ${normalizedProgress}%"></div>
+                    </div>
+                </div>
+
+
+
+
+                <!-- Status compacto -->
+                <div class="flex items-center justify-between text-xs">
+                    <div class="flex gap-1">
+                        <span class="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[10px]" title="Tempo rodando">${runtimeHours.toFixed(1)}h</span>
+                        ${downtimeHours > 0 ? `<span class="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px]" title="Tempo parado">${downtimeHours.toFixed(1)}h</span>` : ''}
+                    </div>
+                    <div class="text-slate-500">
+                        <span class="font-medium">${formatShiftLabel(currentShiftKey)}</span>
+                    </div>
+                </div>
+
+                                                <!-- Mini card de parada ativa -->
+                                                ${(() => {
+                                                    // Verifica se há parada ativa (downtime sem fim) para esta máquina
+                                                    const paradaAtiva = filteredDowntimeEntries.some(dt => dt && dt.machine === machine && (!dt.endTime && !dt.endDate));
+                                                    return paradaAtiva ? `
+                                                        <div class="absolute left-1/2 -translate-x-1/2 bottom-3 bg-red-600 text-white text-xs rounded-lg px-3 py-1 shadow font-bold z-20 animate-pulse flex items-center gap-2" style="min-width: 120px; justify-content: center;">
+                                                            <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+                                                            PARADA ATIVA
+                                                        </div>
+                                                    ` : '';
+                                                })()}
+
+                <!-- Indicador visual de status (máquina ativa/parada) -->
+                <div class="absolute top-2 right-2 w-2 h-2 rounded-full ${downtimeHours > runtimeHours ? 'bg-red-400' : 'bg-green-400'}" title="${downtimeHours > runtimeHours ? 'Máquina com paradas' : 'Máquina produzindo'}"></div>
+
+                ${lotCompleted ? `
+                    <div class="card-actions flex gap-2 mt-3">
+                        ${String(plan.status||'').toLowerCase()!=='concluida' && plan.order_id ? `
+                            <button type="button" class="btn btn-finalize card-finalize-btn" data-plan-id="${plan.id}" data-order-id="${plan.order_id}" title="Finalizar OP">
+                                 <i data-lucide="check-circle"></i>
+                                 <span>Finalizar OP</span>
+                            </button>
+                        ` : ''}
+                        ${String(plan.status||'').toLowerCase()==='concluida' ? `
+                            <button type="button" class="btn btn-activate card-activate-next-btn" data-plan-id="${plan.id}" data-machine="${machine}" data-part-code="${plan.product_cod||''}" title="Ativar próxima OP">
+                                 <i data-lucide="play-circle"></i>
+                                 <span>Ativar próxima OP</span>
+                            </button>
+                        ` : ''}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }).join('');
 
         machineOrder.forEach(machine => {
             renderMachineCardProgress(machine, machineProgressInfo[machine]);
