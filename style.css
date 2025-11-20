@@ -1,12 +1,3 @@
-/* Cores para o status dos cards de máquina */
-.machine-card.machine-stopped {
-    background-color: #fee2e2 !important; /* vermelho claro */
-    border-color: #ef4444 !important;
-}
-.machine-card.selected {
-    background-color: #d1fae5 !important; /* verde claro */
-    border-color: #10b981 !important;
-}
 body { 
     font-family: 'Inter', sans-serif; 
 }
