@@ -1,93 +1,3 @@
-// Popular o select de MP no cadastro de ordem de produção
-document.addEventListener('DOMContentLoaded', function() {
-    // Ocultar subaba Analytics IA para todos, exceto Leandro Camargo
-    setTimeout(() => {
-        try {
-            const user = window.authSystem?.getCurrentUser?.();
-            const analyticsBtn = document.querySelector('.analysis-tab-btn[data-view="predictive"]');
-            if (analyticsBtn && (!user || (user.name !== 'Leandro Camargo' && user.username !== 'leandro.camargo'))) {
-                analyticsBtn.style.display = 'none';
-            }
-        } catch (e) {
-            console.warn('Não foi possível aplicar restrição da subaba Analytics IA:', e);
-        }
-    }, 300);
-    function popularSelectMPOrdem() {
-        const select = document.getElementById('order-raw-material');
-        if (!select) return;
-        select.innerHTML = '<option value="">Selecione a matéria-prima...</option>';
-        materiaPrimaDatabase.forEach(mp => {
-            const opt = document.createElement('option');
-            opt.value = mp.codigo;
-            opt.textContent = `${mp.codigo} - ${mp.descricao}`;
-            select.appendChild(opt);
-        });
-    }
-    carregarBancoMateriaPrima(popularSelectMPOrdem);
-});
-// Utilitário para obter descrição da MP pelo código
-function getDescricaoMP(codigo) {
-    const cod = Number(codigo);
-    const mp = materiaPrimaDatabase.find(mp => Number(mp.codigo) === cod);
-    return mp ? mp.descricao : String(codigo);
-}
-
-// Exemplo de uso em análises de perda:
-// Em qualquer local que exibe ou processa MP de perda, use getDescricaoMP(codigo) para mostrar a descrição padronizada.
-
-// Exemplo para gráficos e relatórios:
-// const descricao = getDescricaoMP(loss.mp_codigo);
-// Popular o select de MP na tela de planejamento
-document.addEventListener('DOMContentLoaded', function() {
-    function popularSelectMPPlanejamento() {
-        const select = document.getElementById('planning-mp');
-        if (!select) return;
-        select.innerHTML = '<option value="">Selecione a matéria-prima...</option>';
-        materiaPrimaDatabase.forEach(mp => {
-            const opt = document.createElement('option');
-            opt.value = mp.codigo;
-            opt.textContent = `${mp.codigo} - ${mp.descricao}`;
-            select.appendChild(opt);
-        });
-    }
-    carregarBancoMateriaPrima(popularSelectMPPlanejamento);
-});
-// --- Integração do banco de Matéria-prima no modal de edição de ordem ---
-// Carregar banco de matéria-prima
-function carregarBancoMateriaPrima(callback) {
-    if (window.materiaPrimaDatabase && Array.isArray(window.materiaPrimaDatabase)) {
-        if (callback) callback();
-    }
-}
-
-function popularSelectMP() {
-    const select = document.getElementById('edit-order-mp');
-    if (!select) return;
-    select.innerHTML = '<option value="">Selecione a matéria-prima...</option>';
-    materiaPrimaDatabase.forEach(mp => {
-        const opt = document.createElement('option');
-        opt.value = mp.codigo;
-        opt.textContent = `${mp.codigo} - ${mp.descricao}`;
-        select.appendChild(opt);
-    });
-}
-
-// Popular o select de MP ao abrir o modal de edição
-document.addEventListener('DOMContentLoaded', function() {
-    const editOrderModal = document.getElementById('edit-order-modal');
-    if (editOrderModal) {
-        editOrderModal.addEventListener('show', function() {
-            carregarBancoMateriaPrima(popularSelectMP);
-        });
-    }
-    // Fallback: popular ao abrir o modal manualmente
-    const btns = document.querySelectorAll('[data-edit-order]');
-    btns.forEach(btn => {
-        btn.addEventListener('click', function() {
-            carregarBancoMateriaPrima(popularSelectMP);
-        });
-    });
-});
 // This file contains the full and correct JavaScript code for the Hokkaido Synchro MES application.
 // All functionalities, including the new database with product codes, are implemented here.
 
@@ -2801,8 +2711,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 ? `<br><strong>Máquina:</strong> ${escapeHtml(order.machine_id)} - ${escapeHtml(machineInfo.model)}`
                 : '';
 
-            // ...existing code...
-            const isReactivatable = ['concluida','finalizada','encerrada'].includes(status);
             return `
                 <div class="bg-white p-6 rounded-lg shadow border-l-4 border-primary-blue ${isActive ? 'ring-2 ring-blue-400' : ''}">
                     <div class="flex items-start justify-between mb-4">
@@ -2846,8 +2754,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
 
                         ${order.raw_material ? `<div class="bg-blue-50 p-2 rounded text-xs"><strong>MP:</strong> ${escapeHtml(order.raw_material)}</div>` : ''}
-                        ${isReactivatable ? `<button class=\"reactivate-order-btn mt-4 px-4 py-2 bg-blue-600 text-white rounded font-semibold text-sm\" data-order-id=\"${order.id}\"><i data-lucide=\"rotate-ccw\" class=\"w-4 h-4 mr-1 inline\"></i>Reativar Ordem</button>` : ''}
-                        <button class=\"edit-order-btn mt-2 px-4 py-2 bg-yellow-500 text-white rounded font-semibold text-sm\" data-order-id=\"${order.id}\"><i data-lucide=\"edit-3\" class=\"w-4 h-4 mr-1 inline\"></i>Editar</button>
                     </div>
                 </div>
             `;
@@ -2896,132 +2802,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         lucide.createIcons();
-
-        // Adicionar event listener para botões de reativação
-        document.querySelectorAll('.reactivate-order-btn').forEach(btn => {
-            if (!btn.dataset.listenerAttached) {
-                btn.addEventListener('click', async (e) => {
-                    const orderId = btn.getAttribute('data-order-id');
-                    if (!orderId) return;
-                    if (!confirm('Deseja realmente reativar esta ordem? Ela voltará ao status ATIVA.')) return;
-                    try {
-                        await db.collection('production_orders').doc(orderId).update({ status: 'ativa' });
-                        showNotification('Ordem reativada com sucesso!', 'success');
-                        await loadOrdersAnalysis();
-                    } catch (err) {
-                        showNotification('Erro ao reativar ordem. Tente novamente.', 'error');
-                        console.error('Erro ao reativar ordem:', err);
-                    }
-                });
-                btn.dataset.listenerAttached = 'true';
-            }
-        });
-
-        // Adicionar event listener para botões de edição
-        document.querySelectorAll('.edit-order-btn').forEach(btn => {
-            if (!btn.dataset.listenerAttached) {
-                btn.addEventListener('click', async (e) => {
-                    const orderId = btn.getAttribute('data-order-id');
-                    if (!orderId) return;
-                    // Buscar dados da ordem
-                    let orderData = null;
-                    if (Array.isArray(productionOrdersCache)) {
-                        orderData = productionOrdersCache.find(o => o.id === orderId);
-                    }
-                    if (!orderData) {
-                        try {
-                            const doc = await db.collection('production_orders').doc(orderId).get();
-                            if (doc.exists) orderData = { id: doc.id, ...doc.data() };
-                        } catch (err) { orderData = null; }
-                    }
-                    if (!orderData) {
-                        showNotification('Ordem não encontrada.', 'error');
-                        return;
-                    }
-                    // Preencher campos do modal
-                    document.getElementById('edit-order-id').value = orderData.id;
-                    // Preencher select de produtos
-                    const productSelect = document.getElementById('edit-order-product');
-                    productSelect.innerHTML = '';
-                    if (window.databaseModule && window.databaseModule.productByCode) {
-                        const products = Array.from(window.databaseModule.productByCode.values());
-                        products.forEach(prod => {
-                            const opt = document.createElement('option');
-                            opt.value = prod.cod;
-                            opt.textContent = `${prod.cod} - ${prod.name} (${prod.client})`;
-                            if ((orderData.product_cod || orderData.part_code || orderData.product) == prod.cod || orderData.product == prod.name) opt.selected = true;
-                            productSelect.appendChild(opt);
-                        });
-                    } else {
-                        const opt = document.createElement('option');
-                        opt.value = orderData.product || '';
-                        opt.textContent = orderData.product || '';
-                        opt.selected = true;
-                        productSelect.appendChild(opt);
-                    }
-
-                    // Preencher select de máquinas
-                    const machineSelect = document.getElementById('edit-order-machine');
-                    machineSelect.innerHTML = '';
-                    if (window.databaseModule && window.databaseModule.machineById) {
-                        const machines = Array.from(window.databaseModule.machineById.values());
-                        machines.forEach(mac => {
-                            const opt = document.createElement('option');
-                            opt.value = mac.id;
-                            opt.textContent = `${mac.id} - ${mac.model}`;
-                            if ((orderData.machine_id || orderData.machine) == mac.id) opt.selected = true;
-                            machineSelect.appendChild(opt);
-                        });
-                    } else {
-                        const opt = document.createElement('option');
-                        opt.value = orderData.machine_id || orderData.machine || '';
-                        opt.textContent = orderData.machine_id || orderData.machine || '';
-                        opt.selected = true;
-                        machineSelect.appendChild(opt);
-                    }
-
-                    document.getElementById('edit-order-customer').value = orderData.customer || orderData.client || '';
-                    document.getElementById('edit-order-lot').value = orderData.lot || orderData.lot_size || '';
-                    document.getElementById('edit-order-planned').value = orderData.lot_size || '';
-                    document.getElementById('edit-order-executed').value = orderData.total_produzido || orderData.totalProduced || '';
-                    document.getElementById('edit-order-modal').classList.remove('hidden');
-                });
-                btn.dataset.listenerAttached = 'true';
-            }
-        });
-// Modal de edição de ordem
-document.getElementById('close-edit-order-modal').onclick = () => {
-    document.getElementById('edit-order-modal').classList.add('hidden');
-};
-document.getElementById('cancel-edit-order').onclick = () => {
-    document.getElementById('edit-order-modal').classList.add('hidden');
-};
-document.getElementById('edit-order-form').onsubmit = async function(e) {
-    e.preventDefault();
-    const id = document.getElementById('edit-order-id').value;
-    const product = document.getElementById('edit-order-product').value;
-    const machine = document.getElementById('edit-order-machine').value;
-    const customer = document.getElementById('edit-order-customer').value;
-    const lot = document.getElementById('edit-order-lot').value;
-    const planned = Number(document.getElementById('edit-order-planned').value);
-    const executed = Number(document.getElementById('edit-order-executed').value);
-    if (!id) return;
-    try {
-        await db.collection('production_orders').doc(id).update({
-            product,
-            machine_id: machine,
-            customer,
-            lot_size: planned,
-            total_produzido: executed
-        });
-        showNotification('Ordem atualizada com sucesso!', 'success');
-        document.getElementById('edit-order-modal').classList.add('hidden');
-        await loadOrdersAnalysis();
-    } catch (err) {
-        showNotification('Erro ao atualizar ordem.', 'error');
-        console.error('Erro ao atualizar ordem:', err);
-    }
-};
     }
 
     // Função para carregar visão geral
@@ -5706,10 +5486,38 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         };
 
         return new Chart(ctx, {
-            type: 'line',
+            type: 'bar',
             data: {
                 labels,
                 datasets: [
+                    {
+                        type: 'bar',
+                        label: 'Executado por Hora',
+                        data: executed,
+                        backgroundColor: barBackground,
+                        borderRadius: 8,
+                        borderSkipped: false,
+                        maxBarThickness: 22,
+                        order: 2,
+                        yAxisID: 'y'
+                    },
+                    {
+                        type: 'line',
+                        label: 'Planejado por Hora',
+                        data: planned,
+                        borderColor: '#3B82F6',
+                        backgroundColor: 'transparent',
+                        borderWidth: 2.5,
+                        tension: 0.35,
+                        pointRadius: 2,
+                        pointHoverRadius: 5,
+                        pointBackgroundColor: '#ffffff',
+                        pointBorderColor: '#3B82F6',
+                        yAxisID: 'y',
+                        order: 3,
+                        fill: false,
+                        borderDash: [6, 6]
+                    },
                     {
                         type: 'line',
                         label: 'Produção Acumulada',
@@ -13318,16 +13126,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     }
 
     function openModal(modalId) {
-        if (modalId === 'quick-downtime-modal') {
-            // Forçar re-vinculação do submit do formulário de parada
-            const quickDowntimeForm = document.getElementById('quick-downtime-form');
-            if (quickDowntimeForm) {
-                quickDowntimeForm.onsubmit = null;
-                quickDowntimeForm.removeEventListener('submit', handleDowntimeSubmit);
-                quickDowntimeForm.addEventListener('submit', handleDowntimeSubmit);
-                console.log('[DEBUG] Evento de submit vinculado ao quick-downtime-form (openModal)');
-            }
-        }
         console.error('🔴🔴🔴 OPENMODAL START, modalId=' + modalId + ' 🔴🔴🔴');
 
         const modal = document.getElementById(modalId);
@@ -14313,31 +14111,26 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (!currentDowntimeStart) {
             alert('Nenhuma parada ativa para finalizar.');
             closeModal('quick-downtime-modal');
-            // Garante que o status da máquina volte para running e a UI seja atualizada
-            machineStatus = 'running';
-            updateMachineStatus();
-            resumeProductionTimer();
-            stopDowntimeTimer();
-            await loadTodayStats();
-            await loadRecentEntries(false);
-            await refreshAnalysisIfActive();
             return;
         }
         
-        let erroFinal = null;
         try {
             const now = new Date();
             const endTime = now.toTimeString().substr(0, 5);
+            
             // Determinar datas de início e fim (fim = data atual de produção)
-            const startDateStr = currentDowntimeStart?.date || formatDateYMD(currentDowntimeStart?.startTimestamp || new Date());
+            const startDateStr = currentDowntimeStart.date || formatDateYMD(currentDowntimeStart.startTimestamp || new Date());
             const endDateStr = getProductionDateString();
+
             // Quebrar em segmentos por dia
-            const segments = splitDowntimeIntoDailySegments(startDateStr, currentDowntimeStart?.startTime, endDateStr, endTime);
+            const segments = splitDowntimeIntoDailySegments(startDateStr, currentDowntimeStart.startTime, endDateStr, endTime);
             if (!segments.length) {
                 alert('Intervalo de parada inválido. Verifique os horários.');
                 return;
             }
+
             const currentUser = getActiveUser();
+
             for (const seg of segments) {
                 const downtimeData = {
                     machine: currentDowntimeStart.machine,
@@ -14351,14 +14144,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     registradoPorNome: getCurrentUserName(),
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
+
                 console.log('[TRACE][handleDowntimeSubmit] saving segment', downtimeData);
                 await db.collection('downtime_entries').add(downtimeData);
             }
-        } catch (error) {
-            erroFinal = error;
-            console.error("Erro ao registrar parada: ", error);
-            alert('Erro ao registrar parada. Tente novamente.');
-        } finally {
             // Remover parada ativa dessa máquina (evita restauração automática na troca de máquina/reload)
             try {
                 if (currentDowntimeStart?.machine) {
@@ -14367,23 +14156,32 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 }
             } catch (err) {
                 console.warn('[WARN][handleDowntimeSubmit] failed to delete active_downtime doc', err);
+                // Não bloquear o fluxo do usuário se a exclusão falhar
             }
-            // Resetar status e timers (sempre)
+            
+            // Resetar status
             currentDowntimeStart = null;
             machineStatus = 'running';
             updateMachineStatus();
             stopDowntimeTimer();
             resumeProductionTimer();
+            
             closeModal('quick-downtime-modal');
+            
+            // Atualizar dados
             await loadTodayStats();
             await loadRecentEntries(false);
+            // Atualizar aba de análise se estiver aberta
             await refreshAnalysisIfActive();
-            if (!erroFinal) {
-                showNotification('Parada finalizada e registrada com sucesso!', 'success');
-                console.log('[TRACE][handleDowntimeSubmit] success path completed');
-            } else {
-                showNotification('Parada finalizada localmente, mas houve erro ao registrar no banco.', 'warning');
-            }
+            
+            // Mostrar sucesso
+            showNotification('Parada finalizada e registrada com sucesso!', 'success');
+
+            console.log('[TRACE][handleDowntimeSubmit] success path completed');
+            
+        } catch (error) {
+            console.error("Erro ao registrar parada: ", error);
+            alert('Erro ao registrar parada. Tente novamente.');
         }
     }
 
@@ -14989,9 +14787,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     }
     
     function updateMachineStatus() {
-    console.log('[DEBUG] updateMachineStatus: machineStatus=', machineStatus, 'currentDowntimeStart=', currentDowntimeStart);
-    console.log('[DEBUG] toggleDowntime: chamado, machineStatus=', machineStatus, 'currentDowntimeStart=', currentDowntimeStart);
-    console.log('[DEBUG] handleDowntimeSubmit: início, machineStatus=', machineStatus, 'currentDowntimeStart=', currentDowntimeStart);
         const btnDowntime = document.getElementById('btn-downtime');
         const downtimeIcon = document.getElementById('downtime-icon');
         const downtimeText = document.getElementById('downtime-text');
@@ -15910,148 +15705,154 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     const machineProgressInfo = {};
 
     machineCardGrid.innerHTML = machineOrder.map(machine => {
-        const data = aggregated[machine];
-        const plan = data.plan || {};
-        const plannedQtyPrimary = parseOptionalNumber(plan.order_lot_size);
-        const plannedQtyFallback = parseOptionalNumber(plan.lot_size);
-        const plannedQty = Math.round(plannedQtyPrimary ?? plannedQtyFallback ?? 0);
-        const totalAccumulatedProduced = Math.round(parseOptionalNumber(plan.total_produzido) ?? data.totalProduced ?? 0);
-        const lossesKg = Math.round(coerceToNumber(data.totalLossesKg, 0));
-        const pieceWeight = coerceToNumber(plan.piece_weight, 0);
-        const scrapPcs = pieceWeight > 0 ? Math.round((lossesKg * 1000) / pieceWeight) : 0;
-        const goodProductionRaw = Math.max(0, totalAccumulatedProduced - scrapPcs);
-        const goodProduction = Math.round(goodProductionRaw);
-        const progressPercentRaw = plannedQty > 0 ? (goodProduction / plannedQty) * 100 : 0;
-        const packagingMultiple = resolvePackagingMultiple(plan);
-        const executedDisplayQty = packagingMultiple > 0 ? Math.floor(goodProduction / packagingMultiple) * packagingMultiple : goodProduction;
-        const displayRemainingQty = Math.max(0, plannedQty - executedDisplayQty);
+            const data = aggregated[machine];
+            const plan = data.plan || {};
+            // Usar APENAS lot_size da OP (quantidade total planejada da ordem)
+            // Não use planned_quantity - esse é apenas meta diária
+            const plannedQtyPrimary = parseOptionalNumber(plan.order_lot_size);
+            const plannedQtyFallback = parseOptionalNumber(plan.lot_size);
+            const plannedQty = Math.round(plannedQtyPrimary ?? plannedQtyFallback ?? 0);
+            
+            // Calcular produção total acumulada da OP (não apenas do dia atual)
+            const totalAccumulatedProduced = Math.round(parseOptionalNumber(plan.total_produzido) ?? data.totalProduced ?? 0);
+            const lossesKg = Math.round(coerceToNumber(data.totalLossesKg, 0));
+            const pieceWeight = coerceToNumber(plan.piece_weight, 0);
+            const scrapPcs = pieceWeight > 0 ? Math.round((lossesKg * 1000) / pieceWeight) : 0;
+            const goodProductionRaw = Math.max(0, totalAccumulatedProduced - scrapPcs);
+            const goodProduction = Math.round(goodProductionRaw); // Executado = produção boa total
+            const progressPercentRaw = plannedQty > 0 ? (goodProduction / plannedQty) * 100 : 0;
+            const packagingMultiple = resolvePackagingMultiple(plan);
+            const executedDisplayQty = packagingMultiple > 0 ? Math.floor(goodProduction / packagingMultiple) * packagingMultiple : goodProduction;
+            const displayRemainingQty = Math.max(0, plannedQty - executedDisplayQty);
 
-        const normalizedProgress = Math.max(0, Math.min(progressPercentRaw, 100));
-        const progressPalette = resolveProgressPalette(progressPercentRaw);
-        const progressTextClass = progressPalette.textClass || 'text-slate-600';
-        const progressText = `${Math.max(0, progressPercentRaw).toFixed(progressPercentRaw >= 100 ? 0 : 1)}%`;
-        const remainingQty = Math.max(0, plannedQty - goodProduction);
-        const lotCompleted = plannedQty > 0 && goodProduction >= plannedQty;
+            console.log(`Card ${machine}:
+  plan.order_lot_size=${plan.order_lot_size}, plan.lot_size=${plan.lot_size}, plannedQty=${plannedQty}
+  plan.total_produzido=${plan.total_produzido}, data.totalProduced=${data.totalProduced}, totalAccumulatedProduced=${totalAccumulatedProduced}
+  lossesKg=${lossesKg}, pieceWeight=${pieceWeight}, scrapPcs=${scrapPcs}
+  goodProduction=${goodProduction}, packagingMultiple=${packagingMultiple}, displayExec=${executedDisplayQty}, displayRemaining=${displayRemainingQty}
+  progressPercent=${progressPercentRaw.toFixed(1)}%
+  data.byShift.T1=${data.byShift.T1}, data.byShift.T2=${data.byShift.T2}, data.byShift.T3=${data.byShift.T3}`);
 
-        machineProgressInfo[machine] = {
-            normalizedProgress,
-            progressPercent: progressPercentRaw,
-            palette: progressPalette
-        };
+            const normalizedProgress = Math.max(0, Math.min(progressPercentRaw, 100));
+            const progressPalette = resolveProgressPalette(progressPercentRaw);
+            const progressTextClass = progressPalette.textClass || 'text-slate-600';
+            const progressText = `${Math.max(0, progressPercentRaw).toFixed(progressPercentRaw >= 100 ? 0 : 1)}%`;
+            const remainingQty = Math.max(0, plannedQty - goodProduction); // Restante baseado na produção boa
+            const lotCompleted = plannedQty > 0 && goodProduction >= plannedQty;
 
-        const oeeShiftData = oeeByMachine[machine]?.[currentShiftKey];
-        const oeePercent = Math.max(0, Math.min((oeeShiftData?.oee || 0) * 100, 100));
-        const oeePercentText = oeePercent ? oeePercent.toFixed(1) : '0.0';
-        const oeeColorClass = oeePercent >= 85 ? 'text-emerald-600' : oeePercent >= 70 ? 'text-amber-500' : 'text-red-500';
-        const nowRef = new Date();
-        const shiftStart = getShiftStartDateTime(nowRef);
-        let runtimeHours = 0, downtimeHours = 0;
-        if (shiftStart instanceof Date && !Number.isNaN(shiftStart.getTime())) {
-            const elapsedSec = Math.max(0, Math.floor((nowRef.getTime() - shiftStart.getTime()) / 1000));
-            if (elapsedSec > 0) {
-                const dts = filteredDowntimeEntries.filter(dt => dt && dt.machine === machine);
-                const runtimeSec = calculateProductionRuntimeSeconds({ shiftStart, now: nowRef, downtimes: dts });
-                runtimeHours = Math.max(0, runtimeSec / 3600);
-                downtimeHours = Math.max(0, (elapsedSec / 3600) - runtimeHours);
+            machineProgressInfo[machine] = {
+                normalizedProgress,
+                progressPercent: progressPercentRaw,
+                palette: progressPalette
+            };
+
+            const oeeShiftData = oeeByMachine[machine]?.[currentShiftKey];
+            const oeePercent = Math.max(0, Math.min((oeeShiftData?.oee || 0) * 100, 100));
+            const oeePercentText = oeePercent ? oeePercent.toFixed(1) : '0.0';
+            const oeeColorClass = oeePercent >= 85 ? 'text-emerald-600' : oeePercent >= 70 ? 'text-amber-500' : 'text-red-500';
+            // Cálculos de KPIs (Tempo rodando/paradas, Qualidade/Perdas)
+            const nowRef = new Date();
+            const shiftStart = getShiftStartDateTime(nowRef);
+            let runtimeHours = 0, downtimeHours = 0;
+            if (shiftStart instanceof Date && !Number.isNaN(shiftStart.getTime())) {
+                const elapsedSec = Math.max(0, Math.floor((nowRef.getTime() - shiftStart.getTime()) / 1000));
+                if (elapsedSec > 0) {
+                    const dts = filteredDowntimeEntries.filter(dt => dt && dt.machine === machine);
+                    const runtimeSec = calculateProductionRuntimeSeconds({ shiftStart, now: nowRef, downtimes: dts });
+                    runtimeHours = Math.max(0, runtimeSec / 3600);
+                    downtimeHours = Math.max(0, (elapsedSec / 3600) - runtimeHours);
+                }
             }
-        }
-        let qualityPct = 100;
-        if (totalAccumulatedProduced > 0) {
-            qualityPct = Math.max(0, Math.min(100, (goodProduction / totalAccumulatedProduced) * 100));
-        } else if (lossesKg > 0) {
-            qualityPct = 0;
-        }
-        const qualityColorClass = qualityPct >= 98 ? 'text-emerald-600' : (qualityPct >= 95 ? 'text-amber-600' : 'text-red-600');
-        const productLine = plan.product ? `<p class=\"mt-1 text-sm text-slate-600\">${plan.product}</p>` : '<p class=\"mt-1 text-sm text-slate-400\">Produto não definido</p>';
-        const mpLine = plan.mp ? `<p class=\"text-xs text-slate-400 mt-1\">MP: ${plan.mp}</p>` : '';
-        const shiftProduced = data.byShift[currentShiftKey] ?? data.byShift[fallbackShiftKey] ?? 0;
+            let qualityPct = 100;
+            if (totalAccumulatedProduced > 0) {
+                qualityPct = Math.max(0, Math.min(100, (goodProduction / totalAccumulatedProduced) * 100));
+            } else if (lossesKg > 0) {
+                qualityPct = 0;
+            }
+            const qualityColorClass = qualityPct >= 98 ? 'text-emerald-600' : (qualityPct >= 95 ? 'text-amber-600' : 'text-red-600');
+            const productLine = plan.product ? `<p class="mt-1 text-sm text-slate-600">${plan.product}</p>` : '<p class="mt-1 text-sm text-slate-400">Produto não definido</p>';
+            const mpLine = plan.mp ? `<p class="text-xs text-slate-400 mt-1">MP: ${plan.mp}</p>` : '';
+            const shiftProduced = data.byShift[currentShiftKey] ?? data.byShift[fallbackShiftKey] ?? 0;
 
-        // Lógica de cor do card
-        let cardColorClass = '';
-        if (downtimeHours > 0) {
-            cardColorClass = 'machine-stopped'; // vermelho sempre que houver parada
-        }
-        // O card selecionado será tratado via classe .selected, mas vamos garantir o estilo
-
-        return `
-            <div class="machine-card group relative bg-white rounded-lg border border-slate-200 hover:border-blue-300 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer p-3 ${lotCompleted && String(plan.status||'').toLowerCase()!=='concluida' ? 'completed-blink' : ''} ${cardColorClass}" data-machine="${machine}" data-plan-id="${plan.id}" data-order-id="${plan.order_id||''}" data-part-code="${plan.product_cod||''}">
-                <!-- Header compacto -->
-                <div class="flex items-center justify-between mb-2">
-                    <div class="flex items-center gap-2">
-                        <div class="machine-identifier w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                            ${machine.slice(-2)}
+            return `
+                <div class="machine-card group relative bg-white rounded-lg border border-slate-200 hover:border-blue-300 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer p-3 ${lotCompleted && String(plan.status||'').toLowerCase()!=='concluida' ? 'completed-blink' : ''}" data-machine="${machine}" data-plan-id="${plan.id}" data-order-id="${plan.order_id||''}" data-part-code="${plan.product_cod||''}">
+                    <!-- Header compacto -->
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <div class="machine-identifier w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                                ${machine.slice(-2)}
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900">${machine}</h3>
+                                <p class="text-xs text-slate-500 truncate max-w-[120px]" title="${plan.product || 'Produto não definido'}">${plan.product || 'Produto não definido'}</p>
+                            </div>
                         </div>
-                        <div>
-                            <h3 class="text-sm font-bold text-slate-900">${machine}</h3>
-                            <p class="text-xs text-slate-500 truncate max-w-[120px]" title="${plan.product || 'Produto não definido'}">${plan.product || 'Produto não definido'}</p>
+                        <div class="text-right">
+                            <div class="text-xs font-semibold ${oeeColorClass}">${oeePercentText}%</div>
+                            <div class="text-[10px] text-slate-400 uppercase">OEE</div>
                         </div>
                     </div>
-                    <div class="text-right">
-                        <div class="text-xs font-semibold ${oeeColorClass}">${oeePercentText}%</div>
-                        <div class="text-[10px] text-slate-400 uppercase">OEE</div>
+
+                    <!-- Indicadores principais em linha -->
+                    <div class="grid grid-cols-3 gap-2 mb-3">
+                        <div class="text-center">
+                            <div class="text-sm font-semibold text-slate-900">${formatQty(executedDisplayQty)}</div>
+                            <div class="text-[10px] text-slate-500 uppercase">Exec. OP</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-sm font-semibold ${qualityColorClass}">${qualityPct.toFixed(0)}%</div>
+                            <div class="text-[10px] text-slate-500 uppercase">Qualidade</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-sm font-semibold text-slate-900">${formatQty(displayRemainingQty)}</div>
+                            <div class="text-[10px] text-slate-500 uppercase">Faltante</div>
+                        </div>
                     </div>
+
+                    <!-- Barra de progresso compacta -->
+                    <div class="mb-2">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-xs text-slate-500">OP Total (${formatQty(plannedQty)})</span>
+                            <span class="text-xs font-semibold ${progressTextClass}">${progressText}</span>
+                        </div>
+                        <div class="w-full bg-slate-100 rounded-full h-2">
+                            <div class="h-2 rounded-full transition-all duration-300 ${progressPalette.bgClass || 'bg-blue-500'}" style="width: ${normalizedProgress}%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Status compacto -->
+                    <div class="flex items-center justify-between text-xs">
+                        <div class="flex gap-1">
+                            <span class="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[10px]" title="Tempo rodando">${runtimeHours.toFixed(1)}h</span>
+                            ${downtimeHours > 0 ? `<span class="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px]" title="Tempo parado">${downtimeHours.toFixed(1)}h</span>` : ''}
+                        </div>
+                        <div class="text-slate-500">
+                            <span class="font-medium">${formatShiftLabel(currentShiftKey)}</span>
+                        </div>
+                    </div>
+
+                    <!-- Indicador visual de status (máquina ativa/parada) -->
+                    <div class="absolute top-2 right-2 w-2 h-2 rounded-full ${downtimeHours > runtimeHours ? 'bg-red-400' : 'bg-green-400'}" title="${downtimeHours > runtimeHours ? 'Máquina com paradas' : 'Máquina produzindo'}"></div>
+
+                                        ${lotCompleted ? `
+                                            <div class="card-actions flex gap-2 mt-3">
+                                                ${String(plan.status||'').toLowerCase()!=='concluida' && plan.order_id ? `
+                                                    <button type="button" class="btn btn-finalize card-finalize-btn" data-plan-id="${plan.id}" data-order-id="${plan.order_id}" title="Finalizar OP">
+                                                         <i data-lucide="check-circle"></i>
+                                                         <span>Finalizar OP</span>
+                                                    </button>
+                                                ` : ''}
+                                                ${String(plan.status||'').toLowerCase()==='concluida' ? `
+                                                    <button type="button" class="btn btn-activate card-activate-next-btn" data-plan-id="${plan.id}" data-machine="${machine}" data-part-code="${plan.product_cod||''}" title="Ativar próxima OP">
+                                                         <i data-lucide="play-circle"></i>
+                                                         <span>Ativar próxima OP</span>
+                                                    </button>
+                                                ` : ''}
+                                            </div>
+                                        ` : ''}
                 </div>
-
-                <!-- Indicadores principais em linha -->
-                <div class="grid grid-cols-3 gap-2 mb-3">
-                    <div class="text-center">
-                        <div class="text-sm font-semibold text-slate-900">${formatQty(executedDisplayQty)}</div>
-                        <div class="text-[10px] text-slate-500 uppercase">Exec. OP</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="text-sm font-semibold ${qualityColorClass}">${qualityPct.toFixed(0)}%</div>
-                        <div class="text-[10px] text-slate-500 uppercase">Qualidade</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="text-sm font-semibold text-slate-900">${formatQty(displayRemainingQty)}</div>
-                        <div class="text-[10px] text-slate-500 uppercase">Faltante</div>
-                    </div>
-                </div>
-
-                <!-- Barra de progresso compacta -->
-                <div class="mb-2">
-                    <div class="flex items-center justify-between mb-1">
-                        <span class="text-xs text-slate-500">OP Total (${formatQty(plannedQty)})</span>
-                        <span class="text-xs font-semibold ${progressTextClass}">${progressText}</span>
-                    </div>
-                    <div class="w-full bg-slate-100 rounded-full h-2">
-                        <div class="h-2 rounded-full transition-all duration-300 ${progressPalette.bgClass || 'bg-blue-500'}" style="width: ${normalizedProgress}%"></div>
-                    </div>
-                </div>
-
-                <!-- Status compacto -->
-                <div class="flex items-center justify-between text-xs">
-                    <div class="flex gap-1">
-                        <span class="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[10px]" title="Tempo rodando">${runtimeHours.toFixed(1)}h</span>
-                        ${downtimeHours > 0 ? `<span class="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px]" title="Tempo parado">${downtimeHours.toFixed(1)}h</span>` : ''}
-                    </div>
-                    <div class="text-slate-500">
-                        <span class="font-medium">${formatShiftLabel(currentShiftKey)}</span>
-                    </div>
-                </div>
-
-                <!-- Indicador visual de status (máquina ativa/parada) -->
-                <div class="absolute top-2 right-2 w-2 h-2 rounded-full ${downtimeHours > runtimeHours ? 'bg-red-400' : 'bg-green-400'}" title="${downtimeHours > runtimeHours ? 'Máquina com paradas' : 'Máquina produzindo'}"></div>
-
-                ${lotCompleted ? `
-                    <div class="card-actions flex gap-2 mt-3">
-                        ${String(plan.status||'').toLowerCase()!=='concluida' && plan.order_id ? `
-                            <button type="button" class="btn btn-finalize card-finalize-btn" data-plan-id="${plan.id}" data-order-id="${plan.order_id}" title="Finalizar OP">
-                                 <i data-lucide="check-circle"></i>
-                                 <span>Finalizar OP</span>
-                            </button>
-                        ` : ''}
-                        ${String(plan.status||'').toLowerCase()==='concluida' ? `
-                            <button type="button" class="btn btn-activate card-activate-next-btn" data-plan-id="${plan.id}" data-machine="${machine}" data-part-code="${plan.product_cod||''}" title="Ativar próxima OP">
-                                 <i data-lucide="play-circle"></i>
-                                 <span>Ativar próxima OP</span>
-                            </button>
-                        ` : ''}
-                    </div>
-                ` : ''}
-            </div>
-        `;
-    }).join('');
+            `;
+        }).join('');
 
         machineOrder.forEach(machine => {
             renderMachineCardProgress(machine, machineProgressInfo[machine]);
