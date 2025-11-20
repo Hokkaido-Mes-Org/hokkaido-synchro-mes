@@ -56,6 +56,7 @@ const productDatabase = [
 
     // --- APTAR ---
     { "cod": 226, "client": "APTAR", "name": "FIXACAO-GS-28/410CUST-28--THREAD-HDPE-WH", "cavities": 22, "cycle": 36, "weight": 1.65, "pieces_per_hour_goal": 2200, "mp": "" },
+    { "cod": 4268, "client": "APTAR", "name": "FIXAÇÃO-GS-28/410CUST-28--THREAD-HDPE-NATURAL-", "cavities": 22, "cycle": 36, "weight": 14.95, "pieces_per_hour_goal": 2200, "mp": "" },
     { "cod": 436, "client": "APTAR", "name": "CLIP PLASTICO PP-RND DS25 K2/F3 OURO (MODIF)", "cavities": 15, "cycle": 16, "weight": 0.45, "pieces_per_hour_goal": 3375, "mp": "" },
     { "cod": 441, "client": "APTAR", "name": "CLIP PLASTICO PP-RND MA00 K2/F3 PRETO (MODIF)", "cavities": 15, "cycle": 16, "weight": 0.45, "pieces_per_hour_goal": 3375, "mp": "" },
     { "cod": 442, "client": "APTAR", "name": "CCLIPE-K--PP-NATU--RRNA00004", "cavities": 15, "cycle": 16, "weight": 0.45, "pieces_per_hour_goal": 3375, "mp": "" },
@@ -178,6 +179,7 @@ const productDatabase = [
     { "cod": 3725, "client": "PARKER", "name": "TAMPA PLASTICA SEM FURO (NOVA VERSAO)", "cavities": 4, "cycle": 21, "weight": 0.45, "pieces_per_hour_goal": 686, "mp": "" },
     { "cod": 3817, "client": "PARKER", "name": "TAMPA SUPERIOR PARA FILTRO", "cavities": 4, "cycle": 34.38, "weight": 0.85, "pieces_per_hour_goal": 419, "mp": "" },
     { "cod": 3818, "client": "PARKER", "name": "TAMPA INFERIOR PARA FILTRO", "cavities": 4, "cycle": 34.38, "weight": 0.85, "pieces_per_hour_goal": 419, "mp": "" },
+    { "cod": 2294, "client": "PARKER", "name": "SUPORTE DO COPO NOVO - 6 CAVIDADES - TECHNYL", "cavities": 6, "cycle": 50, "weight": 54.85, "pieces_per_hour_goal": 432, "mp": "" },
     { "cod": 3983, "client": "PARKER", "name": "TAMPA PLASTICA 5831", "cavities": 4, "cycle": 35, "weight": 0.55, "pieces_per_hour_goal": 411, "mp": "" },
     { "cod": 4010, "client": "PARKER", "name": "SUPORTE PLASTICO SERIE 600 ESCAL (COM ABA) REC", "cavities": 4, "cycle": 50, "weight": 1.25, "pieces_per_hour_goal": 288, "mp": "" },
     { "cod": 4017, "client": "PARKER", "name": "PISTAO PARA FILTRO DE OLEO", "cavities": 4, "cycle": 23, "weight": 0.85, "pieces_per_hour_goal": 626, "mp": "" },
