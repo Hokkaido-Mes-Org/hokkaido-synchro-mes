@@ -1,47 +1,3 @@
-        <!-- Modal de Edição de Ordem -->
-        <div id="edit-order-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 hidden">
-            <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-lg relative">
-                <button id="close-edit-order-modal" class="absolute top-2 right-2 text-gray-400 hover:text-gray-700 text-xl">&times;</button>
-                <h2 class="text-lg font-bold mb-4">Editar Ordem de Produção</h2>
-                <form id="edit-order-form" class="space-y-4">
-                    <input type="hidden" id="edit-order-id">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Produto</label>
-                                    <select id="edit-order-product" class="w-full border-gray-300 rounded-md p-2" required></select>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Máquina</label>
-                                    <select id="edit-order-machine" class="w-full border-gray-300 rounded-md p-2" required></select>
-                                </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Cliente</label>
-                        <input type="text" id="edit-order-customer" class="w-full border-gray-300 rounded-md p-2">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Lote</label>
-                        <input type="text" id="edit-order-lot" class="w-full border-gray-300 rounded-md p-2">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Quantidade Planejada</label>
-                        <input type="number" id="edit-order-planned" class="w-full border-gray-300 rounded-md p-2" min="0">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Quantidade Executada</label>
-                        <input type="number" id="edit-order-executed" class="w-full border-gray-300 rounded-md p-2" min="0">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Matéria-prima (MP)</label>
-                        <select id="edit-order-mp" class="w-full border-gray-300 rounded-md p-2" required>
-                            <option value="">Selecione a matéria-prima...</option>
-                        </select>
-                    </div>
-                    <div class="flex justify-end gap-2 mt-4">
-                        <button type="button" id="cancel-edit-order" class="px-4 py-2 bg-gray-200 text-gray-700 rounded">Cancelar</button>
-                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded font-semibold">Salvar Alterações</button>
-                    </div>
-                </form>
-            </div>
-        </div>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -414,8 +370,23 @@
                             </div>
                             <div>
                                 <label for="planning-mp" class="block text-sm font-medium text-gray-700">Matéria-prima (MP)</label>
-                                <select id="planning-mp" name="mp" required class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm">
-                                    <option value="">Selecione a matéria-prima...</option>
+                                <input type="text" id="planning-mp" name="mp" required placeholder="Informe ou confirme a MP" class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm">
+                            </div>
+                            <div>
+                                <label for="planning-mp-type" class="block text-sm font-medium text-gray-700">Tipo de Matéria-prima</label>
+                                <select id="planning-mp-type" name="mp_type" required class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm">
+                                    <option value="">Selecione o tipo...</option>
+                                    <option value="PP">PP - Polipropileno</option>
+                                    <option value="PE">PE - Polietileno</option>
+                                    <option value="PET">PET - Polietileno Tereftalato</option>
+                                    <option value="PS">PS - Poliestireno</option>
+                                    <option value="PVC">PVC - Policloreto de Vinila</option>
+                                    <option value="ABS">ABS - Acrilonitrila Butadieno Estireno</option>
+                                    <option value="PC">PC - Policarbonato</option>
+                                    <option value="PA">PA - Poliamida (Nylon)</option>
+                                    <option value="PEAD">PEAD - Polietileno de Alta Densidade</option>
+                                    <option value="PEBD">PEBD - Polietileno de Baixa Densidade</option>
+                                    <option value="Outros">Outros</option>
                                 </select>
                             </div>
                             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
@@ -717,14 +688,17 @@
                                     <input type="text" id="order-product" name="product" required class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm" placeholder="Nome do produto">
                                 </div>
                                 <div>
-                                    <label for="order-lot-size" class="block text-sm font-medium text-gray-700">Tam. Lote</label>
+                                    <label for="order-lot-size" class="block text-sm font-medium text-gray-700">Lote (unidades)</label>
                                     <input type="number" id="order-lot-size" name="lot_size" required min="1" class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm" placeholder="Ex.: 5000">
                                 </div>
                                 <div>
                                     <label for="order-batch" class="block text-sm font-medium text-gray-700">Lote Nº</label>
                                     <input type="text" id="order-batch" name="batch_number" class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm" placeholder="Código do lote">
                                 </div>
-                                <!-- Pedido do Cliente removido -->
+                                <div>
+                                    <label for="order-customer-order" class="block text-sm font-medium text-gray-700">Pedido do Cliente</label>
+                                    <input type="text" id="order-customer-order" name="customer_order" class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm" placeholder="Número do pedido">
+                                </div>
                                 <div>
                                     <label for="order-customer" class="block text-sm font-medium text-gray-700">Cliente</label>
                                     <input type="text" id="order-customer" name="customer" class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm" placeholder="Nome do cliente">
@@ -745,12 +719,13 @@
                                     <label for="order-packaging-qty" class="block text-sm font-medium text-gray-700">Qtd. por Embalagem</label>
                                     <input type="number" id="order-packaging-qty" name="packaging_qty" min="0" class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm" placeholder="Ex.: 100">
                                 </div>
-                                <!-- Qtd. por Embalagem Interna removido -->
+                                <div>
+                                    <label for="order-internal-packaging-qty" class="block text-sm font-medium text-gray-700">Qtd. por Embalagem Interna</label>
+                                    <input type="number" id="order-internal-packaging-qty" name="internal_packaging_qty" min="0" class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm" placeholder="Ex.: 10">
+                                </div>
                                 <div class="md:col-span-2 xl:col-span-3">
                                     <label for="order-raw-material" class="block text-sm font-medium text-gray-700">Matéria-prima</label>
-                                    <select id="order-raw-material" name="raw_material" class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm" required>
-                                        <option value="">Selecione a matéria-prima...</option>
-                                    </select>
+                                    <input type="text" id="order-raw-material" name="raw_material" class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm" placeholder="Tipo de material">
                                 </div>
                             </div>
                             <button type="submit" class="w-full bg-accent-2 hover:bg-emerald-600 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2">
@@ -2390,7 +2365,19 @@
                                             <i data-lucide="activity" class="w-4 h-4 mr-2 inline"></i>
                                             SPC - Controle Estatístico
                                         </button>
+                                        <button onclick="showPredictiveSubtab('traceability')" 
+                                                class="predictive-subtab-btn bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:bg-gray-300">
+                                            <i data-lucide="git-branch" class="w-4 h-4 mr-2 inline"></i>
+                                            Rastreabilidade Total
+                                        </button>
                                         </div>
+                                        <button id="traceability-refresh-btn" type="button" 
+                                                class="hidden bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-400">
+                                            <span class="flex items-center gap-2">
+                                                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                                                Atualizar Rastreabilidade
+                                            </span>
+                                        </button>
                                     </div>
                                     
                                     <p class="text-xs text-gray-600">
@@ -2551,6 +2538,24 @@
                                                 <div id="fpy-status" class="text-xs text-gray-600">Calculando...</div>
                                                 <div class="mt-2 text-xs text-gray-500">
                                                     Meta: ≥ 95%
+                                                </div>
+                                            </div>
+
+                                            <!-- Cost per Unit -->
+                                            <div class="bg-white p-4 rounded-lg shadow border">
+                                                <div class="flex items-center justify-between mb-3">
+                                                    <div class="flex items-center gap-2">
+                                                        <i data-lucide="dollar-sign" class="w-5 h-5 text-purple-600"></i>
+                                                        <h4 class="font-semibold text-sm text-gray-800">Custo/Un.</h4>
+                                                    </div>
+                                                    <div id="cost-trend">
+                                                        <i data-lucide="minus" class="w-4 h-4 text-gray-400"></i>
+                                                    </div>
+                                                </div>
+                                                <div class="text-2xl font-bold text-purple-600 mb-1" id="cost-per-unit-value">--</div>
+                                                <div class="text-xs text-gray-600">Total: <span id="total-cost-value">--</span></div>
+                                                <div class="mt-2 text-xs text-gray-500">
+                                                    Custo médio ponderado
                                                 </div>
                                             </div>
                                         </div>
@@ -2802,6 +2807,157 @@
                                                         Parar Monitoramento
                                                     </button>
                                                 </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Subtab Rastreabilidade Total -->
+                                <div id="predictive-traceability-content" class="predictive-subtab-content hidden">
+                                    <!-- Header Rastreabilidade -->
+                                    <div class="bg-gradient-to-r from-green-50 to-teal-50 p-6 rounded-lg border border-green-200 mb-6">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <h3 class="text-xl font-bold text-gray-900 flex items-center gap-3">
+                                                    <i data-lucide="git-branch" class="w-6 h-6 text-green-600"></i>
+                                                    Sistema de Rastreabilidade Total
+                                                </h3>
+                                                <p class="text-sm text-gray-600 mt-2">Genealogia completa: Lote → Ordem → Máquina → Operador → Parâmetros</p>
+                                            </div>
+                                            <div class="text-right">
+                                                <button onclick="window.traceabilitySystem.initialize()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                                                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                                                    Atualizar Dados
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Estatísticas de Rastreabilidade -->
+                                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                                        <div class="bg-white p-4 rounded-lg shadow border">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <h5 class="font-semibold text-sm text-gray-800">Total de Lotes</h5>
+                                                <i data-lucide="package" class="w-4 h-4 text-blue-600"></i>
+                                            </div>
+                                            <div id="total-batches-count" class="text-2xl font-bold text-blue-600">--</div>
+                                            <div class="text-xs text-gray-600 mt-1">Últimos 90 dias</div>
+                                        </div>
+
+                                        <div class="bg-white p-4 rounded-lg shadow border">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <h5 class="font-semibold text-sm text-gray-800">Produtos Únicos</h5>
+                                                <i data-lucide="layers" class="w-4 h-4 text-green-600"></i>
+                                            </div>
+                                            <div id="total-products-count" class="text-2xl font-bold text-green-600">--</div>
+                                            <div class="text-xs text-gray-600 mt-1">Variedade produzida</div>
+                                        </div>
+
+                                        <div class="bg-white p-4 rounded-lg shadow border">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <h5 class="font-semibold text-sm text-gray-800">Taxa de Rastreabilidade</h5>
+                                                <i data-lucide="shield-check" class="w-4 h-4 text-purple-600"></i>
+                                            </div>
+                                            <div id="traceability-rate" class="text-2xl font-bold text-purple-600">--</div>
+                                            <div class="text-xs text-gray-600 mt-1">% Rastreáveis</div>
+                                        </div>
+
+                                        <div class="bg-white p-4 rounded-lg shadow border">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <h5 class="font-semibold text-sm text-gray-800">Níveis Médios</h5>
+                                                <i data-lucide="git-merge" class="w-4 h-4 text-orange-600"></i>
+                                            </div>
+                                            <div id="avg-genealogies" class="text-2xl font-bold text-orange-600">--</div>
+                                            <div class="text-xs text-gray-600 mt-1">Profundidade genealógica</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Interface de Busca -->
+                                    <div class="bg-white p-6 rounded-lg shadow border mb-6">
+                                        <h4 class="font-semibold mb-4 flex items-center gap-2">
+                                            <i data-lucide="search" class="w-4 h-4 text-gray-600"></i>
+                                            Busca de Lotes e Genealogia
+                                        </h4>
+                                        
+                                        <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-4">
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">ID do Lote</label>
+                                                <input type="text" id="search-batch-id" placeholder="Ex: 20241215-M01-T1-001" 
+                                                       class="w-full border-gray-300 rounded-md p-2 text-sm">
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">Ordem de Trabalho</label>
+                                                <input type="text" id="search-work-order" placeholder="Ex: WO202451M01001" 
+                                                       class="w-full border-gray-300 rounded-md p-2 text-sm">
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">Produto</label>
+                                                <input type="text" id="search-product" placeholder="Nome ou código do produto" 
+                                                       class="w-full border-gray-300 rounded-md p-2 text-sm">
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">Máquina</label>
+                                                <input type="text" id="search-machine" placeholder="Ex: M01, M02..." 
+                                                       class="w-full border-gray-300 rounded-md p-2 text-sm">
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">Operador</label>
+                                                <input type="text" id="search-operator" placeholder="Nome do operador" 
+                                                       class="w-full border-gray-300 rounded-md p-2 text-sm">
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">Lote Material</label>
+                                                <input type="text" id="search-material-batch" placeholder="Ex: PP-001-241215-001" 
+                                                       class="w-full border-gray-300 rounded-md p-2 text-sm">
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">Data Início</label>
+                                                <input type="date" id="search-date-from" 
+                                                       class="w-full border-gray-300 rounded-md p-2 text-sm">
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">Data Fim</label>
+                                                <input type="date" id="search-date-to" 
+                                                       class="w-full border-gray-300 rounded-md p-2 text-sm">
+                                            </div>
+                                        </div>
+
+                                        <div class="flex flex-wrap gap-3 items-end">
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">Status Qualidade</label>
+                                                <select id="search-quality-status" class="border-gray-300 rounded-md p-2 text-sm">
+                                                    <option value="">Todos</option>
+                                                    <option value="APROVADO">Aprovado</option>
+                                                    <option value="CONDICIONAL">Condicional</option>
+                                                    <option value="REJEITADO">Rejeitado</option>
+                                                </select>
+                                            </div>
+                                            <button onclick="window.traceabilitySystem.performSearch()" 
+                                                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg text-sm flex items-center gap-2">
+                                                <i data-lucide="search" class="w-4 h-4"></i>
+                                                Buscar
+                                            </button>
+                                            <button onclick="document.getElementById('search-batch-id').value=''; document.getElementById('search-work-order').value=''; document.getElementById('search-product').value=''; document.getElementById('search-machine').value=''; document.getElementById('search-operator').value=''; document.getElementById('search-material-batch').value=''; document.getElementById('search-date-from').value=''; document.getElementById('search-date-to').value=''; document.getElementById('search-quality-status').value=''; window.traceabilitySystem.updateSearchResults([]);" 
+                                                    class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                                                <i data-lucide="x" class="w-4 h-4"></i>
+                                                Limpar
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Resultados da Busca -->
+                                    <div class="bg-white rounded-lg shadow border">
+                                        <div class="p-4 border-b">
+                                            <h4 class="font-semibold flex items-center gap-2">
+                                                <i data-lucide="list" class="w-4 h-4 text-gray-600"></i>
+                                                Resultados da Busca
+                                            </h4>
+                                        </div>
+                                        <div id="traceability-search-results" class="p-4">
+                                            <div class="text-center text-gray-500 py-8">
+                                                <i data-lucide="search" class="w-12 h-12 mx-auto text-gray-400 mb-2"></i>
+                                                <p class="font-semibold">Digite critérios de busca</p>
+                                                <p class="text-sm">Busque por lote, ordem, produto, máquina ou operador</p>
                                             </div>
                                         </div>
                                     </div>
@@ -3834,7 +3990,6 @@
         </div>
     </div>
 
-    <script src="materia-prima-database.js"></script>
     <script src="database.js"></script>
     <script src="advanced-kpis.js"></script>
     <script src="auto-pareto-analysis.js"></script>
