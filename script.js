@@ -2130,6 +2130,61 @@ document.addEventListener('DOMContentLoaded', function() {
 
         try {
             console.log('[TRACE][executeDelete] deleting', { id: docIdToDelete, collection: collectionToDelete });
+            
+            // 🔄 CRÍTICO: Se for production_entries, subtrair o valor da OP antes de excluir
+            if (collectionToDelete === 'production_entries') {
+                const entryDoc = await docRef.get();
+                if (entryDoc.exists) {
+                    const entryData = entryDoc.data();
+                    const produzido = coerceToNumber(entryData.produzido || entryData.produced || entryData.quantity, 0);
+                    const orderId = entryData.orderId || entryData.order_id;
+                    const planId = entryData.planId;
+                    
+                    console.log('[SYNC-DELETE] Subtraindo produção da OP:', { produzido, orderId, planId });
+                    
+                    // Subtrair da OP (production_orders)
+                    if (orderId && produzido > 0) {
+                        try {
+                            const orderRef = db.collection('production_orders').doc(orderId);
+                            const orderSnap = await orderRef.get();
+                            if (orderSnap.exists) {
+                                const orderData = orderSnap.data() || {};
+                                const currentTotal = coerceToNumber(orderData.total_produzido ?? orderData.totalProduced, 0);
+                                const newTotal = Math.max(0, currentTotal - produzido);
+                                await orderRef.update({
+                                    total_produzido: newTotal,
+                                    totalProduced: newTotal,
+                                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                                });
+                                console.log(`[SYNC-DELETE] OP ${orderId} atualizada: total_produzido ${currentTotal} → ${newTotal}`);
+                            }
+                        } catch (orderErr) {
+                            console.warn('[SYNC-DELETE] Falha ao atualizar total da OP:', orderErr);
+                        }
+                    }
+                    
+                    // Subtrair do planejamento também
+                    if (planId && produzido > 0) {
+                        try {
+                            const planRef = db.collection('planning').doc(planId);
+                            const planSnap = await planRef.get();
+                            if (planSnap.exists) {
+                                const planData = planSnap.data() || {};
+                                const currentPlanTotal = coerceToNumber(planData.total_produzido, 0);
+                                const newPlanTotal = Math.max(0, currentPlanTotal - produzido);
+                                await planRef.update({
+                                    total_produzido: newPlanTotal,
+                                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                                });
+                                console.log(`[SYNC-DELETE] Plano ${planId} atualizado: total_produzido ${currentPlanTotal} → ${newPlanTotal}`);
+                            }
+                        } catch (planErr) {
+                            console.warn('[SYNC-DELETE] Falha ao atualizar total do plano:', planErr);
+                        }
+                    }
+                }
+            }
+            
             if (collectionToDelete === 'planning') {
                 const prodEntriesSnapshot = await db.collection('production_entries').where('planId', '==', docIdToDelete).get();
                 const batch = db.batch();
@@ -2149,6 +2204,15 @@ document.addEventListener('DOMContentLoaded', function() {
             if (collectionToDelete === 'production_entries' || collectionToDelete === 'downtime_entries' || collectionToDelete === 'rework_entries') {
                 recentEntriesCache.delete(docIdToDelete);
                 await loadRecentEntries(false);
+                
+                // 🔄 Recarregar ordens para atualizar os cards
+                if (collectionToDelete === 'production_entries') {
+                    productionOrdersCache = null; // Invalidar cache
+                    // Se estiver na view de ordens, recarregar
+                    if (currentAnalysisView === 'orders') {
+                        await loadOrdersAnalysis();
+                    }
+                }
             }
 
 
@@ -12636,6 +12700,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         let planningItems = [];
         let productionEntries = [];
         let downtimeEntries = [];
+        let activeDowntimeSet = new Set();
 
         const render = () => {
             const combinedData = planningItems.map(plan => {
@@ -12660,8 +12725,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
             renderPlanningTable(combinedData);
             renderLeaderPanel(planningItems);
-        const activePlans = planningItems.filter(isPlanActive);
-        renderMachineCards(activePlans, productionEntries, downtimeEntries);
+            const activePlans = planningItems.filter(isPlanActive);
+            renderMachineCards(activePlans, productionEntries, downtimeEntries, activeDowntimeSet);
             showLoadingState('leader-panel', false, planningItems.length === 0);
         };
 
@@ -12669,6 +12734,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         listenerManager.unsubscribe('planning');
         listenerManager.unsubscribe('productionEntries');
         listenerManager.unsubscribe('downtime');
+        listenerManager.unsubscribe('activeDowntimes');
 
         const planningQuery = db.collection('planning').where('date', '==', date);
         listenerManager.subscribe('planning', planningQuery,
@@ -12738,6 +12804,16 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 render();
             },
             (error) => console.error('Erro ao carregar paradas:', error)
+        );
+
+        // Listener para paradas ativas (cards vermelhos)
+        const activeDowntimesQuery = db.collection('active_downtimes');
+        listenerManager.subscribe('activeDowntimes', activeDowntimesQuery,
+            (snapshot) => {
+                activeDowntimeSet = new Set(snapshot.docs.map(doc => doc.id));
+                render();
+            },
+            (error) => console.error('Erro ao carregar paradas ativas:', error)
         );
     }
 
@@ -17484,7 +17560,7 @@ function sendDowntimeNotification() {
         return true;
     }
 
-    function renderMachineCards(plans = [], productionEntries = [], downtimeEntries = []) {
+    function renderMachineCards(plans = [], productionEntries = [], downtimeEntries = [], activeDowntimeMachines = new Set()) {
         if (!machineCardGrid) {
             if (machineSelector) {
                 machineSelector.machineData = {};
@@ -17498,6 +17574,11 @@ function sendDowntimeNotification() {
             machineCardEmptyState.classList.add('hidden');
             machineCardEmptyState.classList.remove('text-red-100');
         }
+        
+        // Converter para Set para busca rápida (pode ser array ou Set)
+        const activeDowntimeSet = activeDowntimeMachines instanceof Set 
+            ? activeDowntimeMachines 
+            : new Set(Array.isArray(activeDowntimeMachines) ? activeDowntimeMachines : []);
 
         const activePlans = Array.isArray(plans) ? plans.filter(isPlanActive) : [];
 
@@ -17737,16 +17818,15 @@ function sendDowntimeNotification() {
         const mpLine = plan.mp ? `<p class=\"text-xs text-slate-400 mt-1\">MP: ${plan.mp}</p>` : '';
         const shiftProduced = data.byShift[currentShiftKey] ?? data.byShift[fallbackShiftKey] ?? 0;
 
-        // Lógica de cor do card: vermelho apenas se houver parada ativa (downtime sem fim)
+        // Lógica de cor do card: vermelho se houver parada ativa (na collection active_downtimes)
         let cardColorClass = '';
-        const paradaAtiva = filteredDowntimeEntries.some(dt => dt && dt.machine === machine && (!dt.endTime && !dt.endDate));
-        if (paradaAtiva) {
-            cardColorClass = 'machine-stopped'; // vermelho apenas se parada ativa
+        const hasActiveDowntime = activeDowntimeSet.has(machine);
+        if (hasActiveDowntime) {
+            cardColorClass = 'machine-stopped'; // vermelho para parada ativa
         }
-        // O card selecionado será tratado via classe .selected, mas vamos garantir o estilo
 
         return `
-            <div class="machine-card group relative bg-white rounded-lg border border-slate-200 hover:border-blue-300 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer p-3 ${lotCompleted && String(plan.status||'').toLowerCase()!=='concluida' ? 'completed-blink' : ''} ${cardColorClass}" data-machine="${machine}" data-plan-id="${plan.id}" data-order-id="${plan.order_id||''}" data-part-code="${plan.product_cod||''}">
+            <div class="machine-card group relative bg-white rounded-lg border border-slate-200 hover:border-blue-300 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer p-3 ${lotCompleted && String(plan.status||'').toLowerCase()!=='concluida' ? 'completed-blink' : ''} ${cardColorClass}" data-machine="${machine}" data-plan-id="${plan.id}" data-order-id="${plan.order_id||''}" data-part-code="${plan.product_cod||''}"
                 <!-- Header compacto -->
                 <div class="flex items-center justify-between mb-2">
                     <div class="flex items-center gap-2">
@@ -18056,7 +18136,16 @@ function sendDowntimeNotification() {
                     .filter(dt => machineSet.has(dt.machine));
             }
 
-            renderMachineCards(activePlans, productionEntries, downtimeEntries);
+            // Buscar paradas ativas para colorir cards de vermelho
+            let activeDowntimeSet = new Set();
+            try {
+                const activeSnapshot = await db.collection('active_downtimes').get();
+                activeDowntimeSet = new Set(activeSnapshot.docs.map(doc => doc.id));
+            } catch (e) {
+                console.warn('Erro ao buscar paradas ativas:', e);
+            }
+
+            renderMachineCards(activePlans, productionEntries, downtimeEntries, activeDowntimeSet);
             
             // Disparar evento para sinalizar que dados foram atualizados
             document.dispatchEvent(new CustomEvent('machineDataUpdated', { detail: { machineCardData, activePlans } }));
