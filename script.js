@@ -20049,25 +20049,7 @@ window.showPredictiveSubtab = function(subtabName) {
     console.log(`[PREDICTIVE-NAV] Navegando para subtab: ${subtabName}`);
 };
 
-// ===== Importador de Ordens em Lote (CSV) =====
-function parseCSVLine(line) {
-    const result = [];
-    let current = '';
-    let insideQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        if (char === '"') {
-            insideQuotes = !insideQuotes;
-        } else if (char === ',' && !insideQuotes) {
-            result.push(current.trim());
-            current = '';
-        } else {
-            current += char;
-        }
-    }
-    result.push(current.trim());
-    return result;
-}
+// ===== Importador de Ordens em Lote (Excel) =====
 
 function parseImportNumber(value) {
     if (value === null || value === undefined || value === '') return null;
@@ -20093,76 +20075,121 @@ function parseImportNumber(value) {
     return Number.isFinite(fallback) ? fallback : null;
 }
 
+// Converter data do Excel para formato ISO
+function excelDateToISO(excelDate) {
+    if (!excelDate) return new Date().toISOString().split('T')[0];
+    
+    // Se for número (data do Excel)
+    if (typeof excelDate === 'number') {
+        const date = new Date((excelDate - 25569) * 86400 * 1000);
+        return date.toISOString().split('T')[0];
+    }
+    
+    // Se for string
+    if (typeof excelDate === 'string') {
+        const parsed = new Date(excelDate);
+        if (!isNaN(parsed)) {
+            return parsed.toISOString().split('T')[0];
+        }
+    }
+    
+    return new Date().toISOString().split('T')[0];
+}
+
+// Mapear nomes de colunas flexíveis
+function mapColumnValue(row, possibleNames) {
+    for (const name of possibleNames) {
+        if (row[name] !== undefined && row[name] !== null && row[name] !== '') {
+            return String(row[name]).trim();
+        }
+    }
+    return '';
+}
+
 async function handleProductionOrdersImport(file) {
     if (!file) {
         alert('Selecione um arquivo.');
         return;
     }
 
+    const statusElement = document.getElementById('import-orders-status');
+    if (statusElement) {
+        statusElement.textContent = 'Lendo arquivo Excel...';
+        statusElement.className = 'text-sm font-semibold text-blue-600';
+    }
+
     const reader = new FileReader();
     reader.onload = async (e) => {
         try {
-            const content = e.target.result;
-            const lines = content.split('\n').map(line => line.trim()).filter(line => line);
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
             
-            if (lines.length < 2) {
-                alert('Arquivo vazio ou sem cabeçalho.');
-                return;
-            }
-
-            const headers = parseCSVLine(lines[0]);
-            const expectedHeaders = ['numero_op', 'cod_produto', 'cod_mp', 'maquina', 'cliente', 'tam_lote', 'numero_lote', 'data'];
+            // Pegar primeira planilha
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
             
-            // Validar cabeçalhos
-            const normalizedHeaders = headers.map(h => h.toLowerCase().trim());
-            const isValidFormat = expectedHeaders.every(expected => normalizedHeaders.includes(expected));
+            // Converter para JSON
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
             
-            if (!isValidFormat) {
-                alert(`Formato inválido. Esperadas colunas: ${expectedHeaders.join(', ')}`);
+            if (jsonData.length === 0) {
+                alert('Arquivo vazio ou sem dados.');
+                if (statusElement) statusElement.textContent = '';
                 return;
             }
 
             // Processar linhas de dados
             const orders = [];
-            for (let i = 1; i < lines.length; i++) {
-                const values = parseCSVLine(lines[i]);
-                const row = {};
-                headers.forEach((header, idx) => {
-                    row[header.toLowerCase().trim()] = values[idx] || '';
-                });
+            for (let i = 0; i < jsonData.length; i++) {
+                const row = jsonData[i];
+                
+                // Mapeamento flexível de colunas (aceita diferentes nomes)
+                const numeroOP = mapColumnValue(row, ['numero_op', 'Numero_OP', 'Número OP', 'OP', 'op', 'ordem', 'Ordem', 'numero', 'Numero']);
+                const codProduto = mapColumnValue(row, ['cod_produto', 'Cod_Produto', 'Código Produto', 'codigo_produto', 'produto', 'Produto', 'cod', 'Cod']);
+                const codMP = mapColumnValue(row, ['cod_mp', 'Cod_MP', 'MP', 'mp', 'materia_prima', 'Matéria Prima', 'Materia Prima']);
+                const maquina = mapColumnValue(row, ['maquina', 'Maquina', 'Máquina', 'machine', 'Machine']);
+                const cliente = mapColumnValue(row, ['cliente', 'Cliente', 'customer', 'Customer']);
+                const tamLote = mapColumnValue(row, ['tam_lote', 'Tam_Lote', 'Lote', 'lote', 'quantidade', 'Quantidade', 'qtd', 'Qtd', 'lot_size']);
+                const numeroLote = mapColumnValue(row, ['numero_lote', 'Numero_Lote', 'batch', 'Batch', 'lote_numero']);
+                const dataOrdem = row['data'] || row['Data'] || row['date'] || row['Date'] || '';
                 
                 // Validar campos obrigatórios
-                if (!row.numero_op || !row.cod_produto || !row.maquina || !row.tam_lote) {
-                    console.warn(`Linha ${i + 1} incompleta, pulando...`);
+                if (!numeroOP || !codProduto || !maquina || !tamLote) {
+                    console.warn(`Linha ${i + 2} incompleta (faltam campos obrigatórios), pulando...`);
                     continue;
                 }
 
                 orders.push({
-                    order_number: (row.numero_op || '').toUpperCase().trim(),
-                    part_code: (row.cod_produto || '').trim(),
-                    raw_material: (row.cod_mp || '').trim(),
-                    machine_id: (row.maquina || '').trim(),
-                    customer: (row.cliente || '').trim(),
-                    lot_size: parseImportNumber(row.tam_lote),
-                    batch_number: (row.numero_lote || '').trim(),
-                    date: (row.data || '').trim(),
+                    order_number: numeroOP.toUpperCase().trim(),
+                    part_code: codProduto.trim(),
+                    raw_material: codMP.trim(),
+                    machine_id: maquina.trim(),
+                    customer: cliente.trim(),
+                    lot_size: parseImportNumber(tamLote),
+                    batch_number: numeroLote.trim(),
+                    date: excelDateToISO(dataOrdem),
                     status: 'planejada'
                 });
             }
 
             if (orders.length === 0) {
-                alert('Nenhuma ordem válida encontrada no arquivo.');
+                alert('Nenhuma ordem válida encontrada no arquivo. Verifique se as colunas estão corretas.');
+                if (statusElement) statusElement.textContent = '';
                 return;
+            }
+
+            if (statusElement) {
+                statusElement.textContent = `${orders.length} ordem(s) encontrada(s). Verificando...`;
             }
 
             // Mostrar prévia em modal
             showImportPreview(orders);
         } catch (error) {
-            console.error('Erro ao processar arquivo CSV:', error);
-            alert('Erro ao processar arquivo. Verifique o formato.');
+            console.error('Erro ao processar arquivo Excel:', error);
+            alert('Erro ao processar arquivo. Verifique se é um arquivo Excel válido (.xlsx)');
+            if (statusElement) statusElement.textContent = '';
         }
     };
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
 }
 
 function showImportPreview(orders) {
@@ -20306,34 +20333,42 @@ async function confirmImportOrders(orders) {
     }, 2000);
 }
 
-// Download template CSV
-function downloadCSVTemplate() {
+// Download template Excel
+function downloadExcelTemplate() {
     const headers = ['numero_op', 'cod_produto', 'cod_mp', 'maquina', 'cliente', 'tam_lote', 'numero_lote', 'data'];
     const exampleRows = [
-        ['OP-001', 'PROD001', 'MP001', 'H-01', 'Cliente A', '5000', 'LOTE-001', '2025-11-24'],
-        ['OP-002', 'PROD002', 'MP002', 'H-02', 'Cliente B', '3000', 'LOTE-002', '2025-11-24'],
-        ['OP-003', 'PROD001', 'MP001', 'H-03', 'Cliente A', '7500', 'LOTE-003', '2025-11-24']
+        ['OP-001', 'PROD001', 'MP001', 'H-01', 'Cliente A', 5000, 'LOTE-001', '2025-11-27'],
+        ['OP-002', 'PROD002', 'MP002', 'H-05', 'Cliente B', 3000, 'LOTE-002', '2025-11-27'],
+        ['OP-003', 'PROD001', 'MP001', 'H-11', 'Cliente A', 7500, 'LOTE-003', '2025-11-27']
     ];
     
-    // Formatar CSV: cabeçalho + exemplos
-    const csvLines = [
-        headers.join(','),
-        ...exampleRows.map(row => row.map(cell => `"${cell}"`).join(','))
-    ];
-    const csv = csvLines.join('\n');
+    // Criar workbook e worksheet
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...exampleRows]);
     
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'template_ordens.csv';
-    link.click();
+    // Formatar largura das colunas
+    ws['!cols'] = [
+        { wch: 12 }, // numero_op
+        { wch: 12 }, // cod_produto
+        { wch: 10 }, // cod_mp
+        { wch: 10 }, // maquina
+        { wch: 15 }, // cliente
+        { wch: 10 }, // tam_lote
+        { wch: 12 }, // numero_lote
+        { wch: 12 }  // data
+    ];
+    
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Ordens');
+    
+    // Salvar arquivo
+    XLSX.writeFile(wb, 'template_ordens.xlsx');
 }
 
 // Event listeners para importação
 document.addEventListener('DOMContentLoaded', () => {
     const importBtn = document.getElementById('btn-import-orders');
     const importFile = document.getElementById('import-orders-file');
-    const downloadTemplateBtn = document.getElementById('download-csv-template');
+    const downloadTemplateBtn = document.getElementById('download-excel-template');
 
     if (importBtn && importFile) {
         importBtn.addEventListener('click', () => {
@@ -20341,13 +20376,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (file) {
                 handleProductionOrdersImport(file);
             } else {
-                alert('Selecione um arquivo CSV.');
+                alert('Selecione um arquivo Excel (.xlsx).');
             }
         });
     }
 
     if (downloadTemplateBtn) {
-        downloadTemplateBtn.addEventListener('click', downloadCSVTemplate);
+        downloadTemplateBtn.addEventListener('click', downloadExcelTemplate);
     }
 });
 
