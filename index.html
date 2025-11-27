@@ -259,6 +259,8 @@
     </style>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS (XLSX) para importação/exportação de Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -455,10 +457,6 @@
                                     <label for="piece-weight" class="block text-sm font-medium">Peso Peça (g)</label>
                                     <input type="number" id="piece-weight" name="piece_weight" required step="0.001" class="mt-1 w-full p-2 border-gray-300 rounded-md">
                                 </div>
-                            </div>
-                            <div>
-                                <label for="quantidade-embalagem" class="block text-sm font-medium">Quantidade da Embalagem (peças/saco)</label>
-                                <input type="number" id="quantidade-embalagem" name="quantidade_da_embalagem" placeholder="Ex: 100 - peças por saco/embalagem" class="mt-1 w-full p-2 border-gray-300 rounded-md shadow-sm">
                             </div>
                             <div>
                                 <label for="planned-quantity" class="block text-sm font-medium">Qtd. Planejada (85% Efic.)</label>
@@ -784,30 +782,24 @@
                         </form>
                     </div>
 
-                    <!-- Importador de Ordens via CSV -->
+                    <!-- Importador de Ordens via Excel -->
                     <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg border-t-4 border-blue-500">
                         <h2 class="text-2xl font-bold mb-4 flex justify-center items-center gap-2 text-center w-full"><i data-lucide="upload-cloud" class="text-blue-500"></i>Importar Ordens em Lote</h2>
                         <div class="space-y-4">
                             <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                                <p class="text-xs md:text-sm text-blue-700"><strong>Formato esperado (CSV):</strong> numero_op, cod_produto, cod_mp, maquina, cliente, tam_lote, numero_lote, data</p>
-                                <button id="download-csv-template" type="button" class="mt-2 text-xs md:text-sm text-blue-600 hover:text-blue-800 underline font-medium">
-                                    ↓ Baixar modelo de planilha
+                                <p class="text-xs md:text-sm text-blue-700"><strong>Formato esperado (Excel):</strong> numero_op, cod_produto, cod_mp, maquina, cliente, tam_lote, numero_lote, data</p>
+                                <button id="download-excel-template" type="button" class="mt-2 text-xs md:text-sm text-blue-600 hover:text-blue-800 underline font-medium">
+                                    ↓ Baixar modelo de planilha Excel
                                 </button>
                             </div>
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
                                 <div>
-                                    <label for="import-orders-file" class="block text-sm font-medium text-gray-700">Escolha o arquivo CSV</label>
-                                    <input type="file" id="import-orders-file" accept=".csv" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
-                                </div>
-                                <div>
-                                    <label for="import-orders-format" class="block text-sm font-medium text-gray-700">Formato</label>
-                                    <select id="import-orders-format" class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm">
-                                        <option value="csv">CSV (.csv)</option>
-                                    </select>
+                                    <label for="import-orders-file" class="block text-sm font-medium text-gray-700">Escolha o arquivo Excel (.xlsx)</label>
+                                    <input type="file" id="import-orders-file" accept=".xlsx,.xls" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                                 </div>
                                 <button id="btn-import-orders" type="button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2">
                                     <i data-lucide="upload" class="w-4 h-4"></i>
-                                    <span>Importar</span>
+                                    <span>Importar do Excel</span>
                                 </button>
                             </div>
                             <div id="import-orders-status" class="text-sm font-semibold h-5"></div>
