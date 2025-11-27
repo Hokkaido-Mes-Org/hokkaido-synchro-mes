@@ -1,47 +1,3 @@
-        <!-- Modal de Edição de Ordem -->
-        <div id="edit-order-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 hidden">
-            <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-lg relative">
-                <button id="close-edit-order-modal" class="absolute top-2 right-2 text-gray-400 hover:text-gray-700 text-xl">&times;</button>
-                <h2 class="text-lg font-bold mb-4">Editar Ordem de Produção</h2>
-                <form id="edit-order-form" class="space-y-4">
-                    <input type="hidden" id="edit-order-id">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Produto</label>
-                                    <select id="edit-order-product" class="w-full border-gray-300 rounded-md p-2" required></select>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Máquina</label>
-                                    <select id="edit-order-machine" class="w-full border-gray-300 rounded-md p-2" required></select>
-                                </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Cliente</label>
-                        <input type="text" id="edit-order-customer" class="w-full border-gray-300 rounded-md p-2">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Lote</label>
-                        <input type="text" id="edit-order-lot" class="w-full border-gray-300 rounded-md p-2">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Quantidade Planejada</label>
-                        <input type="number" id="edit-order-planned" class="w-full border-gray-300 rounded-md p-2" min="0">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Quantidade Executada</label>
-                        <input type="number" id="edit-order-executed" class="w-full border-gray-300 rounded-md p-2" min="0">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Matéria-prima (MP)</label>
-                        <select id="edit-order-mp" class="w-full border-gray-300 rounded-md p-2" required>
-                            <option value="">Selecione a matéria-prima...</option>
-                        </select>
-                    </div>
-                    <div class="flex justify-end gap-2 mt-4">
-                        <button type="button" id="cancel-edit-order" class="px-4 py-2 bg-gray-200 text-gray-700 rounded">Cancelar</button>
-                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded font-semibold">Salvar Alterações</button>
-                    </div>
-                </form>
-            </div>
-        </div>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -317,6 +273,50 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
 </head>
 <body class="bg-background-light text-text-dark antialiased">
+    <!-- Modal de Edição de Ordem -->
+    <div id="edit-order-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 hidden">
+        <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-lg relative">
+            <button id="close-edit-order-modal" class="absolute top-2 right-2 text-gray-400 hover:text-gray-700 text-xl">&times;</button>
+            <h2 class="text-lg font-bold mb-4">Editar Ordem de Produção</h2>
+            <form id="edit-order-form" class="space-y-4">
+                <input type="hidden" id="edit-order-id">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Produto</label>
+                    <select id="edit-order-product" class="w-full border-gray-300 rounded-md p-2" required></select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Máquina</label>
+                    <select id="edit-order-machine" class="w-full border-gray-300 rounded-md p-2" required></select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Cliente</label>
+                    <input type="text" id="edit-order-customer" class="w-full border-gray-300 rounded-md p-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Lote</label>
+                    <input type="text" id="edit-order-lot" class="w-full border-gray-300 rounded-md p-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Quantidade Planejada</label>
+                    <input type="number" id="edit-order-planned" class="w-full border-gray-300 rounded-md p-2" min="0">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Quantidade Executada</label>
+                    <input type="number" id="edit-order-executed" class="w-full border-gray-300 rounded-md p-2" min="0">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Matéria-prima (MP)</label>
+                    <select id="edit-order-mp" class="w-full border-gray-300 rounded-md p-2" required>
+                        <option value="">Selecione a matéria-prima...</option>
+                    </select>
+                </div>
+                <div class="flex justify-end gap-2 mt-4">
+                    <button type="button" id="cancel-edit-order" class="px-4 py-2 bg-gray-200 text-gray-700 rounded">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded font-semibold">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <div class="flex flex-1 min-h-screen bg-background-light">
         <!-- Sidebar de Navegação -->
@@ -353,13 +353,13 @@
                     <i data-lucide="shield-check" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Qualidade</span>
                     <span class="nav-tooltip">Qualidade</span>
                 </a>
-                <a href="#" class="nav-btn group" data-page="teste" title="Teste">
-                    <i data-lucide="flask-conical" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Teste</span>
-                    <span class="nav-tooltip">Teste</span>
+                <a href="#" class="nav-btn group" data-page="relatorios" title="Relatórios">
+                    <i data-lucide="file-bar-chart" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Relatórios</span>
+                    <span class="nav-tooltip">Relatórios</span>
                 </a>
-                <a href="#" class="nav-btn group" data-page="teste-piloto" title="Teste Piloto">
-                    <i data-lucide="life-buoy" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Teste Piloto</span>
-                    <span class="nav-tooltip">Teste Piloto</span>
+                <a href="#" class="nav-btn group" data-page="paradas-longas" title="Paradas Longas">
+                    <i data-lucide="calendar-off" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Paradas Longas</span>
+                    <span class="nav-tooltip">Paradas Longas</span>
                 </a>
                 <a href="#" class="nav-btn group" data-page="ajustes" title="Ajustes">
                     <i data-lucide="settings" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Ajustes</span>
@@ -784,8 +784,63 @@
                         </form>
                     </div>
 
+                    <!-- Importador de Ordens via CSV -->
+                    <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg border-t-4 border-blue-500">
+                        <h2 class="text-2xl font-bold mb-4 flex justify-center items-center gap-2 text-center w-full"><i data-lucide="upload-cloud" class="text-blue-500"></i>Importar Ordens em Lote</h2>
+                        <div class="space-y-4">
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                <p class="text-xs md:text-sm text-blue-700"><strong>Formato esperado (CSV):</strong> numero_op, cod_produto, cod_mp, maquina, cliente, tam_lote, numero_lote, data</p>
+                                <button id="download-csv-template" type="button" class="mt-2 text-xs md:text-sm text-blue-600 hover:text-blue-800 underline font-medium">
+                                    ↓ Baixar modelo de planilha
+                                </button>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                                <div>
+                                    <label for="import-orders-file" class="block text-sm font-medium text-gray-700">Escolha o arquivo CSV</label>
+                                    <input type="file" id="import-orders-file" accept=".csv" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                                </div>
+                                <div>
+                                    <label for="import-orders-format" class="block text-sm font-medium text-gray-700">Formato</label>
+                                    <select id="import-orders-format" class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm">
+                                        <option value="csv">CSV (.csv)</option>
+                                    </select>
+                                </div>
+                                <button id="btn-import-orders" type="button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2">
+                                    <i data-lucide="upload" class="w-4 h-4"></i>
+                                    <span>Importar</span>
+                                </button>
+                            </div>
+                            <div id="import-orders-status" class="text-sm font-semibold h-5"></div>
+                        </div>
+                    </div>
+
                     <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg">
                         <h2 class="text-2xl font-bold mb-4 flex justify-center items-center gap-2 text-center w-full"><i data-lucide="list-ordered" class="text-gray-600"></i>Ordens Cadastradas</h2>
+
+                        <!-- Filtros da lista de ordens -->
+                        <div class="mb-4 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                            <div>
+                                <label for="orders-filter-machine" class="block text-xs font-semibold text-gray-600 uppercase tracking-wide">Máquina</label>
+                                <select id="orders-filter-machine" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                    <option value="">Todas as máquinas</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="orders-filter-status" class="block text-xs font-semibold text-gray-600 uppercase tracking-wide">Status</label>
+                                <select id="orders-filter-status" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                    <option value="">Todos</option>
+                                    <option value="planejada">Planejada</option>
+                                    <option value="ativa">Ativa</option>
+                                    <option value="concluida">Concluída</option>
+                                    <option value="cancelada">Cancelada</option>
+                                </select>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label for="orders-filter-search" class="block text-xs font-semibold text-gray-600 uppercase tracking-wide">Buscar</label>
+                                <input id="orders-filter-search" type="text" placeholder="Filtrar por OP, produto, cliente ou código" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm" />
+                            </div>
+                        </div>
+
                         <div class="overflow-x-auto pt-4">
                             <table class="min-w-full divide-y divide-gray-200 border">
                                 <thead class="bg-gray-50">
@@ -1387,151 +1442,319 @@
                     </div>
                 </div>
 
-                <!-- PÁGINA: Teste -->
-                <div id="teste-page" class="page-content hidden space-y-6">
-                    <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg border-t-4 border-purple-500">
-                        <h2 class="text-2xl font-bold mb-4 flex items-center gap-2"><i data-lucide="flask-conical" class="text-purple-500"></i>Painel de Testes e Debug</h2>
-                        <p class="text-gray-600 mb-6">Área exclusiva para testes, debug e experimentação de novas funcionalidades.</p>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <!-- Card 1: Info do Sistema -->
-                            <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-lg border border-blue-200">
-                                <h3 class="text-lg font-semibold text-blue-900 mb-3 flex items-center gap-2">
-                                    <i data-lucide="info" class="w-5 h-5"></i>
-                                    Informações do Sistema
-                                </h3>
-                                <div class="space-y-2 text-sm">
-                                    <p><strong>Versão:</strong> <span id="test-system-version" class="text-gray-700">v8.0</span></p>
-                                    <p><strong>Data/Hora:</strong> <span id="test-current-datetime" class="text-gray-700">-</span></p>
-                                    <p><strong>Usuário:</strong> <span id="test-current-user" class="text-gray-700">-</span></p>
-                                    <p><strong>Turno:</strong> <span id="test-current-shift" class="text-gray-700">-</span></p>
-                                </div>
+                <!-- PÁGINA: Relatórios -->
+                <div id="relatorios-page" class="page-content hidden space-y-6">
+                    <!-- Cabeçalho -->
+                    <div class="bg-white p-6 rounded-lg shadow-lg border-t-4 border-indigo-500">
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                            <div>
+                                <h2 class="text-2xl font-bold flex items-center gap-2 text-gray-900">
+                                    <i data-lucide="file-bar-chart" class="text-indigo-500"></i>
+                                    Central de Relatórios
+                                </h2>
+                                <p class="text-sm text-gray-600">Visualize e exporte relatórios detalhados de produção, paradas e perdas.</p>
                             </div>
-                            
-                            <!-- Card 2: Console de Teste -->
-                            <div class="bg-gradient-to-br from-gray-50 to-gray-100 p-6 rounded-lg border border-gray-200">
-                                <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                                    <i data-lucide="terminal" class="w-5 h-5"></i>
-                                    Console de Teste
-                                </h3>
-                                <textarea id="test-console-input" rows="4" placeholder="Digite código JavaScript aqui..." class="w-full p-2 border border-gray-300 rounded font-mono text-xs mb-2"></textarea>
-                                <button id="test-console-run" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-semibold">
-                                    Executar
+                            <div class="flex items-center gap-2">
+                                <button id="report-export-excel" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition">
+                                    <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+                                    Exportar Excel
                                 </button>
-                                <div id="test-console-output" class="mt-2 p-2 bg-black text-green-400 rounded font-mono text-xs max-h-48 overflow-y-auto"></div>
+                                <button id="report-export-pdf" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition">
+                                    <i data-lucide="file-text" class="w-4 h-4"></i>
+                                    Exportar PDF
+                                </button>
                             </div>
-                            
-                            <!-- Card 3: Ferramentas -->
-                            <div class="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-lg border border-green-200">
-                                <h3 class="text-lg font-semibold text-green-900 mb-3 flex items-center gap-2">
-                                    <i data-lucide="wrench" class="w-5 h-5"></i>
-                                    Ferramentas de Debug
-                                </h3>
-                                <div class="space-y-2">
-                                    <button id="test-clear-cache" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded font-semibold text-sm">
-                                        Limpar Cache
-                                    </button>
-                                    <button id="test-reload-page" class="w-full bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded font-semibold text-sm">
-                                        Recarregar Página
-                                    </button>
-                                    <button id="test-open-devtools" class="w-full bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded font-semibold text-sm">
-                                        Abrir DevTools
-                                    </button>
-                                </div>
+                        </div>
+                    </div>
+
+                    <!-- Filtros -->
+                    <div class="bg-white p-6 rounded-lg shadow-lg">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                            <i data-lucide="filter" class="w-5 h-5 text-indigo-500"></i>
+                            Filtros do Relatório
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de Relatório</label>
+                                <select id="report-type" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                                    <option value="producao">📦 Produção</option>
+                                    <option value="paradas">⏱️ Paradas</option>
+                                    <option value="perdas">⚠️ Perdas/Refugos</option>
+                                    <option value="consolidado">📊 Consolidado</option>
+                                </select>
                             </div>
-                            
-                            <!-- Card 4: Logs -->
-                            <div class="bg-gradient-to-br from-red-50 to-red-100 p-6 rounded-lg border border-red-200 md:col-span-2 lg:col-span-3">
-                                <h3 class="text-lg font-semibold text-red-900 mb-3 flex items-center gap-2">
-                                    <i data-lucide="activity" class="w-5 h-5"></i>
-                                    Logs em Tempo Real
-                                </h3>
-                                <div id="test-logs-container" class="p-3 bg-gray-900 text-gray-200 rounded font-mono text-xs max-h-64 overflow-y-auto space-y-1">
-                                    <p class="text-green-400">✓ Console de testes inicializado</p>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Período</label>
+                                <select id="report-period" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                                    <option value="today">Hoje</option>
+                                    <option value="yesterday">Ontem</option>
+                                    <option value="7days" selected>Últimos 7 dias</option>
+                                    <option value="30days">Últimos 30 dias</option>
+                                    <option value="month">Este mês</option>
+                                    <option value="lastmonth">Mês passado</option>
+                                    <option value="custom">Personalizado</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Máquina</label>
+                                <select id="report-machine" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                                    <option value="all">Todas as Máquinas</option>
+                                    <option value="H01">H01</option>
+                                    <option value="H05">H05</option>
+                                    <option value="H06">H06</option>
+                                    <option value="H11">H11</option>
+                                    <option value="H12">H12</option>
+                                    <option value="H14">H14</option>
+                                    <option value="H16">H16</option>
+                                    <option value="H17">H17</option>
+                                    <option value="H18">H18</option>
+                                    <option value="H19">H19</option>
+                                    <option value="H20">H20</option>
+                                    <option value="H22">H22</option>
+                                    <option value="H27">H27</option>
+                                    <option value="H31">H31</option>
+                                    <option value="H32">H32</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Turno</label>
+                                <select id="report-shift" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                                    <option value="all">Todos os Turnos</option>
+                                    <option value="1">Turno 1 (07:00-15:00)</option>
+                                    <option value="2">Turno 2 (15:00-23:00)</option>
+                                    <option value="3">Turno 3 (23:00-07:00)</option>
+                                </select>
+                            </div>
+                            <div class="flex items-end">
+                                <button id="report-generate-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg font-semibold flex items-center justify-center gap-2 transition">
+                                    <i data-lucide="search" class="w-4 h-4"></i>
+                                    Gerar Relatório
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Datas personalizadas -->
+                        <div id="report-custom-dates" class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 hidden">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Data Início</label>
+                                <input type="date" id="report-date-start" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Data Fim</label>
+                                <input type="date" id="report-date-end" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- KPIs Resumo -->
+                    <div id="report-kpis" class="grid grid-cols-2 md:grid-cols-4 gap-4 hidden">
+                        <div class="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-4 rounded-lg shadow-lg">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-blue-100 text-sm">Total Produzido</p>
+                                    <p id="report-kpi-produced" class="text-2xl font-bold">0</p>
                                 </div>
+                                <i data-lucide="package" class="w-8 h-8 text-blue-200"></i>
+                            </div>
+                        </div>
+                        <div class="bg-gradient-to-br from-red-500 to-red-600 text-white p-4 rounded-lg shadow-lg">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-red-100 text-sm">Tempo Parado</p>
+                                    <p id="report-kpi-downtime" class="text-2xl font-bold">0h</p>
+                                </div>
+                                <i data-lucide="clock" class="w-8 h-8 text-red-200"></i>
+                            </div>
+                        </div>
+                        <div class="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-4 rounded-lg shadow-lg">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-orange-100 text-sm">Total Refugos</p>
+                                    <p id="report-kpi-losses" class="text-2xl font-bold">0</p>
+                                </div>
+                                <i data-lucide="alert-triangle" class="w-8 h-8 text-orange-200"></i>
+                            </div>
+                        </div>
+                        <div class="bg-gradient-to-br from-green-500 to-green-600 text-white p-4 rounded-lg shadow-lg">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-green-100 text-sm">Eficiência Média</p>
+                                    <p id="report-kpi-efficiency" class="text-2xl font-bold">0%</p>
+                                </div>
+                                <i data-lucide="trending-up" class="w-8 h-8 text-green-200"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Área de Loading -->
+                    <div id="report-loading" class="hidden bg-white p-12 rounded-lg shadow-lg text-center">
+                        <i data-lucide="loader-2" class="w-12 h-12 text-indigo-500 animate-spin mx-auto"></i>
+                        <p class="mt-4 text-gray-600">Gerando relatório...</p>
+                    </div>
+
+                    <!-- Tabela de Resultados -->
+                    <div id="report-results" class="bg-white rounded-lg shadow-lg hidden">
+                        <div class="p-4 border-b border-gray-200 flex items-center justify-between">
+                            <h3 class="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                                <i data-lucide="table" class="w-5 h-5 text-indigo-500"></i>
+                                <span id="report-results-title">Resultados</span>
+                            </h3>
+                            <span id="report-results-count" class="text-sm text-gray-500">0 registros</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead id="report-table-head" class="bg-gray-50 border-b border-gray-200">
+                                    <!-- Cabeçalho dinâmico -->
+                                </thead>
+                                <tbody id="report-table-body" class="divide-y divide-gray-100">
+                                    <!-- Dados dinâmicos -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="report-pagination" class="p-4 border-t border-gray-200 flex items-center justify-between">
+                            <span id="report-pagination-info" class="text-sm text-gray-500">Mostrando 0 de 0</span>
+                            <div class="flex items-center gap-2">
+                                <button id="report-prev-page" class="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50" disabled>
+                                    <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                                </button>
+                                <span id="report-page-info" class="text-sm text-gray-600">Página 1</span>
+                                <button id="report-next-page" class="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50" disabled>
+                                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mensagem de Sem Dados -->
+                    <div id="report-empty" class="hidden bg-white p-12 rounded-lg shadow-lg text-center">
+                        <i data-lucide="inbox" class="w-16 h-16 text-gray-300 mx-auto"></i>
+                        <p class="mt-4 text-gray-500 text-lg">Nenhum dado encontrado para os filtros selecionados.</p>
+                        <p class="text-gray-400 text-sm">Tente ajustar os filtros ou selecionar outro período.</p>
+                    </div>
+
+                    <!-- Gráficos do Relatório -->
+                    <div id="report-charts" class="grid grid-cols-1 lg:grid-cols-2 gap-6 hidden">
+                        <div class="bg-white p-6 rounded-lg shadow-lg">
+                            <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                <i data-lucide="bar-chart-3" class="w-5 h-5 text-indigo-500"></i>
+                                Distribuição por Turno
+                            </h4>
+                            <div class="h-64">
+                                <canvas id="report-chart-shift"></canvas>
+                            </div>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow-lg">
+                            <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                <i data-lucide="pie-chart" class="w-5 h-5 text-indigo-500"></i>
+                                Distribuição por Motivo
+                            </h4>
+                            <div class="h-64">
+                                <canvas id="report-chart-reason"></canvas>
+                            </div>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow-lg lg:col-span-2">
+                            <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                <i data-lucide="trending-up" class="w-5 h-5 text-indigo-500"></i>
+                                Evolução Diária
+                            </h4>
+                            <div class="h-64">
+                                <canvas id="report-chart-timeline"></canvas>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- PÁGINA: Teste Piloto -->
-                <div id="teste-piloto-page" class="page-content hidden space-y-6">
-                    <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg border-t-4 border-teal-500">
+                <!-- PÁGINA: Paradas Longas -->
+                <div id="paradas-longas-page" class="page-content hidden space-y-6">
+                    <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg border-t-4 border-gray-600">
                         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
                             <div>
                                 <h2 class="text-2xl font-bold flex items-center gap-2 text-gray-900">
-                                    <i data-lucide="life-buoy" class="text-teal-500"></i>
-                                    Registro de Teste Piloto
+                                    <i data-lucide="calendar-off" class="text-gray-600"></i>
+                                    Registrar Paradas Longas
                                 </h2>
-                                <p class="text-sm text-gray-600">Use esta área para registrar problemas observados durante o piloto.</p>
+                                <p class="text-sm text-gray-600">Registre paradas de fim de semana, manutenção, feriados e outros períodos prolongados.</p>
                             </div>
-                            <div class="bg-teal-50 border border-teal-200 text-teal-700 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wide">
-                                Espaço colaborativo dos operadores
+                            <div class="bg-gray-50 border border-gray-200 text-gray-700 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wide">
+                                Gerenciar Paradas
                             </div>
                         </div>
 
-                        <form id="pilot-report-form" class="space-y-5">
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <form id="extended-downtime-form" class="space-y-5">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label for="pilot-report-date" class="block text-sm font-medium text-gray-700">Data do registro</label>
-                                    <input type="date" id="pilot-report-date" required class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm">
+                                    <label for="extended-downtime-machine" class="block text-sm font-medium text-gray-700 mb-1">Máquinas *</label>
+                                    <select id="extended-downtime-machine" class="w-full p-2 border border-gray-300 rounded-lg text-sm" multiple size="6" required>
+                                        <option value="">Selecione uma ou mais máquinas...</option>
+                                    </select>
+                                    <p class="mt-1 text-xs text-gray-500">Use Ctrl (ou Shift) para selecionar várias máquinas ao mesmo tempo.</p>
                                 </div>
-                                <div class="md:col-span-2">
-                                    <label class="block text-sm font-medium text-gray-700">Operador</label>
-                                    <div class="mt-2 flex items-center gap-2 text-sm font-semibold text-gray-800 bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
-                                        <i data-lucide="user"></i>
-                                        <span id="pilot-report-user-display">-</span>
-                                    </div>
+                                <div>
+                                    <label for="extended-downtime-type" class="block text-sm font-medium text-gray-700 mb-1">Tipo de Parada *</label>
+                                    <select id="extended-downtime-type" class="w-full p-2 border border-gray-300 rounded-lg text-sm" required>
+                                        <option value="">Selecione...</option>
+                                        <option value="weekend">Fim de Semana</option>
+                                        <option value="scheduled-maintenance">Manutenção Programada</option>
+                                        <option value="holiday">Feriado</option>
+                                        <option value="shift-off">Turno Desligado</option>
+                                        <option value="other">Outro</option>
+                                    </select>
                                 </div>
                             </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="extended-downtime-date-start" class="block text-sm font-medium text-gray-700 mb-1">Data Início *</label>
+                                    <input type="date" id="extended-downtime-date-start" class="w-full p-2 border border-gray-300 rounded-lg text-sm" required>
+                                </div>
+                                <div>
+                                    <label for="extended-downtime-date-end" class="block text-sm font-medium text-gray-700 mb-1">Data Fim *</label>
+                                    <input type="date" id="extended-downtime-date-end" class="w-full p-2 border border-gray-300 rounded-lg text-sm" required>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="extended-downtime-time-start" class="block text-sm font-medium text-gray-700 mb-1">Hora Início</label>
+                                    <input type="time" id="extended-downtime-time-start" class="w-full p-2 border border-gray-300 rounded-lg text-sm">
+                                </div>
+                                <div>
+                                    <label for="extended-downtime-time-end" class="block text-sm font-medium text-gray-700 mb-1">Hora Fim</label>
+                                    <input type="time" id="extended-downtime-time-end" class="w-full p-2 border border-gray-300 rounded-lg text-sm">
+                                </div>
+                            </div>
+
                             <div>
-                                <label for="pilot-report-title" class="block text-sm font-medium text-gray-700">Problema identificado</label>
-                                <input type="text" id="pilot-report-title" required maxlength="120" placeholder="Ex: Sensor de presença falhando" class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm">
+                                <label for="extended-downtime-reason" class="block text-sm font-medium text-gray-700 mb-1">Motivo/Descrição *</label>
+                                <select id="extended-downtime-reason" class="w-full p-2 border border-gray-300 rounded-lg text-sm" required>
+                                    <option value="">Selecione um motivo...</option>
+                                </select>
                             </div>
-                            <div>
-                                <label for="pilot-report-description" class="block text-sm font-medium text-gray-700">Descrição</label>
-                                <textarea id="pilot-report-description" required rows="4" placeholder="Descreva o que foi observado, impacto e qualquer detalhe relevante" class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm"></textarea>
+
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                <p class="text-sm text-blue-700"><strong>Duração estimada:</strong> <span id="extended-downtime-duration">-</span></p>
                             </div>
-                            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                                <p class="text-xs text-gray-500">Os registros ficam disponíveis para toda a equipe discutir e acompanhar as correções.</p>
-                                <button type="submit" id="pilot-report-submit" class="bg-teal-600 hover:bg-teal-700 text-white font-semibold px-4 py-2 rounded-lg flex items-center justify-center gap-2">
-                                    <i data-lucide="send"></i>
-                                    <span>Registrar problema</span>
-                                </button>
-                            </div>
-                            <div id="pilot-report-status" class="text-sm font-semibold h-5"></div>
+
+                            <button type="submit" id="extended-downtime-submit" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center gap-2">
+                                <i data-lucide="save" class="w-4 h-4"></i>
+                                <span>Registrar Parada Longa</span>
+                            </button>
+                            <div id="extended-downtime-status" class="text-sm font-semibold h-5 text-center"></div>
                         </form>
                     </div>
 
                     <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg">
-                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-                            <div>
-                                <h3 class="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                                    <i data-lucide="list-checks" class="text-teal-500"></i>
-                                    Registros por data
-                                </h3>
-                                <p class="text-sm text-gray-500">Filtre pelos registros do dia para preparar o bate-papo do turno.</p>
-                            </div>
-                            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                                <div>
-                                    <label for="pilot-filter-date" class="block text-xs font-semibold text-gray-600 uppercase tracking-wide">Filtrar por data</label>
-                                    <input type="date" id="pilot-filter-date" class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm">
-                                </div>
-                                <button id="pilot-refresh-btn" class="w-full sm:w-auto bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2">
-                                    <i data-lucide="refresh-ccw"></i>
-                                    <span>Atualizar</span>
-                                </button>
-                            </div>
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                            <i data-lucide="list-checks" class="text-gray-600"></i>
+                            Paradas Registradas
+                        </h3>
+                        <div id="extended-downtime-list-loading" class="hidden text-center py-10">
+                            <i data-lucide="loader-2" class="w-8 h-8 animate-spin text-gray-500 mx-auto mb-2"></i>
+                            <p class="text-sm text-gray-500">Carregando paradas...</p>
                         </div>
-
-                        <div id="pilot-report-loading" class="hidden text-center py-10 text-gray-500">
-                            <i data-lucide="loader-2" class="w-10 h-10 animate-spin mx-auto text-teal-500"></i>
-                            <p class="mt-3 text-sm">Carregando registros...</p>
+                        <div id="extended-downtime-list-empty" class="hidden text-center py-10">
+                            <p class="text-sm text-gray-500">Nenhuma parada longa registrada.</p>
                         </div>
-                        <div id="pilot-report-empty" class="hidden text-center py-10 text-sm text-gray-500">
-                            Nenhum registro encontrado para a data selecionada.
-                        </div>
-                        <div id="pilot-report-list" class="space-y-4"></div>
+                        <div id="extended-downtime-list" class="space-y-3"></div>
                     </div>
                 </div>
 
@@ -1586,11 +1809,6 @@
                                             <span class="text-xs md:text-sm text-gray-500" id="production-time">00:00:00</span>
                                         </div>
                                     </div>
-                                </div>
-                                <div class="text-right w-full sm:w-auto">
-                                    <p class="text-xs md:text-sm text-gray-500">Executado / Planejado OP</p>
-                                    <p class="text-xl md:text-2xl font-bold text-blue-600" id="shift-target">0 / 0</p>
-                                    <p class="text-xs md:text-sm text-gray-500">peças</p>
                                 </div>
                             </div>
                         </div>
@@ -1714,8 +1932,8 @@
                                 </button>
                             </div>
                             
-                            <!-- Botões de Lançamentos Manuais -->
-                            <div class="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+                            <!-- Botões de Lançamentos Manuais Restritos (apenas para Leandro Camargo) -->
+                            <div id="manual-entries-container" class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 hidden">
                                 <button id="btn-manual-production" class="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 p-3 rounded-lg shadow-md border border-blue-200 flex items-center justify-center gap-2 transition-all duration-200">
                                     <i data-lucide="history" class="w-4 h-4"></i>
                                     <span class="font-semibold text-xs md:text-sm text-center">Lançamento Manual de Produção</span>
@@ -1724,6 +1942,10 @@
                                     <i data-lucide="alert-triangle" class="w-4 h-4"></i>
                                     <span class="font-semibold text-xs md:text-sm text-center">Lançamento Manual de Perdas</span>
                                 </button>
+                            </div>
+                            
+                            <!-- Botões Disponíveis para Todos -->
+                            <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
                                 <button id="btn-manual-downtime" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 p-3 rounded-lg shadow-md border border-gray-300 flex items-center justify-center gap-2 transition-all duration-200">
                                     <i data-lucide="clock" class="w-4 h-4"></i>
                                     <span class="font-semibold text-xs md:text-sm text-center">Lançamento Manual de Parada</span>
@@ -2271,6 +2493,38 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- Paradas Longas Programadas -->
+                            <div class="bg-white p-4 md:p-6 rounded-lg shadow-lg border mt-6">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-base md:text-lg font-semibold flex items-center gap-2">
+                                        <i data-lucide="calendar-off" class="w-5 h-5 text-gray-600"></i>
+                                        Paradas Longas Programadas
+                                    </h3>
+                                    <span id="extended-downtime-total" class="text-sm font-medium text-gray-600 bg-gray-100 px-3 py-1 rounded-full">0 registros</span>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                                    <div class="bg-gray-50 p-3 rounded-lg text-center">
+                                        <p class="text-xs text-gray-500">Fim de Semana</p>
+                                        <p id="extended-weekend-hours" class="text-xl font-bold text-gray-700">0h</p>
+                                    </div>
+                                    <div class="bg-blue-50 p-3 rounded-lg text-center">
+                                        <p class="text-xs text-blue-500">Manutenção Preventiva</p>
+                                        <p id="extended-maintenance-hours" class="text-xl font-bold text-blue-700">0h</p>
+                                    </div>
+                                    <div class="bg-amber-50 p-3 rounded-lg text-center">
+                                        <p class="text-xs text-amber-500">Feriados</p>
+                                        <p id="extended-holiday-hours" class="text-xl font-bold text-amber-700">0h</p>
+                                    </div>
+                                    <div class="bg-red-50 p-3 rounded-lg text-center">
+                                        <p class="text-xs text-red-500">Outros</p>
+                                        <p id="extended-other-hours" class="text-xl font-bold text-red-700">0h</p>
+                                    </div>
+                                </div>
+                                <div id="extended-downtime-analysis-list" class="space-y-2 max-h-64 overflow-y-auto">
+                                    <p class="text-sm text-gray-500 text-center py-4">Nenhuma parada longa no período selecionado.</p>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Análise Comparativa -->
@@ -2334,35 +2588,156 @@
                         <!-- Aba de Ordens de Produção -->
                         <div id="orders-view" class="analysis-view p-4 md:p-6 hidden">
                             <div class="space-y-4 md:space-y-6">
-                                <!-- Filtros para Ordens -->
-                                <div class="bg-gray-50 p-3 md:p-4 rounded-lg">
-                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
-                                        <div>
-                                            <label class="block text-xs md:text-sm font-medium text-gray-700 mb-1">Filtrar por Status</label>
-                                            <select id="orders-status-filter" class="w-full border-gray-300 rounded-md p-2 text-sm">
-                                                <option value="">Todas as Ordens</option>
-                                                <option value="planejada">Planejada</option>
-                                                <option value="em_andamento">Em Andamento</option>
-                                                <option value="concluida">Concluída</option>
-                                                <option value="cancelada">Cancelada</option>
-                                            </select>
+                                <!-- KPIs de Resumo das Ordens -->
+                                <div id="orders-summary-kpis" class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+                                    <div class="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-4 rounded-xl shadow-lg">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <p class="text-blue-100 text-xs uppercase tracking-wide">Total de OPs</p>
+                                                <p id="orders-kpi-total" class="text-2xl md:text-3xl font-bold">0</p>
+                                            </div>
+                                            <i data-lucide="layers" class="w-8 h-8 text-blue-200"></i>
                                         </div>
-                                        <div>
-                                            <label class="block text-xs md:text-sm font-medium text-gray-700 mb-1">Filtrar por Máquina</label>
-                                            <select id="orders-machine-filter" class="w-full border-gray-300 rounded-md p-2 text-sm">
-                                                <option value="">Todas as Máquinas</option>
-                                            </select>
+                                    </div>
+                                    <div class="bg-gradient-to-br from-amber-500 to-amber-600 text-white p-4 rounded-xl shadow-lg">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <p class="text-amber-100 text-xs uppercase tracking-wide">Em Andamento</p>
+                                                <p id="orders-kpi-active" class="text-2xl md:text-3xl font-bold">0</p>
+                                            </div>
+                                            <i data-lucide="play-circle" class="w-8 h-8 text-amber-200"></i>
                                         </div>
-                                        <div>
-                                            <label class="block text-xs md:text-sm font-medium text-gray-700 mb-1">Pesquisar por Número/Produto</label>
-                                            <input type="text" id="orders-search" placeholder="Digite OP ou produto..." class="w-full border-gray-300 rounded-md p-2 text-sm">
+                                    </div>
+                                    <div class="bg-gradient-to-br from-emerald-500 to-emerald-600 text-white p-4 rounded-xl shadow-lg">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <p class="text-emerald-100 text-xs uppercase tracking-wide">Concluídas</p>
+                                                <p id="orders-kpi-completed" class="text-2xl md:text-3xl font-bold">0</p>
+                                            </div>
+                                            <i data-lucide="check-circle-2" class="w-8 h-8 text-emerald-200"></i>
+                                        </div>
+                                    </div>
+                                    <div class="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-4 rounded-xl shadow-lg">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <p class="text-purple-100 text-xs uppercase tracking-wide">% Progresso Médio</p>
+                                                <p id="orders-kpi-avg-progress" class="text-2xl md:text-3xl font-bold">0%</p>
+                                            </div>
+                                            <i data-lucide="trending-up" class="w-8 h-8 text-purple-200"></i>
                                         </div>
                                     </div>
                                 </div>
+
+                                <!-- Filtros Avançados para Ordens -->
+                                <div class="bg-white p-4 md:p-5 rounded-xl shadow-sm border border-gray-200">
+                                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+                                        <h3 class="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                                            <i data-lucide="filter" class="w-5 h-5 text-primary-blue"></i>
+                                            Filtros e Busca
+                                        </h3>
+                                        <div class="flex items-center gap-2 text-sm text-gray-500">
+                                            <span id="orders-results-count">0 ordens encontradas</span>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4">
+                                        <!-- Busca Principal -->
+                                        <div class="md:col-span-4">
+                                            <label class="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Buscar</label>
+                                            <div class="relative flex gap-2">
+                                                <div class="relative flex-1">
+                                                    <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
+                                                    <input type="text" id="orders-search" placeholder="Nº OP, produto, cliente..." class="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-blue focus:border-transparent">
+                                                </div>
+                                                <button id="orders-search-btn" type="button" class="px-4 py-2.5 bg-primary-blue hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition flex items-center gap-1.5" title="Buscar">
+                                                    <i data-lucide="search" class="w-4 h-4"></i>
+                                                    <span class="hidden sm:inline">Buscar</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <!-- Filtro Status -->
+                                        <div class="md:col-span-2">
+                                            <label class="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Status</label>
+                                            <select id="orders-status-filter" class="w-full border border-gray-300 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-primary-blue focus:border-transparent">
+                                                <option value="">Todos</option>
+                                                <option value="planejada">📋 Planejada</option>
+                                                <option value="ativa">▶️ Ativa</option>
+                                                <option value="em_andamento">🔄 Em Andamento</option>
+                                                <option value="concluida">✅ Concluída</option>
+                                                <option value="cancelada">❌ Cancelada</option>
+                                            </select>
+                                        </div>
+                                        <!-- Filtro Máquina -->
+                                        <div class="md:col-span-2">
+                                            <label class="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Máquina</label>
+                                            <select id="orders-machine-filter" class="w-full border border-gray-300 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-primary-blue focus:border-transparent">
+                                                <option value="">Todas</option>
+                                            </select>
+                                        </div>
+                                        <!-- Ordenação -->
+                                        <div class="md:col-span-2">
+                                            <label class="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Ordenar por</label>
+                                            <select id="orders-sort-filter" class="w-full border border-gray-300 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-primary-blue focus:border-transparent">
+                                                <option value="recent">Mais recentes</option>
+                                                <option value="progress-desc">Maior progresso</option>
+                                                <option value="progress-asc">Menor progresso</option>
+                                                <option value="lot-desc">Maior lote</option>
+                                                <option value="lot-asc">Menor lote</option>
+                                                <option value="alpha">A-Z (Nº OP)</option>
+                                            </select>
+                                        </div>
+                                        <!-- Botões de Ação -->
+                                        <div class="md:col-span-2 flex items-end gap-2">
+                                            <button id="orders-clear-filters" class="flex-1 py-2.5 px-3 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm font-medium transition flex items-center justify-center gap-1" title="Limpar filtros">
+                                                <i data-lucide="x" class="w-4 h-4"></i>
+                                                <span class="hidden lg:inline">Limpar</span>
+                                            </button>
+                                            <button id="orders-refresh-btn" class="flex-1 py-2.5 px-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium transition flex items-center justify-center gap-1" title="Atualizar dados">
+                                                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                                                <span class="hidden lg:inline">Atualizar</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Toggle de Visualização -->
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+                                        <button id="orders-view-grid" class="orders-view-toggle px-3 py-1.5 rounded-md text-sm font-medium bg-white shadow-sm text-primary-blue" title="Visualização em Grid">
+                                            <i data-lucide="grid-3x3" class="w-4 h-4"></i>
+                                        </button>
+                                        <button id="orders-view-list" class="orders-view-toggle px-3 py-1.5 rounded-md text-sm font-medium text-gray-500 hover:text-gray-700" title="Visualização em Lista">
+                                            <i data-lucide="list" class="w-4 h-4"></i>
+                                        </button>
+                                    </div>
+                                    <span id="orders-results-summary" class="text-sm text-gray-500 font-medium"></span>
+                                </div>
                                 
                                 <!-- Grid de Ordens -->
-                                <div id="orders-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                                <div id="orders-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                                     <!-- Será gerado dinamicamente -->
+                                </div>
+
+                                <!-- Lista de Ordens (alternativa) -->
+                                <div id="orders-list" class="hidden">
+                                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                                        <table class="min-w-full divide-y divide-gray-200">
+                                            <thead class="bg-gray-50">
+                                                <tr>
+                                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Nº OP</th>
+                                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Produto</th>
+                                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Máquina</th>
+                                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Status</th>
+                                                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wide">Progresso</th>
+                                                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">Executado</th>
+                                                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">Planejado</th>
+                                                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wide">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="orders-list-body" class="bg-white divide-y divide-gray-100">
+                                                <!-- Será gerado dinamicamente -->
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -3645,6 +4020,7 @@
         </div>
     </div>
 
+    <!-- Modal: Extended Downtime (Paradas Longas) -->
     <!-- Modal de Lançamento Manual de Parada Passada -->
     <div id="manual-downtime-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
         <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">

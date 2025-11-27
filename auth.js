@@ -122,27 +122,32 @@ class AuthSystem {
         if (!this.currentUser) return false;
         
         const isLeandroCamargo = this.currentUser.name === 'Leandro Camargo' || this.currentUser.email === 'leandro@hokkaido.com.br';
+        const isGestor = this.currentUser.role === 'gestor';
         
-        // ⚙️ ACESSO EXCLUSIVO: Abas restritas apenas para Leandro Camargo
+        // ⚙️ ACESSO EXCLUSIVO: Aba Qualidade apenas para Leandro Camargo
         if (tabName === 'qualidade' && !isLeandroCamargo) {
             return false;
         }
-        if (tabName === 'teste' && !isLeandroCamargo) {
+        
+        // ⚙️ Aba Ajustes: Leandro Camargo (acesso total) ou Gestores
+        if (tabName === 'ajustes' && !isLeandroCamargo && !isGestor) {
             return false;
         }
-        if (tabName === 'ajustes' && !isLeandroCamargo) {
+        
+        // ⚙️ Aba Relatórios: Leandro Camargo (acesso total) ou Gestores
+        if (tabName === 'relatorios' && !isLeandroCamargo && !isGestor) {
             return false;
         }
         
         const tabPermissions = {
-            planejamento: ['planejamento'],
+            planejamento: ['planejamento', 'lancamento'], // Operadores também acessam
             ordens: ['planejamento', 'lancamento'],
             lancamento: ['lancamento'],
             analise: ['analise'],
-            qualidade: ['analise', 'lancamento'],
-            teste: ['admin', 'lancamento'],
-            ajustes: ['planejamento', 'lancamento', 'analise'],
-            'teste-piloto': ['lancamento', 'planejamento', 'analise']
+            qualidade: ['analise', 'lancamento'], // Restrito a Leandro acima
+            relatorios: ['analise', 'planejamento', 'lancamento'], // Gestores + Leandro
+            ajustes: ['planejamento', 'lancamento', 'analise'], // Gestores + Leandro
+            'paradas-longas': ['lancamento', 'planejamento', 'analise']
         };
         
         const requiredPermissions = tabPermissions[tabName];
@@ -188,6 +193,26 @@ class AuthSystem {
                 console.log(`✅ Aba '${tabName}' disponível para usuário: ${this.currentUser?.name}`);
             }
         });
+        
+        // Controlar visibilidade dos botões de lançamento manual (apenas Leandro Camargo)
+        this.filterManualEntriesButtons();
+    }
+
+    // Mostrar/ocultar botões de lançamento manual baseado no usuário
+    filterManualEntriesButtons() {
+        const manualEntriesContainer = document.getElementById('manual-entries-container');
+        if (!manualEntriesContainer) return;
+        
+        const isLeandroCamargo = this.currentUser?.name === 'Leandro Camargo' || 
+                                  this.currentUser?.email === 'leandro@hokkaido.com.br';
+        
+        if (isLeandroCamargo) {
+            manualEntriesContainer.classList.remove('hidden');
+            console.log('✅ Botões de lançamento manual visíveis para Leandro Camargo');
+        } else {
+            manualEntriesContainer.classList.add('hidden');
+            console.log('🔒 Botões de lançamento manual ocultos para:', this.currentUser?.name);
+        }
     }
 
     setDefaultActiveTab() {
