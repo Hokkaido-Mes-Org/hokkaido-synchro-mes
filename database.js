@@ -54,6 +54,9 @@ const productDatabase = [
     { "cod": 4505, "client": "SILGAN", "name": "TAMPA MKIV MD STD FUME CB280 PP PD060", "cavities": 14, "cycle": 10.5, "weight": 0.95, "pieces_per_hour_goal": 4800, "mp": "" },
     { "cod": 4669, "client": "SILGAN", "name": "TAMPA MKIV MD STD BEGE CB286 PP PD060", "cavities": 14, "cycle": 10.5, "weight": 0.95, "pieces_per_hour_goal": 4800, "mp": "" },
 
+        // NOVO PRODUTO SILGAN
+        { "cod": 4596, "client": "SILGAN", "name": "ROSCA MKIV MD 22 415 ESTRIADA PRETO 017 PP 09PD06007 - 1.01.01.005.128", "cavities": 44, "cycle": 40, "weight": 2.35, "pieces_per_hour_goal": 3366, "mp": "" },
+
     // --- APTAR ---
     { "cod": 226, "client": "APTAR", "name": "FIXACAO-GS-28/410CUST-28--THREAD-HDPE-WH", "cavities": 22, "cycle": 36, "weight": 1.65, "pieces_per_hour_goal": 2200, "mp": "" },
     { "cod": 4268, "client": "APTAR", "name": "FIXAÇÃO-GS-28/410CUST-28--THREAD-HDPE-NATURAL-", "cavities": 22, "cycle": 36, "weight": 14.95, "pieces_per_hour_goal": 2200, "mp": "" },
