@@ -121,21 +121,24 @@ class AuthSystem {
     canAccessTab(tabName) {
         if (!this.currentUser) return false;
         
-        const isLeandroCamargo = this.currentUser.name === 'Leandro Camargo' || this.currentUser.email === 'leandro@hokkaido.com.br';
+        // Usuários com acesso total (Leandro Camargo e Michelle Benjamin)
+        const isAuthorizedAdmin = 
+            this.currentUser.name === 'Leandro Camargo' || this.currentUser.email === 'leandro@hokkaido.com.br' ||
+            this.currentUser.name === 'Michelle Benjamin' || this.currentUser.email === 'michelle@hokkaido.com.br';
         const isGestor = this.currentUser.role === 'gestor';
         
-        // ⚙️ ACESSO EXCLUSIVO: Aba Qualidade apenas para Leandro Camargo
-        if (tabName === 'qualidade' && !isLeandroCamargo) {
+        // ⚙️ ACESSO EXCLUSIVO: Aba Qualidade apenas para usuários autorizados
+        if (tabName === 'qualidade' && !isAuthorizedAdmin) {
             return false;
         }
         
-        // ⚙️ Aba Ajustes: Leandro Camargo (acesso total) ou Gestores
-        if (tabName === 'ajustes' && !isLeandroCamargo && !isGestor) {
+        // ⚙️ Aba Ajustes: Usuários autorizados ou Gestores
+        if (tabName === 'ajustes' && !isAuthorizedAdmin && !isGestor) {
             return false;
         }
         
-        // ⚙️ Aba Relatórios: Leandro Camargo (acesso total) ou Gestores
-        if (tabName === 'relatorios' && !isLeandroCamargo && !isGestor) {
+        // ⚙️ Aba Relatórios: Usuários autorizados ou Gestores
+        if (tabName === 'relatorios' && !isAuthorizedAdmin && !isGestor) {
             return false;
         }
         
@@ -194,7 +197,7 @@ class AuthSystem {
             }
         });
         
-        // Controlar visibilidade dos botões de lançamento manual (apenas Leandro Camargo)
+        // Controlar visibilidade dos botões de lançamento manual
         this.filterManualEntriesButtons();
     }
 
@@ -203,12 +206,18 @@ class AuthSystem {
         const manualEntriesContainer = document.getElementById('manual-entries-container');
         if (!manualEntriesContainer) return;
         
-        const isLeandroCamargo = this.currentUser?.name === 'Leandro Camargo' || 
-                                  this.currentUser?.email === 'leandro@hokkaido.com.br';
+        // Usuários com acesso total (Leandro Camargo e Michelle Benjamin)
+        const isAuthorizedAdmin = 
+            this.currentUser?.name === 'Leandro Camargo' || this.currentUser?.email === 'leandro@hokkaido.com.br' ||
+            this.currentUser?.name === 'Michelle Benjamin' || this.currentUser?.email === 'michelle@hokkaido.com.br' ||
+            this.currentUser?.username === 'michelle.benjamin';
         
-        if (isLeandroCamargo) {
+        // Também verificar se tem a permissão específica
+        const hasManualPermission = this.currentUser?.permissions?.includes('lançamento_manual_producao');
+        
+        if (isAuthorizedAdmin || hasManualPermission) {
             manualEntriesContainer.classList.remove('hidden');
-            console.log('✅ Botões de lançamento manual visíveis para Leandro Camargo');
+            console.log('✅ Botões de lançamento manual visíveis para:', this.currentUser?.name);
         } else {
             manualEntriesContainer.classList.add('hidden');
             console.log('🔒 Botões de lançamento manual ocultos para:', this.currentUser?.name);
@@ -376,7 +385,7 @@ class AuthSystem {
                     </div>
                 </div>
                 <div class="text-sm text-gray-700 mb-6 p-3 bg-red-50 rounded-lg border border-red-200">
-                    <p>❌ Esta aba é restrita apenas para <strong>Leandro Camargo</strong></p>
+                    <p>❌ Esta aba é restrita apenas para usuários autorizados</p>
                 </div>
                 <button onclick="this.closest('.fixed').remove()" class="w-full py-2 px-4 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-semibold transition">
                     Entendido

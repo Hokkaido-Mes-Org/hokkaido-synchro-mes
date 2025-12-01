@@ -1,11 +1,15 @@
 // Popular o select de MP no cadastro de ordem de produção
 document.addEventListener('DOMContentLoaded', function() {
-    // Ocultar subaba Analytics IA para todos, exceto Leandro Camargo
+    // Ocultar subaba Analytics IA para todos, exceto usuários autorizados (Leandro Camargo e Michelle Benjamin)
     setTimeout(() => {
         try {
             const user = window.authSystem?.getCurrentUser?.();
             const analyticsBtn = document.querySelector('.analysis-tab-btn[data-view="predictive"]');
-            if (analyticsBtn && (!user || (user.name !== 'Leandro Camargo' && user.username !== 'leandro.camargo'))) {
+            const isAuthorizedUser = user && (
+                user.name === 'Leandro Camargo' || user.username === 'leandro.camargo' ||
+                user.name === 'Michelle Benjamin' || user.username === 'michelle.benjamin'
+            );
+            if (analyticsBtn && !isAuthorizedUser) {
                 analyticsBtn.style.display = 'none';
             }
         } catch (e) {
@@ -1745,16 +1749,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /**
-     * Verifica se o usuário atual é gestor ou tem acesso total (Leandro Camargo)
+     * Verifica se o usuário atual é gestor ou tem acesso total (Leandro Camargo ou Michelle Benjamin)
      * Usada para restringir funções de edição e exclusão
      */
     function isUserGestorOrAdmin() {
         const user = getActiveUser();
         if (!user) return false;
         
-        // Leandro Camargo tem acesso total
-        const isLeandroCamargo = user.name === 'Leandro Camargo' || user.email === 'leandro@hokkaido.com.br';
-        if (isLeandroCamargo) return true;
+        // Usuários com acesso total (Leandro Camargo e Michelle Benjamin)
+        const isAuthorizedAdmin = 
+            user.name === 'Leandro Camargo' || user.email === 'leandro@hokkaido.com.br' ||
+            user.name === 'Michelle Benjamin' || user.email === 'michelle@hokkaido.com.br';
+        if (isAuthorizedAdmin) return true;
         
         // Verificar se é gestor
         return user.role === 'gestor';
