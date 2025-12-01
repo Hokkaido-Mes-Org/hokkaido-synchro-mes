@@ -1,13 +1,13 @@
 // Popular o select de MP no cadastro de ordem de produção
 document.addEventListener('DOMContentLoaded', function() {
-    // Ocultar subaba Analytics IA para todos, exceto usuários autorizados (Leandro Camargo e Michelle Benjamin)
+    // Ocultar subaba Analytics IA para todos, exceto usuários autorizados (Leandro Camargo ou role 'suporte')
     setTimeout(() => {
         try {
             const user = window.authSystem?.getCurrentUser?.();
             const analyticsBtn = document.querySelector('.analysis-tab-btn[data-view="predictive"]');
             const isAuthorizedUser = user && (
                 user.name === 'Leandro Camargo' || user.username === 'leandro.camargo' ||
-                user.name === 'Michelle Benjamin' || user.username === 'michelle.benjamin'
+                user.role === 'suporte'
             );
             if (analyticsBtn && !isAuthorizedUser) {
                 analyticsBtn.style.display = 'none';
@@ -1749,17 +1749,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /**
-     * Verifica se o usuário atual é gestor ou tem acesso total (Leandro Camargo ou Michelle Benjamin)
+     * Verifica se o usuário atual é gestor, suporte ou tem acesso total (Leandro Camargo)
      * Usada para restringir funções de edição e exclusão
      */
     function isUserGestorOrAdmin() {
         const user = getActiveUser();
         if (!user) return false;
         
-        // Usuários com acesso total (Leandro Camargo e Michelle Benjamin)
+        // Usuários com acesso total (Leandro Camargo ou role 'suporte')
         const isAuthorizedAdmin = 
             user.name === 'Leandro Camargo' || user.email === 'leandro@hokkaido.com.br' ||
-            user.name === 'Michelle Benjamin' || user.email === 'michelle@hokkaido.com.br';
+            user.role === 'suporte';
         if (isAuthorizedAdmin) return true;
         
         // Verificar se é gestor

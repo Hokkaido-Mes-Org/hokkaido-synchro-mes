@@ -121,11 +121,11 @@ class AuthSystem {
     canAccessTab(tabName) {
         if (!this.currentUser) return false;
         
-        // Usuários com acesso total (Leandro Camargo e Michelle Benjamin)
+        // Usuários com acesso total (Leandro Camargo, role 'suporte')
         const isAuthorizedAdmin = 
             this.currentUser.name === 'Leandro Camargo' || this.currentUser.email === 'leandro@hokkaido.com.br' ||
-            this.currentUser.name === 'Michelle Benjamin' || this.currentUser.email === 'michelle@hokkaido.com.br';
-        const isGestor = this.currentUser.role === 'gestor';
+            this.currentUser.role === 'suporte';
+        const isGestor = this.currentUser.role === 'gestor' || this.currentUser.role === 'suporte';
         
         // ⚙️ ACESSO EXCLUSIVO: Aba Qualidade apenas para usuários autorizados
         if (tabName === 'qualidade' && !isAuthorizedAdmin) {
@@ -206,11 +206,10 @@ class AuthSystem {
         const manualEntriesContainer = document.getElementById('manual-entries-container');
         if (!manualEntriesContainer) return;
         
-        // Usuários com acesso total (Leandro Camargo e Michelle Benjamin)
+        // Usuários com acesso total (Leandro Camargo ou role 'suporte')
         const isAuthorizedAdmin = 
             this.currentUser?.name === 'Leandro Camargo' || this.currentUser?.email === 'leandro@hokkaido.com.br' ||
-            this.currentUser?.name === 'Michelle Benjamin' || this.currentUser?.email === 'michelle@hokkaido.com.br' ||
-            this.currentUser?.username === 'michelle.benjamin';
+            this.currentUser?.role === 'suporte';
         
         // Também verificar se tem a permissão específica
         const hasManualPermission = this.currentUser?.permissions?.includes('lançamento_manual_producao');
