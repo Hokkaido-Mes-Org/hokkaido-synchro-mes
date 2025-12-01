@@ -159,6 +159,10 @@ const predictiveCollectionConfig = {
             const timeValue = raw.horaInformada || raw.hora || raw.hour || raw.time || null;
             const timestamp = resolveTimestamp(raw, dateValue, timeValue);
             const scrap = calculateScrap(raw);
+            
+            // Resolver produto através de múltiplas fontes
+            const product = raw.product || raw.produto || raw.product_cod || raw.cod_produto || raw.productName || '';
+            
             return {
                 id: doc.id,
                 timestamp: ensureISOString(timestamp),
@@ -169,6 +173,7 @@ const predictiveCollectionConfig = {
                 pieceWeight: scrap.pieceWeight,
                 reason: raw.perdas || raw.reason || raw.tipo_perda || '',
                 mp: raw.mp || raw.material || '',
+                product: product,
                 shift: parseShiftValue(raw.turno ?? raw.shift),
                 raw
             };

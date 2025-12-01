@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulação Catapulta LSS - HOKKAIDO PLASTICS</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Bibliotecas 3D -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; background: #111827; }
+        canvas { display: block; }
+        #controls-ui {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(17, 24, 39, 0.9);
+            border: 1px solid rgba(55, 65, 81, 0.7);
+            border-radius: 12px;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px 20px;
+            width: 90%;
+            max-width: 600px;
+            color: white;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+            backdrop-filter: blur(5px);
+        }
+        .control-group { display: flex; flex-direction: column; }
+        .control-group label { font-size: 0.85rem; margin-bottom: 5px; font-weight: 600; color: #93c5fd; }
+        .control-group input[type="range"] { width: 100%; cursor: pointer; }
+        .control-group span { font-size: 0.8rem; text-align: right; color: #9ca3af; }
+        button {
+            grid-column: span 2;
+            background: #2563eb; color: white; border: none; padding: 12px;
+            border-radius: 8px; font-weight: 700; cursor: pointer; transition: background 0.2s;
+            text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        button:hover { background: #1d4ed8; }
+        button:disabled { background: #4b5563; cursor: not-allowed; }
+        #distance-display {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(17, 24, 39, 0.9); border: 1px solid rgba(55, 65, 81, 0.7);
+            color: #4ade80; padding: 10px 25px; border-radius: 8px;
+            font-size: 1.5rem; font-weight: 700; font-family: monospace;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="distance-display">Distância (Y): 0.00 m</div>
+    <canvas id="simulation"></canvas>
+
+    <div id="controls-ui">
+        <div class="control-group">
+            <label for="tension">Variável X1: Tensão (Força)</label>
+            <div class="flex items-center space-x-2">
+                <input type="range" id="tension" min="15" max="40" value="25" step="1">
+                <span id="tension-value">25</span>
+            </div>
+        </div>
+        <div class="control-group">
+            <label for="stopAngle">Variável X3: Barra de Parada</label>
+            <div class="flex items-center space-x-2">
+                <input type="range" id="stopAngle" min="-30" max="30" value="0" step="5">
+                <span id="stopAngle-value">0°</span>
+            </div>
+        </div>
+        <div class="control-group" style="grid-column: span 2;">
+            <label for="pullAngle">Variável X2: Ângulo de Puxada</label>
+            <div class="flex items-center space-x-2">
+                <input type="range" id="pullAngle" min="30" max="90" value="70" step="5">
+                <span id="pullAngle-value">70°</span>
+            </div>
+        </div>
+        <button id="launch-button">LANÇAR</button>
+    </div>
+
+    <script>
+        // --- SETUP -------------------------------------------------
+        let scene, camera, renderer, controls;
+        let armMesh, ballMesh, stopBarMesh, baseMesh, floorMesh;
+        let launchButton;
+        let distanceDisplay = document.getElementById('distance-display');
+
+        // Variáveis de Animação
+        let isLaunching = false;
+        let animationClock = 0;
+        let armInitialAngle = (70 * Math.PI) / 180;
+        let armFinalAngle = (0 * Math.PI) / 180;
+        let armRotationSpeed = 8.0; // rad/s
+        
+        let launchVelocity = new THREE.Vector3(0, 5, 12); // Velocidade inicial base
+        let ballInitialPos = new THREE.Vector3();
+        const gravity = new THREE.Vector3(0, -9.8, 0);
+
+        // Constantes Físicas (Simuladas)
+        const armLength = 3.0;
+        const pivotHeight = 1.8;
+        const ballRadius = 0.15;
+        const armPivotOffset = -armLength / 2 + 0.5;
+
+        // Materiais
+        const cardboardMaterial = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.8 }); // Cor Papelão
+        const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x374151, roughness: 0.5 });
+        const ballMaterial = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.2 });
+        const metalMaterial = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.3, metalness: 0.8 });
+
+        function init() {
+            // Cena 3D
+            scene = new THREE.Scene();
+            // Cor de fundo da cena (Céu noturno suave)
+            scene.background = new THREE.Color(0x1f2937); 
+            
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(6, 6, 12); // Posição inicial da câmera
+
+            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('simulation'), antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.maxPolarAngle = Math.PI / 2 - 0.05; // Impede câmera de ir para baixo do chão
+
+            // Luzes
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+            dirLight.position.set(5, 15, 10);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            scene.add(dirLight);
+            
+            // Criar objetos visuais
+            createFloor();
+            createCatapult();
+            createProjectile();
+            createGrid();
+            
+            // Event Listeners
+            launchButton = document.getElementById('launch-button');
+            launchButton.addEventListener('click', launch);
+
+            // Sincronizar sliders
+            document.getElementById('tension').addEventListener('input', e => {
+                document.getElementById('tension-value').textContent = e.target.value;
+                // Tensão afeta a velocidade Z (distância)
+                // Fórmula simples para simular o efeito da Tensão
+                let tension = parseFloat(e.target.value);
+                launchVelocity.z = tension * 0.5; 
+            });
+            
+            document.getElementById('pullAngle').addEventListener('input', e => {
+                armInitialAngle = (parseFloat(e.target.value) * Math.PI) / 180;
+                document.getElementById('pullAngle-value').textContent = `${e.target.value}°`;
+                resetAnimation();
+            });
+            
+            document.getElementById('stopAngle').addEventListener('input', e => {
+                let angleDeg = parseFloat(e.target.value);
+                armFinalAngle = (angleDeg * Math.PI) / 180;
+                document.getElementById('stopAngle-value').textContent = `${angleDeg}°`;
+                
+                // Atualiza a barra de parada visualmente
+                const stopBarRadius = 1.0;
+                stopBarMesh.position.set(
+                    0,
+                    pivotHeight + Math.sin(armFinalAngle) * stopBarRadius,
+                    Math.cos(armFinalAngle) * stopBarRadius
+                );
+                stopBarMesh.rotation.x = armFinalAngle;
+            });
+
+            // Posição inicial
+            resetAnimation();
+            animate();
+        }
+
+        function createGrid() {
+            // Grade no chão para facilitar medição visual
+            const gridHelper = new THREE.GridHelper(100, 100, 0x4b5563, 0x374151);
+            scene.add(gridHelper);
+        }
+
+        function createFloor() {
+            floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), floorMaterial);
+            floorMesh.rotation.x = -Math.PI / 2;
+            floorMesh.receiveShadow = true;
+            scene.add(floorMesh);
+        }
+
+        function createCatapult() {
+            const baseSize = { x: 2.5, y: 0.2, z: 3.5 };
+            const supportHeight = 2.0;
+
+            // 1. Base
+            baseMesh = new THREE.Mesh(new THREE.BoxGeometry(baseSize.x, baseSize.y, baseSize.z), cardboardMaterial);
+            baseMesh.position.y = baseSize.y / 2;
+            baseMesh.castShadow = true;
+            scene.add(baseMesh);
+
+            // 2. Suportes
+            const supportGeom = new THREE.BoxGeometry(0.2, supportHeight, 0.5);
+            const support1 = new THREE.Mesh(supportGeom, cardboardMaterial);
+            support1.position.set(-1.0, supportHeight / 2 + baseSize.y, 0);
+            support1.castShadow = true;
+            scene.add(support1);
+            
+            const support2 = new THREE.Mesh(supportGeom, cardboardMaterial);
+            support2.position.set(1.0, supportHeight / 2 + baseSize.y, 0);
+            support2.castShadow = true;
+            scene.add(support2);
+            
+            // 3. Braço (Grupo)
+            const armGroup = new THREE.Group();
+            armGroup.position.set(0, pivotHeight, 0); 
+            scene.add(armGroup);
+
+            const armGeom = new THREE.BoxGeometry(0.3, 0.15, armLength);
+            armMesh = new THREE.Mesh(armGeom, cardboardMaterial);
+            armMesh.position.z = -armPivotOffset; 
+            armMesh.castShadow = true;
+            armGroup.add(armMesh);
+            armMesh.parent.rotation.x = armInitialAngle; // Referência global para animação
+            
+            // Eixo (Pivô)
+            const axleMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 2.4, 16), metalMaterial);
+            axleMesh.rotation.z = Math.PI / 2;
+            axleMesh.position.set(0, pivotHeight, 0);
+            scene.add(axleMesh);
+
+            // 4. Barra de Parada
+            stopBarMesh = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.15, 0.15), metalMaterial);
+            stopBarMesh.castShadow = true;
+            scene.add(stopBarMesh);
+        }
+
+        function createProjectile() {
+            ballMesh = new THREE.Mesh(new THREE.SphereGeometry(ballRadius, 32, 32), ballMaterial);
+            ballMesh.castShadow = true;
+            scene.add(ballMesh);
+        }
+        
+        function resetAnimation() {
+            isLaunching = false;
+            animationClock = 0;
+            launchButton.disabled = false;
+            distanceDisplay.textContent = "Distância (Y): 0.00 m";
+            distanceDisplay.style.color = "#9ca3af"; // Cinza
+
+            // Posição do braço
+            armMesh.parent.rotation.x = armInitialAngle;
+
+            // Posição da bola no braço (cálculo vetorial para precisão)
+            // Offset no braço: (Comprimento/2) - PivotOffset - (Pequeno ajuste para o copo)
+            const ballZOffset = armLength / 2 - armPivotOffset - 0.3;
+            const ballOnArmPos = new THREE.Vector3(0, 0.15, ballZOffset); // 0.15 acima da superfície do braço
+            
+            // Converte posição local do braço para posição global (World)
+            ballMesh.position.copy(armMesh.localToWorld(ballOnArmPos));
+            
+            // Salva a posição inicial global da bola para o cálculo de física
+            ballInitialPos.copy(ballMesh.position);
+        }
+
+        function launch() {
+            if (isLaunching) return;
+            resetAnimation();
+            isLaunching = true;
+            launchButton.disabled = true;
+        }
+
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const deltaTime = clock.getDelta();
+
+            if (isLaunching) {
+                animationClock += deltaTime;
+                let ballReleased = false;
+
+                // 1. Animação do Braço (Fase de Aceleração)
+                if (armMesh.parent.rotation.x > armFinalAngle) {
+                    armMesh.parent.rotation.x -= armRotationSpeed * deltaTime;
+                } else {
+                    armMesh.parent.rotation.x = armFinalAngle;
+                    ballReleased = true; // Braço bateu na barra de parada
+                }
+
+                // 2. Animação da Bola
+                if (!ballReleased) {
+                    // Bola está presa ao braço
+                    const ballZOffset = armLength / 2 - armPivotOffset - 0.3;
+                    const ballOnArmPos = new THREE.Vector3(0, 0.15, ballZOffset);
+                    ballMesh.position.copy(armMesh.localToWorld(ballOnArmPos));
+                    ballInitialPos.copy(ballMesh.position);
+                    
+                    // Calcula vetor de lançamento baseado na tangente do arco
+                    const armTipRadius = (armLength / 2 - armPivotOffset);
+                    const tangentialSpeed = armRotationSpeed * armTipRadius; // V = w * r
+                    
+                    // Decompõe a velocidade em Y e Z baseado no ângulo de saída (armFinalAngle)
+                    // Nota: No Three.js, rotação 0 é horizontal. 
+                    launchVelocity.set(
+                        0, 
+                        tangentialSpeed * Math.sin(Math.PI/2 - armFinalAngle), // Componente Vertical
+                        tangentialSpeed * Math.cos(Math.PI/2 - armFinalAngle) + (parseFloat(document.getElementById('tension').value) * 0.2) // Componente Horizontal + Força extra da Tensão
+                    );
+
+                } else {
+                    // Bola está em voo (Balística Simples)
+                    // Tempo de voo (t_flight) começa quando a bola solta
+                    // Usamos uma aproximação simples baseada no clock total para suavidade
+                    
+                    // P = P0 + V*t + 0.5*g*t^2
+                    // Como o deltaTime é pequeno, integramos a posição passo a passo (Euler)
+                    ballMesh.position.x += launchVelocity.x * deltaTime;
+                    ballMesh.position.y += launchVelocity.y * deltaTime;
+                    ballMesh.position.z += launchVelocity.z * deltaTime;
+                    
+                    // Aplica gravidade à velocidade vertical
+                    launchVelocity.y += gravity.y * deltaTime;
+
+                    // Detecção de colisão com o chão
+                    if (ballMesh.position.y < ballRadius) {
+                        ballMesh.position.y = ballRadius;
+                        isLaunching = false; // Fim da animação
+                        
+                        const finalDistance = ballMesh.position.z;
+                        distanceDisplay.textContent = `Distância (Y): ${finalDistance.toFixed(2)} m`;
+                        distanceDisplay.style.color = "#4ade80"; // Verde Sucesso
+                    }
+                }
+            }
+            
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = init;
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

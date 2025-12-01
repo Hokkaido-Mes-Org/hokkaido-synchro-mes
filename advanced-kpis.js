@@ -3,6 +3,14 @@
  * Módulo de indicadores avançados: MTBF, MTTR, FPY, Cost per Unit
  */
 
+// Verificar dependências globais
+if (typeof getFilteredData === 'undefined' && typeof window.getFilteredData === 'undefined') {
+    console.warn('[ADVANCED-KPIs] Função getFilteredData não encontrada. Carregue predictive-analytics.js ou traceability-system.js antes.');
+}
+if (typeof formatDate === 'undefined' && typeof window.formatDate === 'undefined') {
+    console.warn('[ADVANCED-KPIs] Função formatDate não encontrada. Carregue predictive-analytics.js ou traceability-system.js antes.');
+}
+
 class AdvancedKPIs {
     constructor() {
         this.cache = {

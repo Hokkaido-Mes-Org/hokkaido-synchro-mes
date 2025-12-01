@@ -3,6 +3,14 @@
  * Identifica automaticamente as principais causas de problemas
  */
 
+// Verificar dependências globais
+if (typeof getFilteredData === 'undefined' && typeof window.getFilteredData === 'undefined') {
+    console.warn('[AUTO-PARETO] Função getFilteredData não encontrada. Carregue predictive-analytics.js ou traceability-system.js antes.');
+}
+if (typeof formatDate === 'undefined' && typeof window.formatDate === 'undefined') {
+    console.warn('[AUTO-PARETO] Função formatDate não encontrada. Carregue predictive-analytics.js ou traceability-system.js antes.');
+}
+
 class AutoParetoAnalysis {
     constructor() {
         this.analytics = {
@@ -423,14 +431,39 @@ class AutoParetoAnalysis {
             return { categories: [], insights: [], totalImpact: 0 };
         }
 
+        // Criar mapa de máquina para produto a partir dos dados de produção
+        const machineProductMap = {};
+        if (productionData && productionData.length > 0) {
+            productionData.forEach(prod => {
+                const machine = prod.machine || '';
+                const product = prod.product || prod.mp || '';
+                if (machine && product && !machineProductMap[machine]) {
+                    machineProductMap[machine] = product;
+                }
+            });
+        }
+
         // Agrupar perdas por produto
         const productGroups = {};
         let totalLosses = 0;
 
         lossesData.forEach(item => {
-            const productName = this.normalizeProductName(item.product);
+            // Tentar obter produto de múltiplas fontes
+            let productSource = item.product || item.raw?.product || item.raw?.produto || '';
+            
+            // Se não tiver produto, tentar via MP (matéria-prima)
+            if (!productSource) {
+                productSource = item.mp || item.mp_type || item.raw?.mp || '';
+            }
+            
+            // Se ainda não tiver, tentar via mapa de máquina
+            if (!productSource && item.machine) {
+                productSource = machineProductMap[item.machine] || '';
+            }
+            
+            const productName = this.normalizeProductName(productSource);
             const product = productName || 'PRODUTO NÃO ESPECIFICADO';
-            const originalLabel = (item.product || '').toString().trim();
+            const originalLabel = (productSource || '').toString().trim();
             const quantity = Number(item.quantity) || 0;
             const reason = item.reason || 'MOTIVO NÃO ESPECIFICADO';
             

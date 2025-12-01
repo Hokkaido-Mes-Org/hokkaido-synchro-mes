@@ -1361,11 +1361,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // Carregar OPs abertas para o formulário de planejamento
     async function loadPlanningOrders() {
         if (!planningOrderSelect) return;
-        planningOrderSelect.innerHTML = '<option value="">Selecione...</option>';
+        planningOrderSelect.innerHTML = '<option value="">Selecione a OP...</option>';
 
         try {
             const snapshot = await db.collection('production_orders').get();
             const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            // Salvar no cache para uso posterior
+            productionOrdersCache = orders;
+            
             const blocked = ['concluida','cancelada','finalizada','encerrada'];
             const openOrders = orders.filter(o => !blocked.includes(String(o.status||'').toLowerCase()));
 
@@ -1377,7 +1381,14 @@ document.addEventListener('DOMContentLoaded', function() {
             const options = openOrders.map(o => {
                 const lot = Number(o.lot_size)||0;
                 const snapshotData = o.product_snapshot || {};
-                const label = `${o.order_number || o.id} • Cod ${o.part_code || '-'} • Lote ${lot.toLocaleString('pt-BR')}`;
+                const orderNum = o.order_number || o.order_number_original || o.id;
+                const productName = o.product || snapshotData.name || '';
+                
+                // Label simplificado: apenas número da OP e nome do produto
+                const label = productName 
+                    ? `${orderNum} - ${productName}`
+                    : `${orderNum}`;
+                
                 const opt = document.createElement('option');
                 opt.value = o.id;
                 opt.textContent = label;
@@ -1385,13 +1396,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 opt.dataset.product = String(o.product||snapshotData.name||'');
                 opt.dataset.customer = String(o.customer||o.client||snapshotData.client||'');
                 opt.dataset.lotSize = lot > 0 ? String(lot) : '';
-                opt.dataset.orderNumber = String(o.order_number||o.order_number_original||o.id);
+                opt.dataset.orderNumber = String(orderNum);
                 opt.dataset.machineId = String(o.machine_id||o.machine||'');
                 opt.dataset.rawMaterial = String(o.raw_material || snapshotData.mp || '');
                 opt.dataset.mpType = String(o.mp_type || '');
-                opt.dataset.cycle = snapshotData.cycle != null ? String(snapshotData.cycle) : '';
-                opt.dataset.cavities = snapshotData.cavities != null ? String(snapshotData.cavities) : '';
-                opt.dataset.weight = snapshotData.weight != null ? String(snapshotData.weight) : '';
+                // Não passar cycle/cavities/weight do snapshot - vamos buscar do productDatabase
                 return opt;
             });
 
@@ -1420,6 +1429,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const partCode = dataset.partCode || dataset.productCod || '';
         const machineId = dataset.machineId || '';
 
+        console.log('[Planejamento] OP selecionada:', { orderId, partCode, machineId, dataset });
+
         const productCodInput = document.getElementById('planning-product-cod');
         if (productCodInput) {
             if (productCodInput.value !== partCode) {
@@ -1436,6 +1447,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const selectedOrder = Array.isArray(productionOrdersCache)
             ? productionOrdersCache.find(order => order && order.id === orderId)
             : null;
+        
+        console.log('[Planejamento] Ordem do cache:', selectedOrder);
 
         fillPlanningFormWithOrder(selectedOrder || null, dataset);
     }
@@ -1443,6 +1456,9 @@ document.addEventListener('DOMContentLoaded', function() {
     function fillPlanningFormWithOrder(order, dataset = {}) {
         const infoElement = planningOrderInfo;
         const productNameDisplay = document.getElementById('product-name-display');
+        const productNameText = document.getElementById('product-name-text');
+        const orderNumberDisplay = document.getElementById('planning-order-number');
+        const orderCustomerDisplay = document.getElementById('planning-order-customer');
         const mpInput = planningMpInput || document.getElementById('planning-mp');
         const mpTypeSelect = document.getElementById('planning-mp-type');
         const cycleInput = document.getElementById('budgeted-cycle');
@@ -1451,11 +1467,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const plannedQtyInput = document.getElementById('planned-quantity');
         const lotSizeInput = document.getElementById('planning-lot-size');
 
+        // Limpar todos os campos se não houver ordem
         if (!order) {
             if (infoElement) {
                 infoElement.style.display = 'none';
-                infoElement.textContent = '';
             }
+            if (orderNumberDisplay) orderNumberDisplay.textContent = '-';
+            if (orderCustomerDisplay) orderCustomerDisplay.textContent = '-';
             if (mpInput) mpInput.value = '';
             if (mpTypeSelect) mpTypeSelect.value = '';
             if (cycleInput) cycleInput.value = '';
@@ -1464,19 +1482,20 @@ document.addEventListener('DOMContentLoaded', function() {
             if (plannedQtyInput) plannedQtyInput.value = '';
             if (lotSizeInput) lotSizeInput.value = '';
             if (productNameDisplay) {
-                productNameDisplay.textContent = '';
                 productNameDisplay.style.display = 'none';
-                productNameDisplay.classList.remove('text-red-600', 'bg-red-50');
-                productNameDisplay.classList.add('text-primary-blue', 'bg-gray-50');
             }
+            if (productNameText) productNameText.textContent = '';
             return;
         }
 
+        // === SEÇÃO 1: Dados da OP (do Excel/Firebase) ===
         const resolvedOrderNumber = order.order_number || order.order_number_original || dataset.orderNumber || order.id || '';
         const partCode = dataset.partCode || order.part_code || order.product_cod || '';
         const productName = order.product || dataset.product || order.product_snapshot?.name || '';
         const customer = order.customer || order.client || dataset.customer || order.product_snapshot?.client || '';
         const machineId = dataset.machineId || order.machine_id || order.machine || '';
+        
+        // Tamanho do lote (da OP)
         const lotSize = (() => {
             if (dataset.lotSize) {
                 const dsValue = Number(dataset.lotSize);
@@ -1486,27 +1505,170 @@ document.addEventListener('DOMContentLoaded', function() {
             return typeof fromOrder === 'number' && Number.isFinite(fromOrder) && fromOrder > 0 ? fromOrder : 0;
         })();
 
-        if (lotSizeInput && lotSize > 0) {
-            lotSizeInput.value = lotSize;
-        } else if (lotSizeInput) {
-            lotSizeInput.value = '';
+        // Preencher campos da OP
+        if (lotSizeInput) {
+            lotSizeInput.value = lotSize > 0 ? lotSize : '';
         }
 
+        // Exibir info da OP
         if (infoElement) {
-            const infoSegments = [`OP ${resolvedOrderNumber}`];
-            if (productName) {
-                const productSegment = customer ? `${productName} (${customer})` : productName;
-                infoSegments.push(`• ${productSegment}`);
-            } else if (customer) {
-                infoSegments.push(`• (${customer})`);
-            }
-            if (partCode) infoSegments.push(`• Cod ${partCode}`);
-            if (lotSize) infoSegments.push(`• Lote ${lotSize.toLocaleString('pt-BR')}`);
-            if (machineId) infoSegments.push(`• Máquina ${machineId}`);
-            infoElement.textContent = infoSegments.join(' ');
             infoElement.style.display = 'block';
         }
+        if (orderNumberDisplay) {
+            orderNumberDisplay.textContent = resolvedOrderNumber || '-';
+        }
+        if (orderCustomerDisplay) {
+            orderCustomerDisplay.textContent = customer || '-';
+        }
 
+        // === SEÇÃO 2: Dados do Produto (do productDatabase via databaseModule) ===
+        // Buscar produto no database pelo código usando o índice productByCode
+        const partCodeStr = String(partCode || '').trim();
+        const productCode = parseInt(partCodeStr, 10);
+        let productFromDatabase = null;
+        
+        console.log(`[Planejamento] Buscando produto com código: "${partCodeStr}" (parseado: ${productCode})`);
+        
+        // Tentar buscar via productByCode (Map indexado - mais rápido)
+        if (window.databaseModule && window.databaseModule.productByCode instanceof Map) {
+            productFromDatabase = window.databaseModule.productByCode.get(productCode);
+            if (!productFromDatabase) {
+                // Tentar como string
+                productFromDatabase = window.databaseModule.productByCode.get(partCodeStr);
+            }
+        }
+        
+        // Fallback: buscar diretamente no array productDatabase
+        if (!productFromDatabase && window.databaseModule && Array.isArray(window.databaseModule.productDatabase)) {
+            productFromDatabase = window.databaseModule.productDatabase.find(p => 
+                p.cod === productCode || String(p.cod) === partCodeStr
+            );
+        }
+        
+        // Fallback final: tentar acessar productDatabase global (se existir)
+        if (!productFromDatabase && typeof productDatabase !== 'undefined' && Array.isArray(productDatabase)) {
+            productFromDatabase = productDatabase.find(p => 
+                p.cod === productCode || String(p.cod) === partCodeStr
+            );
+        }
+
+        let resolvedCycle = 0;
+        let resolvedCavities = 0;
+        let resolvedWeight = 0;
+        let resolvedProductName = productName;
+        let resolvedClient = customer;
+
+        if (productFromDatabase) {
+            // Usar dados do database de produtos (prioridade)
+            resolvedCycle = Number(productFromDatabase.cycle) || 0;
+            resolvedCavities = Number(productFromDatabase.cavities) || 0;
+            resolvedWeight = Number(productFromDatabase.weight) || 0;
+            resolvedProductName = productFromDatabase.name || productName;
+            resolvedClient = productFromDatabase.client || customer;
+            
+            console.log(`[Planejamento] ✅ Produto encontrado no database:`, {
+                codigo: productCode,
+                nome: resolvedProductName,
+                ciclo: resolvedCycle,
+                cavidades: resolvedCavities,
+                peso: resolvedWeight,
+                cliente: resolvedClient
+            });
+        } else {
+            // Fallback: usar dados do snapshot da OP ou do dataset
+            console.warn(`[Planejamento] ⚠️ Produto Cod ${productCode} NÃO encontrado no database. Usando dados da OP.`, {
+                partCode,
+                productCode,
+                databaseModuleExists: !!window.databaseModule,
+                productByCodeExists: !!(window.databaseModule?.productByCode),
+                productDatabaseLength: window.databaseModule?.productDatabase?.length || 0
+            });
+            
+            resolvedCycle = (() => {
+                if (dataset.cycle) {
+                    const parsed = Number(dataset.cycle);
+                    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+                }
+                const snapshotCycle = Number(order.product_snapshot?.cycle);
+                if (Number.isFinite(snapshotCycle) && snapshotCycle > 0) return snapshotCycle;
+                const orderCycle = Number(order.budgeted_cycle);
+                if (Number.isFinite(orderCycle) && orderCycle > 0) return orderCycle;
+                return 0;
+            })();
+
+            resolvedCavities = (() => {
+                if (dataset.cavities) {
+                    const parsed = Number(dataset.cavities);
+                    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+                }
+                const snapshotCavities = Number(order.product_snapshot?.cavities);
+                if (Number.isFinite(snapshotCavities) && snapshotCavities > 0) return snapshotCavities;
+                const orderCavities = Number(order.mold_cavities);
+                if (Number.isFinite(orderCavities) && orderCavities > 0) return orderCavities;
+                return 0;
+            })();
+
+            resolvedWeight = (() => {
+                if (dataset.weight) {
+                    const parsed = Number(dataset.weight);
+                    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+                }
+                const snapshotWeight = Number(order.product_snapshot?.weight);
+                if (Number.isFinite(snapshotWeight) && snapshotWeight > 0) return snapshotWeight;
+                const orderWeight = Number(order.piece_weight);
+                if (Number.isFinite(orderWeight) && orderWeight > 0) return orderWeight;
+                return 0;
+            })();
+            
+            if (partCode) {
+                console.warn(`[Planejamento] Produto Cod ${partCode} não encontrado no database. Usando dados da OP.`);
+            }
+        }
+
+        console.log('[Planejamento] Valores resolvidos:', {
+            resolvedCycle,
+            resolvedCavities,
+            resolvedWeight,
+            resolvedProductName
+        });
+
+        // Preencher campos do produto
+        console.log('[Planejamento] Inputs encontrados:', {
+            cycleInput: !!cycleInput,
+            cavitiesInput: !!cavitiesInput,
+            weightInput: !!weightInput
+        });
+
+        if (cycleInput) {
+            cycleInput.value = resolvedCycle > 0 ? resolvedCycle : '';
+            console.log('[Planejamento] Ciclo preenchido:', cycleInput.value);
+        }
+        if (cavitiesInput) {
+            cavitiesInput.value = resolvedCavities > 0 ? resolvedCavities : '';
+            console.log('[Planejamento] Cavidades preenchido:', cavitiesInput.value);
+        }
+        if (weightInput) {
+            weightInput.value = resolvedWeight > 0 ? resolvedWeight : '';
+            console.log('[Planejamento] Peso preenchido:', weightInput.value);
+        }
+
+        // Exibir nome do produto
+        if (productNameDisplay && productNameText) {
+            const displayName = resolvedProductName || '';
+            if (displayName) {
+                productNameText.textContent = displayName;
+                productNameDisplay.style.display = 'block';
+            } else {
+                productNameDisplay.style.display = 'none';
+            }
+        } else if (productNameDisplay) {
+            // Fallback para estrutura antiga
+            const label = [resolvedProductName, resolvedClient ? `(${resolvedClient})` : ''].filter(Boolean).join(' ');
+            productNameDisplay.textContent = label;
+            productNameDisplay.style.display = label ? 'block' : 'none';
+        }
+
+        // === SEÇÃO 3: Matéria-prima ===
         const rawMaterial = (dataset.rawMaterial || order.raw_material || order.product_snapshot?.mp || '').trim();
         if (mpInput && rawMaterial) {
             mpInput.value = rawMaterial;
@@ -1517,76 +1679,17 @@ document.addEventListener('DOMContentLoaded', function() {
             mpTypeSelect.value = mpTypeValue;
         }
 
-        const resolvedCycle = (() => {
-            if (dataset.cycle) {
-                const parsed = Number(dataset.cycle);
-                if (Number.isFinite(parsed) && parsed > 0) return parsed;
-            }
-            const snapshotCycle = Number(order.product_snapshot?.cycle);
-            if (Number.isFinite(snapshotCycle) && snapshotCycle > 0) return snapshotCycle;
-            const orderCycle = Number(order.budgeted_cycle);
-            if (Number.isFinite(orderCycle) && orderCycle > 0) return orderCycle;
-            return Number(cycleInput?.value) || 0;
-        })();
-
-        if (cycleInput && resolvedCycle) {
-            cycleInput.value = resolvedCycle;
-        }
-
-        const resolvedCavities = (() => {
-            if (dataset.cavities) {
-                const parsed = Number(dataset.cavities);
-                if (Number.isFinite(parsed) && parsed > 0) return parsed;
-            }
-            const snapshotCavities = Number(order.product_snapshot?.cavities);
-            if (Number.isFinite(snapshotCavities) && snapshotCavities > 0) return snapshotCavities;
-            const orderCavities = Number(order.mold_cavities);
-            if (Number.isFinite(orderCavities) && orderCavities > 0) return orderCavities;
-            return Number(cavitiesInput?.value) || 0;
-        })();
-
-        if (cavitiesInput && resolvedCavities) {
-            cavitiesInput.value = resolvedCavities;
-        }
-
-        const resolvedWeight = (() => {
-            if (dataset.weight) {
-                const parsed = Number(dataset.weight);
-                if (Number.isFinite(parsed) && parsed > 0) return parsed;
-            }
-            const snapshotWeight = Number(order.product_snapshot?.weight);
-            if (Number.isFinite(snapshotWeight) && snapshotWeight > 0) return snapshotWeight;
-            const orderWeight = Number(order.piece_weight);
-            if (Number.isFinite(orderWeight) && orderWeight > 0) return orderWeight;
-            return Number(weightInput?.value) || 0;
-        })();
-
-        if (weightInput && resolvedWeight) {
-            weightInput.value = resolvedWeight;
-        }
-
+        // === Calcular Quantidade Planejada ===
         if (plannedQtyInput) {
-            const cycle = Number(cycleInput?.value) || resolvedCycle;
-            const cavities = Number(cavitiesInput?.value) || resolvedCavities;
+            const cycle = resolvedCycle;
+            const cavities = resolvedCavities;
             const plannedQty = cycle > 0 && cavities > 0
                 ? Math.floor((86400 / cycle) * cavities * 0.85)
                 : 0;
             if (plannedQty > 0) {
                 plannedQtyInput.value = plannedQty;
-            } else if (!plannedQtyInput.value) {
-                plannedQtyInput.value = '';
-            }
-        }
-
-        if (productNameDisplay) {
-            const label = [productName, customer ? `(${customer})` : ''].filter(Boolean).join(' ');
-            productNameDisplay.textContent = label;
-            if (label) {
-                productNameDisplay.style.display = 'block';
-                productNameDisplay.classList.remove('text-red-600', 'bg-red-50');
-                productNameDisplay.classList.add('text-primary-blue', 'bg-gray-50');
             } else {
-                productNameDisplay.style.display = 'none';
+                plannedQtyInput.value = '';
             }
         }
     }
@@ -2654,16 +2757,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Função para trocar entre views de análise
     function switchAnalysisView(viewName) {
-        // Atualizar botões
+        // Atualizar botões - remover classes active
         document.querySelectorAll('.analysis-tab-btn').forEach(btn => {
-            btn.classList.remove('active', 'border-primary-blue', 'text-primary-blue');
-            btn.classList.add('border-transparent', 'text-gray-500');
+            btn.classList.remove('active');
         });
         
-        const activeBtn = document.querySelector(`[data-view="${viewName}"]`);
+        // Adicionar classe active ao botão selecionado
+        const activeBtn = document.querySelector(`.analysis-tab-btn[data-view="${viewName}"]`);
         if (activeBtn) {
-            activeBtn.classList.add('active', 'border-primary-blue', 'text-primary-blue');
-            activeBtn.classList.remove('border-transparent', 'text-gray-500');
+            activeBtn.classList.add('active');
         }
 
         // Mostrar/ocultar views
@@ -2787,33 +2889,28 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function populateOrdersMachineFilter(orders) {
-        const machineFilter = document.getElementById('orders-machine-filter');
+        // Popular filtro na aba Análises/Ordens
+        const machineFilter = document.getElementById('analysis-orders-machine-filter');
         if (!machineFilter) return;
-
-        // Coletar máquinas únicas das ordens
-        const uniqueMachines = new Set();
-        orders.forEach(order => {
-            if (order.machine_id) {
-                uniqueMachines.add(order.machine_id);
-            }
-        });
 
         // Preservar valor atual
         const currentValue = machineFilter.value;
 
-        // Recriar opções
+        // Recriar opções usando machineDatabase (todas as máquinas do sistema)
         machineFilter.innerHTML = '<option value="">Todas as Máquinas</option>';
         
-        // Adicionar máquinas em ordem alfabética
-        Array.from(uniqueMachines).sort().forEach(machineId => {
-            const option = document.createElement('option');
-            option.value = machineId;
-            option.textContent = machineId;
-            machineFilter.appendChild(option);
-        });
+        if (typeof machineDatabase !== 'undefined' && machineDatabase.length > 0) {
+            machineDatabase.forEach(function(machine) {
+                const mid = normalizeMachineId(machine.id);
+                const option = document.createElement('option');
+                option.value = mid;
+                option.textContent = mid + ' - ' + machine.model;
+                machineFilter.appendChild(option);
+            });
+        }
 
         // Restaurar valor anterior
-        machineFilter.value = currentValue;
+        if (currentValue) machineFilter.value = currentValue;
     }
 
     function computeOrderExecutionMetrics(order, productionTotalsByOrderId) {
@@ -2856,9 +2953,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 const snapshot = await db.collection('production_orders').orderBy('createdAt', 'desc').get();
                 ordersDataset = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 productionOrdersCache = ordersDataset;
+                console.log('📋 Ordens carregadas do Firebase:', ordersDataset.length, ordersDataset);
             } catch (error) {
                 console.error('Erro ao recuperar ordens de produção para análise:', error);
+                // Tentar sem ordenação caso o índice não exista
+                try {
+                    console.log('📋 Tentando carregar sem ordenação...');
+                    const snapshot2 = await db.collection('production_orders').get();
+                    ordersDataset = snapshot2.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    productionOrdersCache = ordersDataset;
+                    console.log('📋 Ordens carregadas (sem ordem):', ordersDataset.length);
+                } catch (err2) {
+                    console.error('Erro ao recuperar ordens:', err2);
+                }
             }
+        } else {
+            console.log('📋 Usando cache de ordens:', ordersDataset.length);
         }
 
         if (!ordersDataset || ordersDataset.length === 0) {
@@ -2920,7 +3030,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Aplicar filtros de status, máquina e pesquisa
         const ordersStatusFilter = document.getElementById('orders-status-filter')?.value || '';
-        const ordersMachineFilter = document.getElementById('orders-machine-filter')?.value || '';
+        const ordersMachineFilter = document.getElementById('analysis-orders-machine-filter')?.value || '';
         const ordersSearchQuery = document.getElementById('orders-search')?.value.toLowerCase() || '';
         const ordersSortValue = document.getElementById('orders-sort-filter')?.value || 'recent';
 
@@ -3098,13 +3208,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     <!-- Footer com Ações -->
                     <div class="px-4 pb-4 flex gap-2">
+                        ${status === 'planejada' ? `
+                        <button class="activate-order-btn flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium text-sm transition-colors" data-order-id="${order.id}" data-machine-id="${order.machine_id || ''}">
+                            <i data-lucide="play" class="w-4 h-4"></i>
+                            Ativar
+                        </button>
+                        ` : ''}
                         ${isReactivatable ? `
                         <button class="reactivate-order-btn flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm transition-colors" data-order-id="${order.id}">
                             <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
                             Reativar
                         </button>
                         ` : ''}
-                        <button class="edit-order-btn ${isReactivatable ? 'flex-1' : 'w-full'} flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium text-sm transition-colors" data-order-id="${order.id}">
+                        <button class="edit-order-btn ${(status === 'planejada' || isReactivatable) ? 'flex-1' : 'w-full'} flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium text-sm transition-colors" data-order-id="${order.id}">
                             <i data-lucide="edit-3" class="w-4 h-4"></i>
                             Editar
                         </button>
@@ -3140,7 +3256,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Configurar event listeners para filtros
         const ordersStatusFilterBtn = document.getElementById('orders-status-filter');
-        const ordersMachineFilterBtn = document.getElementById('orders-machine-filter');
+        const ordersMachineFilterBtn = document.getElementById('analysis-orders-machine-filter');
         const ordersSearchInput = document.getElementById('orders-search');
         const ordersSortSelect = document.getElementById('orders-sort-filter');
         const ordersClearFiltersBtn = document.getElementById('orders-clear-filters');
@@ -3324,6 +3440,42 @@ document.addEventListener('DOMContentLoaded', function() {
                     } catch (err) {
                         showNotification('Erro ao reativar ordem. Tente novamente.', 'error');
                         console.error('Erro ao reativar ordem:', err);
+                    }
+                });
+                btn.dataset.listenerAttached = 'true';
+            }
+        });
+
+        // Adicionar event listener para botões de ativação (ordens planejadas)
+        document.querySelectorAll('.activate-order-btn').forEach(btn => {
+            if (!btn.dataset.listenerAttached) {
+                btn.addEventListener('click', async (e) => {
+                    const orderId = btn.getAttribute('data-order-id');
+                    const machineId = btn.getAttribute('data-machine-id');
+                    if (!orderId) return;
+                    
+                    // Verificar se há máquina definida
+                    if (!machineId) {
+                        showNotification('Esta ordem não tem máquina definida. Edite a ordem e selecione uma máquina primeiro.', 'warning');
+                        return;
+                    }
+                    
+                    if (!confirm(`Deseja ativar esta ordem na máquina ${machineId}?`)) return;
+                    
+                    try {
+                        // Atualizar status para ativa
+                        await db.collection('production_orders').doc(orderId).update({ 
+                            status: 'ativa',
+                            activatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                        showNotification('Ordem ativada com sucesso!', 'success');
+                        
+                        // Atualizar cache e recarregar
+                        productionOrdersCache = null;
+                        await loadOrdersAnalysis();
+                    } catch (err) {
+                        showNotification('Erro ao ativar ordem. Tente novamente.', 'error');
+                        console.error('Erro ao ativar ordem:', err);
                     }
                 });
                 btn.dataset.listenerAttached = 'true';
@@ -4244,11 +4396,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const mpType = item.mp_type || 'Não especificado';
             materialCounts[mpType] = (materialCounts[mpType] || 0) + item.quantity;
         });
-        const mainMaterial = Object.keys(materialCounts).length > 0 
+        const mainMaterialCode = Object.keys(materialCounts).length > 0 
             ? Object.keys(materialCounts).reduce((a, b) => 
                 materialCounts[a] > materialCounts[b] ? a : b, '---'
             ) 
             : '---';
+        const mainMaterial = mainMaterialCode !== '---' ? getDescricaoMP(mainMaterialCode) : '---';
 
         // Análise específica de borra
         const borraMPCounts = {};
@@ -4585,15 +4738,23 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 }
             }
 
-            // Inicializar sistema SPC (não automaticamente - usuário deve clicar)
-            if (!window.spcController || !window.spcController.spcData.lastUpdate) {
-                console.log('[SPC] Sistema SPC disponível - aguardando inicialização manual');
-                // Atualizar status para mostrar que está pronto
-                const spcStatus = document.getElementById('spc-process-status');
-                if (spcStatus) {
-                    spcStatus.textContent = 'Pronto para Iniciar';
-                    spcStatus.className = 'px-3 py-1 rounded-full text-sm font-medium text-blue-600 bg-blue-50';
+            // Inicializar sistema SPC automaticamente
+            if (window.spcController) {
+                if (!window.spcController.spcData.lastUpdate) {
+                    console.log('[SPC] Inicializando sistema SPC...');
+                    await window.spcController.initialize();
+                } else {
+                    // Verificar se precisa atualizar
+                    const lastUpdate = window.spcController.spcData.lastUpdate;
+                    const hoursSinceUpdate = (new Date() - lastUpdate) / (1000 * 60 * 60);
+                    
+                    if (hoursSinceUpdate > 1) { // Atualizar se foi há mais de 1 hora
+                        console.log('[SPC] Atualizando sistema SPC...');
+                        await window.spcController.initialize();
+                    }
                 }
+            } else {
+                console.warn('[SPC] SPCController não disponível');
             }
 
             // Inicializar sistema de rastreabilidade total
@@ -4926,6 +5087,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                         const timeHint = raw.horaInformada || raw.hora || raw.hour || raw.time || null;
                         const workDay = getWorkDayFromTimestamp(resolvedDateTime || primaryTimestamp) || getWorkDay(mappedDate, timeHint);
                         const isoDateTime = timestamp ? new Date(timestamp.getTime() - timestamp.getTimezoneOffset() * 60000).toISOString() : null;
+                        
+                        // Resolver produto através de múltiplas fontes
+                        const product = raw.product || raw.produto || raw.product_cod || raw.cod_produto || raw.productName || raw.mp || '';
+                        
                         return {
                             id,
                             date: mappedDate,
@@ -4934,6 +5099,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                             shift: normalizeShift(raw.turno ?? raw.shift),
                             datetime: isoDateTime,
                             mp: raw.mp || '',
+                            product: product,
                             workDay: workDay || mappedDate,
                             raw
                         };
@@ -4957,6 +5123,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                         const resolvedKg = rawRefugoKg > 0
                             ? rawRefugoKg
                             : (pieceWeight > 0 && resolvedPcs > 0 ? (resolvedPcs * pieceWeight) / 1000 : 0);
+                        
+                        // Resolver produto através de múltiplas fontes
+                        const product = raw.product || raw.produto || raw.product_cod || raw.cod_produto || raw.productName || '';
+                        
                         return {
                             id,
                             date: dateValue,
@@ -4966,6 +5136,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                             reason: raw.perdas || raw.reason || '',
                             mp: raw.mp || '',
                             mp_type: raw.mp_type || raw.mp || '',
+                            product: product,
                             workDay: workDay || dateValue,
                             scrapPcs: resolvedPcs,
                             scrapKg: resolvedKg,
@@ -8066,6 +8237,462 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         console.log('✅ Listeners ativos desinscritos pelo listenerManager');
     }
 
+    // --- GESTÃO DE ORDENS DE PRODUÇÃO ---
+    let ordersCache = [];
+    
+    async function loadProductionOrders() {
+        console.log('[Ordens] Carregando ordens de produção...');
+        
+        const grid = document.getElementById('orders-grid');
+        const tableBody = document.getElementById('orders-table-body');
+        const tableContainer = document.getElementById('orders-table-container');
+        const emptyState = document.getElementById('orders-empty-state');
+        const countEl = document.getElementById('orders-count');
+        
+        try {
+            const snapshot = await db.collection('production_orders').get();
+            ordersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            console.log('[Ordens] ' + ordersCache.length + ' ordens carregadas');
+            
+            // Atualizar KPIs
+            updateOrdersKPIs(ordersCache);
+            
+            // Renderizar ordens
+            renderOrders(ordersCache);
+            
+            // Popular filtro de máquinas
+            populateOrdersMachineFilter();
+            
+            // Configurar filtros e eventos (apenas uma vez)
+            if (!window.ordersFiltersConfigured) {
+                setupOrdersFilters();
+                setupOrdersViewToggle();
+                window.ordersFiltersConfigured = true;
+            }
+            
+        } catch (error) {
+            console.error('[Ordens] Erro ao carregar:', error);
+            if (countEl) countEl.textContent = 'Erro ao carregar ordens';
+        }
+    }
+    
+    function updateOrdersKPIs(orders) {
+        const total = orders.length;
+        const active = orders.filter(o => ['ativa', 'em_andamento'].includes((o.status || '').toLowerCase())).length;
+        const completed = orders.filter(o => ['concluida', 'finalizada'].includes((o.status || '').toLowerCase())).length;
+        
+        // Calcular progresso médio
+        let totalProgress = 0;
+        orders.forEach(o => {
+            const lotSize = Number(o.lot_size) || 0;
+            const produced = Number(o.total_produced) || 0;
+            if (lotSize > 0) {
+                totalProgress += Math.min((produced / lotSize) * 100, 100);
+            }
+        });
+        const avgProgress = total > 0 ? Math.round(totalProgress / total) : 0;
+        
+        // Atualizar elementos
+        const kpiTotal = document.getElementById('orders-kpi-total');
+        const kpiActive = document.getElementById('orders-kpi-active');
+        const kpiCompleted = document.getElementById('orders-kpi-completed');
+        const kpiAvgProgress = document.getElementById('orders-kpi-avg-progress');
+        
+        if (kpiTotal) kpiTotal.textContent = total;
+        if (kpiActive) kpiActive.textContent = active;
+        if (kpiCompleted) kpiCompleted.textContent = completed;
+        if (kpiAvgProgress) kpiAvgProgress.textContent = avgProgress + '%';
+    }
+    
+    function renderOrders(orders) {
+        const grid = document.getElementById('orders-grid');
+        const tableBody = document.getElementById('orders-table-body');
+        const tableContainer = document.getElementById('orders-table-container');
+        const emptyState = document.getElementById('orders-empty-state');
+        const countEl = document.getElementById('orders-count');
+        
+        // Atualizar contador
+        if (countEl) countEl.textContent = orders.length + ' ordem' + (orders.length !== 1 ? 's' : '') + ' encontrada' + (orders.length !== 1 ? 's' : '');
+        
+        if (orders.length === 0) {
+            if (grid) grid.innerHTML = '';
+            if (tableBody) tableBody.innerHTML = '';
+            if (emptyState) emptyState.classList.remove('hidden');
+            return;
+        }
+        
+        if (emptyState) emptyState.classList.add('hidden');
+        
+        // Renderizar Grid de Cards
+        if (grid) {
+            grid.innerHTML = orders.map(order => renderOrderCard(order)).join('');
+        }
+        
+        // Renderizar Tabela
+        if (tableBody) {
+            tableBody.innerHTML = orders.map(order => renderOrderTableRow(order)).join('');
+        }
+        
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+    
+    function renderOrderCard(order) {
+        const status = (order.status || 'planejada').toLowerCase();
+        const lotSize = Number(order.lot_size) || 0;
+        const produced = Number(order.total_produced) || 0;
+        const progress = lotSize > 0 ? Math.min((produced / lotSize) * 100, 100) : 0;
+        
+        const statusConfig = {
+            'planejada': { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Planejada', icon: 'calendar' },
+            'ativa': { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Ativa', icon: 'zap' },
+            'em_andamento': { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Em Andamento', icon: 'play-circle' },
+            'concluida': { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Concluída', icon: 'check-circle-2' },
+            'finalizada': { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Finalizada', icon: 'check-circle-2' },
+            'cancelada': { bg: 'bg-red-100', text: 'text-red-700', label: 'Cancelada', icon: 'x-circle' }
+        };
+        
+        const sc = statusConfig[status] || statusConfig['planejada'];
+        const progressColor = progress >= 100 ? 'bg-emerald-500' : progress >= 50 ? 'bg-blue-500' : 'bg-amber-500';
+        const isActive = ['ativa', 'em_andamento'].includes(status);
+        const canActivate = status === 'planejada';
+        const canReactivate = ['concluida', 'finalizada'].includes(status);
+        
+        return '<div class="bg-white rounded-xl border ' + (isActive ? 'border-blue-300 ring-2 ring-blue-100' : 'border-gray-200') + ' shadow-sm hover:shadow-md transition-all overflow-hidden">' +
+            '<div class="p-4 border-b border-gray-100 ' + (isActive ? 'bg-blue-50' : 'bg-gray-50') + '">' +
+                '<div class="flex items-start justify-between gap-2">' +
+                    '<div class="flex-1 min-w-0">' +
+                        '<h4 class="font-bold text-gray-800 truncate">OP ' + escapeHtml(order.order_number || '') + '</h4>' +
+                        '<p class="text-sm text-gray-600 truncate">' + escapeHtml(order.product || order.part_code || 'Produto não definido') + '</p>' +
+                    '</div>' +
+                    '<span class="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ' + sc.bg + ' ' + sc.text + '">' +
+                        '<i data-lucide="' + sc.icon + '" class="w-3 h-3"></i>' +
+                        sc.label +
+                    '</span>' +
+                '</div>' +
+            '</div>' +
+            '<div class="p-4 space-y-3">' +
+                '<div class="grid grid-cols-2 gap-2 text-sm">' +
+                    '<div class="flex items-center gap-2 text-gray-600">' +
+                        '<i data-lucide="user" class="w-4 h-4 text-gray-400"></i>' +
+                        '<span class="truncate">' + escapeHtml(order.customer || 'N/A') + '</span>' +
+                    '</div>' +
+                    '<div class="flex items-center gap-2 text-gray-600">' +
+                        '<i data-lucide="settings" class="w-4 h-4 text-gray-400"></i>' +
+                        '<span class="truncate">' + escapeHtml(order.machine_id || 'N/A') + '</span>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="bg-gray-50 rounded-lg p-3">' +
+                    '<div class="flex items-center justify-between text-xs text-gray-500 mb-1">' +
+                        '<span>Progresso</span>' +
+                        '<span class="font-semibold">' + Math.round(progress) + '%</span>' +
+                    '</div>' +
+                    '<div class="w-full bg-gray-200 rounded-full h-2">' +
+                        '<div class="' + progressColor + ' h-2 rounded-full transition-all" style="width: ' + progress + '%"></div>' +
+                    '</div>' +
+                    '<div class="flex justify-between text-xs text-gray-500 mt-1">' +
+                        '<span>' + produced.toLocaleString('pt-BR') + ' prod.</span>' +
+                        '<span>' + lotSize.toLocaleString('pt-BR') + ' plan.</span>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+            '<div class="px-4 pb-4 flex gap-2">' +
+                (canActivate ? '<button onclick="activateOrder(\'' + order.id + '\', \'' + (order.machine_id || '') + '\')" class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition"><i data-lucide="play" class="w-4 h-4"></i>Ativar</button>' : '') +
+                (canReactivate ? '<button onclick="reactivateOrder(\'' + order.id + '\')" class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition"><i data-lucide="rotate-ccw" class="w-4 h-4"></i>Reativar</button>' : '') +
+                '<button onclick="editOrder(\'' + order.id + '\')" class="' + ((canActivate || canReactivate) ? 'flex-1' : 'w-full') + ' flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition"><i data-lucide="edit-3" class="w-4 h-4"></i>Editar</button>' +
+            '</div>' +
+        '</div>';
+    }
+    
+    function renderOrderTableRow(order) {
+        const status = (order.status || 'planejada').toLowerCase();
+        const lotSize = Number(order.lot_size) || 0;
+        const produced = Number(order.total_produced) || 0;
+        const progress = lotSize > 0 ? Math.min((produced / lotSize) * 100, 100) : 0;
+        
+        const statusBadge = {
+            'planejada': '<span class="px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">Planejada</span>',
+            'ativa': '<span class="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">Ativa</span>',
+            'em_andamento': '<span class="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Em Andamento</span>',
+            'concluida': '<span class="px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Concluída</span>',
+            'finalizada': '<span class="px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Finalizada</span>',
+            'cancelada': '<span class="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">Cancelada</span>'
+        };
+        
+        const canActivate = status === 'planejada';
+        const canReactivate = ['concluida', 'finalizada'].includes(status);
+        
+        let actions = '';
+        if (canActivate) {
+            actions += '<button onclick="activateOrder(\'' + order.id + '\', \'' + (order.machine_id || '') + '\')" class="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-medium mr-1">Ativar</button>';
+        }
+        if (canReactivate) {
+            actions += '<button onclick="reactivateOrder(\'' + order.id + '\')" class="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium mr-1">Reativar</button>';
+        }
+        actions += '<button onclick="editOrder(\'' + order.id + '\')" class="px-2 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded text-xs font-medium">Editar</button>';
+        
+        const progressBar = '<div class="w-full bg-gray-200 rounded-full h-2"><div class="bg-blue-500 h-2 rounded-full" style="width: ' + progress + '%"></div></div><span class="text-xs text-gray-500">' + Math.round(progress) + '%</span>';
+        
+        return '<tr class="hover:bg-gray-50">' +
+            '<td class="px-4 py-3 font-medium">' + escapeHtml(order.order_number || '') + '</td>' +
+            '<td class="px-4 py-3">' + escapeHtml(order.product || order.part_code || '-') + '</td>' +
+            '<td class="px-4 py-3">' + escapeHtml(order.machine_id || '-') + '</td>' +
+            '<td class="px-4 py-3 text-center">' + lotSize.toLocaleString('pt-BR') + '</td>' +
+            '<td class="px-4 py-3 text-center"><div class="flex flex-col items-center gap-1">' + progressBar + '</div></td>' +
+            '<td class="px-4 py-3 text-center">' + (statusBadge[status] || statusBadge['planejada']) + '</td>' +
+            '<td class="px-4 py-3 text-center">' + actions + '</td>' +
+        '</tr>';
+    }
+    
+    function populateOrdersMachineFilter() {
+        const machineFilter = document.getElementById('orders-machine-filter');
+        if (!machineFilter) return;
+        
+        machineFilter.innerHTML = '<option value="">Todas Máquinas</option>';
+        
+        if (typeof machineDatabase !== 'undefined' && machineDatabase.length > 0) {
+            machineDatabase.forEach(function(machine) {
+                const mid = normalizeMachineId(machine.id);
+                machineFilter.innerHTML += '<option value="' + mid + '">' + mid + ' - ' + machine.model + '</option>';
+            });
+        }
+    }
+    
+    function setupOrdersFilters() {
+        const searchInput = document.getElementById('orders-search');
+        const statusFilter = document.getElementById('orders-status-filter');
+        const machineFilter = document.getElementById('orders-machine-filter');
+        const sortFilter = document.getElementById('orders-sort-filter');
+        const clearBtn = document.getElementById('orders-clear-filters');
+        
+        function applyFilters() {
+            let filtered = [...ordersCache];
+            
+            // Busca
+            const query = (searchInput?.value || '').toLowerCase().trim();
+            if (query) {
+                filtered = filtered.filter(o => 
+                    (o.order_number || '').toLowerCase().includes(query) ||
+                    (o.product || '').toLowerCase().includes(query) ||
+                    (o.part_code || '').toLowerCase().includes(query) ||
+                    (o.customer || '').toLowerCase().includes(query)
+                );
+            }
+            
+            // Status
+            const status = statusFilter?.value || '';
+            if (status) {
+                filtered = filtered.filter(o => {
+                    const s = (o.status || '').toLowerCase();
+                    if (status === 'concluida') return ['concluida', 'finalizada'].includes(s);
+                    return s === status;
+                });
+            }
+            
+            // Máquina
+            const machine = machineFilter?.value || '';
+            if (machine) {
+                filtered = filtered.filter(o => o.machine_id === machine);
+            }
+            
+            // Ordenação
+            const sort = sortFilter?.value || 'recent';
+            filtered.sort((a, b) => {
+                const lotA = Number(a.lot_size) || 0;
+                const lotB = Number(b.lot_size) || 0;
+                const prodA = Number(a.total_produced) || 0;
+                const prodB = Number(b.total_produced) || 0;
+                const progressA = lotA > 0 ? (prodA / lotA) : 0;
+                const progressB = lotB > 0 ? (prodB / lotB) : 0;
+                
+                switch (sort) {
+                    case 'recent':
+                        return (b.createdAt?.toDate?.() || new Date(0)) - (a.createdAt?.toDate?.() || new Date(0));
+                    case 'progress-desc':
+                        return progressB - progressA;
+                    case 'progress-asc':
+                        return progressA - progressB;
+                    case 'lot-desc':
+                        return lotB - lotA;
+                    case 'alpha':
+                        return (a.order_number || '').localeCompare(b.order_number || '');
+                    default:
+                        return 0;
+                }
+            });
+            
+            updateOrdersKPIs(filtered);
+            renderOrders(filtered);
+        }
+        
+        if (searchInput) searchInput.addEventListener('input', debounce(applyFilters, 300));
+        if (statusFilter) statusFilter.addEventListener('change', applyFilters);
+        if (machineFilter) machineFilter.addEventListener('change', applyFilters);
+        if (sortFilter) sortFilter.addEventListener('change', applyFilters);
+        
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function() {
+                if (searchInput) searchInput.value = '';
+                if (statusFilter) statusFilter.value = '';
+                if (machineFilter) machineFilter.value = '';
+                if (sortFilter) sortFilter.value = 'recent';
+                applyFilters();
+            });
+        }
+    }
+    
+    function setupOrdersViewToggle() {
+        const gridBtn = document.getElementById('orders-view-grid-btn');
+        const tableBtn = document.getElementById('orders-view-table-btn');
+        const grid = document.getElementById('orders-grid');
+        const tableContainer = document.getElementById('orders-table-container');
+        
+        if (gridBtn && tableBtn && grid && tableContainer) {
+            gridBtn.addEventListener('click', function() {
+                grid.classList.remove('hidden');
+                tableContainer.classList.add('hidden');
+                gridBtn.classList.add('bg-white', 'shadow-sm', 'text-primary-blue');
+                gridBtn.classList.remove('text-gray-500');
+                tableBtn.classList.remove('bg-white', 'shadow-sm', 'text-primary-blue');
+                tableBtn.classList.add('text-gray-500');
+            });
+            
+            tableBtn.addEventListener('click', function() {
+                grid.classList.add('hidden');
+                tableContainer.classList.remove('hidden');
+                tableBtn.classList.add('bg-white', 'shadow-sm', 'text-primary-blue');
+                tableBtn.classList.remove('text-gray-500');
+                gridBtn.classList.remove('bg-white', 'shadow-sm', 'text-primary-blue');
+                gridBtn.classList.add('text-gray-500');
+            });
+        }
+    }
+    
+    // Funções globais para ações nas ordens
+    window.activateOrder = async function(orderId, machineId) {
+        if (!machineId) {
+            showNotification('Esta ordem não tem máquina definida. Edite primeiro.', 'warning');
+            return;
+        }
+        if (!confirm('Ativar ordem na máquina ' + machineId + '?')) return;
+        try {
+            await db.collection('production_orders').doc(orderId).update({
+                status: 'ativa',
+                activatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            showNotification('Ordem ativada!', 'success');
+            loadProductionOrders();
+        } catch (e) {
+            showNotification('Erro ao ativar ordem', 'error');
+        }
+    };
+    
+    window.reactivateOrder = async function(orderId) {
+        if (!confirm('Reativar esta ordem?')) return;
+        try {
+            await db.collection('production_orders').doc(orderId).update({ status: 'ativa' });
+            showNotification('Ordem reativada!', 'success');
+            loadProductionOrders();
+        } catch (e) {
+            showNotification('Erro ao reativar ordem', 'error');
+        }
+    };
+    
+    window.editOrder = function(orderId) {
+        const order = ordersCache.find(o => o.id === orderId);
+        if (!order) {
+            showNotification('Ordem não encontrada', 'error');
+            return;
+        }
+        openNewOrderModal(order);
+    };
+    
+    window.openNewOrderModal = function(order) {
+        const modal = document.getElementById('order-form-modal');
+        if (!modal) return;
+        
+        const title = document.getElementById('order-form-title');
+        if (title) title.textContent = order ? 'Editar Ordem de Produção' : 'Nova Ordem de Produção';
+        
+        // Popular select de máquinas
+        const machineSelect = document.getElementById('order-form-machine');
+        if (machineSelect) {
+            machineSelect.innerHTML = '<option value="">Selecione uma máquina</option>';
+            if (typeof machineDatabase !== 'undefined' && machineDatabase.length > 0) {
+                machineDatabase.forEach(function(machine) {
+                    const mid = normalizeMachineId(machine.id);
+                    machineSelect.innerHTML += '<option value="' + mid + '">' + mid + ' - ' + machine.model + '</option>';
+                });
+            }
+        }
+        
+        // Preencher campos
+        document.getElementById('order-form-id').value = order?.id || '';
+        document.getElementById('order-form-number').value = order?.order_number || '';
+        document.getElementById('order-form-part-code').value = order?.part_code || '';
+        document.getElementById('order-form-product').value = order?.product || '';
+        document.getElementById('order-form-lot-size').value = order?.lot_size || '';
+        document.getElementById('order-form-batch').value = order?.batch_number || '';
+        document.getElementById('order-form-packaging').value = order?.packaging_qty || '';
+        document.getElementById('order-form-customer').value = order?.customer || '';
+        if (machineSelect) machineSelect.value = order?.machine_id || '';
+        
+        modal.classList.remove('hidden');
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    };
+    
+    window.closeOrderFormModal = function() {
+        const modal = document.getElementById('order-form-modal');
+        if (modal) modal.classList.add('hidden');
+    };
+    
+    window.refreshOrdersList = function() {
+        loadProductionOrders();
+    };
+    
+    // Form submit para nova ordem
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('order-form-modal-form');
+        if (form) {
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const id = document.getElementById('order-form-id')?.value;
+                const orderData = {
+                    order_number: document.getElementById('order-form-number')?.value.trim() || '',
+                    part_code: document.getElementById('order-form-part-code')?.value.trim() || '',
+                    product: document.getElementById('order-form-product')?.value.trim() || '',
+                    lot_size: Number(document.getElementById('order-form-lot-size')?.value) || 0,
+                    batch_number: document.getElementById('order-form-batch')?.value.trim() || '',
+                    packaging_qty: Number(document.getElementById('order-form-packaging')?.value) || 0,
+                    customer: document.getElementById('order-form-customer')?.value.trim() || '',
+                    machine_id: document.getElementById('order-form-machine')?.value || ''
+                };
+                
+                if (!orderData.order_number || !orderData.lot_size) {
+                    showNotification('Preencha os campos obrigatórios', 'warning');
+                    return;
+                }
+                
+                try {
+                    if (id) {
+                        await db.collection('production_orders').doc(id).update(orderData);
+                        showNotification('Ordem atualizada!', 'success');
+                    } else {
+                        orderData.status = 'planejada';
+                        orderData.total_produced = 0;
+                        orderData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                        await db.collection('production_orders').add(orderData);
+                        showNotification('Ordem cadastrada!', 'success');
+                    }
+                    closeOrderFormModal();
+                    loadProductionOrders();
+                } catch (error) {
+                    showNotification('Erro ao salvar', 'error');
+                }
+            });
+        }
+    });
+
     // --- NAVEGAÇÃO ---
     function handleNavClick(e) {
         e.preventDefault();
@@ -8093,8 +8720,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (page === 'lancamento') loadLaunchPanel();
         if (page === 'planejamento') listenToPlanningChanges(getProductionDateString());
         if (page === 'ordens') {
-            setupProductionOrdersTab();
-            listenToProductionOrders();
+            // Carregar ordens de produção
+            console.log('[Nav] Abrindo aba Ordens...');
+            loadProductionOrders();
         }
         if (page === 'analise') {
             console.log('📊 Abrindo aba de análise');
@@ -9690,6 +10318,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             qualityPrintBtn.dataset.listenerAttached = 'true';
         }
 
+        // Botões de adicionar linhas nas tabelas de molde (verificar se existem)
+        var moldCloseAddRowBtn = document.getElementById('mold-close-add-row-btn');
+        var moldOpenAddRowBtn = document.getElementById('mold-open-add-row-btn');
+        var moldHistoryAddRowBtn = document.getElementById('mold-history-add-row-btn');
+
         if (moldCloseAddRowBtn && !moldCloseAddRowBtn.dataset.listenerAttached) {
             moldCloseAddRowBtn.addEventListener('click', (event) => {
                 event.preventDefault();
@@ -9714,7 +10347,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             moldHistoryAddRowBtn.dataset.listenerAttached = 'true';
         }
 
-        [moldCloseTbody, moldOpenTbody, moldHistoryTbody].forEach(tbody => {
+        // Obter tbodys para adicionar listeners de remoção
+        var moldCloseTbodyEl = document.getElementById('mold-closure-tbody');
+        var moldOpenTbodyEl = document.getElementById('mold-opening-tbody');
+        var moldHistoryTbodyEl = document.getElementById('mold-history-tbody');
+
+        [moldCloseTbodyEl, moldOpenTbodyEl, moldHistoryTbodyEl].forEach(tbody => {
             if (tbody && !tbody.dataset.moldListenerAttached) {
                 tbody.addEventListener('click', handleMoldRowRemoval);
                 tbody.dataset.moldListenerAttached = 'true';
@@ -11136,9 +11774,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     function openSidebar() {
         if (sidebar && sidebarOverlay) {
             sidebar.classList.remove('-translate-x-full');
+            sidebar.classList.add('sidebar-open');
             sidebarOverlay.classList.remove('hidden');
+            sidebarOverlay.classList.add('active');
             sidebar.setAttribute('aria-hidden', 'false');
             sidebarOverlay.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden'; // Previne scroll do body
             if (sidebarOpenBtn) {
                 sidebarOpenBtn.classList.add('is-active');
                 sidebarOpenBtn.setAttribute('aria-expanded', 'true');
@@ -11149,9 +11790,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     function closeSidebar() {
         if (sidebar && sidebarOverlay) {
             sidebar.classList.add('-translate-x-full');
+            sidebar.classList.remove('sidebar-open');
             sidebarOverlay.classList.add('hidden');
+            sidebarOverlay.classList.remove('active');
             sidebar.setAttribute('aria-hidden', 'true');
             sidebarOverlay.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = ''; // Restaura scroll do body
             if (sidebarOpenBtn) {
                 sidebarOpenBtn.classList.remove('is-active');
                 sidebarOpenBtn.setAttribute('aria-expanded', 'false');
@@ -12552,6 +13196,26 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const data = Object.fromEntries(formData.entries());
         const productionOrderId = (data.production_order_id || '').trim();
         
+        // Validar data - usar data do input ou data atual
+        if (!data.date) {
+            const dateInput = document.getElementById('planning-date-selector');
+            if (dateInput && dateInput.value) {
+                data.date = dateInput.value;
+            } else {
+                // Fallback para data atual
+                const hoje = new Date();
+                data.date = hoje.getFullYear() + '-' + 
+                           String(hoje.getMonth() + 1).padStart(2, '0') + '-' + 
+                           String(hoje.getDate()).padStart(2, '0');
+            }
+        }
+        
+        // Validar máquina
+        if (!data.machine) {
+            alert('Por favor, selecione uma máquina!');
+            return;
+        }
+        
         // Buscar dados completos do produto selecionado
         const productCod = data.product_cod;
         // Usar índice Map para O(1) lookup
@@ -12691,6 +13355,104 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
     }
 
+    // Função para atualizar KPIs do Planejamento
+    function updatePlanningKPIs(planningItems, combinedData) {
+        const kpiItems = document.getElementById('planning-kpi-items');
+        const kpiMachines = document.getElementById('planning-kpi-machines');
+        const kpiProduced = document.getElementById('planning-kpi-produced');
+        const kpiProducts = document.getElementById('planning-kpi-products');
+        
+        if (!kpiItems || !kpiMachines || !kpiProduced || !kpiProducts) return;
+        
+        // Total de itens planejados
+        const totalItems = planningItems?.length || 0;
+        kpiItems.textContent = totalItems.toLocaleString('pt-BR');
+        
+        // Máquinas únicas ativas
+        const uniqueMachines = new Set((planningItems || []).map(p => p.machine).filter(Boolean));
+        kpiMachines.textContent = uniqueMachines.size.toLocaleString('pt-BR');
+        
+        // Produção total acumulada
+        const totalProduced = (combinedData || []).reduce((sum, item) => {
+            return sum + (Number(item.total_produzido) || 0);
+        }, 0);
+        kpiProduced.textContent = totalProduced.toLocaleString('pt-BR');
+        
+        // Produtos únicos
+        const uniqueProducts = new Set((planningItems || []).map(p => p.product_cod || p.product).filter(Boolean));
+        kpiProducts.textContent = uniqueProducts.size.toLocaleString('pt-BR');
+    }
+
+    // Função para atualizar dados do planejamento (botão refresh)
+    window.refreshPlanningData = function() {
+        const dateSelector = document.getElementById('planning-date-selector');
+        if (dateSelector && dateSelector.value) {
+            listenToPlanningChanges(dateSelector.value);
+        }
+    };
+
+    // Função para imprimir relatório de planejamento
+    window.printPlanningReport = function() {
+        window.print();
+    };
+
+    // Função para exportar tabela de planejamento
+    window.exportPlanningTable = function() {
+        const table = document.getElementById('planning-table-body');
+        if (!table) return;
+        
+        const rows = table.querySelectorAll('tr');
+        if (rows.length === 0) {
+            alert('Nenhum dado para exportar.');
+            return;
+        }
+        
+        let csv = 'Máquina,Produto,MP,Ciclo Planejado,Cav. Planejadas,Peso,Ciclo T1,Cav T1,Qtd T1,Ciclo T2,Cav T2,Qtd T2,Ciclo T3,Cav T3,Qtd T3,Total\n';
+        
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            if (cells.length >= 15) {
+                const rowData = Array.from(cells).slice(0, 16).map(cell => {
+                    let text = cell.textContent.trim().replace(/,/g, ';');
+                    return `"${text}"`;
+                });
+                csv += rowData.join(',') + '\n';
+            }
+        });
+        
+        const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const date = document.getElementById('planning-date-selector')?.value || 'export';
+        link.href = URL.createObjectURL(blob);
+        link.download = `planejamento_${date}.csv`;
+        link.click();
+    };
+
+    // Setup de busca na tabela de planejamento
+    function setupPlanningTableSearch() {
+        const searchInput = document.getElementById('planning-table-search');
+        if (!searchInput) return;
+        
+        let debounceTimer;
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                const searchTerm = e.target.value.toLowerCase().trim();
+                const tableBody = document.getElementById('planning-table-body');
+                if (!tableBody) return;
+                
+                const rows = tableBody.querySelectorAll('tr');
+                rows.forEach(row => {
+                    const text = row.textContent.toLowerCase();
+                    row.style.display = text.includes(searchTerm) ? '' : 'none';
+                });
+            }, 300);
+        });
+    }
+
+    // Inicializar busca na tabela
+    setTimeout(setupPlanningTableSearch, 1000);
+
     function listenToPlanningChanges(date) {
         if (!date) return;
         
@@ -12723,11 +13485,20 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 };
             });
 
+            // Atualizar KPIs do Planejamento
+            updatePlanningKPIs(planningItems, combinedData);
+            
             renderPlanningTable(combinedData);
             renderLeaderPanel(planningItems);
             const activePlans = planningItems.filter(isPlanActive);
             renderMachineCards(activePlans, productionEntries, downtimeEntries, activeDowntimeSet);
             showLoadingState('leader-panel', false, planningItems.length === 0);
+            
+            // Atualizar contagem no painel
+            const panelCount = document.getElementById('planning-panel-count');
+            if (panelCount) {
+                panelCount.textContent = `${planningItems.length} ${planningItems.length === 1 ? 'item' : 'itens'}`;
+            }
         };
 
         // Limpar listeners anteriores se existirem
@@ -12878,7 +13649,20 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             }
         });
 
-        const rows = Array.from(grouped.values()).map(item => `
+        // Ordenar por máquina em ordem crescente (numérica se possível)
+        const sortedItems = Array.from(grouped.values()).sort((a, b) => {
+            const machineA = a.machine || '';
+            const machineB = b.machine || '';
+            // Tentar extrair número da máquina para ordenação numérica
+            const numA = parseInt(machineA.replace(/\D/g, ''), 10);
+            const numB = parseInt(machineB.replace(/\D/g, ''), 10);
+            if (!isNaN(numA) && !isNaN(numB)) {
+                return numA - numB;
+            }
+            return machineA.localeCompare(machineB, 'pt-BR', { numeric: true });
+        });
+
+        const rows = sortedItems.map(item => `
             <tr class="hover:bg-gray-50 text-center text-sm">
                 <td class="px-2 py-2 whitespace-nowrap border text-left">${item.machine}</td>
                 <td class="px-2 py-2 whitespace-nowrap border text-left">${item.product}</td>
@@ -12899,15 +13683,23 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 <td class="px-2 py-2 whitespace-nowrap border bg-purple-50">${orDash(item.active_cavities_t3)}</td>
                 <td class="px-2 py-2 whitespace-nowrap border bg-purple-50">${orDashNum(item.T3?.produzido)}</td>
 
-                <td class="px-2 py-2 whitespace-nowrap border font-bold">${orDashNum(item.total_produzido)}</td>
-                <td class="px-2 py-2 whitespace-nowrap border">${item.machine}</td>
-                <td class="px-2 py-2 whitespace-nowrap border no-print text-center">
-                    <button class="delete-plan-btn text-status-error hover:text-red-700 p-1 transition-colors" data-id="${item.id}" title="Deletar planejamento"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                <td class="px-3 py-2 whitespace-nowrap bg-emerald-50 font-bold text-emerald-700 text-base">${orDashNum(item.total_produzido)}</td>
+                <td class="px-2 py-2 whitespace-nowrap no-print text-center">
+                    <button class="delete-plan-btn bg-red-100 hover:bg-red-200 text-red-600 hover:text-red-700 p-1.5 rounded-lg transition-all" data-id="${item.id}" title="Deletar planejamento">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
                 </td>
             </tr>
         `).join('');
 
         planningTableBody.innerHTML = rows;
+        
+        // Mostrar/ocultar estado vazio
+        const emptyState = document.getElementById('planning-table-empty');
+        if (emptyState) {
+            emptyState.classList.toggle('hidden', sortedItems.length > 0);
+        }
+        
         lucide.createIcons();
     }
 
@@ -13680,9 +14472,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 }
             });
             
-            // Calcular eficiência (mantém referência do alvo atual)
-            const target = Number(selectedMachineData.order_lot_size || selectedMachineData.lot_size || selectedMachineData.planned_quantity || 0);
-            const efficiency = target > 0 ? (totalProduced / target * 100) : 0;
+            // Calcular eficiência baseado na meta diária (com fallback para planned_quantity)
+            const dailyTarget = Number(selectedMachineData.daily_target || selectedMachineData.planned_quantity || 0);
+            const efficiency = dailyTarget > 0 ? (totalProduced / dailyTarget * 100) : 0;
             
             // Atualizar display
             if (producedToday) producedToday.textContent = totalProduced.toLocaleString('pt-BR');
@@ -13935,17 +14727,39 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const qty = qtyInput.value ? parseInt(qtyInput.value, 10) : 0;
             const weightInput_value = weightInput.value || '';
             const weightGrams = parseWeightInputToGrams(weightInput_value);
-            const planInfo = getPlanPieceWeightInfo();
-            const activePieceWeight = planInfo.grams;
+            // Usar getActivePieceWeightGrams que faz fallback para o catálogo
+            const activePieceWeight = getActivePieceWeightGrams();
             
             // Atualizar display de conversão
             const convertedDisplay = document.getElementById('quick-production-weight-converted');
             if (weightGrams > 0) {
+                let conversionText = '';
+                
+                // Mostrar conversão de unidade
                 if (parseFloat(weightInput_value) > 0 && parseFloat(weightInput_value) < 100) {
-                    convertedDisplay.textContent = `= ${weightGrams}g`;
+                    conversionText = `= ${weightGrams}g`;
                 } else {
-                    convertedDisplay.textContent = `= ${(weightGrams/1000).toFixed(3)}kg`;
+                    conversionText = `= ${(weightGrams/1000).toFixed(3)}kg`;
                 }
+                
+                // Calcular peso líquido se tara estiver ativa
+                let netWeightGrams = weightGrams;
+                if (useTareCheckbox && useTareCheckbox.checked) {
+                    const tareGrams = getTareWeightForMachine(selectedMachineData?.machine);
+                    if (tareGrams > 0) {
+                        netWeightGrams = Math.max(0, weightGrams - tareGrams);
+                        conversionText += ` → ${(netWeightGrams/1000).toFixed(3)}kg (líquido)`;
+                    }
+                }
+                
+                // ✅ NOVO: Mostrar conversão para peças
+                if (activePieceWeight > 0 && netWeightGrams > 0) {
+                    const estimatedPieces = Math.floor(netWeightGrams / activePieceWeight);
+                    conversionText += ` ≈ ${estimatedPieces.toLocaleString('pt-BR')} peças`;
+                }
+                
+                convertedDisplay.textContent = conversionText;
+                convertedDisplay.classList.remove('hidden');
             } else {
                 convertedDisplay.textContent = '';
             }
@@ -13953,17 +14767,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             if (measuredVariation) {
                 measuredVariation.textContent = '';
                 measuredVariation.classList.add('hidden');
-            }
-
-            // Validar tara
-            if (useTareCheckbox && useTareCheckbox.checked && weightGrams > 0) {
-                const tareGrams = getTareWeightForMachine(selectedMachineData?.machine);
-                if (tareGrams > 0) {
-                    const netWeightGrams = Math.max(0, weightGrams - tareGrams);
-                    if (convertedDisplay.textContent) {
-                        convertedDisplay.textContent += ` → ${(netWeightGrams/1000).toFixed(3)}kg (após tara)`;
-                    }
-                }
             }
             
             // Validar consistência se ambos preenchidos
@@ -14272,12 +15075,23 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         let feedbackHTML = '';
         let feedbackClass = 'text-gray-600';
         
+        // Obter peso da peça para conversão (usa catálogo como fallback)
+        const pieceWeightGrams = getActivePieceWeightGrams();
+        
         if (multipleCommas || multipleDots) {
             feedbackHTML = `⚠️ <strong>Aviso:</strong> Múltiplos separadores detectados! Usando: <strong>${parsed.toFixed(3)} kg</strong>`;
             feedbackClass = 'text-yellow-700 bg-yellow-50 p-2 rounded border border-yellow-200';
         } else if (parsed > 0) {
-            // Interpretação bem-sucedida
+            // Interpretação bem-sucedida - mostrar kg
             feedbackHTML = `✓ Interpretado como: <strong>${parsed.toFixed(3)} kg</strong>`;
+            
+            // ✅ NOVO: Calcular e mostrar quantidade de peças
+            if (pieceWeightGrams > 0) {
+                const weightGrams = parsed * 1000; // Converter kg para gramas
+                const estimatedPieces = Math.floor(weightGrams / pieceWeightGrams);
+                feedbackHTML += ` ≈ <strong class="text-blue-600">${estimatedPieces.toLocaleString('pt-BR')} peças</strong>`;
+            }
+            
             feedbackClass = 'text-green-700';
         } else if (rawValue && parsed === 0) {
             // Entrada não-vazia mas não foi convertida
@@ -17814,7 +18628,52 @@ function sendDowntimeNotification() {
             qualityPct = 0;
         }
         const qualityColorClass = qualityPct >= 98 ? 'text-emerald-600' : (qualityPct >= 95 ? 'text-amber-600' : 'text-red-600');
-        const productLine = plan.product ? `<p class=\"mt-1 text-sm text-slate-600\">${plan.product}</p>` : '<p class=\"mt-1 text-sm text-slate-400\">Produto não definido</p>';
+        
+        // Resolver nome do produto - priorizar nome sobre código
+        const resolveProductName = (p) => {
+            if (!p) return 'Produto não definido';
+            
+            // 1. Tentar buscar no database de produtos pelo código
+            const productCode = p.product_cod || p.product_code || p.part_code;
+            if (productCode && window.databaseModule?.productByCode) {
+                const dbProduct = window.databaseModule.productByCode.get(Number(productCode)) || 
+                                  window.databaseModule.productByCode.get(String(productCode));
+                if (dbProduct?.name) {
+                    return dbProduct.name.trim();
+                }
+            }
+            
+            // 2. Tentar campos de nome explícitos
+            const nameFields = [
+                p.product_name,
+                p.productName,
+                p.produto_nome,
+                p.produtoNome,
+                p.part_name,
+                p.partName,
+                p.product_snapshot?.name,
+                p.product_snapshot?.product_name
+            ];
+            for (const name of nameFields) {
+                if (name && typeof name === 'string' && name.trim()) {
+                    return name.trim();
+                }
+            }
+            
+            // 3. Se product não parece ser um código (tem espaço ou mais de 15 chars), usar
+            if (p.product && typeof p.product === 'string') {
+                const prod = p.product.trim();
+                if (prod.includes(' ') || prod.length > 15) {
+                    return prod;
+                }
+            }
+            
+            // 4. Fallback para product mesmo que pareça código
+            return p.product || 'Produto não definido';
+        };
+        const displayProductName = resolveProductName(plan);
+        
+        const productLine = displayProductName !== 'Produto não definido' ? `<p class=\"mt-1 text-sm text-slate-600\">${displayProductName}</p>` : '<p class=\"mt-1 text-sm text-slate-400\">Produto não definido</p>';
         const mpLine = plan.mp ? `<p class=\"text-xs text-slate-400 mt-1\">MP: ${plan.mp}</p>` : '';
         const shiftProduced = data.byShift[currentShiftKey] ?? data.byShift[fallbackShiftKey] ?? 0;
 
@@ -17835,24 +18694,28 @@ function sendDowntimeNotification() {
                         </div>
                         <div>
                             <h3 class="text-sm font-bold text-slate-900">${machine}</h3>
-                            <p class="text-xs text-slate-500 truncate max-w-[120px]" title="${plan.product || 'Produto não definido'}">${plan.product || 'Produto não definido'}</p>
+                            <p class="text-xs text-slate-500 truncate max-w-[120px]" title="${displayProductName}">${displayProductName}</p>
                         </div>
                     </div>
                     <div class="text-right">
-                        <div class="text-xs font-semibold ${oeeColorClass}">${oeePercentText}%</div>
-                        <div class="text-[10px] text-slate-400 uppercase">OEE</div>
+                        <div class="text-xs font-semibold text-blue-600">${plan.order_number || plan.order_number_original || '-'}</div>
+                        <div class="text-[10px] text-slate-400 uppercase">OP</div>
+                    </div>
+                </div>
+                
+                <!-- OEE centralizado -->
+                <div class="flex items-center justify-center mb-2">
+                    <div class="text-center">
+                        <span class="text-lg font-bold ${oeeColorClass}">${oeePercentText}%</span>
+                        <span class="text-[10px] text-slate-400 uppercase ml-1">OEE</span>
                     </div>
                 </div>
 
                 <!-- Indicadores principais em linha -->
-                <div class="grid grid-cols-3 gap-2 mb-3">
+                <div class="grid grid-cols-2 gap-2 mb-3">
                     <div class="text-center">
                         <div class="text-sm font-semibold text-slate-900">${formatQty(executedDisplayQty)}</div>
                         <div class="text-[10px] text-slate-500 uppercase">Exec. OP</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="text-sm font-semibold ${qualityColorClass}">${qualityPct.toFixed(0)}%</div>
-                        <div class="text-[10px] text-slate-500 uppercase">Qualidade</div>
                     </div>
                     <div class="text-center">
                         <div class="text-sm font-semibold text-slate-900">${formatQty(displayRemainingQty)}</div>
@@ -17896,9 +18759,6 @@ function sendDowntimeNotification() {
                                                         </div>
                                                     ` : '';
                                                 })()}
-
-                <!-- Indicador visual de status (máquina ativa/parada) -->
-                <div class="absolute top-2 right-2 w-2 h-2 rounded-full ${downtimeHours > runtimeHours ? 'bg-red-400' : 'bg-green-400'}" title="${downtimeHours > runtimeHours ? 'Máquina com paradas' : 'Máquina produzindo'}"></div>
 
                 ${lotCompleted ? `
                     <div class="card-actions flex gap-2 mt-3">
@@ -18466,9 +19326,9 @@ function sendDowntimeNotification() {
                 }
             });
             
-            // Calcular eficiência
-            const target = Number(selectedMachineData.order_lot_size || selectedMachineData.lot_size || selectedMachineData.planned_quantity || 0);
-            const efficiency = target > 0 ? (totalProduced / target * 100) : 0;
+            // Calcular eficiência baseado na meta diária (com fallback para planned_quantity)
+            const dailyTarget = Number(selectedMachineData.daily_target || selectedMachineData.planned_quantity || 0);
+            const efficiency = dailyTarget > 0 ? (totalProduced / dailyTarget * 100) : 0;
             
             // Atualizar displays
             if (producedToday) producedToday.textContent = totalProduced.toLocaleString('pt-BR');
@@ -20011,11 +20871,11 @@ window.showPredictiveSubtab = function(subtabName) {
     const subtabs = document.querySelectorAll('.predictive-subtab-content');
     subtabs.forEach(tab => tab.classList.add('hidden'));
     
-    // Remover classe ativa de todos os botões
+    // Remover classe ativa de todos os botões (novo estilo moderno)
     const buttons = document.querySelectorAll('.predictive-subtab-btn');
     buttons.forEach(btn => {
-        btn.classList.remove('bg-purple-600', 'text-white');
-        btn.classList.add('bg-gray-200', 'text-gray-700');
+        btn.classList.remove('bg-gradient-to-r', 'from-purple-600', 'to-indigo-600', 'bg-purple-600', 'text-white', 'shadow-sm');
+        btn.classList.add('bg-gray-50', 'text-gray-600');
     });
     
     // Mostrar subtab selecionada
@@ -20024,11 +20884,56 @@ window.showPredictiveSubtab = function(subtabName) {
         targetTab.classList.remove('hidden');
     }
     
-    // Ativar botão clicado
-    const clickedButton = event.target.closest('.predictive-subtab-btn');
+    // Ativar botão clicado com novo estilo
+    const clickedButton = event?.target?.closest('.predictive-subtab-btn');
     if (clickedButton) {
-        clickedButton.classList.remove('bg-gray-200', 'text-gray-700');
-        clickedButton.classList.add('bg-purple-600', 'text-white');
+        clickedButton.classList.remove('bg-gray-50', 'text-gray-600', 'bg-gray-200', 'text-gray-700');
+        clickedButton.classList.add('bg-purple-600', 'text-white', 'shadow-sm');
+    }
+
+    // Inicializar módulos específicos da subtab
+    if (subtabName === 'dashboard' && window.analyticsIA) {
+        console.log('[Analytics IA] Dashboard selecionado, inicializando...');
+        setTimeout(async () => {
+            try {
+                if (!window.analyticsIA.isInitialized) {
+                    await window.analyticsIA.initialize();
+                } else {
+                    window.analyticsIA.updateDashboard();
+                }
+            } catch (err) {
+                console.error('[Analytics IA] Erro ao inicializar dashboard:', err);
+            }
+        }, 150);
+    }
+
+    if (subtabName === 'ranking' && window.analyticsIA) {
+        console.log('[Analytics IA] Ranking selecionado, atualizando...');
+        setTimeout(async () => {
+            try {
+                await window.analyticsIA.updateRanking();
+            } catch (err) {
+                console.error('[Analytics IA] Erro ao atualizar ranking:', err);
+            }
+        }, 150);
+    }
+
+    if (subtabName === 'spc' && window.spcController) {
+        console.log('[SPC] Subtab SPC selecionada, inicializando...');
+        // Pequeno delay para garantir que o container está visível
+        setTimeout(async () => {
+            try {
+                if (!window.spcController.spcData.lastUpdate) {
+                    console.log('[SPC] Primeira inicialização do SPC...');
+                    await window.spcController.initialize();
+                } else {
+                    console.log('[SPC] SPC já inicializado, atualizando interface...');
+                    window.spcController.updateSPCInterface();
+                }
+            } catch (err) {
+                console.error('[SPC] Erro ao inicializar:', err);
+            }
+        }, 150);
     }
 
     const refreshBtn = document.getElementById('traceability-refresh-btn');
@@ -20048,6 +20953,624 @@ window.showPredictiveSubtab = function(subtabName) {
     
     console.log(`[PREDICTIVE-NAV] Navegando para subtab: ${subtabName}`);
 };
+
+// ===== NOVO: Importador de Ordens do ERP Sankhya =====
+
+// Estado global do importador
+window.importOrdersState = {
+    file: null,
+    parsedOrders: [],
+    selectedRows: new Set()
+};
+
+// Abrir modal de importação
+function openImportOrdersModal() {
+    const modal = document.getElementById('import-orders-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        resetImportModal();
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+}
+
+// Fechar modal de importação
+function closeImportOrdersModal() {
+    const modal = document.getElementById('import-orders-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        resetImportModal();
+    }
+}
+
+// Resetar estado do modal
+function resetImportModal() {
+    window.importOrdersState = { file: null, parsedOrders: [], selectedRows: new Set() };
+    
+    document.getElementById('import-file-input').value = '';
+    document.getElementById('import-upload-area').classList.remove('hidden');
+    document.getElementById('import-file-info').classList.add('hidden');
+    document.getElementById('import-config').classList.add('hidden');
+    document.getElementById('import-preview').classList.add('hidden');
+    document.getElementById('import-status').classList.add('hidden');
+    document.getElementById('import-execute-btn').disabled = true;
+}
+
+// Limpar arquivo selecionado
+function clearImportFile() {
+    resetImportModal();
+}
+
+// Handler para seleção de arquivo
+function handleImportFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    window.importOrdersState.file = file;
+    
+    // Mostrar info do arquivo
+    document.getElementById('import-upload-area').classList.add('hidden');
+    document.getElementById('import-file-info').classList.remove('hidden');
+    document.getElementById('import-file-name').textContent = file.name;
+    document.getElementById('import-file-size').textContent = formatFileSize(file.size);
+    
+    // Processar arquivo
+    parseImportExcel(file);
+}
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' bytes';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+// Parsear arquivo Excel do ERP Sankhya
+async function parseImportExcel(file) {
+    try {
+        const data = await file.arrayBuffer();
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        
+        // Converter para array de arrays para ter acesso às linhas brutas
+        const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        
+        console.log('[Import] Dados brutos:', rawData.slice(0, 5));
+        
+        // Encontrar a linha de cabeçalho (contém "Nro. OP", "Centro de Trabalho", etc)
+        let headerRowIndex = -1;
+        let headers = [];
+        
+        for (let i = 0; i < Math.min(10, rawData.length); i++) {
+            const row = rawData[i];
+            if (row && row.some(cell => String(cell).includes('Nro. OP') || String(cell).includes('Centro de Trabalho'))) {
+                headerRowIndex = i;
+                headers = row.map(h => String(h || '').trim());
+                break;
+            }
+        }
+        
+        if (headerRowIndex === -1) {
+            alert('Formato de arquivo não reconhecido. Certifique-se de que é um relatório de Ordens de Produção do ERP.');
+            resetImportModal();
+            return;
+        }
+        
+        console.log('[Import] Cabeçalhos encontrados na linha', headerRowIndex + 1, ':', headers);
+        
+        // Mapear índices das colunas
+        const colIndex = {
+            centroTrabalho: headers.findIndex(h => h.includes('Centro de Trabalho')),
+            nroOP: headers.findIndex(h => h === 'Nro. OP' || h.includes('Nro. OP')),
+            tamLote: headers.findIndex(h => h.includes('Tam. Lote')),
+            saldoProduzir: headers.findIndex(h => h.includes('Saldo a Produzir')),
+            produtoAcabado: headers.findIndex(h => h.includes('Produto Acabado')),
+            status: headers.findIndex(h => h === 'Status'),
+            descrProduto: headers.findIndex(h => h.includes('Descr. Produto')),
+            nroLote: headers.findIndex(h => h === 'Nro. Lote' || h.includes('Nro. Lote')),
+            cliente: headers.findIndex(h => h.includes('Nome Parceiro')),
+            observacoes: headers.findIndex(h => h.includes('Observações'))
+        };
+        
+        console.log('[Import] Índices de colunas:', colIndex);
+        
+        // Extrair dados das linhas após o cabeçalho
+        const orders = [];
+        for (let i = headerRowIndex + 1; i < rawData.length; i++) {
+            const row = rawData[i];
+            if (!row || row.length === 0) continue;
+            
+            // Pegar valores das colunas
+            const centroTrabalho = colIndex.centroTrabalho >= 0 ? String(row[colIndex.centroTrabalho] || '') : '';
+            const nroOP = colIndex.nroOP >= 0 ? String(row[colIndex.nroOP] || '') : '';
+            const tamLote = colIndex.tamLote >= 0 ? row[colIndex.tamLote] : '';
+            const saldoProduzir = colIndex.saldoProduzir >= 0 ? row[colIndex.saldoProduzir] : '';
+            const produtoAcabado = colIndex.produtoAcabado >= 0 ? String(row[colIndex.produtoAcabado] || '') : '';
+            const status = colIndex.status >= 0 ? String(row[colIndex.status] || '') : '';
+            const descrProduto = colIndex.descrProduto >= 0 ? String(row[colIndex.descrProduto] || '') : '';
+            const nroLote = colIndex.nroLote >= 0 ? String(row[colIndex.nroLote] || '') : '';
+            const cliente = colIndex.cliente >= 0 ? String(row[colIndex.cliente] || '') : '';
+            
+            // Validar se é uma linha de dados (tem número de OP válido)
+            if (!nroOP || nroOP === '' || isNaN(Number(nroOP))) continue;
+            
+            // Extrair código da máquina do Centro de Trabalho (ex: "3 - H02 - SANDRETTO" -> "H02")
+            let machineId = '';
+            if (centroTrabalho) {
+                const match = centroTrabalho.match(/\d+\s*-\s*([A-Z0-9]+)/i);
+                if (match) {
+                    machineId = match[1].toUpperCase();
+                } else {
+                    machineId = centroTrabalho.split('-')[0]?.trim() || centroTrabalho;
+                }
+            }
+            
+            // Converter status do ERP para status do sistema
+            let systemStatus = 'planejada';
+            const statusLower = status.toLowerCase();
+            if (statusLower.includes('andamento')) systemStatus = 'em_andamento';
+            else if (statusLower.includes('criado')) systemStatus = 'planejada';
+            else if (statusLower.includes('conclu') || statusLower.includes('finaliz')) systemStatus = 'concluida';
+            else if (statusLower.includes('cancel')) systemStatus = 'cancelada';
+            
+            orders.push({
+                index: orders.length,
+                order_number: nroOP.trim(),
+                part_code: produtoAcabado.trim(),
+                part_name: descrProduto.trim(),
+                machine_id: machineId,
+                machine_full: centroTrabalho,
+                customer: cliente.trim(),
+                lot_size: parseImportNumber(tamLote) || 0,
+                remaining: parseImportNumber(saldoProduzir) || 0,
+                batch_number: nroLote.trim(),
+                status_erp: status,
+                status: systemStatus,
+                selected: true
+            });
+        }
+        
+        console.log('[Import] Ordens extraídas:', orders.length, orders);
+        
+        if (orders.length === 0) {
+            alert('Nenhuma ordem de produção válida encontrada no arquivo.');
+            resetImportModal();
+            return;
+        }
+        
+        // Atualizar estado
+        window.importOrdersState.parsedOrders = orders;
+        window.importOrdersState.selectedRows = new Set(orders.map((_, i) => i));
+        
+        // Mostrar configurações e preview
+        document.getElementById('import-config').classList.remove('hidden');
+        document.getElementById('import-preview').classList.remove('hidden');
+        document.getElementById('import-records-count').textContent = `${orders.length} registros encontrados`;
+        document.getElementById('import-execute-btn').disabled = false;
+        
+        // Popular select de máquinas
+        populateImportMachineSelect(orders);
+        
+        // Renderizar preview
+        renderImportPreview(orders);
+        
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        
+    } catch (error) {
+        console.error('[Import] Erro ao processar arquivo:', error);
+        alert('Erro ao processar arquivo Excel: ' + error.message);
+        resetImportModal();
+    }
+}
+
+// Popular select de máquinas
+function populateImportMachineSelect(orders) {
+    const select = document.getElementById('import-default-machine');
+    if (!select) return;
+    
+    const machines = [...new Set(orders.map(o => o.machine_id).filter(m => m))];
+    select.innerHTML = '<option value="">Usar do arquivo</option>';
+    machines.forEach(m => {
+        select.innerHTML += `<option value="${m}">${m}</option>`;
+    });
+}
+
+// Renderizar preview da tabela
+function renderImportPreview(orders) {
+    const tbody = document.getElementById('import-preview-body');
+    if (!tbody) return;
+    
+    tbody.innerHTML = orders.map((order, idx) => `
+        <tr class="hover:bg-gray-50 ${order.selected ? '' : 'opacity-50'}">
+            <td class="px-3 py-2">
+                <input type="checkbox" 
+                       class="import-row-checkbox w-4 h-4 text-indigo-600 rounded" 
+                       data-index="${idx}" 
+                       ${order.selected ? 'checked' : ''}
+                       onchange="toggleImportRow(${idx}, this.checked)">
+            </td>
+            <td class="px-3 py-2 font-medium text-gray-800">${order.order_number}</td>
+            <td class="px-3 py-2">${order.part_code}</td>
+            <td class="px-3 py-2 text-gray-600 text-xs max-w-xs truncate" title="${order.part_name}">${order.part_name || '-'}</td>
+            <td class="px-3 py-2">
+                <span class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">${order.machine_id || '-'}</span>
+            </td>
+            <td class="px-3 py-2 text-center font-medium">${order.lot_size.toLocaleString('pt-BR')}</td>
+            <td class="px-3 py-2">
+                <span class="px-2 py-0.5 rounded text-xs font-medium ${getStatusBadgeClass(order.status)}">${order.status_erp || order.status}</span>
+            </td>
+            <td class="px-3 py-2 text-gray-600 text-xs max-w-xs truncate" title="${order.customer}">${order.customer || '-'}</td>
+        </tr>
+    `).join('');
+}
+
+function getStatusBadgeClass(status) {
+    switch(status) {
+        case 'em_andamento': return 'bg-amber-100 text-amber-700';
+        case 'concluida': return 'bg-green-100 text-green-700';
+        case 'cancelada': return 'bg-red-100 text-red-700';
+        default: return 'bg-gray-100 text-gray-700';
+    }
+}
+
+// Toggle seleção de linha
+function toggleImportRow(index, checked) {
+    const orders = window.importOrdersState.parsedOrders;
+    if (orders[index]) {
+        orders[index].selected = checked;
+        if (checked) {
+            window.importOrdersState.selectedRows.add(index);
+        } else {
+            window.importOrdersState.selectedRows.delete(index);
+        }
+    }
+    updateImportSelectAll();
+}
+
+// Toggle todas as linhas
+function toggleAllImportRows(checked) {
+    const orders = window.importOrdersState.parsedOrders;
+    orders.forEach((order, idx) => {
+        order.selected = checked;
+        if (checked) {
+            window.importOrdersState.selectedRows.add(idx);
+        } else {
+            window.importOrdersState.selectedRows.delete(idx);
+        }
+    });
+    renderImportPreview(orders);
+}
+
+function updateImportSelectAll() {
+    const checkbox = document.getElementById('import-select-all');
+    const orders = window.importOrdersState.parsedOrders;
+    const allSelected = orders.every(o => o.selected);
+    const someSelected = orders.some(o => o.selected);
+    
+    if (checkbox) {
+        checkbox.checked = allSelected;
+        checkbox.indeterminate = someSelected && !allSelected;
+    }
+}
+
+// Executar importação
+async function executeImportOrders() {
+    const orders = window.importOrdersState.parsedOrders.filter(o => o.selected);
+    
+    if (orders.length === 0) {
+        alert('Selecione pelo menos uma ordem para importar.');
+        return;
+    }
+    
+    const skipExisting = document.getElementById('import-skip-existing')?.checked ?? true;
+    const defaultStatus = document.getElementById('import-default-status')?.value || 'from_file';
+    const defaultMachine = document.getElementById('import-default-machine')?.value || '';
+    
+    // Mostrar status
+    document.getElementById('import-config').classList.add('hidden');
+    document.getElementById('import-preview').classList.add('hidden');
+    document.getElementById('import-status').classList.remove('hidden');
+    document.getElementById('import-result').classList.add('hidden');
+    document.getElementById('import-progress-container').classList.remove('hidden');
+    document.getElementById('import-execute-btn').disabled = true;
+    
+    let imported = 0;
+    let skipped = 0;
+    let errors = 0;
+    
+    try {
+        // Verificar ordens existentes
+        const existingOrders = new Set();
+        if (skipExisting) {
+            const snapshot = await db.collection('production_orders').get();
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                if (data.order_number) {
+                    existingOrders.add(String(data.order_number));
+                }
+            });
+        }
+        
+        const batch = db.batch();
+        const ordersToImport = [];
+        
+        for (const order of orders) {
+            // Verificar se já existe
+            if (skipExisting && existingOrders.has(order.order_number)) {
+                skipped++;
+                continue;
+            }
+            
+            // Preparar dados da ordem
+            const orderData = {
+                order_number: order.order_number,
+                part_code: order.part_code,
+                product: order.part_name || order.part_code || '',
+                product_cod: order.part_code,
+                machine_id: defaultMachine || order.machine_id || '',
+                machine_name: order.machine_full || '',
+                customer: order.customer || '',
+                lot_size: order.lot_size,
+                total_produced: 0,
+                remaining: order.remaining || order.lot_size,
+                batch_number: order.batch_number || '',
+                status: defaultStatus === 'from_file' ? (order.status || 'planejada') : defaultStatus,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                imported_at: firebase.firestore.FieldValue.serverTimestamp(),
+                import_source: 'excel_erp'
+            };
+            
+            console.log('[Import] Ordem preparada:', orderData);
+            ordersToImport.push(orderData);
+        }
+        
+        // Importar em lotes de 500 (limite do Firestore batch)
+        const batchSize = 450;
+        for (let i = 0; i < ordersToImport.length; i += batchSize) {
+            const batchOrders = ordersToImport.slice(i, i + batchSize);
+            const currentBatch = db.batch();
+            
+            for (const orderData of batchOrders) {
+                const docRef = db.collection('production_orders').doc();
+                currentBatch.set(docRef, orderData);
+            }
+            
+            await currentBatch.commit();
+            imported += batchOrders.length;
+            
+            // Atualizar progresso
+            const progress = Math.round(((i + batchOrders.length) / ordersToImport.length) * 100);
+            document.getElementById('import-progress-bar').style.width = `${progress}%`;
+            document.getElementById('import-progress-text').textContent = `Importando... ${imported} de ${ordersToImport.length}`;
+        }
+        
+        // Mostrar resultado
+        document.getElementById('import-progress-container').classList.add('hidden');
+        document.getElementById('import-result').classList.remove('hidden');
+        
+        if (imported > 0) {
+            document.getElementById('import-result-icon').innerHTML = '<div class="p-4 bg-green-100 rounded-full inline-block"><i data-lucide="check-circle" class="w-12 h-12 text-green-600"></i></div>';
+            document.getElementById('import-result-text').className = 'text-lg font-semibold text-green-700';
+            document.getElementById('import-result-text').textContent = `${imported} ordem(s) importada(s) com sucesso!`;
+        } else {
+            document.getElementById('import-result-icon').innerHTML = '<div class="p-4 bg-amber-100 rounded-full inline-block"><i data-lucide="alert-circle" class="w-12 h-12 text-amber-600"></i></div>';
+            document.getElementById('import-result-text').className = 'text-lg font-semibold text-amber-700';
+            document.getElementById('import-result-text').textContent = 'Nenhuma ordem foi importada.';
+        }
+        
+        let details = [];
+        if (skipped > 0) details.push(`${skipped} ignorada(s) (já existem)`);
+        if (errors > 0) details.push(`${errors} erro(s)`);
+        document.getElementById('import-result-details').textContent = details.length > 0 ? details.join(' • ') : '';
+        
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        
+        // Invalidar cache e atualizar lista de ordens
+        productionOrdersCache = null;
+        
+        // Atualizar lista de ordens após 1.5 segundos
+        setTimeout(async () => {
+            if (typeof loadOrdersAnalysis === 'function') {
+                await loadOrdersAnalysis();
+                showNotification('Lista de ordens atualizada!', 'info');
+            }
+        }, 1500);
+        
+    } catch (error) {
+        console.error('[Import] Erro durante importação:', error);
+        
+        document.getElementById('import-progress-container').classList.add('hidden');
+        document.getElementById('import-result').classList.remove('hidden');
+        document.getElementById('import-result-icon').innerHTML = '<div class="p-4 bg-red-100 rounded-full inline-block"><i data-lucide="x-circle" class="w-12 h-12 text-red-600"></i></div>';
+        document.getElementById('import-result-text').className = 'text-lg font-semibold text-red-700';
+        document.getElementById('import-result-text').textContent = 'Erro durante a importação';
+        document.getElementById('import-result-details').textContent = error.message;
+        
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+}
+
+// Expor funções globalmente
+window.openImportOrdersModal = openImportOrdersModal;
+window.closeImportOrdersModal = closeImportOrdersModal;
+window.handleImportFileSelect = handleImportFileSelect;
+window.clearImportFile = clearImportFile;
+window.toggleImportRow = toggleImportRow;
+window.toggleAllImportRows = toggleAllImportRows;
+window.executeImportOrders = executeImportOrders;
+
+// ====== FUNÇÕES DE DIAGNÓSTICO E CORREÇÃO ======
+
+// Listar TODAS as ordens no Firebase (para diagnóstico)
+window.listarTodasOrdens = async function() {
+    console.log('🔍 Buscando TODAS as ordens no Firebase...');
+    try {
+        const snapshot = await db.collection('production_orders').get();
+        console.log(`📋 Total de ordens no banco: ${snapshot.size}`);
+        
+        const orders = [];
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            orders.push({
+                id: doc.id,
+                order_number: data.order_number,
+                product: data.product || data.part_name || data.part_code,
+                machine_id: data.machine_id,
+                status: data.status,
+                lot_size: data.lot_size,
+                import_source: data.import_source || 'manual',
+                createdAt: data.createdAt
+            });
+        });
+        
+        console.table(orders);
+        return orders;
+    } catch (error) {
+        console.error('❌ Erro ao buscar ordens:', error);
+        return [];
+    }
+};
+
+// Excluir ordens importadas (para limpar e reimportar)
+window.excluirOrdensImportadas = async function() {
+    if (!confirm('Deseja excluir TODAS as ordens importadas do Excel? Esta ação não pode ser desfeita!')) {
+        return;
+    }
+    
+    console.log('🗑️ Excluindo ordens importadas...');
+    try {
+        const snapshot = await db.collection('production_orders')
+            .where('import_source', '==', 'excel_erp')
+            .get();
+        
+        if (snapshot.empty) {
+            console.log('ℹ️ Nenhuma ordem importada encontrada.');
+            alert('Nenhuma ordem importada encontrada.');
+            return;
+        }
+        
+        console.log(`🗑️ Encontradas ${snapshot.size} ordens importadas para excluir...`);
+        
+        const batch = db.batch();
+        snapshot.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+        
+        await batch.commit();
+        console.log(`✅ ${snapshot.size} ordens importadas excluídas com sucesso!`);
+        alert(`${snapshot.size} ordens importadas foram excluídas. Atualize a página e importe novamente.`);
+        
+        // Limpar cache
+        productionOrdersCache = null;
+        
+    } catch (error) {
+        console.error('❌ Erro ao excluir ordens:', error);
+        alert('Erro ao excluir ordens: ' + error.message);
+    }
+};
+
+// Forçar atualização das ordens
+window.forcarAtualizacaoOrdens = async function() {
+    console.log('🔄 Forçando atualização da lista de ordens...');
+    productionOrdersCache = null;
+    
+    if (typeof loadOrdersAnalysis === 'function') {
+        await loadOrdersAnalysis();
+        console.log('✅ Lista de ordens atualizada!');
+    } else {
+        console.error('❌ Função loadOrdersAnalysis não encontrada');
+    }
+};
+
+// Excluir ordens específicas por índices da lista
+window.excluirOrdensPorIndices = async function(indices) {
+    if (!indices || !Array.isArray(indices) || indices.length === 0) {
+        console.error('❌ Forneça um array de índices. Ex: excluirOrdensPorIndices([4, 26, 39, 50])');
+        return;
+    }
+    
+    console.log(`🔍 Buscando ordens nos índices: ${indices.join(', ')}...`);
+    
+    try {
+        const snapshot = await db.collection('production_orders').get();
+        const allOrders = [];
+        snapshot.forEach(doc => {
+            allOrders.push({ id: doc.id, ref: doc.ref, data: doc.data() });
+        });
+        
+        const ordersToDelete = indices.map(idx => allOrders[idx]).filter(o => o);
+        
+        if (ordersToDelete.length === 0) {
+            console.error('❌ Nenhuma ordem encontrada nos índices especificados.');
+            return;
+        }
+        
+        console.log('📋 Ordens que serão excluídas:');
+        ordersToDelete.forEach((o, i) => {
+            console.log(`  ${indices[i]}: OP ${o.data.order_number} - ${o.data.product || o.data.part_code} (${o.data.machine_id})`);
+        });
+        
+        if (!confirm(`Deseja excluir estas ${ordersToDelete.length} ordens? Esta ação não pode ser desfeita!`)) {
+            console.log('❌ Operação cancelada pelo usuário.');
+            return;
+        }
+        
+        const batch = db.batch();
+        ordersToDelete.forEach(o => batch.delete(o.ref));
+        
+        await batch.commit();
+        console.log(`✅ ${ordersToDelete.length} ordens excluídas com sucesso!`);
+        alert(`${ordersToDelete.length} ordens excluídas com sucesso! Agora você pode reimportar.`);
+        
+        // Limpar cache
+        productionOrdersCache = null;
+        
+    } catch (error) {
+        console.error('❌ Erro ao excluir ordens:', error);
+        alert('Erro ao excluir ordens: ' + error.message);
+    }
+};
+
+// Configurar drag and drop para o modal de importação
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(() => {
+        const uploadArea = document.getElementById('import-upload-area');
+        if (uploadArea) {
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, () => {
+                    uploadArea.classList.add('border-indigo-500', 'bg-indigo-50');
+                }, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, () => {
+                    uploadArea.classList.remove('border-indigo-500', 'bg-indigo-50');
+                }, false);
+            });
+            
+            uploadArea.addEventListener('drop', (e) => {
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    const file = files[0];
+                    if (file.name.match(/\.(xlsx|xls)$/i)) {
+                        document.getElementById('import-file-input').files = files;
+                        handleImportFileSelect({ target: { files: [file] } });
+                    } else {
+                        alert('Por favor, selecione um arquivo Excel (.xlsx ou .xls)');
+                    }
+                }
+            }, false);
+        }
+    }, 1000);
+});
 
 // ===== Importador de Ordens em Lote (Excel) =====
 
@@ -20489,17 +22012,26 @@ const ReportsModule = (function() {
 
     // Helper para acessar o Firestore
     function getDB() {
-        return window.db || (typeof db !== 'undefined' ? db : null);
+        const db = window.db || (typeof db !== 'undefined' ? db : null);
+        if (!db) {
+            console.warn('[REPORTS] Banco de dados não iniciado. Tentando novamente em 500ms...');
+            // Se não estiver pronto, aguardar e tentar novamente
+            return null;
+        }
+        return db;
     }
 
     // Helper para mostrar toast
     function showReportToast(message, type = 'info') {
-        if (typeof showToast === 'function') {
-            showToast(message, type);
-        } else if (typeof window.showToast === 'function') {
-            window.showToast(message, type);
+        // Tentar usar a função global showNotification
+        if (typeof showNotification === 'function') {
+            showNotification(message, type);
+        } else if (typeof window.showNotification === 'function') {
+            window.showNotification(message, type);
         } else {
+            // Fallback simples usando console
             console.log(`[REPORTS ${type.toUpperCase()}] ${message}`);
+            alert(message); // Se tudo falhar, usar alert
         }
     }
 
@@ -20507,10 +22039,54 @@ const ReportsModule = (function() {
     function initialize() {
         console.log('[REPORTS] Inicializando módulo de relatórios...');
         
+        // Verificar se os elementos existem
+        const generateBtn = document.getElementById('report-generate-btn');
+        const periodSelect = document.getElementById('report-period');
+        const machineSelect = document.getElementById('report-machine');
+        
+        console.log('[REPORTS] Elementos encontrados:', {
+            generateBtn: !!generateBtn,
+            periodSelect: !!periodSelect,
+            machineSelect: !!machineSelect
+        });
+        
         setupEventListeners();
-        updateDatesFromPeriod();
+        populateReportMachines();
+        
+        // Atualizar datas após um pequeno delay para garantir que o DOM está pronto
+        setTimeout(() => {
+            updateDatesFromPeriod();
+        }, 100);
         
         console.log('[REPORTS] Módulo inicializado com sucesso');
+    }
+
+    // Popular máquinas no filtro de relatórios
+    function populateReportMachines() {
+        const machineSelect = document.getElementById('report-machine');
+        if (!machineSelect) {
+            console.warn('[REPORTS] Select de máquinas não encontrado');
+            return;
+        }
+        
+        // Limpar opções existentes, mantendo "Todas"
+        machineSelect.innerHTML = '<option value="all">Todas Máquinas</option>';
+        
+        // Usar machineDatabase do databaseModule
+        const machines = window.databaseModule?.machineDatabase || 
+                        (typeof machineDatabase !== 'undefined' ? machineDatabase : null);
+        
+        if (machines && Array.isArray(machines)) {
+            console.log('[REPORTS] Carregando', machines.length, 'máquinas no filtro');
+            machines.forEach(machine => {
+                const opt = document.createElement('option');
+                opt.value = machine.id;
+                opt.textContent = machine.id;
+                machineSelect.appendChild(opt);
+            });
+        } else {
+            console.warn('[REPORTS] machineDatabase não disponível');
+        }
     }
 
     // Configurar listeners
@@ -20524,7 +22100,11 @@ const ReportsModule = (function() {
         const periodSelect = document.getElementById('report-period');
 
         if (generateBtn) {
-            generateBtn.addEventListener('click', generateReport);
+            generateBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                console.log('[REPORTS] Botão Gerar Relatório clicado');
+                generateReport();
+            });
             console.log('[REPORTS] Listener adicionado ao botão Gerar Relatório');
         } else {
             console.warn('[REPORTS] Botão report-generate-btn não encontrado');
@@ -20550,6 +22130,30 @@ const ReportsModule = (function() {
         if (periodSelect) {
             periodSelect.addEventListener('change', handlePeriodChange);
         }
+        
+        // Sincronizar radio buttons com select hidden
+        setupReportTypeCards();
+    }
+
+    // Configurar cards de tipo de relatório
+    function setupReportTypeCards() {
+        const radioButtons = document.querySelectorAll('input[name="report-type-radio"]');
+        const hiddenSelect = document.getElementById('report-type');
+        
+        radioButtons.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                if (e.target.checked && hiddenSelect) {
+                    hiddenSelect.value = e.target.value;
+                    currentReportType = e.target.value;
+                    
+                    // Esconder mensagem inicial quando mudar tipo
+                    const initialMsg = document.getElementById('report-initial');
+                    if (initialMsg) {
+                        // Manter visível até gerar relatório
+                    }
+                }
+            });
+        });
     }
 
     // Manipular mudança de período
@@ -20571,7 +22175,17 @@ const ReportsModule = (function() {
         const startInput = document.getElementById('report-date-start');
         const endInput = document.getElementById('report-date-end');
         
-        if (!periodSelect || !startInput || !endInput) return;
+        console.log('[REPORTS] updateDatesFromPeriod - elementos:', {
+            periodSelect: !!periodSelect,
+            startInput: !!startInput,
+            endInput: !!endInput,
+            period: periodSelect?.value
+        });
+        
+        if (!periodSelect || !startInput || !endInput) {
+            console.warn('[REPORTS] Elementos de data não encontrados');
+            return;
+        }
         
         const period = periodSelect.value;
         const today = new Date();
@@ -20624,36 +22238,125 @@ const ReportsModule = (function() {
 
     // Gerar relatório
     async function generateReport() {
-        console.log('[REPORTS] Gerando relatório...');
+        console.log('[REPORTS] ========== INICIANDO GERAÇÃO DE RELATÓRIO ==========');
+        
+        // Mostrar loading imediatamente
+        showLoading(true);
+        
+        // Esconder mensagem inicial
+        const initialMsg = document.getElementById('report-initial');
+        if (initialMsg) {
+            initialMsg.classList.add('hidden');
+            console.log('[REPORTS] Mensagem inicial escondida');
+        }
         
         // Atualizar datas antes de gerar
         const periodSelect = document.getElementById('report-period');
         if (periodSelect && periodSelect.value !== 'custom') {
             updateDatesFromPeriod();
+            console.log('[REPORTS] Datas atualizadas para período:', periodSelect.value);
         }
         
-        const firestore = getDB();
+        // Pequeno delay para garantir que as datas foram atualizadas
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        // Verificar Firestore - usar window.db diretamente
+        let firestore = window.db;
         if (!firestore) {
-            showReportToast('Erro: Banco de dados não disponível. Aguarde a inicialização.', 'error');
-            console.error('[REPORTS] Firestore não disponível:', { windowDb: !!window.db, globalDb: typeof db });
+            console.log('[REPORTS] window.db não disponível, tentando retries...');
+            let retries = 0;
+            while (!firestore && retries < 3) {
+                await new Promise(resolve => setTimeout(resolve, 300));
+                firestore = window.db;
+                retries++;
+            }
+        }
+        
+        console.log('[REPORTS] Firestore verificado:', { disponivel: !!firestore });
+        
+        if (!firestore) {
+            showReportToast('Erro: Banco de dados não disponível. Tente novamente em alguns segundos.', 'error');
+            console.error('[REPORTS] Firestore não disponível após retries:', { windowDb: !!window.db, globalDb: typeof db });
+            showLoading(false);
             return;
         }
 
-        const reportType = document.getElementById('report-type')?.value || 'producao';
-        const startDate = document.getElementById('report-date-start')?.value;
-        const endDate = document.getElementById('report-date-end')?.value;
+        // Obter tipo de relatório do radio button ou select
+        const selectedRadio = document.querySelector('input[name="report-type-radio"]:checked');
+        const reportType = selectedRadio?.value || document.getElementById('report-type')?.value || 'producao';
+        
+        // Obter datas - calcular diretamente se não estiverem definidas
+        let startDate = document.getElementById('report-date-start')?.value;
+        let endDate = document.getElementById('report-date-end')?.value;
+        
+        // Se as datas estiverem vazias, calcular baseado no período selecionado
+        if (!startDate || !endDate) {
+            const period = document.getElementById('report-period')?.value || '7days';
+            const today = new Date();
+            let calcStartDate = new Date();
+            let calcEndDate = new Date();
+            
+            switch (period) {
+                case 'today':
+                    calcStartDate = new Date(today);
+                    calcEndDate = new Date(today);
+                    break;
+                case 'yesterday':
+                    calcStartDate = new Date(today);
+                    calcStartDate.setDate(calcStartDate.getDate() - 1);
+                    calcEndDate = new Date(calcStartDate);
+                    break;
+                case '7days':
+                    calcStartDate = new Date(today);
+                    calcStartDate.setDate(calcStartDate.getDate() - 7);
+                    calcEndDate = new Date(today);
+                    break;
+                case '30days':
+                    calcStartDate = new Date(today);
+                    calcStartDate.setDate(calcStartDate.getDate() - 30);
+                    calcEndDate = new Date(today);
+                    break;
+                case 'month':
+                    calcStartDate = new Date(today.getFullYear(), today.getMonth(), 1);
+                    calcEndDate = new Date(today);
+                    break;
+                case 'lastmonth':
+                    calcStartDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                    calcEndDate = new Date(today.getFullYear(), today.getMonth(), 0);
+                    break;
+                default:
+                    calcStartDate = new Date(today);
+                    calcStartDate.setDate(calcStartDate.getDate() - 7);
+                    calcEndDate = new Date(today);
+            }
+            
+            // Formatar datas como YYYY-MM-DD
+            const formatDate = (d) => {
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+            
+            startDate = formatDate(calcStartDate);
+            endDate = formatDate(calcEndDate);
+            console.log('[REPORTS] Datas calculadas automaticamente:', { period, startDate, endDate });
+        }
+        
         const machine = document.getElementById('report-machine')?.value || 'all';
         const shift = document.getElementById('report-shift')?.value || 'all';
 
-        console.log('[REPORTS] Filtros:', { reportType, startDate, endDate, machine, shift });
+        console.log('[REPORTS] Filtros finais:', { reportType, startDate, endDate, machine, shift });
 
         if (!startDate || !endDate) {
             showReportToast('Por favor, selecione as datas do período.', 'error');
+            console.warn('[REPORTS] Datas ainda inválidas:', { startDate, endDate });
+            showLoading(false);
             return;
         }
 
-        showLoading(true);
         hideResults();
+        console.log('[REPORTS] Iniciando busca de dados...');
 
         try {
             let data = [];
@@ -20700,17 +22403,23 @@ const ReportsModule = (function() {
     // Buscar dados de produção
     async function fetchProductionData(startDate, endDate, machine, shift) {
         const entries = [];
-        const firestore = getDB();
-        if (!firestore) return entries;
+        const firestore = window.db;
+        if (!firestore) {
+            console.error('[REPORTS] Firestore não disponível em fetchProductionData');
+            return entries;
+        }
         
         try {
-            // O campo é 'data' não 'date'
+            console.log('[REPORTS] Buscando produção:', { startDate, endDate, machine, shift });
+            
+            // Buscar sem orderBy para evitar problemas de índice
             let query = firestore.collection('production_entries')
                 .where('data', '>=', startDate)
-                .where('data', '<=', endDate)
-                .orderBy('data', 'desc');
+                .where('data', '<=', endDate);
 
+            console.log('[REPORTS] Executando query de produção...');
             const snapshot = await query.get();
+            
             console.log('[REPORTS] Produção - documentos encontrados:', snapshot.size);
             
             snapshot.forEach(doc => {
@@ -20734,8 +22443,10 @@ const ReportsModule = (function() {
                     hora: d.timestamp?.toDate?.()?.toLocaleTimeString?.('pt-BR', {hour: '2-digit', minute: '2-digit'}) || ''
                 });
             });
+            console.log('[REPORTS] Produção - registros após filtros:', entries.length);
         } catch (error) {
             console.error('[REPORTS] Erro ao buscar produção:', error);
+            showReportToast(`Erro ao buscar dados de produção: ${error.message}`, 'error');
         }
         
         return entries;
@@ -20744,26 +22455,19 @@ const ReportsModule = (function() {
     // Buscar dados de paradas
     async function fetchDowntimeData(startDate, endDate, machine, shift) {
         const entries = [];
-        const firestore = getDB();
+        const firestore = window.db;
         if (!firestore) return entries;
         
         try {
-            // Tentar com 'data' primeiro (padrão do sistema)
+            console.log('[REPORTS] Buscando paradas:', { startDate, endDate, machine, shift });
+            
+            // Buscar por campo 'data'
             let query = firestore.collection('downtime_entries')
                 .where('data', '>=', startDate)
-                .where('data', '<=', endDate)
-                .orderBy('data', 'desc');
+                .where('data', '<=', endDate);
 
-            let snapshot = await query.get();
-            
-            // Se não encontrar, tentar com 'date'
-            if (snapshot.empty) {
-                query = firestore.collection('downtime_entries')
-                    .where('date', '>=', startDate)
-                    .where('date', '<=', endDate)
-                    .orderBy('date', 'desc');
-                snapshot = await query.get();
-            }
+            console.log('[REPORTS] Executando query de paradas...');
+            const snapshot = await query.get();
             
             console.log('[REPORTS] Paradas - documentos encontrados:', snapshot.size);
             
@@ -20790,8 +22494,10 @@ const ReportsModule = (function() {
                     operador: d.registradoPorNome || d.operator || d.created_by || ''
                 });
             });
+            console.log('[REPORTS] Paradas - registros após filtros:', entries.length);
         } catch (error) {
             console.error('[REPORTS] Erro ao buscar paradas:', error);
+            showReportToast(`Erro ao buscar dados de paradas: ${error.message}`, 'error');
         }
         
         return entries;
@@ -20800,20 +22506,27 @@ const ReportsModule = (function() {
     // Buscar dados de perdas/refugos
     async function fetchLossesData(startDate, endDate, machine, shift) {
         const entries = [];
-        const firestore = getDB();
+        const firestore = window.db;
         if (!firestore) return entries;
         
         try {
+            console.log('[REPORTS] Buscando perdas:', { startDate, endDate, machine, shift });
+            
             // Buscar refugos de produção - usando campo 'data'
             let query = firestore.collection('production_entries')
                 .where('data', '>=', startDate)
                 .where('data', '<=', endDate);
 
+            console.log('[REPORTS] Executando query de perdas...');
             const snapshot = await query.get();
+            
             console.log('[REPORTS] Perdas (produção) - documentos:', snapshot.size);
             
             snapshot.forEach(doc => {
                 const d = doc.data();
+                
+                // Filtro de data se fallback
+                if (d.data && (d.data < startDate || d.data > endDate)) return;
                 
                 // Só incluir se tiver refugo
                 const refugoKg = d.refugo_kg || d.scrap || d.rejected || d.refugo || 0;
@@ -20839,21 +22552,14 @@ const ReportsModule = (function() {
                 });
             });
 
-            // Buscar retrabalhos - tentar com 'data' primeiro
+            // Buscar retrabalhos
             try {
-                let reworkQuery = firestore.collection('rework_entries')
+                console.log('[REPORTS] Buscando retrabalhos...');
+                const reworkQuery = firestore.collection('rework_entries')
                     .where('data', '>=', startDate)
                     .where('data', '<=', endDate);
 
-                let reworkSnapshot = await reworkQuery.get();
-                
-                // Se não encontrar, tentar com 'date'
-                if (reworkSnapshot.empty) {
-                    reworkQuery = firestore.collection('rework_entries')
-                        .where('date', '>=', startDate)
-                        .where('date', '<=', endDate);
-                    reworkSnapshot = await reworkQuery.get();
-                }
+                const reworkSnapshot = await reworkQuery.get();
                 
                 console.log('[REPORTS] Retrabalhos - documentos:', reworkSnapshot.size);
                 
@@ -20881,11 +22587,14 @@ const ReportsModule = (function() {
                     });
                 });
             } catch (reworkError) {
-                console.warn('[REPORTS] Erro ao buscar retrabalhos:', reworkError);
+                console.warn('[REPORTS] Erro ao buscar retrabalhos:', reworkError.message);
             }
+            
+            console.log('[REPORTS] Perdas - total de registros:', entries.length);
 
         } catch (error) {
             console.error('[REPORTS] Erro ao buscar perdas:', error);
+            showReportToast(`Erro ao buscar dados de perdas: ${error.message}`, 'error');
         }
         
         // Ordenar por data
@@ -21205,7 +22914,7 @@ const ReportsModule = (function() {
         // Gráfico de distribuição por turno
         const shiftData = {};
         data.forEach(item => {
-            const shift = item.turno || item.turno || 'N/A';
+            const shift = item.turno || 'N/A';
             const key = `Turno ${shift}`;
             shiftData[key] = (shiftData[key] || 0) + 1;
         });
@@ -21454,12 +23163,625 @@ const ReportsModule = (function() {
         initialize,
         generateReport,
         exportToExcel,
-        exportToPDF
+        exportToPDF,
+        populateReportMachines
     };
 })();
+
+// Expor globalmente
+window.ReportsModule = ReportsModule;
 
 // Inicializar módulo de relatórios quando DOM estiver pronto
 document.addEventListener('DOMContentLoaded', () => {
     ReportsModule.initialize();
+    
+    // Popular máquinas também na inicialização global
+    setTimeout(() => {
+        const machineSelect = document.getElementById('report-machine');
+        if (machineSelect && machineSelect.options.length <= 1) {
+            const machines = window.databaseModule?.machineDatabase;
+            if (machines && Array.isArray(machines)) {
+                machines.forEach(machine => {
+                    const opt = document.createElement('option');
+                    opt.value = machine.id;
+                    opt.textContent = machine.id;
+                    machineSelect.appendChild(opt);
+                });
+                console.log('[REPORTS] Máquinas carregadas via fallback:', machines.length);
+            }
+        }
+    }, 500);
 });
 
+// ============================================================
+// MÓDULO: Aba Ordens (Nova Interface Centralizada)
+// ============================================================
+const OrdersPageModule = (function() {
+    'use strict';
+    
+    let ordersCache = [];
+    let currentView = 'cards';
+    let isInitialized = false;
+    
+    // Elementos do DOM
+    const elements = {};
+    
+    function cacheElements() {
+        elements.grid = document.getElementById('orders-page-grid');
+        elements.tableBody = document.getElementById('orders-page-table-body');
+        elements.cardsContainer = document.getElementById('orders-page-cards-container');
+        elements.tableContainer = document.getElementById('orders-page-table-container');
+        elements.emptyState = document.getElementById('orders-page-empty');
+        elements.resultsCount = document.getElementById('orders-page-results-count');
+        elements.searchInput = document.getElementById('orders-page-search');
+        elements.statusFilter = document.getElementById('orders-page-status-filter');
+        elements.machineFilter = document.getElementById('orders-page-machine-filter');
+        elements.sortSelect = document.getElementById('orders-page-sort');
+        elements.clearFiltersBtn = document.getElementById('orders-page-clear-filters');
+        elements.refreshBtn = document.getElementById('orders-page-refresh');
+        elements.addBtn = document.getElementById('orders-page-add-btn');
+        elements.addFirstBtn = document.getElementById('orders-page-add-first');
+        elements.viewCardsBtn = document.getElementById('orders-page-view-cards');
+        elements.viewTableBtn = document.getElementById('orders-page-view-table');
+        elements.kpiTotal = document.getElementById('orders-page-kpi-total');
+        elements.kpiPlanned = document.getElementById('orders-page-kpi-planned');
+        elements.kpiActive = document.getElementById('orders-page-kpi-active');
+        elements.kpiCompleted = document.getElementById('orders-page-kpi-completed');
+        
+        // Debug: verificar quais elementos foram encontrados
+        console.log('[OrdersPage] Elementos encontrados:', {
+            grid: !!elements.grid,
+            tableBody: !!elements.tableBody,
+            cardsContainer: !!elements.cardsContainer,
+            resultsCount: !!elements.resultsCount,
+            kpiTotal: !!elements.kpiTotal
+        });
+    }
+    
+    function setupEventListeners() {
+        if (elements.searchInput) {
+            elements.searchInput.addEventListener('input', debounce(renderOrders, 300));
+            elements.searchInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') renderOrders();
+            });
+        }
+        
+        if (elements.statusFilter) {
+            elements.statusFilter.addEventListener('change', renderOrders);
+        }
+        
+        if (elements.machineFilter) {
+            elements.machineFilter.addEventListener('change', renderOrders);
+        }
+        
+        if (elements.sortSelect) {
+            elements.sortSelect.addEventListener('change', renderOrders);
+        }
+        
+        if (elements.clearFiltersBtn) {
+            elements.clearFiltersBtn.addEventListener('click', clearFilters);
+        }
+        
+        if (elements.refreshBtn) {
+            elements.refreshBtn.addEventListener('click', refreshOrders);
+        }
+        
+        if (elements.addBtn) {
+            elements.addBtn.addEventListener('click', () => openOrderFormModal());
+        }
+        
+        if (elements.addFirstBtn) {
+            elements.addFirstBtn.addEventListener('click', () => openOrderFormModal());
+        }
+        
+        if (elements.viewCardsBtn) {
+            elements.viewCardsBtn.addEventListener('click', () => switchView('cards'));
+        }
+        
+        if (elements.viewTableBtn) {
+            elements.viewTableBtn.addEventListener('click', () => switchView('table'));
+        }
+        
+        // Formulário do modal
+        const formModal = document.getElementById('order-form-modal-form');
+        if (formModal) {
+            formModal.addEventListener('submit', handleFormSubmit);
+        }
+    }
+    
+    function switchView(view) {
+        currentView = view;
+        
+        if (view === 'cards') {
+            elements.cardsContainer?.classList.remove('hidden');
+            elements.tableContainer?.classList.add('hidden');
+            elements.viewCardsBtn?.classList.add('bg-white', 'shadow-sm', 'text-emerald-600');
+            elements.viewCardsBtn?.classList.remove('text-gray-500');
+            elements.viewTableBtn?.classList.remove('bg-white', 'shadow-sm', 'text-emerald-600');
+            elements.viewTableBtn?.classList.add('text-gray-500');
+        } else {
+            elements.cardsContainer?.classList.add('hidden');
+            elements.tableContainer?.classList.remove('hidden');
+            elements.viewTableBtn?.classList.add('bg-white', 'shadow-sm', 'text-emerald-600');
+            elements.viewTableBtn?.classList.remove('text-gray-500');
+            elements.viewCardsBtn?.classList.remove('bg-white', 'shadow-sm', 'text-emerald-600');
+            elements.viewCardsBtn?.classList.add('text-gray-500');
+        }
+        
+        renderOrders();
+    }
+    
+    function clearFilters() {
+        if (elements.searchInput) elements.searchInput.value = '';
+        if (elements.statusFilter) elements.statusFilter.value = '';
+        if (elements.machineFilter) elements.machineFilter.value = '';
+        if (elements.sortSelect) elements.sortSelect.value = 'recent';
+        renderOrders();
+    }
+    
+    async function refreshOrders() {
+        const icon = elements.refreshBtn?.querySelector('i');
+        icon?.classList.add('animate-spin');
+        ordersCache = [];
+        await loadOrders();
+        icon?.classList.remove('animate-spin');
+        showNotification('Ordens atualizadas!', 'success');
+    }
+    
+    async function loadOrders() {
+        try {
+            console.log('📋 [OrdersPage] Carregando ordens...');
+            const snapshot = await db.collection('production_orders').get();
+            ordersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            console.log('[OrdersPage] ' + ordersCache.length + ' ordens carregadas');
+            
+            populateMachineFilter();
+            updateKPIs();
+            renderOrders();
+            
+        } catch (error) {
+            console.error('[OrdersPage] Erro ao carregar ordens:', error);
+            showNotification('Erro ao carregar ordens', 'error');
+        }
+    }
+    
+    function populateMachineFilter() {
+        if (!elements.machineFilter) return;
+        
+        const machines = [...new Set(ordersCache.map(o => o.machine_id).filter(m => m))].sort();
+        
+        elements.machineFilter.innerHTML = '<option value="">Todas Máquinas</option>';
+        machines.forEach(m => {
+            const machineInfo = window.databaseModule?.machineById?.get(m);
+            const label = machineInfo ? m + ' - ' + machineInfo.model : m;
+            elements.machineFilter.innerHTML += '<option value="' + m + '">' + label + '</option>';
+        });
+    }
+    
+    function updateKPIs() {
+        const total = ordersCache.length;
+        const planned = ordersCache.filter(o => (o.status || '').toLowerCase() === 'planejada').length;
+        const active = ordersCache.filter(o => ['ativa', 'em_andamento'].includes((o.status || '').toLowerCase())).length;
+        const completed = ordersCache.filter(o => ['concluida', 'finalizada'].includes((o.status || '').toLowerCase())).length;
+        
+        if (elements.kpiTotal) elements.kpiTotal.textContent = total.toLocaleString('pt-BR');
+        if (elements.kpiPlanned) elements.kpiPlanned.textContent = planned.toLocaleString('pt-BR');
+        if (elements.kpiActive) elements.kpiActive.textContent = active.toLocaleString('pt-BR');
+        if (elements.kpiCompleted) elements.kpiCompleted.textContent = completed.toLocaleString('pt-BR');
+    }
+    
+    function getFilteredOrders() {
+        let filtered = [...ordersCache];
+        
+        // Filtro de busca
+        const searchQuery = (elements.searchInput?.value || '').toLowerCase().trim();
+        if (searchQuery) {
+            filtered = filtered.filter(o => 
+                (o.order_number || '').toLowerCase().includes(searchQuery) ||
+                (o.product || '').toLowerCase().includes(searchQuery) ||
+                (o.part_code || '').toLowerCase().includes(searchQuery) ||
+                (o.customer || '').toLowerCase().includes(searchQuery)
+            );
+        }
+        
+        // Filtro de status
+        const statusFilter = elements.statusFilter?.value || '';
+        if (statusFilter) {
+            filtered = filtered.filter(o => {
+                const status = (o.status || '').toLowerCase();
+                if (statusFilter === 'concluida') return ['concluida', 'finalizada'].includes(status);
+                return status === statusFilter;
+            });
+        }
+        
+        // Filtro de máquina
+        const machineFilter = elements.machineFilter?.value || '';
+        if (machineFilter) {
+            filtered = filtered.filter(o => o.machine_id === machineFilter);
+        }
+        
+        // Ordenação
+        const sortBy = elements.sortSelect?.value || 'recent';
+        filtered.sort((a, b) => {
+            switch (sortBy) {
+                case 'recent':
+                    return (b.createdAt?.toDate?.() || new Date(0)) - (a.createdAt?.toDate?.() || new Date(0));
+                case 'oldest':
+                    return (a.createdAt?.toDate?.() || new Date(0)) - (b.createdAt?.toDate?.() || new Date(0));
+                case 'op-asc':
+                    return (a.order_number || '').localeCompare(b.order_number || '');
+                case 'op-desc':
+                    return (b.order_number || '').localeCompare(a.order_number || '');
+                case 'lot-desc':
+                    return (Number(b.lot_size) || 0) - (Number(a.lot_size) || 0);
+                case 'lot-asc':
+                    return (Number(a.lot_size) || 0) - (Number(b.lot_size) || 0);
+                default:
+                    return 0;
+            }
+        });
+        
+        return filtered;
+    }
+    
+    function renderOrders() {
+        const filtered = getFilteredOrders();
+        
+        // Atualizar contador
+        if (elements.resultsCount) {
+            elements.resultsCount.textContent = filtered.length + ' ordem' + (filtered.length !== 1 ? 's' : '') + ' encontrada' + (filtered.length !== 1 ? 's' : '');
+        }
+        
+        // Mostrar empty state se não houver ordens
+        if (filtered.length === 0) {
+            if (elements.grid) elements.grid.innerHTML = '';
+            if (elements.tableBody) elements.tableBody.innerHTML = '';
+            elements.emptyState?.classList.remove('hidden');
+            elements.emptyState?.classList.add('flex');
+            return;
+        }
+        
+        elements.emptyState?.classList.add('hidden');
+        elements.emptyState?.classList.remove('flex');
+        
+        if (currentView === 'cards') {
+            renderCardsView(filtered);
+        } else {
+            renderTableView(filtered);
+        }
+        
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+    
+    function renderCardsView(orders) {
+        if (!elements.grid) return;
+        
+        const html = orders.map(order => {
+            const status = (order.status || 'planejada').toLowerCase();
+            const lotSize = Number(order.lot_size) || 0;
+            const produced = Number(order.total_produced) || 0;
+            const progress = lotSize > 0 ? Math.min((produced / lotSize) * 100, 100) : 0;
+            
+            const statusConfig = {
+                'planejada': { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200', label: 'Planejada', icon: 'calendar' },
+                'ativa': { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200', label: 'Ativa', icon: 'zap' },
+                'em_andamento': { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200', label: 'Em Andamento', icon: 'play-circle' },
+                'concluida': { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200', label: 'Concluída', icon: 'check-circle-2' },
+                'finalizada': { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200', label: 'Finalizada', icon: 'check-circle-2' },
+                'cancelada': { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200', label: 'Cancelada', icon: 'x-circle' }
+            };
+            
+            const sc = statusConfig[status] || statusConfig['planejada'];
+            const progressColor = progress >= 100 ? 'bg-emerald-500' : progress >= 50 ? 'bg-blue-500' : 'bg-amber-500';
+            const isActive = ['ativa', 'em_andamento'].includes(status);
+            const canActivate = status === 'planejada';
+            const canReactivate = ['concluida', 'finalizada'].includes(status);
+            
+            const machineInfo = window.databaseModule?.machineById?.get(order.machine_id);
+            const machineLabel = machineInfo ? order.machine_id + ' - ' + machineInfo.model : (order.machine_id || 'N/A');
+            
+            return '<div class="bg-white rounded-xl border ' + (isActive ? 'border-blue-300 ring-2 ring-blue-100' : 'border-gray-200') + ' shadow-sm hover:shadow-md transition-all overflow-hidden">' +
+                '<div class="p-4 border-b border-gray-100 ' + (isActive ? 'bg-blue-50' : 'bg-gray-50') + '">' +
+                    '<div class="flex items-start justify-between gap-2">' +
+                        '<div class="flex-1 min-w-0">' +
+                            '<h4 class="font-bold text-gray-800 truncate">OP ' + escapeHtml(order.order_number || '') + '</h4>' +
+                            '<p class="text-sm text-gray-600 truncate">' + escapeHtml(order.product || order.part_code || 'Produto não definido') + '</p>' +
+                        '</div>' +
+                        '<span class="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ' + sc.bg + ' ' + sc.text + ' ' + sc.border + ' border">' +
+                            '<i data-lucide="' + sc.icon + '" class="w-3 h-3"></i>' +
+                            sc.label +
+                        '</span>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="p-4 space-y-3">' +
+                    '<div class="grid grid-cols-2 gap-2 text-sm">' +
+                        '<div class="flex items-center gap-2 text-gray-600">' +
+                            '<i data-lucide="user" class="w-4 h-4 text-gray-400"></i>' +
+                            '<span class="truncate">' + escapeHtml(order.customer || 'N/A') + '</span>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-2 text-gray-600">' +
+                            '<i data-lucide="settings" class="w-4 h-4 text-gray-400"></i>' +
+                            '<span class="truncate">' + escapeHtml(machineLabel) + '</span>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="bg-gray-50 rounded-lg p-3">' +
+                        '<div class="flex items-center justify-between text-xs text-gray-500 mb-1">' +
+                            '<span>Progresso</span>' +
+                            '<span class="font-semibold">' + Math.round(progress) + '%</span>' +
+                        '</div>' +
+                        '<div class="w-full bg-gray-200 rounded-full h-2">' +
+                            '<div class="' + progressColor + ' h-2 rounded-full transition-all" style="width: ' + progress + '%"></div>' +
+                        '</div>' +
+                        '<div class="flex justify-between text-xs text-gray-500 mt-1">' +
+                            '<span>' + produced.toLocaleString('pt-BR') + ' prod.</span>' +
+                            '<span>' + lotSize.toLocaleString('pt-BR') + ' plan.</span>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="px-4 pb-4 flex gap-2">' +
+                    (canActivate ? '<button onclick="OrdersPageModule.activateOrder(\'' + order.id + '\', \'' + (order.machine_id || '') + '\')" class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition"><i data-lucide="play" class="w-4 h-4"></i>Ativar</button>' : '') +
+                    (canReactivate ? '<button onclick="OrdersPageModule.reactivateOrder(\'' + order.id + '\')" class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition"><i data-lucide="rotate-ccw" class="w-4 h-4"></i>Reativar</button>' : '') +
+                    '<button onclick="OrdersPageModule.editOrder(\'' + order.id + '\')" class="' + ((canActivate || canReactivate) ? 'flex-1' : 'w-full') + ' flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition"><i data-lucide="edit-3" class="w-4 h-4"></i>Editar</button>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+        
+        elements.grid.innerHTML = html;
+    }
+    
+    function renderTableView(orders) {
+        if (!elements.tableBody) return;
+        
+        const html = orders.map(order => {
+            const status = (order.status || 'planejada').toLowerCase();
+            const lotSize = Number(order.lot_size) || 0;
+            const produced = Number(order.total_produced) || 0;
+            const progress = lotSize > 0 ? Math.min((produced / lotSize) * 100, 100) : 0;
+            
+            const statusConfig = {
+                'planejada': { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Planejada' },
+                'ativa': { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Ativa' },
+                'em_andamento': { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Em Andamento' },
+                'concluida': { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Concluída' },
+                'finalizada': { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Finalizada' },
+                'cancelada': { bg: 'bg-red-100', text: 'text-red-700', label: 'Cancelada' }
+            };
+            
+            const sc = statusConfig[status] || statusConfig['planejada'];
+            const progressColor = progress >= 100 ? 'bg-emerald-500' : progress >= 50 ? 'bg-blue-500' : 'bg-amber-500';
+            const canActivate = status === 'planejada';
+            const canReactivate = ['concluida', 'finalizada'].includes(status);
+            
+            return '<tr class="hover:bg-gray-50">' +
+                '<td class="px-4 py-3 font-medium text-gray-800">' + escapeHtml(order.order_number || '') + '</td>' +
+                '<td class="px-4 py-3 text-gray-600">' + escapeHtml(order.product || order.part_code || 'N/A') + '</td>' +
+                '<td class="px-4 py-3 text-gray-600">' + escapeHtml(order.customer || 'N/A') + '</td>' +
+                '<td class="px-4 py-3 text-gray-600">' + escapeHtml(order.machine_id || 'N/A') + '</td>' +
+                '<td class="px-4 py-3 text-center text-gray-700">' + lotSize.toLocaleString('pt-BR') + '</td>' +
+                '<td class="px-4 py-3 text-center text-gray-700">' + produced.toLocaleString('pt-BR') + '</td>' +
+                '<td class="px-4 py-3"><div class="flex items-center gap-2"><div class="flex-1 bg-gray-200 rounded-full h-2"><div class="' + progressColor + ' h-2 rounded-full" style="width: ' + progress + '%"></div></div><span class="text-xs font-medium text-gray-600">' + Math.round(progress) + '%</span></div></td>' +
+                '<td class="px-4 py-3 text-center"><span class="px-2 py-1 rounded-full text-xs font-medium ' + sc.bg + ' ' + sc.text + '">' + sc.label + '</span></td>' +
+                '<td class="px-4 py-3"><div class="flex items-center justify-center gap-1">' +
+                    (canActivate ? '<button onclick="OrdersPageModule.activateOrder(\'' + order.id + '\', \'' + (order.machine_id || '') + '\')" class="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition" title="Ativar"><i data-lucide="play" class="w-4 h-4"></i></button>' : '') +
+                    (canReactivate ? '<button onclick="OrdersPageModule.reactivateOrder(\'' + order.id + '\')" class="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition" title="Reativar"><i data-lucide="rotate-ccw" class="w-4 h-4"></i></button>' : '') +
+                    '<button onclick="OrdersPageModule.editOrder(\'' + order.id + '\')" class="p-1.5 text-gray-600 hover:bg-gray-100 rounded transition" title="Editar"><i data-lucide="edit-3" class="w-4 h-4"></i></button>' +
+                    '<button onclick="OrdersPageModule.deleteOrder(\'' + order.id + '\')" class="p-1.5 text-red-600 hover:bg-red-50 rounded transition" title="Excluir"><i data-lucide="trash-2" class="w-4 h-4"></i></button>' +
+                '</div></td>' +
+            '</tr>';
+        }).join('');
+        
+        elements.tableBody.innerHTML = html;
+    }
+    
+    // Ações das ordens
+    async function activateOrder(orderId, machineId) {
+        if (!machineId) {
+            showNotification('Esta ordem não tem máquina definida. Edite a ordem primeiro.', 'warning');
+            return;
+        }
+        
+        if (!confirm('Deseja ativar esta ordem na máquina ' + machineId + '?')) return;
+        
+        try {
+            await db.collection('production_orders').doc(orderId).update({
+                status: 'ativa',
+                activatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            showNotification('Ordem ativada com sucesso!', 'success');
+            await refreshOrders();
+        } catch (error) {
+            console.error('Erro ao ativar ordem:', error);
+            showNotification('Erro ao ativar ordem', 'error');
+        }
+    }
+    
+    async function reactivateOrder(orderId) {
+        if (!confirm('Deseja reativar esta ordem?')) return;
+        
+        try {
+            await db.collection('production_orders').doc(orderId).update({ status: 'ativa' });
+            showNotification('Ordem reativada com sucesso!', 'success');
+            await refreshOrders();
+        } catch (error) {
+            console.error('Erro ao reativar ordem:', error);
+            showNotification('Erro ao reativar ordem', 'error');
+        }
+    }
+    
+    async function deleteOrder(orderId) {
+        if (!confirm('Deseja excluir esta ordem? Esta ação não pode ser desfeita.')) return;
+        
+        try {
+            await db.collection('production_orders').doc(orderId).delete();
+            showNotification('Ordem excluída com sucesso!', 'success');
+            await refreshOrders();
+        } catch (error) {
+            console.error('Erro ao excluir ordem:', error);
+            showNotification('Erro ao excluir ordem', 'error');
+        }
+    }
+    
+    function editOrder(orderId) {
+        const order = ordersCache.find(o => o.id === orderId);
+        if (!order) {
+            showNotification('Ordem não encontrada', 'error');
+            return;
+        }
+        openOrderFormModal(order);
+    }
+    
+    // Modal de formulário
+    function openOrderFormModal(order) {
+        const modal = document.getElementById('order-form-modal');
+        if (!modal) return;
+        
+        const title = document.getElementById('order-form-title');
+        const idInput = document.getElementById('order-form-id');
+        const numberInput = document.getElementById('order-form-number');
+        const partCodeInput = document.getElementById('order-form-part-code');
+        const productInput = document.getElementById('order-form-product');
+        const lotSizeInput = document.getElementById('order-form-lot-size');
+        const batchInput = document.getElementById('order-form-batch');
+        const packagingInput = document.getElementById('order-form-packaging');
+        const customerInput = document.getElementById('order-form-customer');
+        const machineSelect = document.getElementById('order-form-machine');
+        const rawMaterialSelect = document.getElementById('order-form-raw-material');
+        
+        // Atualizar título
+        if (title) {
+            title.textContent = order ? 'Editar Ordem de Produção' : 'Nova Ordem de Produção';
+        }
+        
+        // Popular select de máquinas
+        if (machineSelect && window.databaseModule?.machineById) {
+            machineSelect.innerHTML = '<option value="">Selecione uma máquina</option>';
+            window.databaseModule.machineById.forEach(function(machine, id) {
+                machineSelect.innerHTML += '<option value="' + id + '">' + id + ' - ' + machine.model + '</option>';
+            });
+        }
+        
+        // Popular select de matéria-prima
+        if (rawMaterialSelect && window.databaseModule?.rawMaterialByCode) {
+            rawMaterialSelect.innerHTML = '<option value="">Selecione a matéria-prima...</option>';
+            window.databaseModule.rawMaterialByCode.forEach(function(mp, code) {
+                rawMaterialSelect.innerHTML += '<option value="' + code + '">' + mp.codigo + ' - ' + mp.descricao + '</option>';
+            });
+        }
+        
+        // Popular datalist de produtos
+        var productList = document.getElementById('order-form-product-list');
+        if (productList && window.databaseModule?.productByCode) {
+            productList.innerHTML = '';
+            window.databaseModule.productByCode.forEach(function(prod, code) {
+                productList.innerHTML += '<option value="' + code + '">' + prod.name + '</option>';
+            });
+        }
+        
+        // Preencher formulário
+        if (idInput) idInput.value = order?.id || '';
+        if (numberInput) numberInput.value = order?.order_number || '';
+        if (partCodeInput) partCodeInput.value = order?.part_code || '';
+        if (productInput) productInput.value = order?.product || '';
+        if (lotSizeInput) lotSizeInput.value = order?.lot_size || '';
+        if (batchInput) batchInput.value = order?.batch_number || '';
+        if (packagingInput) packagingInput.value = order?.packaging_qty || '';
+        if (customerInput) customerInput.value = order?.customer || '';
+        if (machineSelect) machineSelect.value = order?.machine_id || '';
+        if (rawMaterialSelect) rawMaterialSelect.value = order?.raw_material || '';
+        
+        modal.classList.remove('hidden');
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+    
+    function closeOrderFormModal() {
+        var modal = document.getElementById('order-form-modal');
+        if (modal) modal.classList.add('hidden');
+    }
+    
+    async function handleFormSubmit(e) {
+        e.preventDefault();
+        
+        var id = document.getElementById('order-form-id')?.value;
+        var orderData = {
+            order_number: document.getElementById('order-form-number')?.value.trim() || '',
+            part_code: document.getElementById('order-form-part-code')?.value.trim() || '',
+            product: document.getElementById('order-form-product')?.value.trim() || '',
+            lot_size: Number(document.getElementById('order-form-lot-size')?.value) || 0,
+            batch_number: document.getElementById('order-form-batch')?.value.trim() || '',
+            packaging_qty: Number(document.getElementById('order-form-packaging')?.value) || 0,
+            customer: document.getElementById('order-form-customer')?.value.trim() || '',
+            machine_id: document.getElementById('order-form-machine')?.value || '',
+            raw_material: document.getElementById('order-form-raw-material')?.value || ''
+        };
+        
+        if (!orderData.order_number) {
+            showNotification('Informe o número da OP', 'warning');
+            return;
+        }
+        
+        if (!orderData.lot_size || orderData.lot_size <= 0) {
+            showNotification('Informe o tamanho do lote', 'warning');
+            return;
+        }
+        
+        try {
+            if (id) {
+                await db.collection('production_orders').doc(id).update(orderData);
+                showNotification('Ordem atualizada com sucesso!', 'success');
+            } else {
+                orderData.status = 'planejada';
+                orderData.total_produced = 0;
+                orderData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                await db.collection('production_orders').add(orderData);
+                showNotification('Ordem cadastrada com sucesso!', 'success');
+            }
+            
+            closeOrderFormModal();
+            await refreshOrders();
+            
+        } catch (error) {
+            console.error('Erro ao salvar ordem:', error);
+            showNotification('Erro ao salvar ordem', 'error');
+        }
+    }
+    
+    // Inicialização
+    function initialize() {
+        if (isInitialized) return;
+        
+        console.log('[OrdersPage] Inicializando módulo...');
+        cacheElements();
+        setupEventListeners();
+        loadOrders();
+        isInitialized = true;
+    }
+    
+    // API Pública
+    return {
+        initialize: initialize,
+        refreshOrders: refreshOrders,
+        loadOrders: loadOrders,
+        activateOrder: activateOrder,
+        reactivateOrder: reactivateOrder,
+        deleteOrder: deleteOrder,
+        editOrder: editOrder,
+        openOrderFormModal: openOrderFormModal,
+        closeOrderFormModal: closeOrderFormModal
+    };
+})();
+
+// Expor funções globalmente
+window.OrdersPageModule = OrdersPageModule;
+window.openOrderFormModal = function() { OrdersPageModule.openOrderFormModal(); };
+window.closeOrderFormModal = function() { OrdersPageModule.closeOrderFormModal(); };
+
+// Inicializar módulo de ordens quando página carregar
+document.addEventListener('DOMContentLoaded', function() {
+    // Pré-carregar ordens em background para ter dados prontos quando abrir a aba
+    setTimeout(function() {
+        if (window.OrdersPageModule && typeof window.OrdersPageModule.loadOrders === 'function') {
+            console.log('[OrdersPage] Pré-carregando ordens em background...');
+            // Só inicializa os elementos quando a aba for aberta
+        }
+    }, 2000);
+});
