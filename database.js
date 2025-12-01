@@ -60,6 +60,7 @@ const productDatabase = [
     // --- APTAR ---
     { "cod": 226, "client": "APTAR", "name": "FIXACAO-GS-28/410CUST-28--THREAD-HDPE-WH", "cavities": 22, "cycle": 36, "weight": 1.65, "pieces_per_hour_goal": 2200, "mp": "" },
     { "cod": 4268, "client": "APTAR", "name": "FIXAÇÃO-GS-28/410CUST-28--THREAD-HDPE-NATURAL-", "cavities": 22, "cycle": 36, "weight": 14.95, "pieces_per_hour_goal": 2200, "mp": "" },
+    { "cod": 4324, "client": "APTAR", "name": "FIXAÇÃO-GS-24/410--2N-THREAD-PP-YELL (LISO)", "cavities": 24, "cycle": 18, "weight": 1.25, "pieces_per_hour_goal": 4800, "mp": "" },
     { "cod": 436, "client": "APTAR", "name": "CLIP PLASTICO PP-RND DS25 K2/F3 OURO (MODIF)", "cavities": 15, "cycle": 16, "weight": 0.45, "pieces_per_hour_goal": 3375, "mp": "" },
     { "cod": 441, "client": "APTAR", "name": "CLIP PLASTICO PP-RND MA00 K2/F3 PRETO (MODIF)", "cavities": 15, "cycle": 16, "weight": 0.45, "pieces_per_hour_goal": 3375, "mp": "" },
     { "cod": 442, "client": "APTAR", "name": "CCLIPE-K--PP-NATU--RRNA00004", "cavities": 15, "cycle": 16, "weight": 0.45, "pieces_per_hour_goal": 3375, "mp": "" },
