@@ -663,9 +663,9 @@
                                         <th rowspan="2" class="px-3 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider align-middle border-b-2 border-gray-200 bg-gray-100">Produto</th>
                                         <th rowspan="2" class="px-3 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider align-middle border-b-2 border-gray-200 bg-gray-100">MP</th>
                                         <th colspan="3" class="px-3 py-2 text-center text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-300 bg-gray-100">Planejado</th>
-                                        <th colspan="3" class="px-3 py-2 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-blue-200 bg-blue-50">1º Turno</th>
-                                        <th colspan="3" class="px-3 py-2 text-center text-xs font-bold text-amber-700 uppercase tracking-wider border-b border-amber-200 bg-amber-50">2º Turno</th>
-                                        <th colspan="3" class="px-3 py-2 text-center text-xs font-bold text-purple-700 uppercase tracking-wider border-b border-purple-200 bg-purple-50">3º Turno</th>
+                                        <th colspan="3" class="px-3 py-2 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-blue-200 bg-blue-50">1º Turno</th>
+                                        <th colspan="3" class="px-3 py-2 text-center text-xs font-bold text-amber-700 uppercase tracking-wider border-b border-amber-200 bg-amber-50">2º Turno</th>
+                                        <th colspan="3" class="px-3 py-2 text-center text-xs font-bold text-purple-700 uppercase tracking-wider border-b border-purple-200 bg-purple-50">3º Turno</th>
                                         <th rowspan="2" class="px-3 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider align-middle border-b-2 border-gray-200 bg-emerald-50">Total</th>
                                         <th rowspan="2" class="px-3 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider align-middle border-b-2 border-gray-200 bg-gray-100 no-print">Ações</th>
                                     </tr>
@@ -732,7 +732,7 @@
                         </div>
                         <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl shadow-sm border border-purple-200 p-4 hover:shadow-md transition">
                             <div class="flex items-center justify-between mb-2">
-                                <p class="text-xs font-medium text-purple-700">Progresso Mdio</p>
+                                <p class="text-xs font-medium text-purple-700">Progresso Médio</p>
                                 <div class="p-1.5 bg-purple-200 rounded-lg">
                                     <i data-lucide="trending-up" class="w-3.5 h-3.5 text-purple-600"></i>
                                 </div>
@@ -773,8 +773,7 @@
                                 <!-- Busca -->
                                 <div class="md:col-span-4">
                                     <div class="relative">
-                                        <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
-                                        <input type="text" id="orders-search" placeholder="Buscar Nº OP, produto, cliente..." class="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-blue focus:border-transparent">
+                                        <input type="text" id="orders-search" placeholder="Buscar Nº OP, produto, cliente..." class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-blue focus:border-transparent">
                                     </div>
                                 </div>
                                 <!-- Status -->
@@ -1688,9 +1687,9 @@
                                         <div class="relative">
                                             <select id="analysis-shift" class="w-full appearance-none bg-gray-50 border border-gray-200 rounded-lg py-2.5 pl-3 pr-10 text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition cursor-pointer">
                                                 <option value="all">Todos</option>
-                                                <option value="1">1º Turno</option>
-                                                <option value="2">2º Turno</option>
-                                                <option value="3">3º Turno</option>
+                                                <option value="1">1º Turno</option>
+                                                <option value="2">2º Turno</option>
+                                                <option value="3">3º Turno</option>
                                             </select>
                                             <i data-lucide="chevron-down" class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"></i>
                                         </div>
@@ -3573,6 +3572,177 @@
 
     <!-- Modais -->
     
+    <!-- Modal de Nova/Editar Ordem de Produção -->
+    <div id="order-form-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
+            <!-- Header -->
+            <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 bg-white/20 rounded-lg">
+                            <i data-lucide="plus-circle" class="w-6 h-6 text-white"></i>
+                        </div>
+                        <div>
+                            <h3 id="order-form-title" class="text-xl font-bold text-white">Nova Ordem de Produção</h3>
+                            <p class="text-blue-200 text-sm">Preencha os dados da OP</p>
+                        </div>
+                    </div>
+                    <button onclick="closeOrderFormModal()" class="p-2 hover:bg-white/20 rounded-lg transition">
+                        <i data-lucide="x" class="w-5 h-5 text-white"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Body -->
+            <div class="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+                <form id="order-form-modal-form" class="space-y-4">
+                    <input type="hidden" id="order-form-id">
+                    
+                    <!-- Seção 1: Dados da OP -->
+                    <div class="border border-blue-200 rounded-lg overflow-hidden">
+                        <div class="bg-blue-50 px-3 py-2 border-b border-blue-200">
+                            <h4 class="text-sm font-semibold text-blue-800 flex items-center gap-2">
+                                <i data-lucide="file-text" class="w-4 h-4"></i>
+                                Dados da Ordem
+                            </h4>
+                        </div>
+                        <div class="p-3 space-y-3 bg-white">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <!-- Nº da OP -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Nº da OP <span class="text-red-500">*</span></label>
+                                    <input type="text" id="order-form-number" class="w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Ex: OP-2024-001" required>
+                                </div>
+                                
+                                <!-- Código da Peça -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Código da Peça <span class="text-blue-500">(busca automática)</span></label>
+                                    <div class="relative">
+                                        <input type="text" id="order-form-part-code" class="w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Digite o código e pressione Enter">
+                                        <button type="button" onclick="onPartCodeChange(document.getElementById('order-form-part-code').value)" class="absolute right-2 top-1/2 -translate-y-1/2 p-1 bg-blue-100 hover:bg-blue-200 rounded text-blue-600">
+                                            <i data-lucide="search" class="w-4 h-4"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Seção 2: Dados do Produto (preenchido automaticamente) -->
+                    <div class="border border-emerald-200 rounded-lg overflow-hidden">
+                        <div class="bg-emerald-50 px-3 py-2 border-b border-emerald-200">
+                            <h4 class="text-sm font-semibold text-emerald-800 flex items-center gap-2">
+                                <i data-lucide="package" class="w-4 h-4"></i>
+                                Dados do Produto
+                            </h4>
+                        </div>
+                        <div class="p-3 space-y-3 bg-white">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <!-- Produto -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Nome do Produto</label>
+                                    <input type="text" id="order-form-product" class="w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50" placeholder="Preenchido automaticamente" readonly>
+                                </div>
+                                
+                                <!-- Cliente -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
+                                    <input type="text" id="order-form-customer" class="w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50" placeholder="Preenchido automaticamente" readonly>
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <!-- Cavidades -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Cavidades</label>
+                                    <input type="number" id="order-form-cavities" class="w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50" placeholder="-" readonly>
+                                </div>
+                                
+                                <!-- Ciclo -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Ciclo (s)</label>
+                                    <input type="number" step="0.01" id="order-form-cycle" class="w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50" placeholder="-" readonly>
+                                </div>
+                                
+                                <!-- Peso -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Peso (g)</label>
+                                    <input type="number" step="0.01" id="order-form-weight" class="w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50" placeholder="-" readonly>
+                                </div>
+                                
+                                <!-- Meta peças/hora -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Meta pç/h</label>
+                                    <input type="number" id="order-form-goal" class="w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50" placeholder="-" readonly>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Seção 3: Dados da Produção -->
+                    <div class="border border-amber-200 rounded-lg overflow-hidden">
+                        <div class="bg-amber-50 px-3 py-2 border-b border-amber-200">
+                            <h4 class="text-sm font-semibold text-amber-800 flex items-center gap-2">
+                                <i data-lucide="settings" class="w-4 h-4"></i>
+                                Dados da Produção
+                            </h4>
+                        </div>
+                        <div class="p-3 space-y-3 bg-white">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <!-- Tamanho do Lote -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Tamanho do Lote <span class="text-red-500">*</span></label>
+                                    <input type="number" id="order-form-lot-size" class="w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Ex: 10000" min="1" required>
+                                </div>
+                                
+                                <!-- Nº do Lote -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Nº do Lote</label>
+                                    <input type="text" id="order-form-batch" class="w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Ex: L001">
+                                </div>
+                                
+                                <!-- Embalagem -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Qtd. Embalagem</label>
+                                    <input type="number" id="order-form-packaging" class="w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Ex: 500" min="0">
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <!-- Máquina -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Máquina</label>
+                                    <select id="order-form-machine" class="w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                        <option value="">Selecione uma máquina</option>
+                                    </select>
+                                </div>
+                                
+                                <!-- Matéria-Prima -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Matéria-Prima (MP)</label>
+                                    <select id="order-form-mp" class="w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                        <option value="">Selecione a MP...</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Botões -->
+                    <div class="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                        <button type="button" onclick="closeOrderFormModal()" class="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg transition">
+                            Cancelar
+                        </button>
+                        <button type="button" onclick="saveOrderForm()" class="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-lg shadow-md transition flex items-center gap-2">
+                            <i data-lucide="save" class="w-4 h-4"></i>
+                            Salvar OP
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
     <!-- Modal de Importação de Ordens Excel -->
     <div id="import-orders-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
@@ -4160,9 +4330,9 @@
                     <div>
                         <label for="manual-production-shift" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Turno</label>
                         <select id="manual-production-shift" name="shift" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all">
-                            <option value="1">1º Turno</option>
-                            <option value="2">2º Turno</option>
-                            <option value="3">3º Turno</option>
+                            <option value="1">1º Turno</option>
+                            <option value="2">2º Turno</option>
+                            <option value="3">3º Turno</option>
                         </select>
                     </div>
                     <div>
@@ -4243,9 +4413,9 @@
                         <div>
                             <label for="manual-losses-shift" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Turno</label>
                             <select id="manual-losses-shift" name="shift" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all">
-                                <option value="1">1º Turno</option>
-                                <option value="2">2º Turno</option>
-                                <option value="3">3º Turno</option>
+                                <option value="1">1º Turno</option>
+                                <option value="2">2º Turno</option>
+                                <option value="3">3º Turno</option>
                             </select>
                         </div>
                         <div>
@@ -4347,9 +4517,9 @@
                     <div>
                         <label for="manual-borra-shift" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Turno</label>
                         <select id="manual-borra-shift" name="shift" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all">
-                            <option value="1">1º Turno</option>
-                            <option value="2">2º Turno</option>
-                            <option value="3">3º Turno</option>
+                            <option value="1">1º Turno</option>
+                            <option value="2">2º Turno</option>
+                            <option value="3">3º Turno</option>
                         </select>
                     </div>
                     <div>

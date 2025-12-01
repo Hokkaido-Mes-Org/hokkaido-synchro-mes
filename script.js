@@ -8612,6 +8612,95 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         openNewOrderModal(order);
     };
     
+    // Buscar MP por texto
+    window.searchMP = function() {
+        const searchTerm = prompt('Digite o código ou descrição da MP:');
+        if (!searchTerm) return;
+        
+        const mpSelect = document.getElementById('order-form-mp');
+        if (!mpSelect || typeof materiaPrimaDatabase === 'undefined') {
+            showNotification('Database de MP não disponível', 'error');
+            return;
+        }
+        
+        const term = searchTerm.toLowerCase();
+        const found = materiaPrimaDatabase.find(mp => 
+            mp.codigo.toLowerCase().includes(term) || 
+            mp.descricao.toLowerCase().includes(term)
+        );
+        
+        if (found) {
+            mpSelect.value = found.codigo;
+            mpSelect.dispatchEvent(new Event('change'));
+            showNotification(`✅ MP encontrada: ${found.codigo} - ${found.descricao}`, 'success');
+        } else {
+            showNotification(`❌ MP não encontrada para: ${searchTerm}`, 'warning');
+        }
+    };
+    
+    // Função para salvar ordem de produção
+    window.saveOrderForm = async function() {
+        console.log('📝 [saveOrderForm] Iniciando salvamento...');
+        
+        try {
+            const id = document.getElementById('order-form-id')?.value;
+            const orderData = {
+                order_number: document.getElementById('order-form-number')?.value.trim() || '',
+                part_code: document.getElementById('order-form-part-code')?.value.trim() || '',
+                product: document.getElementById('order-form-product')?.value.trim() || '',
+                lot_size: Number(document.getElementById('order-form-lot-size')?.value) || 0,
+                batch_number: document.getElementById('order-form-batch')?.value.trim() || '',
+                packaging_qty: Number(document.getElementById('order-form-packaging')?.value) || 0,
+                customer: document.getElementById('order-form-customer')?.value.trim() || '',
+                machine_id: document.getElementById('order-form-machine')?.value || '',
+                raw_material: document.getElementById('order-form-mp')?.value || ''
+            };
+            
+            console.log('📝 [saveOrderForm] Dados:', orderData);
+            
+            if (!orderData.order_number) {
+                showNotification('Informe o número da OP', 'warning');
+                return;
+            }
+            
+            if (!orderData.lot_size || orderData.lot_size <= 0) {
+                showNotification('Informe o tamanho do lote', 'warning');
+                return;
+            }
+            
+            if (id) {
+                console.log('📝 [saveOrderForm] Atualizando ordem:', id);
+                await db.collection('production_orders').doc(id).update(orderData);
+                showNotification('Ordem atualizada com sucesso!', 'success');
+            } else {
+                console.log('📝 [saveOrderForm] Criando nova ordem...');
+                orderData.status = 'planejada';
+                orderData.total_produced = 0;
+                orderData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                const docRef = await db.collection('production_orders').add(orderData);
+                console.log('✅ [saveOrderForm] Ordem criada com ID:', docRef.id);
+                showNotification('Ordem cadastrada com sucesso!', 'success');
+            }
+            
+            closeOrderFormModal();
+            
+            // Atualizar lista de ordens
+            if (typeof loadProductionOrders === 'function') {
+                loadProductionOrders();
+            }
+            // Atualizar módulo de ordens após um pequeno delay
+            setTimeout(function() {
+                if (window.OrdersPageModule && window.OrdersPageModule.refreshOrders) {
+                    window.OrdersPageModule.refreshOrders();
+                }
+            }, 100);
+            
+        } catch (error) {
+            console.error('❌ [saveOrderForm] Erro:', error);
+            showNotification('Erro ao salvar: ' + error.message, 'error');
+        }
+    };
+    
     window.openNewOrderModal = function(order) {
         const modal = document.getElementById('order-form-modal');
         if (!modal) return;
@@ -8631,7 +8720,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             }
         }
         
-        // Preencher campos
+        // Popular select de Matéria-Prima
+        const mpSelect = document.getElementById('order-form-mp');
+        if (mpSelect) {
+            mpSelect.innerHTML = '<option value="">Selecione a MP...</option>';
+            if (typeof materiaPrimaDatabase !== 'undefined' && materiaPrimaDatabase.length > 0) {
+                materiaPrimaDatabase.forEach(function(mp) {
+                    mpSelect.innerHTML += '<option value="' + mp.codigo + '">' + mp.codigo + ' - ' + mp.descricao + '</option>';
+                });
+            }
+        }
+        
+        // Preencher campos básicos
         document.getElementById('order-form-id').value = order?.id || '';
         document.getElementById('order-form-number').value = order?.order_number || '';
         document.getElementById('order-form-part-code').value = order?.part_code || '';
@@ -8641,6 +8741,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         document.getElementById('order-form-packaging').value = order?.packaging_qty || '';
         document.getElementById('order-form-customer').value = order?.customer || '';
         if (machineSelect) machineSelect.value = order?.machine_id || '';
+        if (mpSelect) mpSelect.value = order?.mp || order?.raw_material || '';
+        
+        // Preencher campos do produto
+        const cavitiesField = document.getElementById('order-form-cavities');
+        const cycleField = document.getElementById('order-form-cycle');
+        const weightField = document.getElementById('order-form-weight');
+        const goalField = document.getElementById('order-form-goal');
+        
+        if (cavitiesField) cavitiesField.value = order?.cavities || '';
+        if (cycleField) cycleField.value = order?.cycle || '';
+        if (weightField) weightField.value = order?.weight || '';
+        if (goalField) goalField.value = order?.pieces_per_hour_goal || '';
         
         modal.classList.remove('hidden');
         if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -8654,6 +8766,154 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     window.refreshOrdersList = function() {
         loadProductionOrders();
     };
+    
+    // Auto-completar dados do produto ao inserir código da peça
+    window.onPartCodeChange = function(code) {
+        if (!code || code.trim() === '') return;
+        
+        const partCode = code.trim();
+        console.log('🔍 Buscando produto pelo código:', partCode);
+        
+        // Buscar no productDatabase pelo código
+        if (typeof productDatabase !== 'undefined' && productDatabase.length > 0) {
+            // Tentar encontrar pelo cod (número)
+            let product = productDatabase.find(p => String(p.cod) === partCode);
+            
+            // Se não encontrou, tentar pelo nome parcial
+            if (!product) {
+                product = productDatabase.find(p => 
+                    p.name && p.name.toLowerCase().includes(partCode.toLowerCase())
+                );
+            }
+            
+            if (product) {
+                console.log('✅ Produto encontrado:', product);
+                
+                // Preencher TODOS os campos automaticamente
+                const productField = document.getElementById('order-form-product');
+                const customerField = document.getElementById('order-form-customer');
+                const cavitiesField = document.getElementById('order-form-cavities');
+                const cycleField = document.getElementById('order-form-cycle');
+                const weightField = document.getElementById('order-form-weight');
+                const goalField = document.getElementById('order-form-goal');
+                
+                // Preencher nome do produto
+                if (productField) {
+                    productField.value = product.name || '';
+                    productField.classList.add('bg-green-50', 'border-green-300');
+                }
+                
+                // Preencher cliente
+                if (customerField) {
+                    customerField.value = product.client || '';
+                    customerField.classList.add('bg-green-50', 'border-green-300');
+                }
+                
+                // Preencher cavidades
+                if (cavitiesField) {
+                    cavitiesField.value = product.cavities || '';
+                    cavitiesField.classList.add('bg-green-50', 'border-green-300');
+                }
+                
+                // Preencher ciclo
+                if (cycleField) {
+                    cycleField.value = product.cycle || '';
+                    cycleField.classList.add('bg-green-50', 'border-green-300');
+                }
+                
+                // Preencher peso
+                if (weightField) {
+                    weightField.value = product.weight || '';
+                    weightField.classList.add('bg-green-50', 'border-green-300');
+                }
+                
+                // Preencher meta peças/hora
+                if (goalField) {
+                    goalField.value = product.pieces_per_hour_goal || '';
+                    goalField.classList.add('bg-green-50', 'border-green-300');
+                }
+                
+                // Preencher MP automaticamente se existir no produto
+                const mpSelect = document.getElementById('order-form-mp');
+                const mpInfoDiv = document.getElementById('order-form-mp-info');
+                const mpDisplay = document.getElementById('order-form-mp-display');
+                
+                if (mpSelect && product.mp) {
+                    mpSelect.value = product.mp;
+                    mpSelect.classList.add('bg-green-50', 'border-green-300');
+                    
+                    // Mostrar info da MP
+                    if (mpInfoDiv && mpDisplay && typeof materiaPrimaDatabase !== 'undefined') {
+                        const mpInfo = materiaPrimaDatabase.find(m => m.codigo === product.mp);
+                        if (mpInfo) {
+                            mpDisplay.textContent = `${mpInfo.codigo} - ${mpInfo.descricao}`;
+                            mpInfoDiv.classList.remove('hidden');
+                        }
+                    }
+                }
+                
+                showNotification(`✅ Produto encontrado: ${product.name} (${product.client})`, 'success');
+            } else {
+                console.log('❌ Produto não encontrado para o código:', partCode);
+                showNotification(`❌ Produto não encontrado para o código: ${partCode}`, 'warning');
+                
+                // Limpar campos
+                const fields = ['order-form-product', 'order-form-customer', 'order-form-cavities', 'order-form-cycle', 'order-form-weight', 'order-form-goal', 'order-form-mp'];
+                fields.forEach(fieldId => {
+                    const field = document.getElementById(fieldId);
+                    if (field) {
+                        field.value = '';
+                        field.classList.remove('bg-green-50', 'border-green-300');
+                    }
+                });
+                
+                // Esconder info da MP
+                const mpInfoDiv = document.getElementById('order-form-mp-info');
+                if (mpInfoDiv) {
+                    mpInfoDiv.classList.add('hidden');
+                }
+            }
+        } else {
+            console.log('❌ productDatabase não disponível');
+            showNotification('❌ Database de produtos não carregado', 'error');
+        }
+    };
+    
+    // Listener para o campo de código da peça
+    document.addEventListener('DOMContentLoaded', function() {
+        const partCodeInput = document.getElementById('order-form-part-code');
+        if (partCodeInput) {
+            // Ao perder o foco ou pressionar Enter
+            partCodeInput.addEventListener('blur', function() {
+                onPartCodeChange(this.value);
+            });
+            partCodeInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    onPartCodeChange(this.value);
+                }
+            });
+        }
+        
+        // Listener para o select de MP
+        const mpSelect = document.getElementById('order-form-mp');
+        if (mpSelect) {
+            mpSelect.addEventListener('change', function() {
+                const mpInfoDiv = document.getElementById('order-form-mp-info');
+                const mpDisplay = document.getElementById('order-form-mp-display');
+                
+                if (this.value && typeof materiaPrimaDatabase !== 'undefined') {
+                    const mpInfo = materiaPrimaDatabase.find(m => m.codigo === this.value);
+                    if (mpInfo && mpInfoDiv && mpDisplay) {
+                        mpDisplay.textContent = `${mpInfo.codigo} - ${mpInfo.descricao}`;
+                        mpInfoDiv.classList.remove('hidden');
+                    }
+                } else if (mpInfoDiv) {
+                    mpInfoDiv.classList.add('hidden');
+                }
+            });
+        }
+    });
     
     // Form submit para nova ordem
     document.addEventListener('DOMContentLoaded', function() {
@@ -8671,7 +8931,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     batch_number: document.getElementById('order-form-batch')?.value.trim() || '',
                     packaging_qty: Number(document.getElementById('order-form-packaging')?.value) || 0,
                     customer: document.getElementById('order-form-customer')?.value.trim() || '',
-                    machine_id: document.getElementById('order-form-machine')?.value || ''
+                    machine_id: document.getElementById('order-form-machine')?.value || '',
+                    raw_material: document.getElementById('order-form-mp')?.value || ''
                 };
                 
                 if (!orderData.order_number || !orderData.lot_size) {
@@ -23651,7 +23912,7 @@ const OrdersPageModule = (function() {
         const packagingInput = document.getElementById('order-form-packaging');
         const customerInput = document.getElementById('order-form-customer');
         const machineSelect = document.getElementById('order-form-machine');
-        const rawMaterialSelect = document.getElementById('order-form-raw-material');
+        const mpSelect = document.getElementById('order-form-mp');
         
         // Atualizar título
         if (title) {
@@ -23659,27 +23920,32 @@ const OrdersPageModule = (function() {
         }
         
         // Popular select de máquinas
-        if (machineSelect && window.databaseModule?.machineById) {
+        if (machineSelect) {
             machineSelect.innerHTML = '<option value="">Selecione uma máquina</option>';
-            window.databaseModule.machineById.forEach(function(machine, id) {
-                machineSelect.innerHTML += '<option value="' + id + '">' + id + ' - ' + machine.model + '</option>';
-            });
+            if (typeof machineDatabase !== 'undefined' && machineDatabase.length > 0) {
+                machineDatabase.forEach(function(machine) {
+                    const mid = typeof normalizeMachineId === 'function' ? normalizeMachineId(machine.id) : machine.id;
+                    machineSelect.innerHTML += '<option value="' + mid + '">' + mid + ' - ' + machine.model + '</option>';
+                });
+            }
         }
         
         // Popular select de matéria-prima
-        if (rawMaterialSelect && window.databaseModule?.rawMaterialByCode) {
-            rawMaterialSelect.innerHTML = '<option value="">Selecione a matéria-prima...</option>';
-            window.databaseModule.rawMaterialByCode.forEach(function(mp, code) {
-                rawMaterialSelect.innerHTML += '<option value="' + code + '">' + mp.codigo + ' - ' + mp.descricao + '</option>';
-            });
+        if (mpSelect) {
+            mpSelect.innerHTML = '<option value="">Selecione a MP...</option>';
+            if (typeof materiaPrimaDatabase !== 'undefined' && materiaPrimaDatabase.length > 0) {
+                materiaPrimaDatabase.forEach(function(mp) {
+                    mpSelect.innerHTML += '<option value="' + mp.codigo + '">' + mp.codigo + ' - ' + mp.descricao + '</option>';
+                });
+            }
         }
         
         // Popular datalist de produtos
         var productList = document.getElementById('order-form-product-list');
-        if (productList && window.databaseModule?.productByCode) {
+        if (productList && typeof productDatabase !== 'undefined') {
             productList.innerHTML = '';
-            window.databaseModule.productByCode.forEach(function(prod, code) {
-                productList.innerHTML += '<option value="' + code + '">' + prod.name + '</option>';
+            productDatabase.forEach(function(prod) {
+                productList.innerHTML += '<option value="' + prod.cod + '">' + prod.name + '</option>';
             });
         }
         
@@ -23693,7 +23959,7 @@ const OrdersPageModule = (function() {
         if (packagingInput) packagingInput.value = order?.packaging_qty || '';
         if (customerInput) customerInput.value = order?.customer || '';
         if (machineSelect) machineSelect.value = order?.machine_id || '';
-        if (rawMaterialSelect) rawMaterialSelect.value = order?.raw_material || '';
+        if (mpSelect) mpSelect.value = order?.raw_material || '';
         
         modal.classList.remove('hidden');
         if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -23717,7 +23983,7 @@ const OrdersPageModule = (function() {
             packaging_qty: Number(document.getElementById('order-form-packaging')?.value) || 0,
             customer: document.getElementById('order-form-customer')?.value.trim() || '',
             machine_id: document.getElementById('order-form-machine')?.value || '',
-            raw_material: document.getElementById('order-form-raw-material')?.value || ''
+            raw_material: document.getElementById('order-form-mp')?.value || ''
         };
         
         if (!orderData.order_number) {
