@@ -61,6 +61,7 @@ const productDatabase = [
     { "cod": 226, "client": "APTAR", "name": "FIXACAO-GS-28/410CUST-28--THREAD-HDPE-WH", "cavities": 22, "cycle": 36, "weight": 1.65, "pieces_per_hour_goal": 2200, "mp": "" },
     { "cod": 4268, "client": "APTAR", "name": "FIXAÇÃO-GS-28/410CUST-28--THREAD-HDPE-NATURAL-", "cavities": 22, "cycle": 36, "weight": 14.95, "pieces_per_hour_goal": 2200, "mp": "" },
     { "cod": 4324, "client": "APTAR", "name": "FIXAÇÃO-GS-24/410--2N-THREAD-PP-YELL (LISO)", "cavities": 16, "cycle": 18, "weight": 1.25, "pieces_per_hour_goal": 4800, "mp": "" },
+    { "cod": 4134, "client": "APTAR", "name": "FIXAÇÃO-GS-24/410--2N-THREA-PP-BLAC--MA", "cavities": 16, "cycle": 18, "weight": 1.25, "pieces_per_hour_goal": 4800, "mp": "" },
     { "cod": 436, "client": "APTAR", "name": "CLIP PLASTICO PP-RND DS25 K2/F3 OURO (MODIF)", "cavities": 15, "cycle": 16, "weight": 0.45, "pieces_per_hour_goal": 3375, "mp": "" },
     { "cod": 441, "client": "APTAR", "name": "CLIP PLASTICO PP-RND MA00 K2/F3 PRETO (MODIF)", "cavities": 15, "cycle": 16, "weight": 0.45, "pieces_per_hour_goal": 3375, "mp": "" },
     { "cod": 442, "client": "APTAR", "name": "CCLIPE-K--PP-NATU--RRNA00004", "cavities": 15, "cycle": 16, "weight": 0.45, "pieces_per_hour_goal": 3375, "mp": "" },
@@ -252,7 +253,10 @@ const productDatabase = [
     { "cod": 5800, "client": "SUNVISOR", "name": "JUNCAO SEM FURO - KG 2 REC", "cavities": 1, "cycle": 60, "weight": 1.25, "pieces_per_hour_goal": 60, "mp": "" },
     { "cod": 5802, "client": "SUNVISOR", "name": "BASE TRIANGULAR - KG 3 REC", "cavities": 1, "cycle": 60, "weight": 1.25, "pieces_per_hour_goal": 60, "mp": "" },
     { "cod": 5803, "client": "SUNVISOR", "name": "FIXADOR FUNDO FECHADO 6M SEM FURO - KG 4A REC", "cavities": 1, "cycle": 60, "weight": 1.25, "pieces_per_hour_goal": 60, "mp": "" },
-    { "cod": 5805, "client": "SUNVISOR", "name": "CORREDICA FUNDO VAZADO 6M SEM FURO - KG 4B REC", "cavities": 1, "cycle": 60, "weight": 1.25, "pieces_per_hour_goal": 60, "mp": "" }
+    { "cod": 5805, "client": "SUNVISOR", "name": "CORREDICA FUNDO VAZADO 6M SEM FURO - KG 4B REC", "cavities": 1, "cycle": 60, "weight": 1.25, "pieces_per_hour_goal": 60, "mp": "" },
+
+    // --- NOVO PRODUTO ---
+    { "cod": 5048, "client": "OUTROS", "name": "BASE CASSETE MONTADA - 510080655PLP", "cavities": 1, "cycle": 40, "weight": 0, "pieces_per_hour_goal": 90, "mp": "" }
 ];
 
 // Catálogo de máquinas (fonte única para app)
