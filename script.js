@@ -4229,7 +4229,25 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
             machine
         };
 
-        // Atualizar interface
+        // Atualizar interface - KPIs
+        const totalProducedKpi = document.getElementById('total-produced-kpi');
+        const totalProducedSubtext = document.getElementById('total-produced-subtext');
+        if (totalProducedKpi) {
+            // Formatar número grande (ex: 1.2M, 500K)
+            let formattedTotal;
+            if (totalProduction >= 1000000) {
+                formattedTotal = (totalProduction / 1000000).toFixed(1) + 'M';
+            } else if (totalProduction >= 1000) {
+                formattedTotal = (totalProduction / 1000).toFixed(1) + 'K';
+            } else {
+                formattedTotal = totalProduction.toLocaleString('pt-BR');
+            }
+            totalProducedKpi.textContent = formattedTotal;
+        }
+        if (totalProducedSubtext) {
+            totalProducedSubtext.textContent = `${totalProduction.toLocaleString('pt-BR')} peças`;
+        }
+        
         document.getElementById('production-target-vs-actual').textContent = `${targetVsActual.toFixed(1)}%`;
         document.getElementById('top-machine').textContent = topMachine;
         updateProductionRateDisplay();
