@@ -142,6 +142,7 @@ const productDatabase = [
     { "cod": 6095, "client": "APTAR", "name": "ATUADOR-POEMA-PP--5,85-RED---LOT", "cavities": 22, "cycle": 25.5, "weight": 2.15, "pieces_per_hour_goal": 3106, "mp": "" },
     { "cod": 6097, "client": "APTAR", "name": "ATUADOR-SENTIDOS-PP--5,75-RED---LOT", "cavities": 22, "cycle": 25.5, "weight": 2.15, "pieces_per_hour_goal": 3106, "mp": "" },
     { "cod": 6140, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-LILA---SPRAY----CA", "cavities": 30, "cycle": 20, "weight": 1.85, "pieces_per_hour_goal": 5400, "mp": "" },
+    { "cod": 6141, "client": "APTAR", "name": "TAMPA-EM-28,20-PP-PINK--SHNY-----TODODIA", "cavities": 29, "cycle": 12, "weight": 0.95, "pieces_per_hour_goal": 8700, "mp": "" },
     { "cod": 6142, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-PINK---SPRAY----TO", "cavities": 30, "cycle": 20, "weight": 1.85, "pieces_per_hour_goal": 5400, "mp": "" },
 
     // --- ÓRICA ---
