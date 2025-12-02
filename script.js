@@ -12,10 +12,109 @@ document.addEventListener('DOMContentLoaded', function() {
             if (analyticsBtn && !isAuthorizedUser) {
                 analyticsBtn.style.display = 'none';
             }
+            
+            // Mostrar filtro de data no lançamento para Leandro Camargo ou perfis de suporte
+            const lancamentoDateFilter = document.getElementById('lancamento-date-filter');
+            const isLeandro = user && (
+                user.name === 'Leandro Camargo' || user.username === 'leandro.camargo' ||
+                user.email === 'leandro@hokkaido.com.br'
+            );
+            const isSuporte = user?.role === 'suporte';
+            if (lancamentoDateFilter && (isLeandro || isSuporte)) {
+                lancamentoDateFilter.classList.remove('hidden');
+                setupLancamentoDateFilter();
+            }
+            
+            // Mostrar botão de Novo Produto apenas para usuários autorizados (gestores, suporte ou Leandro)
+            const btnNewProduct = document.getElementById('btn-new-product');
+            const isGestorOrAdmin = user && (
+                user.name === 'Leandro Camargo' || user.username === 'leandro.camargo' ||
+                user.email === 'leandro@hokkaido.com.br' ||
+                user.role === 'suporte' || user.role === 'gestor'
+            );
+            if (btnNewProduct && !isGestorOrAdmin) {
+                btnNewProduct.style.display = 'none';
+            }
         } catch (e) {
             console.warn('Não foi possível aplicar restrição da subaba Analytics IA:', e);
         }
     }, 300);
+    
+    // Configurar filtro de data do lançamento
+    function setupLancamentoDateFilter() {
+        const dateInput = document.getElementById('lancamento-date-input');
+        const applyBtn = document.getElementById('lancamento-date-apply');
+        const resetBtn = document.getElementById('lancamento-date-reset');
+        const indicator = document.getElementById('lancamento-date-indicator');
+        const dateLabel = document.getElementById('lancamento-date-label');
+        
+        if (!dateInput) return;
+        
+        // Definir data atual como padrão
+        const today = new Date();
+        const hour = today.getHours();
+        if (hour < 7) today.setDate(today.getDate() - 1);
+        const todayStr = today.toISOString().split('T')[0];
+        dateInput.value = todayStr;
+        
+        // Variável global para data selecionada no lançamento
+        window.lancamentoFilterDate = null;
+        
+        applyBtn?.addEventListener('click', () => {
+            const selectedDate = dateInput.value;
+            if (!selectedDate) return;
+            
+            window.lancamentoFilterDate = selectedDate;
+            
+            // Mostrar indicador
+            if (indicator) indicator.classList.remove('hidden');
+            if (dateLabel) {
+                const dateObj = new Date(selectedDate + 'T12:00:00');
+                const formatted = dateObj.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+                dateLabel.textContent = `Visualizando: ${formatted}`;
+            }
+            
+            // Recarregar dados com a nova data
+            if (typeof populateMachineSelector === 'function') {
+                populateMachineSelector(selectedDate);
+            }
+            if (typeof loadTodayStats === 'function') {
+                loadTodayStats(selectedDate);
+            }
+            if (typeof loadRecentEntries === 'function') {
+                loadRecentEntries(false, selectedDate);
+            }
+            
+            console.log('[FILTRO DATA] Aplicado:', selectedDate);
+        });
+        
+        resetBtn?.addEventListener('click', () => {
+            window.lancamentoFilterDate = null;
+            dateInput.value = todayStr;
+            
+            // Ocultar indicador
+            if (indicator) indicator.classList.add('hidden');
+            
+            // Recarregar dados do dia atual
+            if (typeof populateMachineSelector === 'function') {
+                populateMachineSelector();
+            }
+            if (typeof loadTodayStats === 'function') {
+                loadTodayStats();
+            }
+            if (typeof loadRecentEntries === 'function') {
+                loadRecentEntries(false);
+            }
+            
+            console.log('[FILTRO DATA] Resetado para hoje');
+        });
+        
+        // Renderizar ícones
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+    
     function popularSelectMPOrdem() {
         const select = document.getElementById('order-raw-material');
         if (!select) return;
@@ -9040,6 +9139,20 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             loadExtendedDowntimeList();
         }
 
+        if (page === 'qualidade') {
+            // Página em construção - apenas renderizar ícones
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        }
+
+        if (page === 'processo') {
+            // Página em construção - apenas renderizar ícones
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        }
+
         if (page === 'ajustes') {
             setupAjustesPage();
         }
@@ -15210,6 +15323,53 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (quickReworkCancel) quickReworkCancel.addEventListener('click', () => closeModal('quick-rework-modal'));
         if (quickReworkForm) quickReworkForm.addEventListener('submit', handleReworkSubmit);
 
+        // === SISTEMA DE TRIAGEM ===
+        // Botão principal de triagem
+        const btnTriagem = document.getElementById('btn-triagem');
+        if (btnTriagem && !btnTriagem.dataset.listenerAttached) {
+            btnTriagem.addEventListener('click', openTriagemMenu);
+            btnTriagem.dataset.listenerAttached = 'true';
+        }
+
+        // Modal menu triagem
+        const triagemMenuClose = document.getElementById('triagem-menu-close');
+        const triagemMenuCancel = document.getElementById('triagem-menu-cancel');
+        if (triagemMenuClose) triagemMenuClose.addEventListener('click', () => closeModal('triagem-menu-modal'));
+        if (triagemMenuCancel) triagemMenuCancel.addEventListener('click', () => closeModal('triagem-menu-modal'));
+
+        // Botões do menu de triagem
+        const btnEnviarTriagem = document.getElementById('btn-enviar-triagem');
+        const btnVoltaTriagem = document.getElementById('btn-volta-triagem');
+        const btnDescarteTriagem = document.getElementById('btn-descarte-triagem');
+
+        if (btnEnviarTriagem) btnEnviarTriagem.addEventListener('click', openEnviarTriagemModal);
+        if (btnVoltaTriagem) btnVoltaTriagem.addEventListener('click', openVoltaTriagemModal);
+        if (btnDescarteTriagem) btnDescarteTriagem.addEventListener('click', openDescarteTriagemModal);
+
+        // Modal Enviar Triagem
+        const enviarTriagemClose = document.getElementById('enviar-triagem-close');
+        const enviarTriagemCancel = document.getElementById('enviar-triagem-cancel');
+        const enviarTriagemForm = document.getElementById('enviar-triagem-form');
+        if (enviarTriagemClose) enviarTriagemClose.addEventListener('click', () => closeModal('enviar-triagem-modal'));
+        if (enviarTriagemCancel) enviarTriagemCancel.addEventListener('click', () => closeModal('enviar-triagem-modal'));
+        if (enviarTriagemForm) enviarTriagemForm.addEventListener('submit', handleEnviarTriagemSubmit);
+
+        // Modal Volta Triagem
+        const voltaTriagemClose = document.getElementById('volta-triagem-close');
+        const voltaTriagemCancel = document.getElementById('volta-triagem-cancel');
+        const voltaTriagemForm = document.getElementById('volta-triagem-form');
+        if (voltaTriagemClose) voltaTriagemClose.addEventListener('click', () => closeModal('volta-triagem-modal'));
+        if (voltaTriagemCancel) voltaTriagemCancel.addEventListener('click', () => closeModal('volta-triagem-modal'));
+        if (voltaTriagemForm) voltaTriagemForm.addEventListener('submit', handleVoltaTriagemSubmit);
+
+        // Modal Descarte Triagem
+        const descarteTriagemClose = document.getElementById('descarte-triagem-close');
+        const descarteTriagemCancel = document.getElementById('descarte-triagem-cancel');
+        const descarteTriagemForm = document.getElementById('descarte-triagem-form');
+        if (descarteTriagemClose) descarteTriagemClose.addEventListener('click', () => closeModal('descarte-triagem-modal'));
+        if (descarteTriagemCancel) descarteTriagemCancel.addEventListener('click', () => closeModal('descarte-triagem-modal'));
+        if (descarteTriagemForm) descarteTriagemForm.addEventListener('submit', handleDescarteTriagemSubmit);
+
         // Modal de borra
         const manualBorraClose = document.getElementById('manual-borra-close');
         const manualBorraCancel = document.getElementById('manual-borra-cancel');
@@ -17791,6 +17951,724 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             alert('Erro ao registrar retrabalho. Tente novamente.');
         }
     }
+
+    // ============================================
+    // SISTEMA DE TRIAGEM - INÍCIO
+    // ============================================
+
+    // Buscar quantidade em triagem para a máquina/OP atual
+    async function getTriagemPendente() {
+        if (!selectedMachineData) return 0;
+        
+        try {
+            const machineId = selectedMachineData.machine || '';
+            const orderId = selectedMachineData.order_id || selectedMachineData.orderId || '';
+            
+            // Buscar entradas de triagem pendentes (enviadas mas não resolvidas)
+            let query = db.collection('triagem_entries')
+                .where('machine', '==', machineId)
+                .where('status', '==', 'PENDENTE');
+            
+            if (orderId) {
+                query = query.where('orderId', '==', orderId);
+            }
+            
+            const snapshot = await query.get();
+            let totalPendente = 0;
+            
+            snapshot.docs.forEach(doc => {
+                const data = doc.data();
+                const enviado = Number(data.quantidade_enviada || 0);
+                const resolvido = Number(data.quantidade_resolvida || 0);
+                totalPendente += Math.max(0, enviado - resolvido);
+            });
+            
+            return totalPendente;
+        } catch (error) {
+            console.error('[TRIAGEM] Erro ao buscar pendentes:', error);
+            return 0;
+        }
+    }
+
+    // Abrir menu principal de triagem
+    async function openTriagemMenu() {
+        console.log('[TRIAGEM] Abrindo menu de triagem');
+        
+        if (!selectedMachineData) {
+            alert('Selecione uma máquina primeiro.');
+            return;
+        }
+        
+        // Atualizar contexto nos modais
+        updateTriagemContexts();
+        
+        // Buscar quantidade em triagem
+        const pendente = await getTriagemPendente();
+        const pendenteEl = document.getElementById('triagem-pendente-qty');
+        if (pendenteEl) {
+            pendenteEl.textContent = pendente.toLocaleString('pt-BR');
+        }
+        
+        openModal('triagem-menu-modal');
+        lucide.createIcons();
+    }
+
+    // Atualizar contexto em todos os modais de triagem
+    function updateTriagemContexts() {
+        const modals = [
+            'triagem-menu-modal',
+            'enviar-triagem-modal', 
+            'volta-triagem-modal',
+            'descarte-triagem-modal'
+        ];
+        
+        const machineText = selectedMachineData?.machine || '-';
+        const productText = selectedMachineData?.product?.substring(0, 30) + '...' || selectedMachineData?.productName?.substring(0, 30) + '...' || '-';
+        
+        modals.forEach(modalId => {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                const machineEl = modal.querySelector('.context-machine');
+                const productEl = modal.querySelector('.context-product');
+                if (machineEl) machineEl.textContent = machineText;
+                if (productEl) productEl.textContent = productText;
+            }
+        });
+    }
+
+    // Abrir modal Enviar para Triagem
+    function openEnviarTriagemModal() {
+        closeModal('triagem-menu-modal');
+        
+        // Limpar formulário
+        const form = document.getElementById('enviar-triagem-form');
+        if (form) form.reset();
+        
+        updateTriagemContexts();
+        openModal('enviar-triagem-modal');
+        lucide.createIcons();
+        
+        // Focar no campo de quantidade
+        setTimeout(() => {
+            document.getElementById('enviar-triagem-qty')?.focus();
+        }, 100);
+    }
+
+    // Abrir modal Volta de Triagem
+    async function openVoltaTriagemModal() {
+        closeModal('triagem-menu-modal');
+        
+        // Limpar formulário
+        const form = document.getElementById('volta-triagem-form');
+        if (form) form.reset();
+        
+        // Mostrar quantidade pendente
+        const pendente = await getTriagemPendente();
+        const pendenteEl = document.getElementById('volta-triagem-pendente');
+        if (pendenteEl) {
+            pendenteEl.textContent = pendente.toLocaleString('pt-BR');
+        }
+        
+        updateTriagemContexts();
+        openModal('volta-triagem-modal');
+        lucide.createIcons();
+        
+        setTimeout(() => {
+            document.getElementById('volta-triagem-qty')?.focus();
+        }, 100);
+    }
+
+    // Abrir modal Descarte Pós-Triagem
+    async function openDescarteTriagemModal() {
+        closeModal('triagem-menu-modal');
+        
+        // Limpar formulário
+        const form = document.getElementById('descarte-triagem-form');
+        if (form) form.reset();
+        
+        // Mostrar quantidade pendente
+        const pendente = await getTriagemPendente();
+        const pendenteEl = document.getElementById('descarte-triagem-pendente');
+        if (pendenteEl) {
+            pendenteEl.textContent = pendente.toLocaleString('pt-BR');
+        }
+        
+        updateTriagemContexts();
+        openModal('descarte-triagem-modal');
+        lucide.createIcons();
+        
+        setTimeout(() => {
+            document.getElementById('descarte-triagem-qty')?.focus();
+        }, 100);
+    }
+
+    // Função utilitária para retry com backoff exponencial (para erros 429)
+    async function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
+        let lastError;
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                return await fn();
+            } catch (error) {
+                lastError = error;
+                const is429 = error.message?.includes('429') || error.code === 'resource-exhausted';
+                if (!is429 || attempt === maxRetries) {
+                    throw error;
+                }
+                const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 500;
+                console.log(`[RETRY] Tentativa ${attempt + 1} falhou com 429, aguardando ${Math.round(delay)}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+        throw lastError;
+    }
+
+    // Handler: Enviar para Triagem
+    async function handleEnviarTriagemSubmit(e) {
+        e.preventDefault();
+        
+        if (!window.authSystem?.checkPermissionForAction('add_rework')) {
+            showNotification('Permissão negada', 'error');
+            return;
+        }
+        
+        if (!selectedMachineData) {
+            alert('Nenhuma máquina selecionada.');
+            return;
+        }
+        
+        const qtyInput = document.getElementById('enviar-triagem-qty');
+        const motivoSelect = document.getElementById('enviar-triagem-motivo');
+        const obsInput = document.getElementById('enviar-triagem-obs');
+        
+        const quantity = parseInt(qtyInput?.value, 10) || 0;
+        const motivo = motivoSelect?.value || '';
+        const observations = (obsInput?.value || '').trim();
+        
+        if (quantity <= 0) {
+            alert('Informe uma quantidade válida.');
+            qtyInput?.focus();
+            return;
+        }
+        
+        if (!motivo) {
+            alert('Selecione o motivo da triagem.');
+            motivoSelect?.focus();
+            return;
+        }
+        
+        const planId = selectedMachineData?.id || null;
+        const currentShift = getCurrentShift();
+        const dataReferencia = getProductionDateString();
+        const currentUser = getActiveUser();
+        const machineId = selectedMachineData.machine || '';
+        const orderId = selectedMachineData.order_id || selectedMachineData.orderId || null;
+        
+        console.log('[TRIAGEM] Enviando para triagem:', { quantity, motivo, machineId });
+        
+        try {
+            // Buscar lançamentos de produção FORA da transação
+            const productionSnapshot = await db.collection('production_entries')
+                .where('machine', '==', machineId)
+                .where('data', '==', dataReferencia)
+                .where('turno', '==', currentShift)
+                .get();
+            
+            const productionDocs = productionSnapshot.docs.map(doc => ({ ref: doc.ref, id: doc.id }));
+            
+            // Transação para descontar da produção e criar registro de triagem
+            const result = await db.runTransaction(async (transaction) => {
+                // === FASE 1: TODAS AS LEITURAS ===
+                
+                // Ler produções
+                const productionReads = [];
+                for (const docInfo of productionDocs) {
+                    const freshDoc = await transaction.get(docInfo.ref);
+                    if (freshDoc.exists) {
+                        productionReads.push({ ref: docInfo.ref, data: freshDoc.data() });
+                    }
+                }
+                
+                // Ler planejamento
+                let planSnap = null;
+                if (planId) {
+                    const planRef = db.collection('planning').doc(planId);
+                    planSnap = await transaction.get(planRef);
+                }
+                
+                // Ler OP
+                let orderSnap = null;
+                if (orderId) {
+                    const orderRef = db.collection('production_orders').doc(orderId);
+                    orderSnap = await transaction.get(orderRef);
+                }
+                
+                // === FASE 2: TODAS AS ESCRITAS ===
+                
+                let totalDeducted = 0;
+                let remainingToDeduct = quantity;
+                
+                // 1. Descontar das produções
+                for (const prodDoc of productionReads) {
+                    if (remainingToDeduct <= 0) break;
+                    
+                    const prodData = prodDoc.data || {};
+                    const currentQty = Number(prodData.produzido || prodData.quantity || 0);
+                    
+                    if (currentQty <= 0) continue;
+                    
+                    const deduct = Math.min(currentQty, remainingToDeduct);
+                    const newQty = currentQty - deduct;
+                    
+                    transaction.update(prodDoc.ref, {
+                        produzido: newQty,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        lastAdjustment: {
+                            type: 'triagem_envio',
+                            deducted: deduct,
+                            previousQty: currentQty,
+                            newQty: newQty,
+                            motivo: motivo,
+                            adjustedBy: currentUser?.username || 'sistema',
+                            adjustedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        }
+                    });
+                    
+                    totalDeducted += deduct;
+                    remainingToDeduct -= deduct;
+                }
+                
+                // 2. Atualizar totais no planejamento
+                if (planSnap && planSnap.exists && totalDeducted > 0) {
+                    const planData = planSnap.data() || {};
+                    const currentTotal = Number(planData.total_produzido || 0);
+                    transaction.update(planSnap.ref, {
+                        total_produzido: Math.max(0, currentTotal - totalDeducted),
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+                
+                // 3. Atualizar total da OP
+                if (orderSnap && orderSnap.exists && totalDeducted > 0) {
+                    const orderData = orderSnap.data() || {};
+                    const currentTotal = Number(orderData.total_produzido ?? orderData.totalProduced ?? 0);
+                    transaction.update(orderSnap.ref, {
+                        total_produzido: Math.max(0, currentTotal - totalDeducted),
+                        totalProduced: Math.max(0, currentTotal - totalDeducted),
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+                
+                // 4. Criar registro de triagem
+                const triagemRef = db.collection('triagem_entries').doc();
+                transaction.set(triagemRef, {
+                    tipo: 'ENVIO',
+                    status: 'PENDENTE',
+                    planId: planId,
+                    orderId: orderId,
+                    machine: machineId,
+                    mp: selectedMachineData.mp || '',
+                    product: selectedMachineData.product || selectedMachineData.productName || '',
+                    data: dataReferencia,
+                    turno: currentShift,
+                    quantidade_enviada: quantity,
+                    quantidade_descontada: totalDeducted,
+                    quantidade_resolvida: 0,
+                    motivo: motivo,
+                    observacoes: observations,
+                    registradoPor: currentUser?.username || null,
+                    registradoPorNome: getCurrentUserName(),
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                return { totalDeducted, triagemId: triagemRef.id };
+            });
+            
+            closeModal('enviar-triagem-modal');
+            await Promise.all([
+                populateMachineSelector(),
+                loadTodayStats(),
+                refreshLaunchCharts(),
+                loadRecentEntries(false)
+            ]);
+            
+            if (result.totalDeducted > 0) {
+                showNotification(`✅ ${result.totalDeducted} peças enviadas para triagem!`, 'success');
+            } else {
+                showNotification('⚠️ Triagem registrada, mas nenhuma produção foi descontada (verifique se há produção no turno).', 'warning');
+            }
+            
+            console.log('[TRIAGEM] Envio concluído:', result);
+            
+        } catch (error) {
+            console.error('[TRIAGEM] Erro ao enviar:', error);
+            alert('Erro ao enviar para triagem. Tente novamente.');
+        }
+    }
+
+    // Handler: Volta de Triagem
+    async function handleVoltaTriagemSubmit(e) {
+        e.preventDefault();
+        
+        if (!window.authSystem?.checkPermissionForAction('add_production')) {
+            showNotification('Permissão negada', 'error');
+            return;
+        }
+        
+        if (!selectedMachineData) {
+            alert('Nenhuma máquina selecionada.');
+            return;
+        }
+        
+        const qtyInput = document.getElementById('volta-triagem-qty');
+        const resultadoSelect = document.getElementById('volta-triagem-resultado');
+        const obsInput = document.getElementById('volta-triagem-obs');
+        
+        const quantity = parseInt(qtyInput?.value, 10) || 0;
+        const resultado = resultadoSelect?.value || '';
+        const observations = (obsInput?.value || '').trim();
+        
+        if (quantity <= 0) {
+            alert('Informe uma quantidade válida.');
+            qtyInput?.focus();
+            return;
+        }
+        
+        if (!resultado) {
+            alert('Selecione o resultado da triagem.');
+            resultadoSelect?.focus();
+            return;
+        }
+        
+        // Verificar se há peças pendentes suficientes
+        const pendente = await getTriagemPendente();
+        if (quantity > pendente) {
+            alert(`Quantidade maior que o pendente em triagem (${pendente} peças).`);
+            return;
+        }
+        
+        const planId = selectedMachineData?.id || null;
+        const currentShift = getCurrentShift();
+        const dataReferencia = getProductionDateString();
+        const currentUser = getActiveUser();
+        const machineId = selectedMachineData.machine || '';
+        const orderId = selectedMachineData.order_id || selectedMachineData.orderId || null;
+        
+        console.log('[TRIAGEM] Registrando volta:', { quantity, resultado, machineId });
+        
+        try {
+            await retryWithBackoff(async () => {
+                // Buscar triagens pendentes FORA da transação
+                const triagemSnapshot = await db.collection('triagem_entries')
+                    .where('machine', '==', machineId)
+                    .where('status', '==', 'PENDENTE')
+                    .get();
+                
+                // Ordenar por timestamp no client-side
+                const triagemDocs = triagemSnapshot.docs
+                    .map(doc => ({ ref: doc.ref, id: doc.id, timestamp: doc.data().timestamp }))
+                    .sort((a, b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0))
+                    .map(({ ref, id }) => ({ ref, id }));
+                
+                await db.runTransaction(async (transaction) => {
+                    // === FASE 1: TODAS AS LEITURAS ===
+                    
+                    // Ler planejamento
+                    let planSnap = null;
+                    if (planId) {
+                        const planRef = db.collection('planning').doc(planId);
+                    planSnap = await transaction.get(planRef);
+                }
+                
+                // Ler OP
+                let orderSnap = null;
+                if (orderId) {
+                    const orderRef = db.collection('production_orders').doc(orderId);
+                    orderSnap = await transaction.get(orderRef);
+                }
+                
+                // Ler triagens pendentes (fresh read)
+                const triagemReads = [];
+                for (const docInfo of triagemDocs) {
+                    const freshDoc = await transaction.get(docInfo.ref);
+                    if (freshDoc.exists) {
+                        triagemReads.push({ ref: docInfo.ref, data: freshDoc.data() });
+                    }
+                }
+                
+                // === FASE 2: TODAS AS ESCRITAS ===
+                
+                // 1. Criar entrada de produção como "VOLTA_TRIAGEM"
+                const productionRef = db.collection('production_entries').doc();
+                transaction.set(productionRef, {
+                    planId: planId,
+                    orderId: orderId,
+                    machine: machineId,
+                    mp: selectedMachineData.mp || '',
+                    data: dataReferencia,
+                    turno: currentShift,
+                    produzido: quantity,
+                    tipo_lancamento: 'VOLTA_TRIAGEM',
+                    resultado_triagem: resultado,
+                    peso_bruto: 0,
+                    observacoes: observations,
+                    registradoPor: currentUser?.username || null,
+                    registradoPorNome: getCurrentUserName(),
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                // 2. Atualizar totais no planejamento
+                if (planSnap && planSnap.exists) {
+                    const planData = planSnap.data() || {};
+                    const currentTotal = Number(planData.total_produzido || 0);
+                    transaction.update(planSnap.ref, {
+                        total_produzido: currentTotal + quantity,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+                
+                // 3. Atualizar total da OP
+                if (orderSnap && orderSnap.exists) {
+                    const orderData = orderSnap.data() || {};
+                    const currentTotal = Number(orderData.total_produzido ?? orderData.totalProduced ?? 0);
+                    transaction.update(orderSnap.ref, {
+                        total_produzido: currentTotal + quantity,
+                        totalProduced: currentTotal + quantity,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+                
+                // 4. Atualizar registros de triagem pendentes
+                let remainingToResolve = quantity;
+                
+                for (const triagemDoc of triagemReads) {
+                    if (remainingToResolve <= 0) break;
+                    
+                    const triagemData = triagemDoc.data || {};
+                    const enviado = Number(triagemData.quantidade_enviada || 0);
+                    const jaResolvido = Number(triagemData.quantidade_resolvida || 0);
+                    const disponivel = enviado - jaResolvido;
+                    
+                    if (disponivel <= 0) continue;
+                    
+                    const resolver = Math.min(disponivel, remainingToResolve);
+                    const novoResolvido = jaResolvido + resolver;
+                    const novoStatus = novoResolvido >= enviado ? 'RESOLVIDO' : 'PENDENTE';
+                    
+                    transaction.update(triagemDoc.ref, {
+                        quantidade_resolvida: novoResolvido,
+                        status: novoStatus,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    
+                    remainingToResolve -= resolver;
+                }
+                
+                // 5. Criar registro de volta de triagem
+                const voltaRef = db.collection('triagem_entries').doc();
+                transaction.set(voltaRef, {
+                    tipo: 'VOLTA',
+                    status: 'CONCLUIDO',
+                    planId: planId,
+                    orderId: orderId,
+                    machine: machineId,
+                    mp: selectedMachineData.mp || '',
+                    product: selectedMachineData.product || selectedMachineData.productName || '',
+                    data: dataReferencia,
+                    turno: currentShift,
+                    quantidade: quantity,
+                    resultado: resultado,
+                    observacoes: observations,
+                    registradoPor: currentUser?.username || null,
+                    registradoPorNome: getCurrentUserName(),
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            });
+            }); // Fim do retryWithBackoff
+            
+            closeModal('volta-triagem-modal');
+            await Promise.all([
+                populateMachineSelector(),
+                loadTodayStats(),
+                refreshLaunchCharts(),
+                loadRecentEntries(false)
+            ]);
+            
+            showNotification(`✅ ${quantity} peças retornaram da triagem como "${resultado}"!`, 'success');
+            console.log('[TRIAGEM] Volta concluída');
+            
+        } catch (error) {
+            console.error('[TRIAGEM] Erro na volta:', error);
+            alert('Erro ao registrar volta de triagem. Tente novamente.');
+        }
+    }
+
+    // Handler: Descarte Pós-Triagem
+    async function handleDescarteTriagemSubmit(e) {
+        e.preventDefault();
+        
+        if (!window.authSystem?.checkPermissionForAction('add_losses')) {
+            showNotification('Permissão negada', 'error');
+            return;
+        }
+        
+        if (!selectedMachineData) {
+            alert('Nenhuma máquina selecionada.');
+            return;
+        }
+        
+        const qtyInput = document.getElementById('descarte-triagem-qty');
+        const motivoSelect = document.getElementById('descarte-triagem-motivo');
+        const obsInput = document.getElementById('descarte-triagem-obs');
+        
+        const quantity = parseInt(qtyInput?.value, 10) || 0;
+        const motivo = motivoSelect?.value || '';
+        const observations = (obsInput?.value || '').trim();
+        
+        if (quantity <= 0) {
+            alert('Informe uma quantidade válida.');
+            qtyInput?.focus();
+            return;
+        }
+        
+        if (!motivo) {
+            alert('Selecione o motivo do descarte.');
+            motivoSelect?.focus();
+            return;
+        }
+        
+        // Verificar se há peças pendentes suficientes
+        const pendente = await getTriagemPendente();
+        if (quantity > pendente) {
+            alert(`Quantidade maior que o pendente em triagem (${pendente} peças).`);
+            return;
+        }
+        
+        const planId = selectedMachineData?.id || null;
+        const currentShift = getCurrentShift();
+        const dataReferencia = getProductionDateString();
+        const currentUser = getActiveUser();
+        const machineId = selectedMachineData.machine || '';
+        const orderId = selectedMachineData.order_id || selectedMachineData.orderId || null;
+        
+        console.log('[TRIAGEM] Registrando descarte:', { quantity, motivo, machineId });
+        
+        try {
+            await retryWithBackoff(async () => {
+                // Buscar triagens pendentes FORA da transação
+                const triagemSnapshot = await db.collection('triagem_entries')
+                    .where('machine', '==', machineId)
+                    .where('status', '==', 'PENDENTE')
+                    .get();
+                
+                // Ordenar por timestamp no client-side
+                const triagemDocs = triagemSnapshot.docs
+                    .map(doc => ({ ref: doc.ref, id: doc.id, timestamp: doc.data().timestamp }))
+                    .sort((a, b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0))
+                    .map(({ ref, id }) => ({ ref, id }));
+                
+                await db.runTransaction(async (transaction) => {
+                    // === FASE 1: TODAS AS LEITURAS ===
+                    const triagemReads = [];
+                    for (const docInfo of triagemDocs) {
+                        const freshDoc = await transaction.get(docInfo.ref);
+                        if (freshDoc.exists) {
+                            triagemReads.push({ ref: docInfo.ref, data: freshDoc.data() });
+                        }
+                    }
+                    
+                    // === FASE 2: TODAS AS ESCRITAS ===
+                    
+                    // 1. Criar entrada de perda como "DESCARTE_TRIAGEM"
+                const lossRef = db.collection('loss_entries').doc();
+                transaction.set(lossRef, {
+                    planId: planId,
+                    orderId: orderId,
+                    machine: machineId,
+                    mp: selectedMachineData.mp || '',
+                    data: dataReferencia,
+                    turno: currentShift,
+                    quantidade: quantity,
+                    tipo_perda: 'DESCARTE_TRIAGEM',
+                    motivo: motivo,
+                    observacoes: observations,
+                    registradoPor: currentUser?.username || null,
+                    registradoPorNome: getCurrentUserName(),
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                // 2. Atualizar registros de triagem pendentes
+                let remainingToResolve = quantity;
+                
+                for (const triagemDoc of triagemReads) {
+                    if (remainingToResolve <= 0) break;
+                    
+                    const triagemData = triagemDoc.data || {};
+                    const enviado = Number(triagemData.quantidade_enviada || 0);
+                    const jaResolvido = Number(triagemData.quantidade_resolvida || 0);
+                    const disponivel = enviado - jaResolvido;
+                    
+                    if (disponivel <= 0) continue;
+                    
+                    const resolver = Math.min(disponivel, remainingToResolve);
+                    const novoResolvido = jaResolvido + resolver;
+                    const novoStatus = novoResolvido >= enviado ? 'RESOLVIDO' : 'PENDENTE';
+                    
+                    transaction.update(triagemDoc.ref, {
+                        quantidade_resolvida: novoResolvido,
+                        status: novoStatus,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    
+                    remainingToResolve -= resolver;
+                }
+                
+                // 3. Criar registro de descarte de triagem
+                const descarteRef = db.collection('triagem_entries').doc();
+                transaction.set(descarteRef, {
+                    tipo: 'DESCARTE',
+                    status: 'CONCLUIDO',
+                    planId: planId,
+                    orderId: orderId,
+                    machine: machineId,
+                    mp: selectedMachineData.mp || '',
+                    product: selectedMachineData.product || selectedMachineData.productName || '',
+                    data: dataReferencia,
+                    turno: currentShift,
+                    quantidade: quantity,
+                    motivo: motivo,
+                    observacoes: observations,
+                    registradoPor: currentUser?.username || null,
+                    registradoPorNome: getCurrentUserName(),
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            });
+            }); // Fim do retryWithBackoff
+            
+            closeModal('descarte-triagem-modal');
+            await Promise.all([
+                populateMachineSelector(),
+                loadTodayStats(),
+                refreshLaunchCharts(),
+                loadRecentEntries(false)
+            ]);
+            
+            showNotification(`⚠️ ${quantity} peças descartadas após triagem.`, 'warning');
+            console.log('[TRIAGEM] Descarte concluído');
+            
+        } catch (error) {
+            console.error('[TRIAGEM] Erro no descarte:', error);
+            alert('Erro ao registrar descarte. Tente novamente.');
+        }
+    }
+
+    // ============================================
+    // SISTEMA DE TRIAGEM - FIM
+    // ============================================
     
     // Funções auxiliares
     function getCurrentShift(reference = new Date()) {
@@ -18168,7 +19046,8 @@ function sendDowntimeNotification() {
             production: { label: 'Produção', badge: 'bg-green-100 text-green-700 border border-green-200' },
             loss: { label: 'Perda', badge: 'bg-orange-100 text-orange-700 border border-orange-200' },
             downtime: { label: 'Parada', badge: 'bg-red-100 text-red-700 border border-red-200' },
-            rework: { label: 'Retrabalho', badge: 'bg-purple-100 text-purple-700 border border-purple-200' }
+            rework: { label: 'Retrabalho', badge: 'bg-purple-100 text-purple-700 border border-purple-200' },
+            triagem: { label: 'Triagem', badge: 'bg-indigo-100 text-indigo-700 border border-indigo-200' }
         };
 
         const config = typeConfig[entry.type] || { label: 'Lançamento', badge: 'bg-gray-100 text-gray-600 border border-gray-200' };
@@ -18187,16 +19066,37 @@ function sendDowntimeNotification() {
 
         if (entry.type === 'production') {
             const produzido = parseInt(entry.data.produzido ?? entry.data.quantity ?? 0, 10) || 0;
+            
+            // Verificar se é uma volta de triagem
+            if (entry.data.tipo_lancamento === 'VOLTA_TRIAGEM') {
+                details.push(`<span class="text-emerald-600">🔄 Volta de Triagem</span>`);
+                if (entry.data.resultado_triagem) {
+                    details.push(`<span class="text-xs text-emerald-500">${entry.data.resultado_triagem}</span>`);
+                }
+            }
+            
             details.push(`<span class="font-semibold text-gray-800">${produzido} peça(s)</span>`);
             const pesoBruto = parseNumber(entry.data.peso_bruto ?? entry.data.weight ?? 0);
             if (pesoBruto > 0) {
                 details.push(`${pesoBruto.toFixed(3)} kg`);
             }
         } else if (entry.type === 'loss') {
+            // Verificar se é um descarte de triagem
+            if (entry.data.tipo_perda === 'DESCARTE_TRIAGEM') {
+                details.push(`<span class="text-red-600">🗑️ Descarte Pós-Triagem</span>`);
+            }
+            
             const refugoKg = parseNumber(entry.data.refugo_kg ?? entry.data.weight ?? 0);
-            details.push(`<span class="font-semibold text-gray-800">${refugoKg.toFixed(3)} kg</span>`);
-            if (entry.data.perdas) {
-                details.push(`Motivo: ${entry.data.perdas}`);
+            const quantidade = parseInt(entry.data.quantidade ?? 0, 10) || 0;
+            
+            if (quantidade > 0) {
+                details.push(`<span class="font-semibold text-gray-800">${quantidade} peça(s)</span>`);
+            }
+            if (refugoKg > 0) {
+                details.push(`<span class="font-semibold text-gray-800">${refugoKg.toFixed(3)} kg</span>`);
+            }
+            if (entry.data.perdas || entry.data.motivo) {
+                details.push(`Motivo: ${entry.data.perdas || entry.data.motivo}`);
             }
         } else if (entry.type === 'downtime') {
             const start = entry.data.startTime ? `${entry.data.startTime}` : '';
@@ -18246,6 +19146,36 @@ function sendDowntimeNotification() {
             }
             if (entry.data.motivo) {
                 details.push(`Motivo: ${entry.data.motivo}`);
+            }
+        } else if (entry.type === 'triagem') {
+            const tipoTriagem = entry.data.tipo || 'ENVIO';
+            const quantidade = parseInt(entry.data.quantidade ?? entry.data.quantidade_enviada ?? 0, 10) || 0;
+            const status = entry.data.status || 'PENDENTE';
+            
+            // Ícone e label baseado no tipo
+            const tipoLabels = {
+                'ENVIO': { icon: '📤', label: 'Enviado p/ Triagem', color: 'text-indigo-600' },
+                'VOLTA': { icon: '✅', label: 'Volta de Triagem', color: 'text-emerald-600' },
+                'DESCARTE': { icon: '🗑️', label: 'Descarte Pós-Triagem', color: 'text-red-600' }
+            };
+            
+            const tipoInfo = tipoLabels[tipoTriagem] || tipoLabels['ENVIO'];
+            
+            details.push(`<span class="font-semibold ${tipoInfo.color}">${tipoInfo.icon} ${tipoInfo.label}</span>`);
+            details.push(`<span class="font-semibold text-gray-800">${quantidade} peça(s)</span>`);
+            
+            if (tipoTriagem === 'ENVIO') {
+                const pendente = quantidade - (parseInt(entry.data.quantidade_resolvida ?? 0, 10) || 0);
+                if (pendente > 0) {
+                    details.push(`<span class="text-amber-600">⏳ ${pendente} pendente(s)</span>`);
+                }
+            }
+            
+            if (entry.data.motivo) {
+                details.push(`Motivo: ${entry.data.motivo}`);
+            }
+            if (entry.data.resultado) {
+                details.push(`Resultado: ${entry.data.resultado}`);
             }
         }
 
@@ -18306,7 +19236,7 @@ function sendDowntimeNotification() {
         }
     }
 
-    async function loadRecentEntries(showLoading = true) {
+    async function loadRecentEntries(showLoading = true, filterDate = null) {
         if (!recentEntriesList) return;
 
         if (showLoading) {
@@ -18322,7 +19252,7 @@ function sendDowntimeNotification() {
         }
 
         try {
-            const date = getProductionDateString();
+            const date = filterDate || window.lancamentoFilterDate || getProductionDateString();
             const planId = selectedMachineData.id;
 
             const productionSnapshot = await db.collection('production_entries')
@@ -18419,6 +19349,28 @@ function sendDowntimeNotification() {
                 recentEntriesCache.set(doc.id, entry);
             });
 
+            // Carregar entradas de triagem
+            const triagemSnapshot = await db.collection('triagem_entries')
+                .where('machine', '==', selectedMachineData.machine)
+                .where('data', '==', date)
+                .get();
+
+            triagemSnapshot.forEach(doc => {
+                const data = doc.data();
+                const timestamp = data.createdAt?.toDate?.() || data.timestamp?.toDate?.() || (data.data ? new Date(`${data.data}T12:00:00`) : null);
+
+                const entry = {
+                    id: doc.id,
+                    type: 'triagem',
+                    collection: 'triagem_entries',
+                    data,
+                    timestamp
+                };
+
+                entries.push(entry);
+                recentEntriesCache.set(doc.id, entry);
+            });
+
             entries.sort((a, b) => {
                 const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
                 const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
@@ -18463,7 +19415,8 @@ function sendDowntimeNotification() {
                 production: 'lançamentos de produção',
                 downtime: 'paradas',
                 loss: 'perdas',
-                rework: 'retrabalhos'
+                rework: 'retrabalhos',
+                triagem: 'triagens'
             };
             updateRecentEntriesEmptyMessage(`Não há ${filterLabels[filter]} para exibir.`);
             setRecentEntriesState({ loading: false, empty: true });
@@ -19117,9 +20070,9 @@ function sendDowntimeNotification() {
     }
 
     // Função para popular o seletor de máquinas (e cards)
-    async function populateMachineSelector() {
+    async function populateMachineSelector(filterDate = null) {
         try {
-            const today = getProductionDateString();
+            const today = filterDate || window.lancamentoFilterDate || getProductionDateString();
             const planSnapshot = await db.collection('planning').where('date', '==', today).get();
             let plans = planSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
@@ -19541,11 +20494,11 @@ function sendDowntimeNotification() {
     }
     
     // Função para carregar estatísticas do dia (janela de produção 07:00 -> 07:00)
-    async function loadTodayStats() {
+    async function loadTodayStats(filterDate = null) {
         if (!selectedMachineData) return;
         
         try {
-            const today = getProductionDateString();
+            const today = filterDate || window.lancamentoFilterDate || getProductionDateString();
             // Janela do dia de produção atual: [hoje 07:00, amanhã 07:00)
             const windowStart = combineDateAndTime(today, '07:00');
             const nextDay = new Date(windowStart);
@@ -21664,6 +22617,221 @@ window.clearImportFile = clearImportFile;
 window.toggleImportRow = toggleImportRow;
 window.toggleAllImportRows = toggleAllImportRows;
 window.executeImportOrders = executeImportOrders;
+
+// ====== CADASTRO DE NOVOS PRODUTOS ======
+
+// Abrir modal de novo produto
+function openNewProductModal() {
+    const modal = document.getElementById('new-product-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        resetNewProductModal();
+        populateNewProductMPSelect();
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+}
+
+// Fechar modal de novo produto
+function closeNewProductModal() {
+    const modal = document.getElementById('new-product-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        resetNewProductModal();
+    }
+}
+
+// Resetar modal de novo produto
+function resetNewProductModal() {
+    const form = document.getElementById('new-product-form');
+    if (form) form.reset();
+    
+    const feedback = document.getElementById('new-product-feedback');
+    if (feedback) {
+        feedback.classList.add('hidden');
+        feedback.textContent = '';
+    }
+    
+    const calcResult = document.getElementById('new-product-calc-result');
+    if (calcResult) calcResult.textContent = '';
+}
+
+// Popular select de matéria-prima
+function populateNewProductMPSelect() {
+    const select = document.getElementById('new-product-mp');
+    if (!select) return;
+    
+    select.innerHTML = '<option value="">Selecione (opcional)...</option>';
+    
+    // Usar o banco de matérias-primas se disponível
+    if (typeof materiaPrimaDatabase !== 'undefined' && Array.isArray(materiaPrimaDatabase)) {
+        materiaPrimaDatabase.forEach(mp => {
+            const opt = document.createElement('option');
+            opt.value = mp.codigo;
+            opt.textContent = `${mp.codigo} - ${mp.descricao}`;
+            select.appendChild(opt);
+        });
+    }
+}
+
+// Calcular meta de peças por hora
+function calcularMetaPPH() {
+    const cavities = parseFloat(document.getElementById('new-product-cavities')?.value) || 0;
+    const cycle = parseFloat(document.getElementById('new-product-cycle')?.value) || 0;
+    
+    if (cavities <= 0 || cycle <= 0) {
+        document.getElementById('new-product-calc-result').textContent = '⚠️ Preencha cavidades e ciclo';
+        return;
+    }
+    
+    const pph = Math.round((3600 / cycle) * cavities);
+    document.getElementById('new-product-calc-result').textContent = `= ${pph.toLocaleString('pt-BR')} peças/hora`;
+    document.getElementById('new-product-pph').value = pph;
+}
+
+// Mostrar feedback no modal
+function showNewProductFeedback(message, type = 'info') {
+    const feedback = document.getElementById('new-product-feedback');
+    if (!feedback) return;
+    
+    feedback.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800', 'bg-amber-100', 'text-amber-800');
+    
+    if (type === 'success') {
+        feedback.classList.add('bg-green-100', 'text-green-800');
+    } else if (type === 'error') {
+        feedback.classList.add('bg-red-100', 'text-red-800');
+    } else {
+        feedback.classList.add('bg-amber-100', 'text-amber-800');
+    }
+    
+    feedback.textContent = message;
+}
+
+// Salvar novo produto
+async function saveNewProduct() {
+    const cod = parseInt(document.getElementById('new-product-cod')?.value, 10);
+    const client = document.getElementById('new-product-client')?.value?.trim();
+    const name = document.getElementById('new-product-name')?.value?.trim();
+    const cavities = parseInt(document.getElementById('new-product-cavities')?.value, 10);
+    const cycle = parseFloat(document.getElementById('new-product-cycle')?.value);
+    const weight = parseFloat(document.getElementById('new-product-weight')?.value);
+    const pph = parseInt(document.getElementById('new-product-pph')?.value, 10);
+    const mp = document.getElementById('new-product-mp')?.value || '';
+    
+    // Validações
+    if (!cod || cod <= 0) {
+        showNewProductFeedback('⚠️ Informe um código válido para o produto.', 'error');
+        document.getElementById('new-product-cod')?.focus();
+        return;
+    }
+    
+    if (!client) {
+        showNewProductFeedback('⚠️ Selecione o cliente.', 'error');
+        document.getElementById('new-product-client')?.focus();
+        return;
+    }
+    
+    if (!name) {
+        showNewProductFeedback('⚠️ Informe o nome do produto.', 'error');
+        document.getElementById('new-product-name')?.focus();
+        return;
+    }
+    
+    if (!cavities || cavities <= 0) {
+        showNewProductFeedback('⚠️ Informe um número válido de cavidades.', 'error');
+        document.getElementById('new-product-cavities')?.focus();
+        return;
+    }
+    
+    if (!cycle || cycle <= 0) {
+        showNewProductFeedback('⚠️ Informe um tempo de ciclo válido.', 'error');
+        document.getElementById('new-product-cycle')?.focus();
+        return;
+    }
+    
+    if (!weight || weight <= 0) {
+        showNewProductFeedback('⚠️ Informe um peso válido.', 'error');
+        document.getElementById('new-product-weight')?.focus();
+        return;
+    }
+    
+    if (!pph || pph <= 0) {
+        showNewProductFeedback('⚠️ Informe a meta de peças/hora. Use o botão Calcular.', 'error');
+        document.getElementById('new-product-pph')?.focus();
+        return;
+    }
+    
+    try {
+        showNewProductFeedback('⏳ Verificando código do produto...', 'info');
+        
+        // Verificar se o código já existe no Firestore
+        const existingSnapshot = await db.collection('products')
+            .where('cod', '==', cod)
+            .get();
+        
+        if (!existingSnapshot.empty) {
+            showNewProductFeedback(`❌ Já existe um produto com o código ${cod}.`, 'error');
+            return;
+        }
+        
+        showNewProductFeedback('⏳ Salvando produto...', 'info');
+        
+        // Criar objeto do produto
+        const newProduct = {
+            cod: cod,
+            client: client,
+            name: name,
+            cavities: cavities,
+            cycle: cycle,
+            weight: weight,
+            pieces_per_hour_goal: pph,
+            mp: mp,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            createdBy: window.authSystem?.getCurrentUser?.()?.name || 'Sistema',
+            source: 'manual_cadastro'
+        };
+        
+        // Salvar no Firestore
+        const docRef = await db.collection('products').add(newProduct);
+        
+        console.log('[PRODUTO] Novo produto cadastrado:', { id: docRef.id, ...newProduct });
+        
+        // Também adicionar ao productDatabase local se existir
+        if (typeof productDatabase !== 'undefined' && Array.isArray(productDatabase)) {
+            productDatabase.push({
+                cod: cod,
+                client: client,
+                name: name,
+                cavities: cavities,
+                cycle: cycle,
+                weight: weight,
+                pieces_per_hour_goal: pph,
+                mp: mp
+            });
+        }
+        
+        showNewProductFeedback(`✅ Produto ${cod} - ${name} cadastrado com sucesso!`, 'success');
+        
+        // Notificação de sucesso
+        if (typeof showNotification === 'function') {
+            showNotification(`Produto ${cod} cadastrado com sucesso!`, 'success');
+        }
+        
+        // Fechar modal após 2 segundos
+        setTimeout(() => {
+            closeNewProductModal();
+        }, 2000);
+        
+    } catch (error) {
+        console.error('[PRODUTO] Erro ao salvar:', error);
+        showNewProductFeedback(`❌ Erro ao salvar: ${error.message}`, 'error');
+    }
+}
+
+// Expor funções globalmente
+window.openNewProductModal = openNewProductModal;
+window.closeNewProductModal = closeNewProductModal;
+window.calcularMetaPPH = calcularMetaPPH;
+window.saveNewProduct = saveNewProduct;
 
 // ====== FUNÇÕES DE DIAGNÓSTICO E CORREÇÃO ======
 

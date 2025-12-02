@@ -132,6 +132,11 @@ class AuthSystem {
             return false;
         }
         
+        // ⚙️ ACESSO EXCLUSIVO: Aba Processo apenas para usuários autorizados
+        if (tabName === 'processo' && !isAuthorizedAdmin) {
+            return false;
+        }
+        
         // ⚙️ Aba Ajustes: Usuários autorizados ou Gestores
         if (tabName === 'ajustes' && !isAuthorizedAdmin && !isGestor) {
             return false;
@@ -148,6 +153,7 @@ class AuthSystem {
             lancamento: ['lancamento'],
             analise: ['analise'],
             qualidade: ['analise', 'lancamento'], // Restrito a Leandro acima
+            processo: ['analise', 'lancamento'], // Restrito a Leandro acima
             relatorios: ['analise', 'planejamento', 'lancamento'], // Gestores + Leandro
             ajustes: ['planejamento', 'lancamento', 'analise'], // Gestores + Leandro
             'paradas-longas': ['lancamento', 'planejamento', 'analise']
