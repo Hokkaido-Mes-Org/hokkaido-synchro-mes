@@ -313,45 +313,9 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Firebase Storage indisponível (irrelevante: fotos removidas).');
         }
         
-        // Testar conexão com Firebase
+        // Firebase inicializado (teste de conexão removido para otimização)
         console.log('Firebase inicializado com sucesso');
         console.log('Firestore instance:', db);
-        
-        // Teste de conectividade básica
-        db.collection('test').doc('connection-test').set({
-            timestamp: new Date().toISOString(),
-            test: true
-        }).then(() => {
-            console.log('✅ Teste de conexão Firebase bem-sucedido');
-            
-            // Testar específicamente as coleções que vamos usar
-            return Promise.all([
-                db.collection('production').doc('test').set({ test: true, timestamp: new Date() }),
-                db.collection('losses').doc('test').set({ test: true, timestamp: new Date() }),
-                db.collection('downtime').doc('test').set({ test: true, timestamp: new Date() })
-            ]);
-        }).then(() => {
-            console.log('✅ Teste de escrita nas coleções principais bem-sucedido');
-            
-            // Limpar documentos de teste
-            return Promise.all([
-                db.collection('production').doc('test').delete(),
-                db.collection('losses').doc('test').delete(),
-                db.collection('downtime').doc('test').delete()
-            ]);
-        }).then(() => {
-            console.log('✅ Limpeza dos documentos de teste concluída');
-        }).catch((error) => {
-            console.error('❌ Erro no teste de conexão Firebase:', error);
-            console.error('Código do erro:', error.code);
-            console.error('Mensagem do erro:', error.message);
-            
-            if (error.code === 'permission-denied') {
-                console.error('🚨 PROBLEMA DE PERMISSÃO DETECTADO!');
-                console.error('Verifique as regras de segurança do Firestore.');
-                alert('Erro de permissão: Verifique as regras de segurança do Firebase Firestore. O banco pode estar configurado para bloquear escritas.');
-            }
-        });
         
     } catch (error) {
         console.error("Erro ao inicializar Firebase: ", error);
@@ -791,11 +755,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (value === undefined || value === null || value === '') return 0;
         let numValue = parseFloat(String(value).replace(',', '.'));
         if (!Number.isFinite(numValue) || numValue <= 0) return 0;
-        // Valores grandes são considerados gramas. Valores pequenos (ex: 1.5) são kg.
-        if (numValue >= 100) {
-            return Math.round(numValue);
-        }
-        return Math.round(numValue * 1000);
+        // Entrada é sempre em GRAMAS - não faz mais conversão automática
+        return Math.round(numValue);
     }
 
     function parsePieceWeightInput(value) {
@@ -892,9 +853,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 ? window.databaseModule.productByCode.get(numericCode)
                 : window.databaseModule.productByCode.get(candidate);
             if (catalogEntry && catalogEntry.weight !== undefined && catalogEntry.weight !== null) {
-                // O peso no catálogo está em GRAMAS
-                const weightGrams = parseFloat(catalogEntry.weight);
+                let weightGrams = parseFloat(catalogEntry.weight);
                 if (Number.isFinite(weightGrams) && weightGrams > 0) {
+                    // Se o peso for menor que 1, considerar como MILIGRAMAS e converter para gramas
+                    // Ex: 0.19 no database = 0.19mg = 0.00019g (mas na verdade queremos 0.19g)
+                    // Ajuste: valores < 1 já estão em gramas, não precisa converter
+                    // Valores >= 1 também estão em gramas
+                    // O database.js usa gramas como unidade padrão
                     return weightGrams;
                 }
             }
@@ -906,8 +871,17 @@ document.addEventListener('DOMContentLoaded', function() {
     function getActivePieceWeightGrams(machineData = selectedMachineData) {
         if (!machineData) return 0;
 
+        // Buscar peso do catálogo para comparação/validação
+        const catalogWeight = getCatalogPieceWeight(machineData);
+
         const planInfo = getPlanPieceWeightInfo(machineData);
         if (planInfo.grams > 0) {
+            // Se o catálogo tem peso e o planejamento tem peso muito diferente,
+            // preferir o catálogo (pode ser erro de unidade no planejamento)
+            if (catalogWeight > 0 && planInfo.grams > catalogWeight * 100) {
+                console.warn(`[PESO] Peso do planejamento (${planInfo.grams}g) parece muito alto comparado ao catálogo (${catalogWeight}g). Usando catálogo.`);
+                return catalogWeight;
+            }
             return planInfo.grams;
         }
 
@@ -928,10 +902,14 @@ document.addEventListener('DOMContentLoaded', function() {
             machineData.mp_weight
         );
         if (fallbackWeight > 0) {
+            // Mesma validação para fallback
+            if (catalogWeight > 0 && fallbackWeight > catalogWeight * 100) {
+                console.warn(`[PESO] Peso fallback (${fallbackWeight}g) parece muito alto comparado ao catálogo (${catalogWeight}g). Usando catálogo.`);
+                return catalogWeight;
+            }
             return fallbackWeight;
         }
 
-        const catalogWeight = getCatalogPieceWeight(machineData);
         if (catalogWeight > 0) {
             return catalogWeight;
         }
@@ -1001,6 +979,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const planningDateSelector = document.getElementById('planning-date-selector');
     const planningForm = document.getElementById('planning-form');
     const planningOrderSelect = document.getElementById('planning-order-select');
+    const planningOrderSearch = document.getElementById('planning-order-search');
+    const planningOrderResults = document.getElementById('planning-order-results');
+    const planningOrderSearchLoading = document.getElementById('planning-order-search-loading');
     const planningOrderInfo = document.getElementById('planning-order-info');
     const planningTableBody = document.getElementById('planning-table-body');
     const planningMachineSelect = document.getElementById('planning-machine');
@@ -1461,11 +1442,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- FUNÇÕES UTILITÁRIAS ---
 
-    // Carregar OPs abertas para o formulário de planejamento
+    // Carregar OPs abertas para o cache (usado na busca)
     async function loadPlanningOrders() {
-        if (!planningOrderSelect) return;
-        planningOrderSelect.innerHTML = '<option value="">Selecione a OP...</option>';
-
         try {
             const snapshot = await db.collection('production_orders').get();
             const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -1473,51 +1451,210 @@ document.addEventListener('DOMContentLoaded', function() {
             // Salvar no cache para uso posterior
             productionOrdersCache = orders;
             
-            const blocked = ['concluida','cancelada','finalizada','encerrada'];
-            const openOrders = orders.filter(o => !blocked.includes(String(o.status||'').toLowerCase()));
-
-            openOrders.sort((a,b) => {
-                const toNum = (v) => { const n = parseInt(String(v||'').replace(/\D/g,''), 10); return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY; };
-                return toNum(a.order_number || a.order_number_original || a.id) - toNum(b.order_number || b.order_number_original || b.id);
-            });
-
-            const options = openOrders.map(o => {
-                const lot = Number(o.lot_size)||0;
-                const snapshotData = o.product_snapshot || {};
-                const orderNum = o.order_number || o.order_number_original || o.id;
-                const productName = o.product || snapshotData.name || '';
-                
-                // Label simplificado: apenas número da OP e nome do produto
-                const label = productName 
-                    ? `${orderNum} - ${productName}`
-                    : `${orderNum}`;
-                
-                const opt = document.createElement('option');
-                opt.value = o.id;
-                opt.textContent = label;
-                opt.dataset.partCode = String(o.part_code||o.product_cod||snapshotData.cod||'');
-                opt.dataset.product = String(o.product||snapshotData.name||'');
-                opt.dataset.customer = String(o.customer||o.client||snapshotData.client||'');
-                opt.dataset.lotSize = lot > 0 ? String(lot) : '';
-                opt.dataset.orderNumber = String(orderNum);
-                opt.dataset.machineId = String(o.machine_id||o.machine||'');
-                opt.dataset.rawMaterial = String(o.raw_material || snapshotData.mp || '');
-                opt.dataset.mpType = String(o.mp_type || '');
-                // Não passar cycle/cavities/weight do snapshot - vamos buscar do productDatabase
-                return opt;
-            });
-
-            options.forEach(opt => planningOrderSelect.appendChild(opt));
+            console.log(`[Planejamento] ${orders.length} OPs carregadas no cache`);
         } catch (err) {
             console.error('Erro ao carregar OPs:', err);
         }
     }
 
-    function onPlanningOrderChange() {
-        if (!planningOrderSelect) return;
+    // Buscar OP pelo número digitado
+    function searchPlanningOrder(searchTerm) {
+        const resultsContainer = document.getElementById('planning-order-results');
+        
+        if (!searchTerm || searchTerm.trim() === '') {
+            if (resultsContainer) resultsContainer.classList.add('hidden');
+            return;
+        }
 
-        const selectedOption = planningOrderSelect.selectedOptions[0];
-        if (!selectedOption || !selectedOption.value) {
+        const term = searchTerm.trim().toLowerCase();
+        const blocked = ['concluida','cancelada','finalizada','encerrada'];
+        
+        console.log(`[Planejamento] Buscando OP com termo: "${term}", cache tem ${productionOrdersCache?.length || 0} OPs`);
+        
+        // Se o cache está vazio, tentar recarregar
+        if (!productionOrdersCache || productionOrdersCache.length === 0) {
+            console.warn('[Planejamento] Cache vazio, recarregando OPs...');
+            loadPlanningOrders().then(() => {
+                searchPlanningOrder(searchTerm);
+            });
+            return;
+        }
+        
+        // Filtrar OPs abertas que correspondem ao termo de busca
+        const matchedOrders = productionOrdersCache.filter(o => {
+            if (blocked.includes(String(o.status||'').toLowerCase())) return false;
+            
+            const orderNum = String(o.order_number || o.order_number_original || o.id || '').toLowerCase();
+            const productName = String(o.product || o.product_snapshot?.name || '').toLowerCase();
+            const partCode = String(o.part_code || o.product_cod || o.product_snapshot?.cod || '').toLowerCase();
+            
+            return orderNum.includes(term) || productName.includes(term) || partCode.includes(term);
+        });
+        
+        console.log(`[Planejamento] Encontradas ${matchedOrders.length} OPs`);
+
+        // Ordenar por número da OP
+        matchedOrders.sort((a,b) => {
+            const toNum = (v) => { const n = parseInt(String(v||'').replace(/\D/g,''), 10); return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY; };
+            return toNum(a.order_number || a.order_number_original || a.id) - toNum(b.order_number || b.order_number_original || b.id);
+        });
+
+        // Limitar a 10 resultados
+        const limitedResults = matchedOrders.slice(0, 10);
+
+        // Renderizar resultados
+        renderPlanningOrderResults(limitedResults);
+    }
+
+    // Renderizar resultados da busca de OP
+    function renderPlanningOrderResults(orders) {
+        const resultsContainer = document.getElementById('planning-order-results');
+        if (!resultsContainer) {
+            console.error('[Planejamento] Container de resultados não encontrado!');
+            return;
+        }
+
+        if (orders.length === 0) {
+            resultsContainer.innerHTML = `
+                <div class="p-3 text-center text-gray-500 text-sm">
+                    <i data-lucide="search-x" class="w-5 h-5 mx-auto mb-1 text-gray-400"></i>
+                    <p>Nenhuma OP encontrada</p>
+                </div>
+            `;
+            resultsContainer.classList.remove('hidden');
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            return;
+        }
+
+        const html = orders.map(o => {
+            const orderNum = o.order_number || o.order_number_original || o.id;
+            const productName = o.product || o.product_snapshot?.name || '';
+            const snapshotData = o.product_snapshot || {};
+            const lot = Number(o.lot_size)||0;
+            
+            return `
+                <div class="planning-order-result p-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors"
+                    data-order-id="${o.id}"
+                    data-part-code="${o.part_code||o.product_cod||snapshotData.cod||''}"
+                    data-product="${o.product||snapshotData.name||''}"
+                    data-customer="${o.customer||o.client||snapshotData.client||''}"
+                    data-lot-size="${lot > 0 ? lot : ''}"
+                    data-order-number="${orderNum}"
+                    data-machine-id="${o.machine_id||o.machine||''}"
+                    data-raw-material="${o.raw_material || snapshotData.mp || ''}"
+                    data-mp-type="${o.mp_type || ''}">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span class="font-bold text-blue-600 text-sm">${orderNum}</span>
+                            <span class="text-gray-400 mx-1">•</span>
+                            <span class="text-gray-700 text-xs">${productName || 'Sem produto'}</span>
+                        </div>
+                        ${lot > 0 ? `<span class="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">${lot.toLocaleString('pt-BR')} pcs</span>` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        resultsContainer.innerHTML = html;
+        resultsContainer.classList.remove('hidden');
+        
+        console.log(`[Planejamento] Renderizados ${orders.length} resultados`);
+
+        // Adicionar eventos de clique nos resultados
+        resultsContainer.querySelectorAll('.planning-order-result').forEach(item => {
+            item.addEventListener('click', () => selectPlanningOrderFromSearch(item));
+        });
+    }
+
+    // Selecionar OP da lista de resultados
+    function selectPlanningOrderFromSearch(item) {
+        const dataset = item.dataset;
+        const orderId = dataset.orderId;
+        const orderNumber = dataset.orderNumber;
+        
+        const searchInput = document.getElementById('planning-order-search');
+        const hiddenSelect = document.getElementById('planning-order-select');
+        const resultsContainer = document.getElementById('planning-order-results');
+        const machineSelect = document.getElementById('planning-machine');
+
+        console.log('[Planejamento] Dataset do item clicado:', dataset);
+        console.log('[Planejamento] orderId:', orderId, 'orderNumber:', orderNumber);
+
+        // Atualizar campo de busca com o número da OP selecionada
+        if (searchInput) {
+            searchInput.value = orderNumber;
+        }
+
+        // Atualizar campo hidden com o ID da OP
+        if (hiddenSelect) {
+            hiddenSelect.value = orderId;
+        }
+
+        // Ocultar resultados
+        if (resultsContainer) {
+            resultsContainer.classList.add('hidden');
+        }
+
+        // Converter dataset para objeto simples (dataset usa camelCase)
+        const datasetObj = {
+            partCode: dataset.partCode || '',
+            product: dataset.product || '',
+            customer: dataset.customer || '',
+            lotSize: dataset.lotSize || '',
+            orderNumber: dataset.orderNumber || '',
+            machineId: dataset.machineId || '',
+            rawMaterial: dataset.rawMaterial || '',
+            mpType: dataset.mpType || ''
+        };
+
+        console.log('[Planejamento] OP selecionada via busca:', { orderId, orderNumber, datasetObj });
+
+        const productCodInput = document.getElementById('planning-product-cod');
+        if (productCodInput && datasetObj.partCode) {
+            if (productCodInput.value !== datasetObj.partCode) {
+                productCodInput.value = datasetObj.partCode;
+            }
+            productCodInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        if (machineSelect && datasetObj.machineId) {
+            const hasOption = Array.from(machineSelect.options).some(opt => opt.value === datasetObj.machineId);
+            if (hasOption) machineSelect.value = datasetObj.machineId;
+        }
+
+        const selectedOrder = Array.isArray(productionOrdersCache)
+            ? productionOrdersCache.find(order => order && order.id === orderId)
+            : null;
+        
+        console.log('[Planejamento] Ordem encontrada no cache:', selectedOrder);
+
+        fillPlanningFormWithOrder(selectedOrder || null, datasetObj);
+    }
+
+    // Debounce para busca
+    let planningSearchTimeout = null;
+    function onPlanningOrderSearchInput(e) {
+        const searchTerm = e.target.value;
+        const loadingEl = document.getElementById('planning-order-search-loading');
+        const resultsContainer = document.getElementById('planning-order-results');
+        const hiddenSelect = document.getElementById('planning-order-select');
+        
+        // Mostrar loading
+        if (loadingEl) {
+            loadingEl.classList.remove('hidden');
+        }
+
+        // Cancelar busca anterior
+        if (planningSearchTimeout) {
+            clearTimeout(planningSearchTimeout);
+        }
+
+        // Se campo vazio, limpar formulário
+        if (!searchTerm || searchTerm.trim() === '') {
+            if (loadingEl) loadingEl.classList.add('hidden');
+            if (resultsContainer) resultsContainer.classList.add('hidden');
+            if (hiddenSelect) hiddenSelect.value = '';
+            
             const productCodInput = document.getElementById('planning-product-cod');
             if (productCodInput) {
                 productCodInput.value = '';
@@ -1527,33 +1664,39 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const dataset = selectedOption.dataset || {};
-        const orderId = selectedOption.value;
-        const partCode = dataset.partCode || dataset.productCod || '';
-        const machineId = dataset.machineId || '';
-
-        console.log('[Planejamento] OP selecionada:', { orderId, partCode, machineId, dataset });
-
-        const productCodInput = document.getElementById('planning-product-cod');
-        if (productCodInput) {
-            if (productCodInput.value !== partCode) {
-                productCodInput.value = partCode;
+        // Aguardar 300ms antes de buscar (debounce)
+        planningSearchTimeout = setTimeout(() => {
+            searchPlanningOrder(searchTerm);
+            if (loadingEl) {
+                loadingEl.classList.add('hidden');
             }
-            productCodInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }, 300);
+    }
+
+    // Fechar resultados ao clicar fora
+    function onPlanningOrderSearchBlur(e) {
+        const resultsContainer = document.getElementById('planning-order-results');
+        // Delay para permitir clique no resultado antes de fechar
+        setTimeout(() => {
+            if (resultsContainer && !resultsContainer.contains(document.activeElement)) {
+                resultsContainer.classList.add('hidden');
+            }
+        }, 200);
+    }
+
+    function onPlanningOrderChange() {
+        // Função mantida para compatibilidade, mas agora o fluxo principal é pela busca
+        const hiddenSelect = document.getElementById('planning-order-select');
+        if (!hiddenSelect || !hiddenSelect.value) {
+            const productCodInput = document.getElementById('planning-product-cod');
+            if (productCodInput) {
+                productCodInput.value = '';
+                productCodInput.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            fillPlanningFormWithOrder(null);
+            return;
         }
-
-        if (planningMachineSelect && machineId) {
-            const hasOption = Array.from(planningMachineSelect.options).some(opt => opt.value === machineId);
-            if (hasOption) planningMachineSelect.value = machineId;
-        }
-
-        const selectedOrder = Array.isArray(productionOrdersCache)
-            ? productionOrdersCache.find(order => order && order.id === orderId)
-            : null;
-        
-        console.log('[Planejamento] Ordem do cache:', selectedOrder);
-
-        fillPlanningFormWithOrder(selectedOrder || null, dataset);
+        // O preenchimento é feito pela função selectPlanningOrderFromSearch
     }
 
     function fillPlanningFormWithOrder(order, dataset = {}) {
@@ -2688,11 +2831,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 productionModalForm.prepend(planIdInput);
             }
             
-            // Iniciar atualização automática de OEE em tempo real (a cada 5 minutos)
-            setInterval(updateRealTimeOeeData, 5 * 60 * 1000);
+            // Iniciar atualização automática de OEE em tempo real (a cada 15 minutos - otimizado)
+            setInterval(updateRealTimeOeeData, 15 * 60 * 1000);
             
-            // Iniciar atualização automática da timeline (a cada minuto)
-            setInterval(updateTimelineIfVisible, 60 * 1000);
+            // Iniciar atualização automática da timeline (a cada 5 minutos - otimizado)
+            setInterval(updateTimelineIfVisible, 5 * 60 * 1000);
             
             // Atualizar imediatamente se estivermos na aba de dashboard ou análise
             setTimeout(updateRealTimeOeeData, 2000);
@@ -2706,9 +2849,20 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 300); // Fim do setTimeout da autenticação
     }
     
+    // Verificar se a aba está visível (otimização para não fazer refresh em background)
+    function isPageVisible() {
+        return document.visibilityState === 'visible';
+    }
+    
     // Função para atualizar dados de OEE em tempo real
     async function updateRealTimeOeeData() {
         try {
+            // Otimização: Não atualizar se a aba não estiver visível
+            if (!isPageVisible()) {
+                console.log('[OEE] Aba não visível, pulando atualização');
+                return;
+            }
+            
             // Verificar se estamos na aba de dashboard ou análise
             const currentPage = document.querySelector('.nav-btn.active')?.dataset.page;
             if (currentPage !== 'analise') {
@@ -6412,6 +6566,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
     // Função para atualizar timeline apenas se estiver visível
     async function updateTimelineIfVisible() {
+        // Otimização: Não atualizar se a aba do navegador não estiver visível
+        if (!isPageVisible()) {
+            return;
+        }
+        
         const timelineElement = document.getElementById('timeline-progress');
         if (!timelineElement || timelineElement.offsetParent === null) {
             return; // Timeline não está visível
@@ -8241,6 +8400,22 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
     if (planningForm) planningForm.addEventListener('submit', handlePlanningFormSubmit);
     if (planningOrderSelect) planningOrderSelect.addEventListener('change', onPlanningOrderChange);
+    
+    // Event listeners para busca de OP
+    const orderSearchInput = document.getElementById('planning-order-search');
+    if (orderSearchInput) {
+        console.log('[Planejamento] Adicionando event listeners ao campo de busca de OP');
+        orderSearchInput.addEventListener('input', onPlanningOrderSearchInput);
+        orderSearchInput.addEventListener('blur', onPlanningOrderSearchBlur);
+        orderSearchInput.addEventListener('focus', (e) => {
+            if (e.target.value.trim()) {
+                searchPlanningOrder(e.target.value);
+            }
+        });
+    } else {
+        console.warn('[Planejamento] Campo de busca de OP não encontrado!');
+    }
+    
         if (planningDateSelector) planningDateSelector.addEventListener('change', (e) => listenToPlanningChanges(e.target.value));
         if (productionOrderForm) productionOrderForm.addEventListener('submit', handleProductionOrderFormSubmit);
         
@@ -8280,6 +8455,70 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (recentEntriesList) recentEntriesList.addEventListener('click', handleRecentEntryAction);
         if (finalizeOrderBtn) finalizeOrderBtn.addEventListener('click', handleFinalizeOrderClick);
     if (activateOrderBtn) activateOrderBtn.addEventListener('click', handleActivateOrderFromPanel);
+        
+        // Event listeners para filtro de data e máquina de lançamentos históricos
+        const entriesDateFilter = document.getElementById('entries-date-filter');
+        const entriesMachineFilter = document.getElementById('entries-machine-filter');
+        const entriesDateToday = document.getElementById('entries-date-today');
+        const entriesClearAllFilters = document.getElementById('entries-clear-all-filters');
+        
+        // Popular seletor de máquinas
+        if (entriesMachineFilter && typeof machineProductData !== 'undefined') {
+            const machines = Object.keys(machineProductData).sort();
+            machines.forEach(machine => {
+                const option = document.createElement('option');
+                option.value = machine;
+                option.textContent = machine;
+                entriesMachineFilter.appendChild(option);
+            });
+        }
+        
+        if (entriesDateFilter) {
+            // Definir data atual como valor padrão
+            entriesDateFilter.value = getProductionDateString();
+            
+            entriesDateFilter.addEventListener('change', () => {
+                const selectedDate = entriesDateFilter.value;
+                if (selectedDate) {
+                    window.lancamentoFilterDate = selectedDate;
+                    updateEntriesFilterIndicator();
+                    loadRecentEntriesWithFilters();
+                }
+            });
+        }
+        
+        if (entriesMachineFilter) {
+            entriesMachineFilter.addEventListener('change', () => {
+                const selectedMachine = entriesMachineFilter.value;
+                window.lancamentoFilterMachine = selectedMachine || null;
+                updateEntriesFilterIndicator();
+                loadRecentEntriesWithFilters();
+            });
+        }
+        
+        if (entriesDateToday) {
+            entriesDateToday.addEventListener('click', () => {
+                const today = getProductionDateString();
+                if (entriesDateFilter) entriesDateFilter.value = today;
+                if (entriesMachineFilter) entriesMachineFilter.value = '';
+                window.lancamentoFilterDate = null;
+                window.lancamentoFilterMachine = null;
+                hideEntriesFilterIndicator();
+                loadRecentEntries(true);
+            });
+        }
+        
+        if (entriesClearAllFilters) {
+            entriesClearAllFilters.addEventListener('click', () => {
+                const today = getProductionDateString();
+                if (entriesDateFilter) entriesDateFilter.value = today;
+                if (entriesMachineFilter) entriesMachineFilter.value = '';
+                window.lancamentoFilterDate = null;
+                window.lancamentoFilterMachine = null;
+                hideEntriesFilterIndicator();
+                loadRecentEntries(true);
+            });
+        }
         
         // Event listeners para filtros de lançamentos recentes
         const filterButtons = document.querySelectorAll('.filter-entry-btn');
@@ -12334,66 +12573,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     }
 
     function populatePlanningOrderSelect() {
-        if (!planningOrderSelect || !Array.isArray(productionOrdersCache)) return;
-
-        const currentValue = planningOrderSelect.value;
-        const blockedStatuses = new Set(['concluida', 'cancelada', 'finalizada', 'encerrada']);
-        const toNumeric = (value) => {
-            if (!value) return Number.POSITIVE_INFINITY;
-            const digits = String(value).match(/\d+/g);
-            if (!digits) return Number.POSITIVE_INFINITY;
-            const parsed = parseInt(digits.join(''), 10);
-            return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
-        };
-
-        const openOrders = productionOrdersCache
-            .filter(order => !blockedStatuses.has(String(order.status || '').toLowerCase()))
-            .sort((a, b) => toNumeric(a.order_number || a.order_number_original || a.id) - toNumeric(b.order_number || b.order_number_original || b.id));
-
-        const fragment = document.createDocumentFragment();
-        const placeholder = document.createElement('option');
-        placeholder.value = '';
-        placeholder.textContent = 'Selecione uma OP...';
-        fragment.appendChild(placeholder);
-
-        openOrders.forEach(order => {
-            if (!order || !order.id) return;
-
-            const option = document.createElement('option');
-            option.value = order.id;
-
-            const orderLabelNumber = order.order_number || order.order_number_original || order.id;
-            const productLabel = order.product || order.product_snapshot?.name || 'N/A';
-            const customerLabel = order.customer || order.client || order.product_snapshot?.client || 'N/A';
-            option.textContent = `${orderLabelNumber} - ${productLabel} (${customerLabel})`;
-
-            const snapshot = order.product_snapshot || {};
-            option.dataset.partCode = String(order.part_code || order.product_cod || snapshot.cod || '');
-            option.dataset.product = String(order.product || snapshot.name || '');
-            option.dataset.customer = String(order.customer || order.client || snapshot.client || '');
-            const lotSizeNumeric = parseOptionalNumber(order.lot_size);
-            option.dataset.lotSize = typeof lotSizeNumeric === 'number' && Number.isFinite(lotSizeNumeric) && lotSizeNumeric > 0
-                ? String(lotSizeNumeric)
-                : '';
-            option.dataset.orderNumber = String(orderLabelNumber || '');
-            option.dataset.machineId = String(order.machine_id || order.machine || '');
-            option.dataset.rawMaterial = String(order.raw_material || snapshot.mp || '');
-            option.dataset.mpType = String(order.mp_type || '');
-            option.dataset.cycle = snapshot.cycle != null ? String(snapshot.cycle) : '';
-            option.dataset.cavities = snapshot.cavities != null ? String(snapshot.cavities) : '';
-            option.dataset.weight = snapshot.weight != null ? String(snapshot.weight) : '';
-
-            fragment.appendChild(option);
-        });
-
-        planningOrderSelect.innerHTML = '';
-        planningOrderSelect.appendChild(fragment);
-
-        if (currentValue && openOrders.some(order => order.id === currentValue)) {
-            planningOrderSelect.value = currentValue;
-        } else {
-            planningOrderSelect.value = '';
-        }
+        // Função mantida para compatibilidade - agora a busca usa o cache productionOrdersCache
+        // Não é mais necessário popular um select com options
+        if (!Array.isArray(productionOrdersCache)) return;
+        
+        console.log(`[Planejamento] Cache atualizado com ${productionOrdersCache.length} OPs`);
     }
 
     function handleProductionOrderCodeInput(e) {
@@ -15261,7 +15445,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 document.getElementById('quick-production-weight-feedback').classList.add('text-red-600');
             } else {
                 this.classList.remove('border-red-500', 'border-2');
-                document.getElementById('quick-production-weight-feedback').textContent = 'Aceita valores em gramas ou kg (Ex: 1,5 kg = 1500g)';
+                document.getElementById('quick-production-weight-feedback').textContent = 'Digite o peso em gramas (Ex: 1500g = 1,5kg)';
                 document.getElementById('quick-production-weight-feedback').classList.remove('text-red-600');
             }
         });
@@ -15340,53 +15524,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (quickReworkClose) quickReworkClose.addEventListener('click', () => closeModal('quick-rework-modal'));
         if (quickReworkCancel) quickReworkCancel.addEventListener('click', () => closeModal('quick-rework-modal'));
         if (quickReworkForm) quickReworkForm.addEventListener('submit', handleReworkSubmit);
-
-        // === SISTEMA DE TRIAGEM ===
-        // Botão principal de triagem
-        const btnTriagem = document.getElementById('btn-triagem');
-        if (btnTriagem && !btnTriagem.dataset.listenerAttached) {
-            btnTriagem.addEventListener('click', openTriagemMenu);
-            btnTriagem.dataset.listenerAttached = 'true';
-        }
-
-        // Modal menu triagem
-        const triagemMenuClose = document.getElementById('triagem-menu-close');
-        const triagemMenuCancel = document.getElementById('triagem-menu-cancel');
-        if (triagemMenuClose) triagemMenuClose.addEventListener('click', () => closeModal('triagem-menu-modal'));
-        if (triagemMenuCancel) triagemMenuCancel.addEventListener('click', () => closeModal('triagem-menu-modal'));
-
-        // Botões do menu de triagem
-        const btnEnviarTriagem = document.getElementById('btn-enviar-triagem');
-        const btnVoltaTriagem = document.getElementById('btn-volta-triagem');
-        const btnDescarteTriagem = document.getElementById('btn-descarte-triagem');
-
-        if (btnEnviarTriagem) btnEnviarTriagem.addEventListener('click', openEnviarTriagemModal);
-        if (btnVoltaTriagem) btnVoltaTriagem.addEventListener('click', openVoltaTriagemModal);
-        if (btnDescarteTriagem) btnDescarteTriagem.addEventListener('click', openDescarteTriagemModal);
-
-        // Modal Enviar Triagem
-        const enviarTriagemClose = document.getElementById('enviar-triagem-close');
-        const enviarTriagemCancel = document.getElementById('enviar-triagem-cancel');
-        const enviarTriagemForm = document.getElementById('enviar-triagem-form');
-        if (enviarTriagemClose) enviarTriagemClose.addEventListener('click', () => closeModal('enviar-triagem-modal'));
-        if (enviarTriagemCancel) enviarTriagemCancel.addEventListener('click', () => closeModal('enviar-triagem-modal'));
-        if (enviarTriagemForm) enviarTriagemForm.addEventListener('submit', handleEnviarTriagemSubmit);
-
-        // Modal Volta Triagem
-        const voltaTriagemClose = document.getElementById('volta-triagem-close');
-        const voltaTriagemCancel = document.getElementById('volta-triagem-cancel');
-        const voltaTriagemForm = document.getElementById('volta-triagem-form');
-        if (voltaTriagemClose) voltaTriagemClose.addEventListener('click', () => closeModal('volta-triagem-modal'));
-        if (voltaTriagemCancel) voltaTriagemCancel.addEventListener('click', () => closeModal('volta-triagem-modal'));
-        if (voltaTriagemForm) voltaTriagemForm.addEventListener('submit', handleVoltaTriagemSubmit);
-
-        // Modal Descarte Triagem
-        const descarteTriagemClose = document.getElementById('descarte-triagem-close');
-        const descarteTriagemCancel = document.getElementById('descarte-triagem-cancel');
-        const descarteTriagemForm = document.getElementById('descarte-triagem-form');
-        if (descarteTriagemClose) descarteTriagemClose.addEventListener('click', () => closeModal('descarte-triagem-modal'));
-        if (descarteTriagemCancel) descarteTriagemCancel.addEventListener('click', () => closeModal('descarte-triagem-modal'));
-        if (descarteTriagemForm) descarteTriagemForm.addEventListener('submit', handleDescarteTriagemSubmit);
 
         // Modal de borra
         const manualBorraClose = document.getElementById('manual-borra-close');
@@ -15509,13 +15646,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
         
         const rawValue = weightInput.value;
-        const parsed = parseNumberPtBR(rawValue);
-        
-        // Detectar se há caractere suspeito
-        const hasComma = rawValue.includes(',');
-        const hasDot = rawValue.includes('.');
-        const multipleDots = (rawValue.match(/\./g) || []).length > 1;
-        const multipleCommas = (rawValue.match(/,/g) || []).length > 1;
+        const weightGrams = parseInt(rawValue, 10) || 0;
         
         let feedbackHTML = '';
         let feedbackClass = 'text-gray-600';
@@ -15523,22 +15654,19 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         // Obter peso da peça para conversão (usa catálogo como fallback)
         const pieceWeightGrams = getActivePieceWeightGrams();
         
-        if (multipleCommas || multipleDots) {
-            feedbackHTML = `⚠️ <strong>Aviso:</strong> Múltiplos separadores detectados! Usando: <strong>${parsed.toFixed(3)} kg</strong>`;
-            feedbackClass = 'text-yellow-700 bg-yellow-50 p-2 rounded border border-yellow-200';
-        } else if (parsed > 0) {
-            // Interpretação bem-sucedida - mostrar kg
-            feedbackHTML = `✓ Interpretado como: <strong>${parsed.toFixed(3)} kg</strong>`;
+        if (weightGrams > 0) {
+            // Entrada em gramas - mostrar conversão para kg
+            const weightKg = (weightGrams / 1000).toFixed(3);
+            feedbackHTML = `✓ ${weightGrams}g = <strong>${weightKg} kg</strong>`;
             
-            // ✅ NOVO: Calcular e mostrar quantidade de peças
+            // Calcular e mostrar quantidade de peças
             if (pieceWeightGrams > 0) {
-                const weightGrams = parsed * 1000; // Converter kg para gramas
                 const estimatedPieces = Math.floor(weightGrams / pieceWeightGrams);
                 feedbackHTML += ` ≈ <strong class="text-blue-600">${estimatedPieces.toLocaleString('pt-BR')} peças</strong>`;
             }
             
             feedbackClass = 'text-green-700';
-        } else if (rawValue && parsed === 0) {
+        } else if (rawValue && weightGrams === 0) {
             // Entrada não-vazia mas não foi convertida
             feedbackHTML = `❌ <strong>Erro:</strong> Não foi possível interpretar "${rawValue}" como número`;
             feedbackClass = 'text-red-700 bg-red-50 p-2 rounded border border-red-200';
@@ -15556,14 +15684,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (!weightInput || !weightInput.value) return;
         
         const rawValue = weightInput.value;
-        const parsed = parseNumberPtBR(rawValue);
+        const weightGrams = parseInt(rawValue, 10) || 0;
         
-        if (parsed === 0 && rawValue.trim()) {
+        if (weightGrams === 0 && rawValue.trim()) {
             // Campo tem texto mas não foi interpretado como número
             const confirmation = window.confirm(
-                `Não consegui interpretar "${rawValue}" como peso.\n\n` +
-                `Use vírgula (,) para decimais: 1,5 kg\n` +
-                `Ou ponto (.): 1.5 kg\n\n` +
+                `Não consegui interpretar "${rawValue}" como peso em gramas.\n\n` +
+                `Digite apenas números inteiros (ex: 1500 para 1,5kg)\n\n` +
                 `Deseja limpar o campo e tentar novamente?`
             );
             if (confirmation) {
@@ -15571,10 +15698,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 updateWeightFeedback();
                 weightInput.focus();
             }
-        } else if (parsed > 100) {
-            // Alerta se peso muito alto (pode ser digitação errada de 1,5 como 15)
+        } else if (weightGrams > 50000) {
+            // Alerta se peso muito alto (mais de 50kg em gramas)
+            const weightKg = (weightGrams / 1000).toFixed(3);
             const confirmation = window.confirm(
-                `⚠️ Peso muito alto: ${parsed.toFixed(3)} kg\n\n` +
+                `⚠️ Peso muito alto: ${weightGrams}g (${weightKg}kg)\n\n` +
                 `Confirma este peso ou quer corrigir?`
             );
             if (!confirmation) {
@@ -17070,8 +17198,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const quantityInput = document.getElementById('quick-losses-qty');
         const weightInput = document.getElementById('quick-losses-weight');
         const quantity = parseInt(quantityInput.value, 10) || 0;
-        const weightKgInput = parseNumberPtBR(weightInput.value);
-        let weightGrams = kgToGrams(weightKgInput);
+        // Entrada agora é em GRAMAS diretamente (não mais em kg)
+        let weightGrams = parseInt(weightInput.value, 10) || 0;
         const reason = document.getElementById('quick-losses-reason').value;
         const obs = (document.getElementById('quick-losses-obs').value || '').trim();
         
@@ -17081,11 +17209,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const tareWeight = getTareWeightForMachine(selectedMachineData?.machine);
             if (tareWeight > 0) {
                 weightGrams = Math.max(0, weightGrams - tareWeight);
-                console.log(`[TRACE][handleLossesSubmit] Tara aplicada: ${(gramsToKg(tareWeight)).toFixed(3)}kg descontados. Peso líquido: ${(gramsToKg(weightGrams)).toFixed(3)}kg`);
+                console.log(`[TRACE][handleLossesSubmit] Tara aplicada: ${tareWeight}g descontados. Peso líquido: ${weightGrams}g`);
             }
         }
 
-        console.log('[TRACE][handleLossesSubmit] parsed form values', { quantity, weightKgInput, netWeightKg: gramsToKg(weightGrams), reason, obs, useTare });
+        console.log('[TRACE][handleLossesSubmit] parsed form values', { quantity, weightGrams, reason, obs, useTare });
 
         if (quantity <= 0 && weightGrams <= 0) {
             alert('Informe a quantidade ou o peso da perda.');
@@ -17113,11 +17241,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             }
             const conversion = calculateQuantityFromGrams(weightGrams, pieceWeightGrams);
             refugoQty = conversion.quantity > 0 ? conversion.quantity : 1;
-            console.log(`[TRACE][handleLossesSubmit] Conversão: ${(gramsToKg(weightGrams)).toFixed(3)}kg ÷ ${pieceWeightGrams}g/peça = ${refugoQty} peças`);
-            showNotification(`Convertido: ${(gramsToKg(weightGrams)).toFixed(3)}kg = ${refugoQty} peças`, 'info');
+            console.log(`[TRACE][handleLossesSubmit] Conversão: ${weightGrams}g ÷ ${pieceWeightGrams}g/peça = ${refugoQty} peças`);
+            showNotification(`Convertido: ${weightGrams}g = ${refugoQty} peças`, 'info');
         }
         
-        console.log('[TRACE][handleLossesSubmit] Perda em peças:', { quantity, netWeightKg: gramsToKg(weightGrams), refugoQty, pesoMedio: weightGrams > 0 ? (weightGrams / Math.max(refugoQty, 1)) : 0 });
+        console.log('[TRACE][handleLossesSubmit] Perda em peças:', { quantity, weightGrams, refugoQty, pesoMedio: weightGrams > 0 ? (weightGrams / Math.max(refugoQty, 1)) : 0 });
 
         const isEditing = currentEditContext && currentEditContext.type === 'loss' && currentEditContext.id;
         const originalData = isEditing ? currentEditContext.original : null;
@@ -17420,7 +17548,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const shiftRaw = shiftSelect?.value || '';
         const hourValue = (hourInput?.value || '').trim();
     const machineValue = machineSelect?.value || '';
-        const weightValue = parseFloat(weightInput?.value || '0');
+        // Entrada agora é em GRAMAS diretamente
+        const weightGrams = parseInt(weightInput?.value || '0', 10);
+        const weightKg = weightGrams / 1000; // Converter para kg para salvar
         const mpTypeValue = mpTypeSelect?.value || '';
         const reasonValue = (reasonInput?.value || '').trim();
         const observations = (obsInput?.value || '').trim();
@@ -17437,8 +17567,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
 
-        if (!Number.isFinite(weightValue) || weightValue <= 0) {
-            alert('Informe o peso da borra em kg (valor deve ser maior que zero).');
+        if (!Number.isFinite(weightGrams) || weightGrams <= 0) {
+            alert('Informe o peso da borra em gramas (valor deve ser maior que zero).');
             if (weightInput) weightInput.focus();
             return;
         }
@@ -17482,7 +17612,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 machine: normalizedMachine,
                 planId: resolvedPlanId || null,
                 planningRef: resolvedPlanId || null,
-                refugo_kg: weightValue, // Salvar como refugo em kg
+                refugo_kg: weightKg, // Salvar em kg (convertido de gramas)
                 perdas: `BORRA - ${reasonValue}`,
                 mp: '',
                 mp_type: mpTypeValue,
@@ -17504,7 +17634,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             console.log('[TRACE][handleManualBorraSubmit] borra saved successfully', { docId: docRef.id });
 
             if (statusDiv) statusDiv.textContent = 'Borra registrada com sucesso!';
-            showNotification(`Borra de ${weightValue}kg registrada com sucesso!`, 'success');
+            showNotification(`Borra de ${weightGrams}g (${weightKg.toFixed(3)}kg) registrada com sucesso!`, 'success');
 
             // Fechar modal e atualizar dados
             setTimeout(() => {
@@ -17970,156 +18100,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
     }
 
-    // ============================================
-    // SISTEMA DE TRIAGEM - INÍCIO
-    // ============================================
-
-    // Buscar quantidade em triagem para a máquina/OP atual
-    async function getTriagemPendente() {
-        if (!selectedMachineData) return 0;
-        
-        try {
-            const machineId = selectedMachineData.machine || '';
-            const orderId = selectedMachineData.order_id || selectedMachineData.orderId || '';
-            
-            // Buscar entradas de triagem pendentes (enviadas mas não resolvidas)
-            let query = db.collection('triagem_entries')
-                .where('machine', '==', machineId)
-                .where('status', '==', 'PENDENTE');
-            
-            if (orderId) {
-                query = query.where('orderId', '==', orderId);
-            }
-            
-            const snapshot = await query.get();
-            let totalPendente = 0;
-            
-            snapshot.docs.forEach(doc => {
-                const data = doc.data();
-                const enviado = Number(data.quantidade_enviada || 0);
-                const resolvido = Number(data.quantidade_resolvida || 0);
-                totalPendente += Math.max(0, enviado - resolvido);
-            });
-            
-            return totalPendente;
-        } catch (error) {
-            console.error('[TRIAGEM] Erro ao buscar pendentes:', error);
-            return 0;
-        }
-    }
-
-    // Abrir menu principal de triagem
-    async function openTriagemMenu() {
-        console.log('[TRIAGEM] Abrindo menu de triagem');
-        
-        if (!selectedMachineData) {
-            alert('Selecione uma máquina primeiro.');
-            return;
-        }
-        
-        // Atualizar contexto nos modais
-        updateTriagemContexts();
-        
-        // Buscar quantidade em triagem
-        const pendente = await getTriagemPendente();
-        const pendenteEl = document.getElementById('triagem-pendente-qty');
-        if (pendenteEl) {
-            pendenteEl.textContent = pendente.toLocaleString('pt-BR');
-        }
-        
-        openModal('triagem-menu-modal');
-        lucide.createIcons();
-    }
-
-    // Atualizar contexto em todos os modais de triagem
-    function updateTriagemContexts() {
-        const modals = [
-            'triagem-menu-modal',
-            'enviar-triagem-modal', 
-            'volta-triagem-modal',
-            'descarte-triagem-modal'
-        ];
-        
-        const machineText = selectedMachineData?.machine || '-';
-        const productText = selectedMachineData?.product?.substring(0, 30) + '...' || selectedMachineData?.productName?.substring(0, 30) + '...' || '-';
-        
-        modals.forEach(modalId => {
-            const modal = document.getElementById(modalId);
-            if (modal) {
-                const machineEl = modal.querySelector('.context-machine');
-                const productEl = modal.querySelector('.context-product');
-                if (machineEl) machineEl.textContent = machineText;
-                if (productEl) productEl.textContent = productText;
-            }
-        });
-    }
-
-    // Abrir modal Enviar para Triagem
-    function openEnviarTriagemModal() {
-        closeModal('triagem-menu-modal');
-        
-        // Limpar formulário
-        const form = document.getElementById('enviar-triagem-form');
-        if (form) form.reset();
-        
-        updateTriagemContexts();
-        openModal('enviar-triagem-modal');
-        lucide.createIcons();
-        
-        // Focar no campo de quantidade
-        setTimeout(() => {
-            document.getElementById('enviar-triagem-qty')?.focus();
-        }, 100);
-    }
-
-    // Abrir modal Volta de Triagem
-    async function openVoltaTriagemModal() {
-        closeModal('triagem-menu-modal');
-        
-        // Limpar formulário
-        const form = document.getElementById('volta-triagem-form');
-        if (form) form.reset();
-        
-        // Mostrar quantidade pendente
-        const pendente = await getTriagemPendente();
-        const pendenteEl = document.getElementById('volta-triagem-pendente');
-        if (pendenteEl) {
-            pendenteEl.textContent = pendente.toLocaleString('pt-BR');
-        }
-        
-        updateTriagemContexts();
-        openModal('volta-triagem-modal');
-        lucide.createIcons();
-        
-        setTimeout(() => {
-            document.getElementById('volta-triagem-qty')?.focus();
-        }, 100);
-    }
-
-    // Abrir modal Descarte Pós-Triagem
-    async function openDescarteTriagemModal() {
-        closeModal('triagem-menu-modal');
-        
-        // Limpar formulário
-        const form = document.getElementById('descarte-triagem-form');
-        if (form) form.reset();
-        
-        // Mostrar quantidade pendente
-        const pendente = await getTriagemPendente();
-        const pendenteEl = document.getElementById('descarte-triagem-pendente');
-        if (pendenteEl) {
-            pendenteEl.textContent = pendente.toLocaleString('pt-BR');
-        }
-        
-        updateTriagemContexts();
-        openModal('descarte-triagem-modal');
-        lucide.createIcons();
-        
-        setTimeout(() => {
-            document.getElementById('descarte-triagem-qty')?.focus();
-        }, 100);
-    }
-
     // Função utilitária para retry com backoff exponencial (para erros 429)
     async function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
         let lastError;
@@ -18139,554 +18119,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
         throw lastError;
     }
-
-    // Handler: Enviar para Triagem
-    async function handleEnviarTriagemSubmit(e) {
-        e.preventDefault();
-        
-        if (!window.authSystem?.checkPermissionForAction('add_rework')) {
-            showNotification('Permissão negada', 'error');
-            return;
-        }
-        
-        if (!selectedMachineData) {
-            alert('Nenhuma máquina selecionada.');
-            return;
-        }
-        
-        const qtyInput = document.getElementById('enviar-triagem-qty');
-        const motivoSelect = document.getElementById('enviar-triagem-motivo');
-        const obsInput = document.getElementById('enviar-triagem-obs');
-        
-        const quantity = parseInt(qtyInput?.value, 10) || 0;
-        const motivo = motivoSelect?.value || '';
-        const observations = (obsInput?.value || '').trim();
-        
-        if (quantity <= 0) {
-            alert('Informe uma quantidade válida.');
-            qtyInput?.focus();
-            return;
-        }
-        
-        if (!motivo) {
-            alert('Selecione o motivo da triagem.');
-            motivoSelect?.focus();
-            return;
-        }
-        
-        const planId = selectedMachineData?.id || null;
-        const currentShift = getCurrentShift();
-        const dataReferencia = getProductionDateString();
-        const currentUser = getActiveUser();
-        const machineId = selectedMachineData.machine || '';
-        const orderId = selectedMachineData.order_id || selectedMachineData.orderId || null;
-        
-        console.log('[TRIAGEM] Enviando para triagem:', { quantity, motivo, machineId });
-        
-        try {
-            // Buscar lançamentos de produção FORA da transação
-            const productionSnapshot = await db.collection('production_entries')
-                .where('machine', '==', machineId)
-                .where('data', '==', dataReferencia)
-                .where('turno', '==', currentShift)
-                .get();
-            
-            const productionDocs = productionSnapshot.docs.map(doc => ({ ref: doc.ref, id: doc.id }));
-            
-            // Transação para descontar da produção e criar registro de triagem
-            const result = await db.runTransaction(async (transaction) => {
-                // === FASE 1: TODAS AS LEITURAS ===
-                
-                // Ler produções
-                const productionReads = [];
-                for (const docInfo of productionDocs) {
-                    const freshDoc = await transaction.get(docInfo.ref);
-                    if (freshDoc.exists) {
-                        productionReads.push({ ref: docInfo.ref, data: freshDoc.data() });
-                    }
-                }
-                
-                // Ler planejamento
-                let planSnap = null;
-                if (planId) {
-                    const planRef = db.collection('planning').doc(planId);
-                    planSnap = await transaction.get(planRef);
-                }
-                
-                // Ler OP
-                let orderSnap = null;
-                if (orderId) {
-                    const orderRef = db.collection('production_orders').doc(orderId);
-                    orderSnap = await transaction.get(orderRef);
-                }
-                
-                // === FASE 2: TODAS AS ESCRITAS ===
-                
-                let totalDeducted = 0;
-                let remainingToDeduct = quantity;
-                
-                // 1. Descontar das produções
-                for (const prodDoc of productionReads) {
-                    if (remainingToDeduct <= 0) break;
-                    
-                    const prodData = prodDoc.data || {};
-                    const currentQty = Number(prodData.produzido || prodData.quantity || 0);
-                    
-                    if (currentQty <= 0) continue;
-                    
-                    const deduct = Math.min(currentQty, remainingToDeduct);
-                    const newQty = currentQty - deduct;
-                    
-                    transaction.update(prodDoc.ref, {
-                        produzido: newQty,
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                        lastAdjustment: {
-                            type: 'triagem_envio',
-                            deducted: deduct,
-                            previousQty: currentQty,
-                            newQty: newQty,
-                            motivo: motivo,
-                            adjustedBy: currentUser?.username || 'sistema',
-                            adjustedAt: firebase.firestore.FieldValue.serverTimestamp()
-                        }
-                    });
-                    
-                    totalDeducted += deduct;
-                    remainingToDeduct -= deduct;
-                }
-                
-                // 2. Atualizar totais no planejamento
-                if (planSnap && planSnap.exists && totalDeducted > 0) {
-                    const planData = planSnap.data() || {};
-                    const currentTotal = Number(planData.total_produzido || 0);
-                    transaction.update(planSnap.ref, {
-                        total_produzido: Math.max(0, currentTotal - totalDeducted),
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                }
-                
-                // 3. Atualizar total da OP
-                if (orderSnap && orderSnap.exists && totalDeducted > 0) {
-                    const orderData = orderSnap.data() || {};
-                    const currentTotal = Number(orderData.total_produzido ?? orderData.totalProduced ?? 0);
-                    transaction.update(orderSnap.ref, {
-                        total_produzido: Math.max(0, currentTotal - totalDeducted),
-                        totalProduced: Math.max(0, currentTotal - totalDeducted),
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                }
-                
-                // 4. Criar registro de triagem
-                const triagemRef = db.collection('triagem_entries').doc();
-                transaction.set(triagemRef, {
-                    tipo: 'ENVIO',
-                    status: 'PENDENTE',
-                    planId: planId,
-                    orderId: orderId,
-                    machine: machineId,
-                    mp: selectedMachineData.mp || '',
-                    product: selectedMachineData.product || selectedMachineData.productName || '',
-                    data: dataReferencia,
-                    turno: currentShift,
-                    quantidade_enviada: quantity,
-                    quantidade_descontada: totalDeducted,
-                    quantidade_resolvida: 0,
-                    motivo: motivo,
-                    observacoes: observations,
-                    registradoPor: currentUser?.username || null,
-                    registradoPorNome: getCurrentUserName(),
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                
-                return { totalDeducted, triagemId: triagemRef.id };
-            });
-            
-            closeModal('enviar-triagem-modal');
-            await Promise.all([
-                populateMachineSelector(),
-                loadTodayStats(),
-                refreshLaunchCharts(),
-                loadRecentEntries(false)
-            ]);
-            
-            if (result.totalDeducted > 0) {
-                showNotification(`✅ ${result.totalDeducted} peças enviadas para triagem!`, 'success');
-            } else {
-                showNotification('⚠️ Triagem registrada, mas nenhuma produção foi descontada (verifique se há produção no turno).', 'warning');
-            }
-            
-            console.log('[TRIAGEM] Envio concluído:', result);
-            
-        } catch (error) {
-            console.error('[TRIAGEM] Erro ao enviar:', error);
-            alert('Erro ao enviar para triagem. Tente novamente.');
-        }
-    }
-
-    // Handler: Volta de Triagem
-    async function handleVoltaTriagemSubmit(e) {
-        e.preventDefault();
-        
-        if (!window.authSystem?.checkPermissionForAction('add_production')) {
-            showNotification('Permissão negada', 'error');
-            return;
-        }
-        
-        if (!selectedMachineData) {
-            alert('Nenhuma máquina selecionada.');
-            return;
-        }
-        
-        const qtyInput = document.getElementById('volta-triagem-qty');
-        const resultadoSelect = document.getElementById('volta-triagem-resultado');
-        const obsInput = document.getElementById('volta-triagem-obs');
-        
-        const quantity = parseInt(qtyInput?.value, 10) || 0;
-        const resultado = resultadoSelect?.value || '';
-        const observations = (obsInput?.value || '').trim();
-        
-        if (quantity <= 0) {
-            alert('Informe uma quantidade válida.');
-            qtyInput?.focus();
-            return;
-        }
-        
-        if (!resultado) {
-            alert('Selecione o resultado da triagem.');
-            resultadoSelect?.focus();
-            return;
-        }
-        
-        // Verificar se há peças pendentes suficientes
-        const pendente = await getTriagemPendente();
-        if (quantity > pendente) {
-            alert(`Quantidade maior que o pendente em triagem (${pendente} peças).`);
-            return;
-        }
-        
-        const planId = selectedMachineData?.id || null;
-        const currentShift = getCurrentShift();
-        const dataReferencia = getProductionDateString();
-        const currentUser = getActiveUser();
-        const machineId = selectedMachineData.machine || '';
-        const orderId = selectedMachineData.order_id || selectedMachineData.orderId || null;
-        
-        console.log('[TRIAGEM] Registrando volta:', { quantity, resultado, machineId });
-        
-        try {
-            await retryWithBackoff(async () => {
-                // Buscar triagens pendentes FORA da transação
-                const triagemSnapshot = await db.collection('triagem_entries')
-                    .where('machine', '==', machineId)
-                    .where('status', '==', 'PENDENTE')
-                    .get();
-                
-                // Ordenar por timestamp no client-side
-                const triagemDocs = triagemSnapshot.docs
-                    .map(doc => ({ ref: doc.ref, id: doc.id, timestamp: doc.data().timestamp }))
-                    .sort((a, b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0))
-                    .map(({ ref, id }) => ({ ref, id }));
-                
-                await db.runTransaction(async (transaction) => {
-                    // === FASE 1: TODAS AS LEITURAS ===
-                    
-                    // Ler planejamento
-                    let planSnap = null;
-                    if (planId) {
-                        const planRef = db.collection('planning').doc(planId);
-                    planSnap = await transaction.get(planRef);
-                }
-                
-                // Ler OP
-                let orderSnap = null;
-                if (orderId) {
-                    const orderRef = db.collection('production_orders').doc(orderId);
-                    orderSnap = await transaction.get(orderRef);
-                }
-                
-                // Ler triagens pendentes (fresh read)
-                const triagemReads = [];
-                for (const docInfo of triagemDocs) {
-                    const freshDoc = await transaction.get(docInfo.ref);
-                    if (freshDoc.exists) {
-                        triagemReads.push({ ref: docInfo.ref, data: freshDoc.data() });
-                    }
-                }
-                
-                // === FASE 2: TODAS AS ESCRITAS ===
-                
-                // 1. Criar entrada de produção como "VOLTA_TRIAGEM"
-                const productionRef = db.collection('production_entries').doc();
-                transaction.set(productionRef, {
-                    planId: planId,
-                    orderId: orderId,
-                    machine: machineId,
-                    mp: selectedMachineData.mp || '',
-                    data: dataReferencia,
-                    turno: currentShift,
-                    produzido: quantity,
-                    tipo_lancamento: 'VOLTA_TRIAGEM',
-                    resultado_triagem: resultado,
-                    peso_bruto: 0,
-                    observacoes: observations,
-                    registradoPor: currentUser?.username || null,
-                    registradoPorNome: getCurrentUserName(),
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                
-                // 2. Atualizar totais no planejamento
-                if (planSnap && planSnap.exists) {
-                    const planData = planSnap.data() || {};
-                    const currentTotal = Number(planData.total_produzido || 0);
-                    transaction.update(planSnap.ref, {
-                        total_produzido: currentTotal + quantity,
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                }
-                
-                // 3. Atualizar total da OP
-                if (orderSnap && orderSnap.exists) {
-                    const orderData = orderSnap.data() || {};
-                    const currentTotal = Number(orderData.total_produzido ?? orderData.totalProduced ?? 0);
-                    transaction.update(orderSnap.ref, {
-                        total_produzido: currentTotal + quantity,
-                        totalProduced: currentTotal + quantity,
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                }
-                
-                // 4. Atualizar registros de triagem pendentes
-                let remainingToResolve = quantity;
-                
-                for (const triagemDoc of triagemReads) {
-                    if (remainingToResolve <= 0) break;
-                    
-                    const triagemData = triagemDoc.data || {};
-                    const enviado = Number(triagemData.quantidade_enviada || 0);
-                    const jaResolvido = Number(triagemData.quantidade_resolvida || 0);
-                    const disponivel = enviado - jaResolvido;
-                    
-                    if (disponivel <= 0) continue;
-                    
-                    const resolver = Math.min(disponivel, remainingToResolve);
-                    const novoResolvido = jaResolvido + resolver;
-                    const novoStatus = novoResolvido >= enviado ? 'RESOLVIDO' : 'PENDENTE';
-                    
-                    transaction.update(triagemDoc.ref, {
-                        quantidade_resolvida: novoResolvido,
-                        status: novoStatus,
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                    
-                    remainingToResolve -= resolver;
-                }
-                
-                // 5. Criar registro de volta de triagem
-                const voltaRef = db.collection('triagem_entries').doc();
-                transaction.set(voltaRef, {
-                    tipo: 'VOLTA',
-                    status: 'CONCLUIDO',
-                    planId: planId,
-                    orderId: orderId,
-                    machine: machineId,
-                    mp: selectedMachineData.mp || '',
-                    product: selectedMachineData.product || selectedMachineData.productName || '',
-                    data: dataReferencia,
-                    turno: currentShift,
-                    quantidade: quantity,
-                    resultado: resultado,
-                    observacoes: observations,
-                    registradoPor: currentUser?.username || null,
-                    registradoPorNome: getCurrentUserName(),
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-            });
-            }); // Fim do retryWithBackoff
-            
-            closeModal('volta-triagem-modal');
-            await Promise.all([
-                populateMachineSelector(),
-                loadTodayStats(),
-                refreshLaunchCharts(),
-                loadRecentEntries(false)
-            ]);
-            
-            showNotification(`✅ ${quantity} peças retornaram da triagem como "${resultado}"!`, 'success');
-            console.log('[TRIAGEM] Volta concluída');
-            
-        } catch (error) {
-            console.error('[TRIAGEM] Erro na volta:', error);
-            alert('Erro ao registrar volta de triagem. Tente novamente.');
-        }
-    }
-
-    // Handler: Descarte Pós-Triagem
-    async function handleDescarteTriagemSubmit(e) {
-        e.preventDefault();
-        
-        if (!window.authSystem?.checkPermissionForAction('add_losses')) {
-            showNotification('Permissão negada', 'error');
-            return;
-        }
-        
-        if (!selectedMachineData) {
-            alert('Nenhuma máquina selecionada.');
-            return;
-        }
-        
-        const qtyInput = document.getElementById('descarte-triagem-qty');
-        const motivoSelect = document.getElementById('descarte-triagem-motivo');
-        const obsInput = document.getElementById('descarte-triagem-obs');
-        
-        const quantity = parseInt(qtyInput?.value, 10) || 0;
-        const motivo = motivoSelect?.value || '';
-        const observations = (obsInput?.value || '').trim();
-        
-        if (quantity <= 0) {
-            alert('Informe uma quantidade válida.');
-            qtyInput?.focus();
-            return;
-        }
-        
-        if (!motivo) {
-            alert('Selecione o motivo do descarte.');
-            motivoSelect?.focus();
-            return;
-        }
-        
-        // Verificar se há peças pendentes suficientes
-        const pendente = await getTriagemPendente();
-        if (quantity > pendente) {
-            alert(`Quantidade maior que o pendente em triagem (${pendente} peças).`);
-            return;
-        }
-        
-        const planId = selectedMachineData?.id || null;
-        const currentShift = getCurrentShift();
-        const dataReferencia = getProductionDateString();
-        const currentUser = getActiveUser();
-        const machineId = selectedMachineData.machine || '';
-        const orderId = selectedMachineData.order_id || selectedMachineData.orderId || null;
-        
-        console.log('[TRIAGEM] Registrando descarte:', { quantity, motivo, machineId });
-        
-        try {
-            await retryWithBackoff(async () => {
-                // Buscar triagens pendentes FORA da transação
-                const triagemSnapshot = await db.collection('triagem_entries')
-                    .where('machine', '==', machineId)
-                    .where('status', '==', 'PENDENTE')
-                    .get();
-                
-                // Ordenar por timestamp no client-side
-                const triagemDocs = triagemSnapshot.docs
-                    .map(doc => ({ ref: doc.ref, id: doc.id, timestamp: doc.data().timestamp }))
-                    .sort((a, b) => (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0))
-                    .map(({ ref, id }) => ({ ref, id }));
-                
-                await db.runTransaction(async (transaction) => {
-                    // === FASE 1: TODAS AS LEITURAS ===
-                    const triagemReads = [];
-                    for (const docInfo of triagemDocs) {
-                        const freshDoc = await transaction.get(docInfo.ref);
-                        if (freshDoc.exists) {
-                            triagemReads.push({ ref: docInfo.ref, data: freshDoc.data() });
-                        }
-                    }
-                    
-                    // === FASE 2: TODAS AS ESCRITAS ===
-                    
-                    // 1. Criar entrada de perda como "DESCARTE_TRIAGEM"
-                const lossRef = db.collection('loss_entries').doc();
-                transaction.set(lossRef, {
-                    planId: planId,
-                    orderId: orderId,
-                    machine: machineId,
-                    mp: selectedMachineData.mp || '',
-                    data: dataReferencia,
-                    turno: currentShift,
-                    quantidade: quantity,
-                    tipo_perda: 'DESCARTE_TRIAGEM',
-                    motivo: motivo,
-                    observacoes: observations,
-                    registradoPor: currentUser?.username || null,
-                    registradoPorNome: getCurrentUserName(),
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                
-                // 2. Atualizar registros de triagem pendentes
-                let remainingToResolve = quantity;
-                
-                for (const triagemDoc of triagemReads) {
-                    if (remainingToResolve <= 0) break;
-                    
-                    const triagemData = triagemDoc.data || {};
-                    const enviado = Number(triagemData.quantidade_enviada || 0);
-                    const jaResolvido = Number(triagemData.quantidade_resolvida || 0);
-                    const disponivel = enviado - jaResolvido;
-                    
-                    if (disponivel <= 0) continue;
-                    
-                    const resolver = Math.min(disponivel, remainingToResolve);
-                    const novoResolvido = jaResolvido + resolver;
-                    const novoStatus = novoResolvido >= enviado ? 'RESOLVIDO' : 'PENDENTE';
-                    
-                    transaction.update(triagemDoc.ref, {
-                        quantidade_resolvida: novoResolvido,
-                        status: novoStatus,
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                    
-                    remainingToResolve -= resolver;
-                }
-                
-                // 3. Criar registro de descarte de triagem
-                const descarteRef = db.collection('triagem_entries').doc();
-                transaction.set(descarteRef, {
-                    tipo: 'DESCARTE',
-                    status: 'CONCLUIDO',
-                    planId: planId,
-                    orderId: orderId,
-                    machine: machineId,
-                    mp: selectedMachineData.mp || '',
-                    product: selectedMachineData.product || selectedMachineData.productName || '',
-                    data: dataReferencia,
-                    turno: currentShift,
-                    quantidade: quantity,
-                    motivo: motivo,
-                    observacoes: observations,
-                    registradoPor: currentUser?.username || null,
-                    registradoPorNome: getCurrentUserName(),
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-            });
-            }); // Fim do retryWithBackoff
-            
-            closeModal('descarte-triagem-modal');
-            await Promise.all([
-                populateMachineSelector(),
-                loadTodayStats(),
-                refreshLaunchCharts(),
-                loadRecentEntries(false)
-            ]);
-            
-            showNotification(`⚠️ ${quantity} peças descartadas após triagem.`, 'warning');
-            console.log('[TRIAGEM] Descarte concluído');
-            
-        } catch (error) {
-            console.error('[TRIAGEM] Erro no descarte:', error);
-            alert('Erro ao registrar descarte. Tente novamente.');
-        }
-    }
-
-    // ============================================
-    // SISTEMA DE TRIAGEM - FIM
-    // ============================================
     
     // Funções auxiliares
     function getCurrentShift(reference = new Date()) {
@@ -19064,8 +18496,7 @@ function sendDowntimeNotification() {
             production: { label: 'Produção', badge: 'bg-green-100 text-green-700 border border-green-200' },
             loss: { label: 'Perda', badge: 'bg-orange-100 text-orange-700 border border-orange-200' },
             downtime: { label: 'Parada', badge: 'bg-red-100 text-red-700 border border-red-200' },
-            rework: { label: 'Retrabalho', badge: 'bg-purple-100 text-purple-700 border border-purple-200' },
-            triagem: { label: 'Triagem', badge: 'bg-indigo-100 text-indigo-700 border border-indigo-200' }
+            rework: { label: 'Retrabalho', badge: 'bg-purple-100 text-purple-700 border border-purple-200' }
         };
 
         const config = typeConfig[entry.type] || { label: 'Lançamento', badge: 'bg-gray-100 text-gray-600 border border-gray-200' };
@@ -19085,25 +18516,12 @@ function sendDowntimeNotification() {
         if (entry.type === 'production') {
             const produzido = parseInt(entry.data.produzido ?? entry.data.quantity ?? 0, 10) || 0;
             
-            // Verificar se é uma volta de triagem
-            if (entry.data.tipo_lancamento === 'VOLTA_TRIAGEM') {
-                details.push(`<span class="text-emerald-600">🔄 Volta de Triagem</span>`);
-                if (entry.data.resultado_triagem) {
-                    details.push(`<span class="text-xs text-emerald-500">${entry.data.resultado_triagem}</span>`);
-                }
-            }
-            
             details.push(`<span class="font-semibold text-gray-800">${produzido} peça(s)</span>`);
             const pesoBruto = parseNumber(entry.data.peso_bruto ?? entry.data.weight ?? 0);
             if (pesoBruto > 0) {
                 details.push(`${pesoBruto.toFixed(3)} kg`);
             }
         } else if (entry.type === 'loss') {
-            // Verificar se é um descarte de triagem
-            if (entry.data.tipo_perda === 'DESCARTE_TRIAGEM') {
-                details.push(`<span class="text-red-600">🗑️ Descarte Pós-Triagem</span>`);
-            }
-            
             const refugoKg = parseNumber(entry.data.refugo_kg ?? entry.data.weight ?? 0);
             const quantidade = parseInt(entry.data.quantidade ?? 0, 10) || 0;
             
@@ -19164,36 +18582,6 @@ function sendDowntimeNotification() {
             }
             if (entry.data.motivo) {
                 details.push(`Motivo: ${entry.data.motivo}`);
-            }
-        } else if (entry.type === 'triagem') {
-            const tipoTriagem = entry.data.tipo || 'ENVIO';
-            const quantidade = parseInt(entry.data.quantidade ?? entry.data.quantidade_enviada ?? 0, 10) || 0;
-            const status = entry.data.status || 'PENDENTE';
-            
-            // Ícone e label baseado no tipo
-            const tipoLabels = {
-                'ENVIO': { icon: '📤', label: 'Enviado p/ Triagem', color: 'text-indigo-600' },
-                'VOLTA': { icon: '✅', label: 'Volta de Triagem', color: 'text-emerald-600' },
-                'DESCARTE': { icon: '🗑️', label: 'Descarte Pós-Triagem', color: 'text-red-600' }
-            };
-            
-            const tipoInfo = tipoLabels[tipoTriagem] || tipoLabels['ENVIO'];
-            
-            details.push(`<span class="font-semibold ${tipoInfo.color}">${tipoInfo.icon} ${tipoInfo.label}</span>`);
-            details.push(`<span class="font-semibold text-gray-800">${quantidade} peça(s)</span>`);
-            
-            if (tipoTriagem === 'ENVIO') {
-                const pendente = quantidade - (parseInt(entry.data.quantidade_resolvida ?? 0, 10) || 0);
-                if (pendente > 0) {
-                    details.push(`<span class="text-amber-600">⏳ ${pendente} pendente(s)</span>`);
-                }
-            }
-            
-            if (entry.data.motivo) {
-                details.push(`Motivo: ${entry.data.motivo}`);
-            }
-            if (entry.data.resultado) {
-                details.push(`Resultado: ${entry.data.resultado}`);
             }
         }
 
@@ -19367,28 +18755,6 @@ function sendDowntimeNotification() {
                 recentEntriesCache.set(doc.id, entry);
             });
 
-            // Carregar entradas de triagem
-            const triagemSnapshot = await db.collection('triagem_entries')
-                .where('machine', '==', selectedMachineData.machine)
-                .where('data', '==', date)
-                .get();
-
-            triagemSnapshot.forEach(doc => {
-                const data = doc.data();
-                const timestamp = data.createdAt?.toDate?.() || data.timestamp?.toDate?.() || (data.data ? new Date(`${data.data}T12:00:00`) : null);
-
-                const entry = {
-                    id: doc.id,
-                    type: 'triagem',
-                    collection: 'triagem_entries',
-                    data,
-                    timestamp
-                };
-
-                entries.push(entry);
-                recentEntriesCache.set(doc.id, entry);
-            });
-
             entries.sort((a, b) => {
                 const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
                 const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
@@ -19417,6 +18783,157 @@ function sendDowntimeNotification() {
     }
     window.refreshRecentEntries = refreshRecentEntries;
 
+    // Funções auxiliares para indicador de data de lançamentos
+    // Funções auxiliares para indicador de filtros de lançamentos
+    function updateEntriesFilterIndicator() {
+        const indicator = document.getElementById('entries-filter-indicator');
+        const display = document.getElementById('entries-filter-display');
+        const today = getProductionDateString();
+        const filterDate = window.lancamentoFilterDate;
+        const filterMachine = window.lancamentoFilterMachine;
+        
+        if (indicator && display) {
+            const parts = [];
+            
+            if (filterDate && filterDate !== today) {
+                const [year, month, day] = filterDate.split('-');
+                parts.push(`Data: ${day}/${month}/${year}`);
+            }
+            
+            if (filterMachine) {
+                parts.push(`Máquina: ${filterMachine}`);
+            }
+            
+            if (parts.length > 0) {
+                display.textContent = parts.join(' | ');
+                indicator.classList.remove('hidden');
+            } else {
+                indicator.classList.add('hidden');
+            }
+        }
+    }
+    
+    function hideEntriesFilterIndicator() {
+        const indicator = document.getElementById('entries-filter-indicator');
+        if (indicator) {
+            indicator.classList.add('hidden');
+        }
+    }
+    
+    // Função para carregar lançamentos com filtros de data e máquina
+    async function loadRecentEntriesWithFilters() {
+        if (!recentEntriesList) return;
+        
+        setRecentEntriesState({ loading: true, empty: false });
+        
+        const filterDate = window.lancamentoFilterDate || getProductionDateString();
+        const filterMachine = window.lancamentoFilterMachine;
+        
+        // Se tiver máquina específica selecionada, buscar por ela
+        const machineToSearch = filterMachine || (selectedMachineData ? selectedMachineData.machine : null);
+        
+        if (!machineToSearch) {
+            updateRecentEntriesEmptyMessage('Selecione uma máquina para visualizar os lançamentos.');
+            setRecentEntriesState({ loading: false, empty: true });
+            return;
+        }
+        
+        try {
+            const entries = [];
+            recentEntriesCache = new Map();
+            
+            // Buscar lançamentos de produção pela máquina
+            const productionSnapshot = await db.collection('production_entries')
+                .where('machine', '==', machineToSearch)
+                .where('data', '==', filterDate)
+                .get();
+            
+            productionSnapshot.forEach(doc => {
+                const data = doc.data();
+                // Verificar se é borra
+                const isBorra = data.tipo_lancamento === 'BORRA' || data.lote === 'BORRA' || (data.observacoes && data.observacoes.toUpperCase().includes('BORRA'));
+                const type = isBorra ? 'borra' : ((data.refugo_kg && data.refugo_kg > 0) || data.perdas ? 'loss' : 'production');
+                const resolvedTimestamp = resolveProductionDateTime(data) || data.updatedAt?.toDate?.() || data.timestamp?.toDate?.() || data.createdAt?.toDate?.() || (data.datetime ? new Date(data.datetime) : null);
+
+                const entry = {
+                    id: doc.id,
+                    type,
+                    collection: 'production_entries',
+                    data,
+                    timestamp: resolvedTimestamp
+                };
+
+                entries.push(entry);
+                recentEntriesCache.set(doc.id, entry);
+            });
+            
+            // Buscar paradas
+            const downtimeSnapshot = await db.collection('downtime_entries')
+                .where('machine', '==', machineToSearch)
+                .where('date', '==', filterDate)
+                .get();
+
+            downtimeSnapshot.forEach(doc => {
+                const data = doc.data();
+                const timestamp = data.createdAt?.toDate?.() || data.timestamp?.toDate?.() || resolveProductionDateTime(data) || (data.startTime ? new Date(`${data.date}T${data.startTime}`) : null);
+
+                const entry = {
+                    id: doc.id,
+                    type: 'downtime',
+                    collection: 'downtime_entries',
+                    data,
+                    timestamp
+                };
+
+                entries.push(entry);
+                recentEntriesCache.set(doc.id, entry);
+            });
+            
+            // Buscar retrabalhos
+            const reworkSnapshot = await db.collection('rework_entries')
+                .where('machine', '==', machineToSearch)
+                .where('data', '==', filterDate)
+                .get();
+
+            reworkSnapshot.forEach(doc => {
+                const data = doc.data();
+                const timestamp = data.createdAt?.toDate?.() || data.timestamp?.toDate?.() || (data.data ? new Date(`${data.data}T12:00:00`) : null);
+
+                const entry = {
+                    id: doc.id,
+                    type: 'rework',
+                    collection: 'rework_entries',
+                    data,
+                    timestamp
+                };
+
+                entries.push(entry);
+                recentEntriesCache.set(doc.id, entry);
+            });
+            
+            // Ordenar por timestamp
+            entries.sort((a, b) => {
+                const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
+                const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
+                return timeB - timeA;
+            });
+
+            allRecentEntries = entries;
+
+            if (!entries.length) {
+                updateRecentEntriesEmptyMessage(`Nenhum lançamento encontrado para ${machineToSearch} em ${filterDate.split('-').reverse().join('/')}.`);
+                setRecentEntriesState({ loading: false, empty: true });
+            } else {
+                applyEntryFilter(currentEntryFilter);
+                setRecentEntriesState({ loading: false, empty: false });
+            }
+        } catch (error) {
+            console.error('Erro ao carregar lançamentos com filtros:', error);
+            updateRecentEntriesEmptyMessage('Erro ao carregar lançamentos. Tente novamente.');
+            setRecentEntriesState({ loading: false, empty: true });
+        }
+    }
+
     // Função para aplicar filtro de tipo de entrada
     function applyEntryFilter(filter) {
         currentEntryFilter = filter;
@@ -19433,8 +18950,7 @@ function sendDowntimeNotification() {
                 production: 'lançamentos de produção',
                 downtime: 'paradas',
                 loss: 'perdas',
-                rework: 'retrabalhos',
-                triagem: 'triagens'
+                rework: 'retrabalhos'
             };
             updateRecentEntriesEmptyMessage(`Não há ${filterLabels[filter]} para exibir.`);
             setRecentEntriesState({ loading: false, empty: true });
@@ -19819,7 +19335,9 @@ function sendDowntimeNotification() {
         const plannedQtyPrimary = parseOptionalNumber(plan.order_lot_size);
         const plannedQtyFallback = parseOptionalNumber(plan.lot_size);
         const plannedQty = Math.round(plannedQtyPrimary ?? plannedQtyFallback ?? 0);
-        const totalAccumulatedProduced = Math.round(parseOptionalNumber(plan.total_produzido) ?? data.totalProduced ?? 0);
+        // OTIMIZAÇÃO: Usar APENAS data.totalProduced (soma dos entries) como fonte única
+        // Isso elimina oscilação causada por conflito entre plan.total_produzido e soma dos entries
+        const totalAccumulatedProduced = Math.round(data.totalProduced ?? 0);
         const lossesKg = Math.round(coerceToNumber(data.totalLossesKg, 0));
         const pieceWeight = coerceToNumber(plan.piece_weight, 0);
         const scrapPcs = pieceWeight > 0 ? Math.round((lossesKg * 1000) / pieceWeight) : 0;

@@ -29,7 +29,7 @@ class AnalyticsIACore {
         };
         
         this.config = {
-            refreshInterval: 300000, // 5 minutos
+            refreshInterval: 1800000, // 30 minutos (otimizado)
             historicalDays: 30,
             predictionHorizon: 8, // horas
             alertThresholds: {

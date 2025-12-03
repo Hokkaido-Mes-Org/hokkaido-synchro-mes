@@ -626,9 +626,10 @@ class SPCController {
         if (this.activeMonitoring) return;
 
         this.activeMonitoring = true;
+        // Intervalo aumentado para 15 minutos (otimizado)
         this.monitoringInterval = setInterval(() => {
             this.checkProcessStatus();
-        }, this.config.updateInterval);
+        }, 15 * 60 * 1000);
 
         console.log('[SPC] Monitoramento ativo');
     }
@@ -658,46 +659,46 @@ class SPCController {
         }
     }
 
-    // Monitoramento contínuo de medições do Firestore
+    // Monitoramento de medições do Firestore (OTIMIZADO - sem listener real-time)
     async monitorNewMeasurements() {
-        // Em produção, usa listeners do Firestore para tempo real
+        // Otimização: Usar .get() ao invés de onSnapshot para reduzir consumo Firebase
         try {
             if (typeof db === 'undefined') {
                 console.warn('[SPC] Firestore não disponível para monitoramento');
                 return;
             }
 
-            // Configurar listener em tempo real para collection quality_measurements
-            db.collection('quality_measurements')
+            // Busca sob demanda ao invés de listener constante
+            const snapshot = await db.collection('quality_measurements')
                 .where('timestamp', '>=', new Date(Date.now() - 24 * 60 * 60 * 1000))
                 .orderBy('timestamp', 'desc')
                 .limit(100)
-                .onSnapshot(snapshot => {
-                    const newMeasurements = [];
-                    
-                    snapshot.forEach(doc => {
-                        newMeasurements.push({
-                            id: doc.id,
-                            ...doc.data(),
-                            timestamp: doc.data().timestamp?.toDate ? doc.data().timestamp.toDate() : new Date(doc.data().timestamp)
-                        });
-                    });
-                    
-                    // Atualizar dados SPC com novas medições
-                    if (newMeasurements.length > 0) {
-                        this.spcData.measurements = newMeasurements;
-                        this.updateSPCInterface();
-                        
-                        // Aplicar regras de controle
-                        const alarms = this.applyControlRules();
-                        if (alarms.length > 0) {
-                            this.processAlarms(alarms);
-                        }
-                    }
+                .get();
+            
+            const newMeasurements = [];
+            
+            snapshot.forEach(doc => {
+                newMeasurements.push({
+                    id: doc.id,
+                    ...doc.data(),
+                    timestamp: doc.data().timestamp?.toDate ? doc.data().timestamp.toDate() : new Date(doc.data().timestamp)
                 });
+            });
+            
+            // Atualizar dados SPC com novas medições
+            if (newMeasurements.length > 0) {
+                this.spcData.measurements = newMeasurements;
+                this.updateSPCInterface();
+                
+                // Aplicar regras de controle
+                const alarms = this.applyControlRules();
+                if (alarms.length > 0) {
+                    this.processAlarms(alarms);
+                }
+            }
                 
         } catch (error) {
-            console.error('[SPC] Erro ao configurar monitoramento em tempo real:', error);
+            console.error('[SPC] Erro ao buscar medições:', error);
         }
     }
 

@@ -348,22 +348,12 @@
                     <i data-lucide="area-chart" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Análise</span>
                     <span class="nav-tooltip">Análise</span>
                 </a>
-                <a href="#" class="nav-btn group" data-page="relatorios" title="Relatórios">
-                    <i data-lucide="file-bar-chart" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Relatórios</span>
-                    <span class="nav-tooltip">Relatórios</span>
-                </a>
+                <!-- Aba Relatórios removida - Otimização 02/12/2025 -->
                 <a href="#" class="nav-btn group" data-page="paradas-longas" title="Paradas Longas">
                     <i data-lucide="calendar-off" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Paradas Longas</span>
                     <span class="nav-tooltip">Paradas Longas</span>
                 </a>
-                <a href="#" class="nav-btn group" data-page="qualidade" title="Qualidade">
-                    <i data-lucide="shield-check" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Qualidade</span>
-                    <span class="nav-tooltip">Qualidade</span>
-                </a>
-                <a href="#" class="nav-btn group" data-page="processo" title="Processo">
-                    <i data-lucide="settings-2" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Processo</span>
-                    <span class="nav-tooltip">Processo</span>
-                </a>
+                <!-- Abas Qualidade e Processo removidas - Otimização 02/12/2025 -->
 
             </nav>
         </aside>
@@ -495,25 +485,31 @@
                                 <form id="planning-form" class="p-5 space-y-5">
                                     
                                     <!-- SEÇÃO 1: Dados da Ordem de Produção (do Excel) -->
-                                    <div class="border border-blue-200 rounded-lg overflow-hidden">
-                                        <div class="bg-blue-50 px-3 py-2 border-b border-blue-200">
+                                    <div class="border border-blue-200 rounded-lg overflow-visible">
+                                        <div class="bg-blue-50 px-3 py-2 border-b border-blue-200 rounded-t-lg">
                                             <h3 class="text-xs font-bold text-blue-700 uppercase tracking-wide flex items-center gap-1.5">
                                                 <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>
                                                 Dados da OP (Excel)
                                             </h3>
                                         </div>
-                                        <div class="p-3 space-y-3 bg-white">
-                                            <div>
-                                                <label for="planning-order-select" class="block text-[10px] font-semibold text-gray-500 uppercase mb-1">Ordem de Produção</label>
-                                                <select id="planning-order-select" name="production_order_id" required 
-                                                    class="w-full p-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all">
-                                                    <option value="">Selecione a OP...</option>
-                                                </select>
+                                        <div class="p-3 space-y-3 bg-white rounded-b-lg">
+                                            <div class="relative">
+                                                <label for="planning-order-search" class="block text-[10px] font-semibold text-gray-500 uppercase mb-1">Buscar Ordem de Produção</label>
+                                                <div class="relative">
+                                                    <input type="text" id="planning-order-search" name="production_order_search" 
+                                                        class="w-full p-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                                        placeholder="Digite o número da OP..." autocomplete="off">
+                                                    <div id="planning-order-search-loading" class="hidden absolute right-3 top-1/2 -translate-y-1/2">
+                                                        <i data-lucide="loader-2" class="w-4 h-4 text-blue-500 animate-spin"></i>
+                                                    </div>
+                                                </div>
+                                                <input type="hidden" id="planning-order-select" name="production_order_id">
+                                                <div id="planning-order-results" class="hidden absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto border border-gray-200 rounded-lg shadow-lg bg-white z-[100]"></div>
                                             </div>
                                             <div id="planning-order-info" class="p-2.5 bg-blue-50 border border-blue-100 rounded-lg text-xs" style="display: none;">
                                                 <div class="grid grid-cols-2 gap-2">
                                                     <div>
-                                                        <span class="text-blue-500 font-medium">Nº OP:</span>
+                                                        <span class="text-blue-500 font-medium">Nº OP:</span>
                                                         <span id="planning-order-number" class="text-blue-800 font-bold ml-1">-</span>
                                                     </div>
                                                     <div>
@@ -812,7 +808,7 @@
                                         <option value="progress-desc">Maior progresso</option>
                                         <option value="progress-asc">Menor progresso</option>
                                         <option value="lot-desc">Maior lote</option>
-                                        <option value="alpha">A-Z (Nº OP)</option>
+                                        <option value="alpha">A-Z (Nº OP)</option>
                                     </select>
                                 </div>
                                 <!-- Botões -->
@@ -851,7 +847,7 @@
                             <table class="min-w-full divide-y divide-gray-200 border rounded-lg">
                                 <thead class="bg-gray-50">
                                     <tr>
-                                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Nº OP</th>
+                                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Nº OP</th>
                                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Produto</th>
                                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Máquina</th>
                                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wide">Lote</th>
@@ -873,310 +869,6 @@
                             </div>
                             <h3 class="text-lg font-semibold text-gray-700 mb-2">Nenhuma ordem encontrada</h3>
                             <p class="text-sm text-gray-500 mb-4">Cadastre uma nova OP ou importe do Excel</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- PÁGINA: Relatórios -->
-                <div id="relatorios-page" class="page-content hidden p-2 space-y-4">
-                    <!-- Cabeçalho com Gradiente -->
-                    <div class="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 rounded-2xl shadow-lg p-4 md:p-5">
-                        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                            <div class="flex items-center gap-4">
-                                <div class="p-3 bg-white/20 rounded-xl">
-                                    <i data-lucide="file-bar-chart" class="w-7 h-7 text-white"></i>
-                                </div>
-                                <div class="text-white">
-                                    <h2 class="text-xl md:text-2xl font-bold">Central de Relatórios</h2>
-                                    <p class="text-indigo-100 text-sm">Visualize e exporte relatórios detalhados de Produção, Paradas e perdas</p>
-                                </div>
-                            </div>
-                            <div class="flex flex-wrap items-center gap-2">
-                                <button id="report-export-excel" class="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 backdrop-blur text-white px-4 py-2.5 rounded-xl font-semibold transition border border-white/20 text-sm">
-                                    <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
-                                    Excel
-                                </button>
-                                <button id="report-export-pdf" class="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 backdrop-blur text-white px-4 py-2.5 rounded-xl font-semibold transition border border-white/20 text-sm">
-                                    <i data-lucide="file-text" class="w-4 h-4"></i>
-                                    PDF
-                                </button>
-                                <button id="report-generate-btn" class="inline-flex items-center gap-2 bg-white text-indigo-600 hover:bg-indigo-50 px-5 py-2.5 rounded-xl font-bold transition shadow-lg text-sm">
-                                    <i data-lucide="play" class="w-4 h-4"></i>
-                                    Gerar Relatório
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Cards de Tipo de Relatório -->
-                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                        <label class="report-type-card cursor-pointer">
-                            <input type="radio" name="report-type-radio" value="producao" class="hidden" checked>
-                            <div class="bg-white border-2 border-gray-200 hover:border-blue-400 rounded-2xl p-4 transition-all duration-200 h-full report-type-content hover:shadow-md">
-                                <div class="flex items-center gap-3 mb-2">
-                                    <div class="p-2 bg-blue-100 rounded-lg">
-                                        <i data-lucide="package" class="w-4 h-4 text-blue-600"></i>
-                                    </div>
-                                    <span class="font-semibold text-gray-800">Produção</span>
-                                </div>
-                                <p class="text-xs text-gray-500">Quantidade produzida, metas e eficiência por máquina</p>
-                            </div>
-                        </label>
-                        <label class="report-type-card cursor-pointer">
-                            <input type="radio" name="report-type-radio" value="paradas" class="hidden">
-                            <div class="bg-white border-2 border-gray-200 hover:border-red-400 rounded-2xl p-4 transition-all duration-200 h-full report-type-content hover:shadow-md">
-                                <div class="flex items-center gap-3 mb-2">
-                                    <div class="p-2 bg-red-100 rounded-lg">
-                                        <i data-lucide="pause-circle" class="w-4 h-4 text-red-600"></i>
-                                    </div>
-                                    <span class="font-semibold text-gray-800">Paradas</span>
-                                </div>
-                                <p class="text-xs text-gray-500">Tempo parado, motivos e impacto na Produção</p>
-                            </div>
-                        </label>
-                        <label class="report-type-card cursor-pointer">
-                            <input type="radio" name="report-type-radio" value="perdas" class="hidden">
-                            <div class="bg-white border-2 border-gray-200 hover:border-orange-400 rounded-2xl p-4 transition-all duration-200 h-full report-type-content hover:shadow-md">
-                                <div class="flex items-center gap-3 mb-2">
-                                    <div class="p-2 bg-orange-100 rounded-lg">
-                                        <i data-lucide="alert-triangle" class="w-4 h-4 text-orange-600"></i>
-                                    </div>
-                                    <span class="font-semibold text-gray-800">Refugos</span>
-                                </div>
-                                <p class="text-xs text-gray-500">Perdas, refugos e análise de causas</p>
-                            </div>
-                        </label>
-                        <label class="report-type-card cursor-pointer">
-                            <input type="radio" name="report-type-radio" value="consolidado" class="hidden">
-                            <div class="bg-white border-2 border-gray-200 hover:border-purple-400 rounded-2xl p-4 transition-all duration-200 h-full report-type-content hover:shadow-md">
-                                <div class="flex items-center gap-3 mb-2">
-                                    <div class="p-2 bg-purple-100 rounded-lg">
-                                        <i data-lucide="layout-dashboard" class="w-4 h-4 text-purple-600"></i>
-                                    </div>
-                                    <span class="font-semibold text-gray-800">Consolidado</span>
-                                </div>
-                                <p class="text-xs text-gray-500">Visão geral com todos os indicadores</p>
-                            </div>
-                        </label>
-                    </div>
-
-                    <!-- Filtros Compactos -->
-                    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-                        <div class="flex flex-wrap items-center gap-3">
-                            <!-- Período -->
-                            <div class="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-200">
-                                <i data-lucide="calendar" class="w-4 h-4 text-gray-400"></i>
-                                <select id="report-period" class="bg-transparent border-0 text-sm font-medium text-gray-700 focus:ring-0 cursor-pointer pr-6">
-                                    <option value="today">Hoje</option>
-                                    <option value="yesterday">Ontem</option>
-                                    <option value="7days" selected>Últimos 7 dias</option>
-                                    <option value="30days">Últimos 30 dias</option>
-                                    <option value="month">Este mês</option>
-                                    <option value="lastmonth">Mês passado</option>
-                                    <option value="custom">Personalizado</option>
-                                </select>
-                            </div>
-
-                            <!-- Máquina -->
-                            <div class="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
-                                <i data-lucide="cpu" class="w-4 h-4 text-gray-400"></i>
-                                <select id="report-machine" class="bg-transparent border-0 text-sm font-medium text-gray-700 focus:ring-0 cursor-pointer pr-6">
-                                    <option value="all">Todas Máquinas</option>
-                                </select>
-                            </div>
-
-                            <!-- Turno -->
-                            <div class="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
-                                <i data-lucide="clock" class="w-4 h-4 text-gray-400"></i>
-                                <select id="report-shift" class="bg-transparent border-0 text-sm font-medium text-gray-700 focus:ring-0 cursor-pointer pr-6">
-                                    <option value="all">Todos Turnos</option>
-                                    <option value="1">Turno 1 (07:00-15:00)</option>
-                                    <option value="2">Turno 2 (15:00-23:20)</option>
-                                    <option value="3">Turno 3 (23:00-07:00)</option>
-                                </select>
-                            </div>
-
-                            <!-- Datas Personalizadas -->
-                            <div id="report-custom-dates" class="hidden flex items-center gap-2">
-                                <div class="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
-                                    <span class="text-xs text-gray-500">De:</span>
-                                    <input type="date" id="report-date-start" class="bg-transparent border-0 text-sm font-medium text-gray-700 focus:ring-0">
-                                </div>
-                                <div class="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
-                                    <span class="text-xs text-gray-500">Até:</span>
-                                    <input type="date" id="report-date-end" class="bg-transparent border-0 text-sm font-medium text-gray-700 focus:ring-0">
-                                </div>
-                            </div>
-
-                            <!-- Indicador de filtros ativos -->
-                            <div class="ml-auto flex items-center gap-2">
-                                <span id="report-filter-status" class="text-xs text-gray-400">
-                                    <i data-lucide="filter" class="w-3 h-3 inline"></i>
-                                    Filtros aplicados
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Select hidden para compatibilidade -->
-                    <select id="report-type" class="hidden">
-                        <option value="producao">Produção</option>
-                        <option value="paradas">Paradas</option>
-                        <option value="perdas">Perdas/Refugos</option>
-                        <option value="consolidado">Consolidado</option>
-                    </select>
-
-                    <!-- KPIs Resumo -->
-                    <div id="report-kpis" class="grid grid-cols-2 lg:grid-cols-4 gap-3 hidden">
-                        <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl shadow-sm border border-blue-200 p-4 hover:shadow-md transition">
-                            <div class="flex items-center justify-between mb-2">
-                                <p class="text-xs font-medium text-blue-700">Total Produzido</p>
-                                <div class="p-1.5 bg-blue-200 rounded-lg">
-                                    <i data-lucide="package" class="w-3.5 h-3.5 text-blue-600"></i>
-                                </div>
-                            </div>
-                            <p id="report-kpi-produced" class="text-2xl font-bold text-blue-600">0</p>
-                            <p class="text-xs text-blue-600 opacity-70 mt-1">peças</p>
-                        </div>
-                        <div class="bg-gradient-to-br from-red-50 to-red-100 rounded-2xl shadow-sm border border-red-200 p-4 hover:shadow-md transition">
-                            <div class="flex items-center justify-between mb-2">
-                                <p class="text-xs font-medium text-red-700">Tempo Parado</p>
-                                <div class="p-1.5 bg-red-200 rounded-lg">
-                                    <i data-lucide="pause-circle" class="w-3.5 h-3.5 text-red-600"></i>
-                                </div>
-                            </div>
-                            <p id="report-kpi-downtime" class="text-2xl font-bold text-red-600">0h</p>
-                            <p class="text-xs text-red-600 opacity-70 mt-1">horas</p>
-                        </div>
-                        <div class="bg-gradient-to-br from-orange-50 to-orange-100 rounded-2xl shadow-sm border border-orange-200 p-4 hover:shadow-md transition">
-                            <div class="flex items-center justify-between mb-2">
-                                <p class="text-xs font-medium text-orange-700">Total Refugos</p>
-                                <div class="p-1.5 bg-orange-200 rounded-lg">
-                                    <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-orange-600"></i>
-                                </div>
-                            </div>
-                            <p id="report-kpi-losses" class="text-2xl font-bold text-orange-600">0</p>
-                            <p class="text-xs text-orange-600 opacity-70 mt-1">perdas</p>
-                        </div>
-                        <div class="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-2xl shadow-sm border border-emerald-200 p-4 hover:shadow-md transition">
-                            <div class="flex items-center justify-between mb-2">
-                                <p class="text-xs font-medium text-emerald-700">Eficiência Média</p>
-                                <div class="p-1.5 bg-emerald-200 rounded-lg">
-                                    <i data-lucide="trending-up" class="w-3.5 h-3.5 text-emerald-600"></i>
-                                </div>
-                            </div>
-                            <p id="report-kpi-efficiency" class="text-2xl font-bold text-emerald-600">0%</p>
-                            <p class="text-xs text-emerald-600 opacity-70 mt-1">OEE</p>
-                        </div>
-                    </div>
-
-                    <!-- Área de Loading -->
-                    <div id="report-loading" class="hidden bg-white p-16 rounded-2xl shadow-sm border border-gray-100 text-center">
-                        <div class="inline-flex items-center justify-center w-16 h-16 bg-indigo-100 rounded-full mb-4">
-                            <i data-lucide="loader-2" class="w-8 h-8 text-indigo-600 animate-spin"></i>
-                        </div>
-                        <p class="text-gray-600 font-medium">Gerando relatório...</p>
-                        <p class="text-gray-400 text-sm mt-1">Aguarde enquanto processamos os dados</p>
-                    </div>
-
-                    <!-- Mensagem Inicial -->
-                    <div id="report-initial" class="bg-white p-12 rounded-2xl shadow-sm border border-gray-100 text-center">
-                        <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-indigo-100 to-indigo-200 rounded-2xl mb-4">
-                            <i data-lucide="file-search" class="w-8 h-8 text-indigo-600"></i>
-                        </div>
-                        <h3 class="text-xl font-semibold text-gray-800 mb-2">Selecione os parâmetros</h3>
-                        <p class="text-gray-500 max-w-md mx-auto text-sm">
-                            Escolha o tipo de relatório, período e filtros desejados, depois clique em 
-                            <span class="font-semibold text-indigo-600">"Gerar Relatório"</span>
-                        </p>
-                        <div class="mt-6 flex flex-wrap justify-center gap-2">
-                            <span class="bg-gradient-to-br from-blue-50 to-blue-100 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-medium border border-blue-200">📦 Produção</span>
-                            <span class="bg-gradient-to-br from-red-50 to-red-100 text-red-700 px-3 py-1.5 rounded-lg text-xs font-medium border border-red-200">⏸️ Paradas</span>
-                            <span class="bg-gradient-to-br from-orange-50 to-orange-100 text-orange-700 px-3 py-1.5 rounded-lg text-xs font-medium border border-orange-200">⚠️ Refugos</span>
-                            <span class="bg-gradient-to-br from-purple-50 to-purple-100 text-purple-700 px-3 py-1.5 rounded-lg text-xs font-medium border border-purple-200">📊 Consolidado</span>
-                        </div>
-                    </div>
-
-                    <!-- Tabela de Resultados -->
-                    <div id="report-results" class="bg-white rounded-2xl shadow-sm border border-gray-100 hidden overflow-hidden">
-                        <div class="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
-                            <div class="flex items-center gap-3">
-                                <div class="p-2 bg-indigo-100 rounded-lg">
-                                    <i data-lucide="table-2" class="w-4 h-4 text-indigo-600"></i>
-                                </div>
-                                <h3 class="font-semibold text-gray-800" id="report-results-title">Resultados</h3>
-                            </div>
-                            <span id="report-results-count" class="text-xs font-semibold text-gray-500 bg-white px-3 py-1.5 rounded-full border border-gray-200">0 registros</span>
-                        </div>
-                        <div class="overflow-x-auto">
-                            <table class="w-full">
-                                <thead id="report-table-head" class="bg-gray-50 border-b border-gray-200">
-                                    <!-- Cabeçalho dinmico -->
-                                </thead>
-                                <tbody id="report-table-body" class="divide-y divide-gray-100">
-                                    <!-- Dados dinmicos -->
-                                </tbody>
-                            </table>
-                        </div>
-                        <div id="report-pagination" class="p-4 border-t border-gray-100 flex items-center justify-between bg-gray-50">
-                            <span id="report-pagination-info" class="text-sm text-gray-500">Mostrando 0 de 0</span>
-                            <div class="flex items-center gap-2">
-                                <button id="report-prev-page" class="px-3 py-1.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition" disabled>
-                                    <i data-lucide="chevron-left" class="w-4 h-4"></i>
-                                </button>
-                                <span id="report-page-info" class="text-sm font-medium text-gray-700 px-3">Página 1</span>
-                                <button id="report-next-page" class="px-3 py-1.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition" disabled>
-                                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Mensagem de Sem Dados -->
-                    <div id="report-empty" class="hidden bg-white p-12 rounded-2xl shadow-sm border border-gray-100 text-center">
-                        <div class="inline-flex items-center justify-center w-20 h-20 bg-gray-100 rounded-full mb-4">
-                            <i data-lucide="inbox" class="w-10 h-10 text-gray-400"></i>
-                        </div>
-                        <h3 class="text-xl font-semibold text-gray-800 mb-2">Nenhum dado encontrado</h3>
-                        <p class="text-gray-500 max-w-md mx-auto text-sm">
-                            Não há registros para os filtros selecionados. Tente ajustar o período ou outros parâmetros.
-                        </p>
-                    </div>
-
-                    <!-- Gráficos do Relatório -->
-                    <div id="report-charts" class="grid grid-cols-1 lg:grid-cols-2 gap-4 hidden">
-                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition">
-                            <div class="flex items-center gap-3 mb-4">
-                                <div class="p-2 bg-indigo-100 rounded-lg">
-                                    <i data-lucide="bar-chart-3" class="w-4 h-4 text-indigo-600"></i>
-                                </div>
-                                <h4 class="font-semibold text-gray-800">Distribuição por Turno</h4>
-                            </div>
-                            <div class="h-64">
-                                <canvas id="report-chart-shift"></canvas>
-                            </div>
-                        </div>
-                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition">
-                            <div class="flex items-center gap-3 mb-4">
-                                <div class="p-2 bg-purple-100 rounded-lg">
-                                    <i data-lucide="pie-chart" class="w-4 h-4 text-purple-600"></i>
-                                </div>
-                                <h4 class="font-semibold text-gray-800">Distribuição por Motivo</h4>
-                            </div>
-                            <div class="h-64">
-                                <canvas id="report-chart-reason"></canvas>
-                            </div>
-                        </div>
-                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 lg:col-span-2 hover:shadow-md transition">
-                            <div class="flex items-center gap-3 mb-4">
-                                <div class="p-2 bg-green-100 rounded-lg">
-                                    <i data-lucide="trending-up" class="w-4 h-4 text-green-600"></i>
-                                </div>
-                                <h4 class="font-semibold text-gray-800">Evolução Diária</h4>
-                            </div>
-                            <div class="h-64">
-                                <canvas id="report-chart-timeline"></canvas>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -1283,41 +975,6 @@
 
                 <!-- PÁGINA: Lançamento -->
                 <div id="lancamento-page" class="page-content space-y-3 p-2">
-                    
-                    <!-- Filtro de Data (apenas para Leandro Camargo) -->
-                    <div id="lancamento-date-filter" class="hidden bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl p-3 mb-2">
-                        <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                            <div class="flex items-center gap-2">
-                                <div class="p-2 bg-amber-100 rounded-lg">
-                                    <i data-lucide="calendar-search" class="w-5 h-5 text-amber-600"></i>
-                                </div>
-                                <div>
-                                    <p class="text-sm font-semibold text-amber-800">Filtro de Data</p>
-                                    <p class="text-xs text-amber-600">Visualizar lançamentos de outra data</p>
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-2 flex-1">
-                                <input type="date" id="lancamento-date-input" 
-                                    class="flex-1 sm:flex-none px-3 py-2 bg-white border border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
-                                <button id="lancamento-date-apply" 
-                                    class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-                                    <i data-lucide="search" class="w-4 h-4"></i>
-                                    <span class="hidden sm:inline">Aplicar</span>
-                                </button>
-                                <button id="lancamento-date-reset" 
-                                    class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-                                    <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
-                                    <span class="hidden sm:inline">Hoje</span>
-                                </button>
-                            </div>
-                            <div id="lancamento-date-indicator" class="hidden">
-                                <span class="inline-flex items-center px-3 py-1.5 bg-amber-500 text-white rounded-full text-xs font-semibold">
-                                    <i data-lucide="alert-circle" class="w-3.5 h-3.5 mr-1.5"></i>
-                                    <span id="lancamento-date-label">Visualizando: --</span>
-                                </span>
-                            </div>
-                        </div>
-                    </div>
 
                     <!-- Header do Painel de Controle -->
                     <div class="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 p-4 rounded-2xl shadow-xl text-white relative overflow-hidden">
@@ -1492,10 +1149,6 @@
                                     <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                                     <span>Retrabalho</span>
                                 </button>
-                                <button id="btn-triagem" class="flex items-center justify-center gap-2 px-3 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg border border-indigo-200 transition-colors text-sm font-medium">
-                                    <i data-lucide="filter" class="w-4 h-4"></i>
-                                    <span>Triagem</span>
-                                </button>
                                 <button id="btn-manual-downtime" class="flex items-center justify-center gap-2 px-3 py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg border border-gray-200 transition-colors text-sm font-medium">
                                     <i data-lucide="clock" class="w-4 h-4"></i>
                                     <span>Parada Manual</span>
@@ -1577,21 +1230,47 @@
                                 <div class="p-2 bg-blue-100 rounded-lg">
                                     <i data-lucide="history" class="w-4 h-4 text-blue-600"></i>
                                 </div>
-                                <h3 class="font-semibold text-gray-800">Lançamentos Recentes</h3>
+                                <h3 class="font-semibold text-gray-800">Lançamentos</h3>
                             </div>
-                            <div class="flex items-center gap-2 w-full sm:w-auto">
-                                <!-- Filtros de tipo -->
-                                <div class="flex gap-1 bg-gray-100 rounded-lg p-1 overflow-x-auto flex-1 sm:flex-initial">
-                                    <button id="filter-all-entries" class="filter-entry-btn px-2 py-1 text-xs font-medium rounded whitespace-nowrap transition-all active bg-white text-blue-600 shadow-sm" data-filter="all">Todos</button>
-                                    <button id="filter-production-entries" class="filter-entry-btn px-2 py-1 text-xs font-medium rounded whitespace-nowrap transition-all text-gray-600 hover:bg-gray-50" data-filter="production">Produção</button>
-                                    <button id="filter-downtime-entries" class="filter-entry-btn px-2 py-1 text-xs font-medium rounded whitespace-nowrap transition-all text-gray-600 hover:bg-gray-50" data-filter="downtime">Paradas</button>
-                                    <button id="filter-loss-entries" class="filter-entry-btn px-2 py-1 text-xs font-medium rounded whitespace-nowrap transition-all text-gray-600 hover:bg-gray-50" data-filter="loss">Perdas</button>
-                                    <button id="filter-rework-entries" class="filter-entry-btn px-2 py-1 text-xs font-medium rounded whitespace-nowrap transition-all text-gray-600 hover:bg-gray-50" data-filter="rework">Retrabalho</button>
-                                    <button id="filter-triagem-entries" class="filter-entry-btn px-2 py-1 text-xs font-medium rounded whitespace-nowrap transition-all text-gray-600 hover:bg-gray-50" data-filter="triagem">Triagem</button>
-                                    <button id="filter-borra-entries" class="filter-entry-btn px-2 py-1 text-xs font-medium rounded whitespace-nowrap transition-all text-gray-600 hover:bg-gray-50" data-filter="borra">Borra</button>
+                            <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                                <!-- Seletor de Máquina para Histórico -->
+                                <select id="entries-machine-filter" 
+                                        class="px-2 py-1 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        title="Filtrar por máquina">
+                                    <option value="">Máquina atual</option>
+                                </select>
+                                <!-- Seletor de Data para Histórico -->
+                                <div class="flex items-center gap-1">
+                                    <input type="date" id="entries-date-filter" 
+                                           class="px-2 py-1 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                           title="Filtrar por data">
+                                    <button id="entries-date-today" class="px-2 py-1 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50" title="Voltar para hoje">
+                                        Hoje
+                                    </button>
                                 </div>
                                 <button id="refresh-recent-entries" class="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50">
                                     <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Filtros de tipo -->
+                        <div class="flex gap-1 bg-gray-100 rounded-lg p-1 overflow-x-auto mb-3">
+                            <button id="filter-all-entries" class="filter-entry-btn px-2 py-1 text-xs font-medium rounded whitespace-nowrap transition-all active bg-white text-blue-600 shadow-sm" data-filter="all">Todos</button>
+                            <button id="filter-production-entries" class="filter-entry-btn px-2 py-1 text-xs font-medium rounded whitespace-nowrap transition-all text-gray-600 hover:bg-gray-50" data-filter="production">Produção</button>
+                            <button id="filter-downtime-entries" class="filter-entry-btn px-2 py-1 text-xs font-medium rounded whitespace-nowrap transition-all text-gray-600 hover:bg-gray-50" data-filter="downtime">Paradas</button>
+                            <button id="filter-loss-entries" class="filter-entry-btn px-2 py-1 text-xs font-medium rounded whitespace-nowrap transition-all text-gray-600 hover:bg-gray-50" data-filter="loss">Perdas</button>
+                            <button id="filter-rework-entries" class="filter-entry-btn px-2 py-1 text-xs font-medium rounded whitespace-nowrap transition-all text-gray-600 hover:bg-gray-50" data-filter="rework">Retrabalho</button>
+                            <button id="filter-borra-entries" class="filter-entry-btn px-2 py-1 text-xs font-medium rounded whitespace-nowrap transition-all text-gray-600 hover:bg-gray-50" data-filter="borra">Borra</button>
+                        </div>
+                        <!-- Indicador de filtro ativo -->
+                        <div id="entries-filter-indicator" class="hidden mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-amber-700">
+                                    <i data-lucide="filter" class="w-3 h-3 inline mr-1"></i>
+                                    <span id="entries-filter-display">Filtro ativo</span>
+                                </span>
+                                <button id="entries-clear-all-filters" class="text-xs text-amber-600 hover:text-amber-800 font-medium">
+                                    Limpar filtros
                                 </button>
                             </div>
                         </div>
@@ -1622,45 +1301,7 @@
                     </div>
                 </div>
                 
-
-
-                <!-- PÁGINA: Qualidade -->
-                <div id="qualidade-page" class="page-content hidden space-y-3 p-2">
-                    <div class="bg-white p-8 md:p-12 rounded-2xl shadow-sm border border-gray-100">
-                        <div class="flex flex-col items-center justify-center text-center py-16">
-                            <div class="p-4 bg-gradient-to-br from-amber-100 to-yellow-100 rounded-2xl mb-6">
-                                <i data-lucide="construction" class="w-16 h-16 text-amber-500"></i>
-                            </div>
-                            <div class="p-3 bg-gradient-to-br from-green-100 to-emerald-100 rounded-xl mb-4">
-                                <i data-lucide="shield-check" class="w-10 h-10 text-emerald-600"></i>
-                            </div>
-                            <h2 class="text-2xl font-bold text-gray-800 mb-3">Módulo de Qualidade</h2>
-                            <p class="text-gray-500 text-lg mb-2">🚧 Em Construção 🚧</p>
-                            <p class="text-gray-400 text-sm max-w-md">
-                                Este módulo está sendo desenvolvido e em breve estará disponível com funcionalidades completas para gestão da qualidade.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- PÁGINA: Processo -->
-                <div id="processo-page" class="page-content hidden space-y-3 p-2">
-                    <div class="bg-white p-8 md:p-12 rounded-2xl shadow-sm border border-gray-100">
-                        <div class="flex flex-col items-center justify-center text-center py-16">
-                            <div class="p-4 bg-gradient-to-br from-amber-100 to-yellow-100 rounded-2xl mb-6">
-                                <i data-lucide="construction" class="w-16 h-16 text-amber-500"></i>
-                            </div>
-                            <div class="p-3 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl mb-4">
-                                <i data-lucide="settings-2" class="w-10 h-10 text-indigo-600"></i>
-                            </div>
-                            <h2 class="text-2xl font-bold text-gray-800 mb-3">Módulo de Processo</h2>
-                            <p class="text-gray-500 text-lg mb-2">🚧 Em Construção 🚧</p>
-                            <p class="text-gray-400 text-sm max-w-md">
-                                Este módulo está sendo desenvolvido e em breve estará disponível com funcionalidades completas para gestão de processos.
-                            </p>
-                        </div>
-                    </div>
-                </div>
+                <!-- Páginas Qualidade e Processo removidas - Otimização 02/12/2025 -->
 
                 <!-- PÁGINA: Análise -->
                 <div id="analise-page" class="page-content hidden">
@@ -1729,12 +1370,7 @@
                                         </div>
                                         <span>Paradas</span>
                                     </button>
-                                    <button class="analysis-tab-btn group flex items-center gap-2 py-3 px-4 text-sm font-medium text-gray-500 hover:text-blue-600 border-b-2 border-transparent hover:border-blue-300 transition-all whitespace-nowrap" data-view="predictive">
-                                        <div class="p-1.5 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 transition">
-                                            <i data-lucide="brain" class="w-4 h-4 text-white"></i>
-                                        </div>
-                                        <span class="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent font-semibold">Analytics IA</span>
-                                    </button>
+                                    <!-- Subaba Analytics IA removida - Otimização 02/12/2025 -->
                                 </nav>
                             </div>
                         </div>
@@ -2470,7 +2106,7 @@
                                     </div>
                                     <div class="bg-gradient-to-br from-orange-50 to-orange-100 rounded-2xl shadow-sm border border-orange-200 p-4 hover:shadow-md transition">
                                         <div class="flex items-center justify-between mb-2">
-                                            <p class="text-xs font-medium text-orange-700">Nº de Paradas</p>
+                                            <p class="text-xs font-medium text-orange-700">Nº de Paradas</p>
                                             <div class="p-1.5 bg-orange-200 rounded">
                                                 <i data-lucide="list" class="w-3 h-3 text-orange-600"></i>
                                             </div>
@@ -2597,1045 +2233,7 @@
                                 </div>
                             </div>
 
-                            <!-- ========== ANALYTICS IA ========== -->
-                            <div id="predictive-view" class="analysis-view hidden">
-                                <div class="space-y-6">
-                                    
-                                    <!-- Header Moderno com Glassmorphism -->
-                                    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-6 shadow-2xl">
-                                        <div class="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\"60\" height=\"60\" viewBox=\"0 0 60 60\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cg fill=\"none\" fill-rule=\"evenodd\"%3E%3Cg fill=\"%239C92AC\" fill-opacity=\"0.08\"%3E%3Cpath d=\"M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')]"></div>
-                                        <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                                            <div class="flex items-center gap-4">
-                                                <div class="p-3 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl shadow-lg">
-                                                    <i data-lucide="brain" class="w-8 h-8 text-white"></i>
-                                                </div>
-                                                <div>
-                                                    <h2 class="text-2xl font-bold text-white tracking-tight">Analytics IA</h2>
-                                                    <p class="text-purple-200 text-sm">Inteligência Artificial para Manufatura Avançada</p>
-                                                </div>
-                                            </div>
-                                            <div class="flex items-center gap-4">
-                                                <div class="flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full">
-                                                    <span class="relative flex h-3 w-3">
-                                                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                                        <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-                                                    </span>
-                                                    <span class="text-white text-sm font-medium">Sistema Online</span>
-                                                </div>
-                                                <div class="text-right hidden md:block">
-                                                    <p class="text-purple-200 text-xs">Última atualização</p>
-                                                    <p id="last-prediction-time" class="text-white font-mono text-sm">--:--</p>
-                                                </div>
-                                                <button onclick="window.analyticsIA?.refreshData()" class="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-all" title="Atualizar dados">
-                                                    <i data-lucide="refresh-cw" class="w-5 h-5 text-white"></i>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Navegação por Tabs Moderna -->
-                                    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-1.5">
-                                        <div class="flex flex-wrap gap-1">
-                                            <button onclick="showPredictiveSubtab('dashboard')" 
-                                                    class="predictive-subtab-btn flex-1 min-w-[120px] bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-all shadow-sm">
-                                                <i data-lucide="layout-dashboard" class="w-4 h-4 mr-2 inline"></i>
-                                                Dashboard
-                                            </button>
-                                            <button onclick="showPredictiveSubtab('analytics')" 
-                                                    class="predictive-subtab-btn flex-1 min-w-[120px] bg-gray-50 text-gray-600 px-4 py-2.5 rounded-lg text-sm font-medium transition-all hover:bg-gray-100">
-                                                <i data-lucide="sparkles" class="w-4 h-4 mr-2 inline"></i>
-                                                Preditivo
-                                            </button>
-                                            <button onclick="showPredictiveSubtab('kpis')" 
-                                                    class="predictive-subtab-btn flex-1 min-w-[120px] bg-gray-50 text-gray-600 px-4 py-2.5 rounded-lg text-sm font-medium transition-all hover:bg-gray-100">
-                                                <i data-lucide="gauge" class="w-4 h-4 mr-2 inline"></i>
-                                                KPIs
-                                            </button>
-                                            <button onclick="showPredictiveSubtab('oee')" 
-                                                    class="predictive-subtab-btn flex-1 min-w-[120px] bg-gray-50 text-gray-600 px-4 py-2.5 rounded-lg text-sm font-medium transition-all hover:bg-gray-100">
-                                                <i data-lucide="target" class="w-4 h-4 mr-2 inline"></i>
-                                                OEE
-                                            </button>
-                                            <button onclick="showPredictiveSubtab('pareto')" 
-                                                    class="predictive-subtab-btn flex-1 min-w-[120px] bg-gray-50 text-gray-600 px-4 py-2.5 rounded-lg text-sm font-medium transition-all hover:bg-gray-100">
-                                                <i data-lucide="bar-chart-3" class="w-4 h-4 mr-2 inline"></i>
-                                                Pareto
-                                            </button>
-                                            <button onclick="showPredictiveSubtab('spc')" 
-                                                    class="predictive-subtab-btn flex-1 min-w-[120px] bg-gray-50 text-gray-600 px-4 py-2.5 rounded-lg text-sm font-medium transition-all hover:bg-gray-100">
-                                                <i data-lucide="activity" class="w-4 h-4 mr-2 inline"></i>
-                                                SPC
-                                            </button>
-                                            <button onclick="showPredictiveSubtab('ranking')" 
-                                                    class="predictive-subtab-btn flex-1 min-w-[120px] bg-gray-50 text-gray-600 px-4 py-2.5 rounded-lg text-sm font-medium transition-all hover:bg-gray-100">
-                                                <i data-lucide="trophy" class="w-4 h-4 mr-2 inline"></i>
-                                                Ranking
-                                            </button>
-                                        </div>
-                                </div>
-
-                                <!-- ===== SUBTAB: DASHBOARD EXECUTIVO ===== -->
-                                <div id="predictive-dashboard-content" class="predictive-subtab-content">
-                                    
-                                    <!-- Mtricas Principais em Cards Modernos -->
-                                    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-                                        <!-- OEE Card -->
-                                        <div class="relative overflow-hidden bg-gradient-to-br from-purple-500 to-purple-700 p-5 rounded-2xl shadow-lg">
-                                            <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white/10 rounded-full"></div>
-                                            <div class="relative">
-                                                <div class="flex items-center gap-2 mb-3">
-                                                    <i data-lucide="gauge" class="w-5 h-5 text-purple-200"></i>
-                                                    <span class="text-purple-100 text-sm font-medium">OEE</span>
-                                                </div>
-                                                <div id="analytics-oee-value" class="text-4xl font-bold text-white mb-1">--</div>
-                                                <div class="flex items-center gap-2">
-                                                    <span id="analytics-oee-trend" class="text-purple-200 text-xs"></span>
-                                                    <span id="analytics-oee-status" class="text-purple-200 text-xs">Carregando...</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Disponibilidade -->
-                                        <div class="relative overflow-hidden bg-gradient-to-br from-blue-500 to-blue-700 p-5 rounded-2xl shadow-lg">
-                                            <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white/10 rounded-full"></div>
-                                            <div class="relative">
-                                                <div class="flex items-center gap-2 mb-3">
-                                                    <i data-lucide="clock" class="w-5 h-5 text-blue-200"></i>
-                                                    <span class="text-blue-100 text-sm font-medium">Disponibilidade</span>
-                                                </div>
-                                                <div id="analytics-availability-value" class="text-4xl font-bold text-white mb-1">--</div>
-                                                <div class="flex items-center gap-2">
-                                                    <span id="analytics-availability-trend" class="text-blue-200 text-xs"></span>
-                                                    <span id="analytics-availability-status" class="text-blue-200 text-xs">Carregando...</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Performance -->
-                                        <div class="relative overflow-hidden bg-gradient-to-br from-emerald-500 to-emerald-700 p-5 rounded-2xl shadow-lg">
-                                            <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white/10 rounded-full"></div>
-                                            <div class="relative">
-                                                <div class="flex items-center gap-2 mb-3">
-                                                    <i data-lucide="zap" class="w-5 h-5 text-emerald-200"></i>
-                                                    <span class="text-emerald-100 text-sm font-medium">Performance</span>
-                                                </div>
-                                                <div id="analytics-performance-value" class="text-4xl font-bold text-white mb-1">--</div>
-                                                <div class="flex items-center gap-2">
-                                                    <span id="analytics-performance-trend" class="text-emerald-200 text-xs"></span>
-                                                    <span id="analytics-performance-status" class="text-emerald-200 text-xs">Carregando...</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Qualidade -->
-                                        <div class="relative overflow-hidden bg-gradient-to-br from-teal-500 to-teal-700 p-5 rounded-2xl shadow-lg">
-                                            <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white/10 rounded-full"></div>
-                                            <div class="relative">
-                                                <div class="flex items-center gap-2 mb-3">
-                                                    <i data-lucide="shield-check" class="w-5 h-5 text-teal-200"></i>
-                                                    <span class="text-teal-100 text-sm font-medium">Qualidade</span>
-                                                </div>
-                                                <div id="analytics-quality-value" class="text-4xl font-bold text-white mb-1">--</div>
-                                                <div class="flex items-center gap-2">
-                                                    <span id="analytics-quality-trend" class="text-teal-200 text-xs"></span>
-                                                    <span id="analytics-quality-status" class="text-teal-200 text-xs">Carregando...</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Factory Score -->
-                                        <div class="relative overflow-hidden bg-gradient-to-br from-slate-700 to-slate-900 p-5 rounded-2xl shadow-lg">
-                                            <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white/10 rounded-full"></div>
-                                            <div class="relative">
-                                                <div class="flex items-center gap-2 mb-3">
-                                                    <i data-lucide="factory" class="w-5 h-5 text-slate-300"></i>
-                                                    <span class="text-slate-300 text-sm font-medium">Score Fábrica</span>
-                                                </div>
-                                                <div id="factory-health-score" class="text-4xl font-bold text-white mb-1">--</div>
-                                                <div class="text-slate-400 text-xs">Health Index</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Gráficos e Alertas -->
-                                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                                        <!-- Gráfico de Tendência OEE -->
-                                        <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                                            <div class="flex items-center justify-between mb-4">
-                                                <div>
-                                                    <h4 class="font-semibold text-gray-800">Tendência OEE</h4>
-                                                    <p class="text-xs text-gray-500">Últimos 30 dias</p>
-                                                </div>
-                                                <div class="flex items-center gap-2">
-                                                    <span class="inline-flex items-center gap-1 px-2 py-1 bg-purple-50 text-purple-600 text-xs rounded-full">
-                                                        <span class="w-2 h-2 bg-purple-500 rounded-full"></span> OEE
-                                                    </span>
-                                                    <span class="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-600 text-xs rounded-full">
-                                                        <span class="w-2 h-2 bg-green-500 rounded-full"></span> Meta
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <div style="position: relative; height: 280px; width: 100%;">
-                                                <canvas id="analytics-oee-trend-chart"></canvas>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Alertas Inteligentes -->
-                                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                                            <div class="flex items-center justify-between mb-4">
-                                                <div class="flex items-center gap-2">
-                                                    <div class="p-2 bg-amber-100 rounded-lg">
-                                                        <i data-lucide="bell" class="w-4 h-4 text-amber-600"></i>
-                                                    </div>
-                                                    <h4 class="font-semibold text-gray-800">Alertas IA</h4>
-                                                </div>
-                                                <span class="text-xs text-gray-400">Tempo real</span>
-                                            </div>
-                                            <div id="analytics-smart-alerts" class="space-y-3 max-h-64 overflow-y-auto">
-                                                <div class="flex items-center justify-center py-8">
-                                                    <div class="text-center">
-                                                        <i data-lucide="loader-2" class="w-8 h-8 mx-auto animate-spin text-purple-500 mb-2"></i>
-                                                        <p class="text-sm text-gray-500">Analisando dados...</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Resumo Operacional -->
-                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                        <div class="bg-white rounded-xl p-4 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                                            <div class="flex items-center gap-3">
-                                                <div class="p-2.5 bg-blue-100 rounded-xl">
-                                                    <i data-lucide="package" class="w-5 h-5 text-blue-600"></i>
-                                                </div>
-                                                <div>
-                                                    <p class="text-xs text-gray-500 font-medium">Produção</p>
-                                                    <p id="analytics-production-value" class="text-xl font-bold text-gray-800">--</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="bg-white rounded-xl p-4 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                                            <div class="flex items-center gap-3">
-                                                <div class="p-2.5 bg-red-100 rounded-xl">
-                                                    <i data-lucide="timer-off" class="w-5 h-5 text-red-600"></i>
-                                                </div>
-                                                <div>
-                                                    <p class="text-xs text-gray-500 font-medium">Paradas</p>
-                                                    <p id="analytics-downtime-value" class="text-xl font-bold text-gray-800">--</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="bg-white rounded-xl p-4 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                                            <div class="flex items-center gap-3">
-                                                <div class="p-2.5 bg-amber-100 rounded-xl">
-                                                    <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-600"></i>
-                                                </div>
-                                                <div>
-                                                    <p class="text-xs text-gray-500 font-medium">Perdas</p>
-                                                    <p id="analytics-losses-value" class="text-xl font-bold text-gray-800">--</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="bg-white rounded-xl p-4 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                                            <div class="flex items-center gap-3">
-                                                <div class="p-2.5 bg-green-100 rounded-xl">
-                                                    <i data-lucide="cpu" class="w-5 h-5 text-green-600"></i>
-                                                </div>
-                                                <div>
-                                                    <p class="text-xs text-gray-500 font-medium">Máquinas</p>
-                                                    <p id="analytics-machines-value" class="text-xl font-bold text-gray-800">--</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- ===== SUBTAB: ANLISES PREDITIVAS ===== -->
-                                <div id="predictive-analytics-content" class="predictive-subtab-content hidden">
-                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                                        <!-- Previsões -->
-                                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                                            <div class="flex items-center gap-3 mb-4">
-                                                <div class="p-2 bg-indigo-100 rounded-lg">
-                                                    <i data-lucide="trending-up" class="w-5 h-5 text-indigo-600"></i>
-                                                </div>
-                                                <div>
-                                                    <h4 class="font-semibold text-gray-800">Previsões Próximas 8h</h4>
-                                                    <p class="text-xs text-gray-500">Baseado em Machine Learning</p>
-                                                </div>
-                                            </div>
-                                            <div style="position: relative; height: 280px; width: 100%;">
-                                                <canvas id="predictions-chart"></canvas>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Alertas Proativos -->
-                                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                                            <div class="flex items-center gap-3 mb-4">
-                                                <div class="p-2 bg-amber-100 rounded-lg">
-                                                    <i data-lucide="shield-alert" class="w-5 h-5 text-amber-600"></i>
-                                                </div>
-                                                <div>
-                                                    <h4 class="font-semibold text-gray-800">Alertas Proativos</h4>
-                                                    <p class="text-xs text-gray-500">Prevenção de problemas</p>
-                                                </div>
-                                            </div>
-                                            <div id="proactive-alerts" class="space-y-3 max-h-64 overflow-y-auto">
-                                                <div class="p-3 bg-gray-50 rounded-lg text-center text-gray-500 text-sm">
-                                                    Carregando alertas...
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- KPIs Preditivos -->
-                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                                            <div class="flex items-center justify-between mb-4">
-                                                <h4 class="font-medium text-gray-600">Prob. Parada</h4>
-                                                <i data-lucide="alert-octagon" class="w-5 h-5 text-red-500"></i>
-                                            </div>
-                                            <div id="breakdown-probability" class="text-4xl font-bold text-red-600 mb-2">--</div>
-                                            <p class="text-sm text-gray-500">Próximas 4 horas</p>
-                                            <div class="mt-3 bg-red-100 rounded-full h-2">
-                                                <div id="breakdown-probability-bar" class="bg-red-500 h-2 rounded-full transition-all" style="width: 0%"></div>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                                            <div class="flex items-center justify-between mb-4">
-                                                <h4 class="font-medium text-gray-600">Tendência Qualidade</h4>
-                                                <i data-lucide="target" class="w-5 h-5 text-green-500"></i>
-                                            </div>
-                                            <div id="quality-trend" class="text-4xl font-bold text-green-600 mb-2">--</div>
-                                            <p class="text-sm text-gray-500">Previsão turno atual</p>
-                                            <div class="mt-3 bg-green-100 rounded-full h-2">
-                                                <div id="quality-trend-bar" class="bg-green-500 h-2 rounded-full transition-all" style="width: 0%"></div>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                                            <div class="flex items-center justify-between mb-4">
-                                                <h4 class="font-medium text-gray-600">OEE Previsto</h4>
-                                                <i data-lucide="gauge" class="w-5 h-5 text-blue-500"></i>
-                                            </div>
-                                            <div id="predicted-oee" class="text-4xl font-bold text-blue-600 mb-2">--</div>
-                                            <p class="text-sm text-gray-500">Fim do turno</p>
-                                            <div class="mt-3 bg-blue-100 rounded-full h-2">
-                                                <div id="predicted-oee-bar" class="bg-blue-500 h-2 rounded-full transition-all" style="width: 0%"></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Gráfico de Tendências e Recomendações -->
-                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-                                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                                            <div class="flex items-center gap-3 mb-4">
-                                                <div class="p-2 bg-purple-100 rounded-lg">
-                                                    <i data-lucide="activity" class="w-5 h-5 text-purple-600"></i>
-                                                </div>
-                                                <h4 class="font-semibold text-gray-800">Análise de Tendências (7 dias)</h4>
-                                            </div>
-                                            <div style="position: relative; height: 300px; width: 100%;">
-                                                <canvas id="trends-chart"></canvas>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                                            <div class="flex items-center gap-3 mb-4">
-                                                <div class="p-2 bg-yellow-100 rounded-lg">
-                                                    <i data-lucide="lightbulb" class="w-5 h-5 text-yellow-600"></i>
-                                                </div>
-                                                <h4 class="font-semibold text-gray-800">Recomendações IA</h4>
-                                            </div>
-                                            <div id="ai-recommendations" class="space-y-3 max-h-80 overflow-y-auto">
-                                                <div class="p-3 bg-gray-50 rounded-lg text-center text-gray-500 text-sm">
-                                                    Gerando recomendações...
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- KPIs Avançados -->
-                                <div id="predictive-kpis-content" class="predictive-subtab-content hidden">
-                                    <div class="bg-gradient-to-r from-slate-50 to-gray-50 p-6 rounded-lg border border-slate-200">
-                                        <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
-                                            <i data-lucide="bar-chart-4" class="w-5 h-5 text-slate-600"></i>
-                                            KPIs Avançados (30 dias)
-                                        </h3>
-                                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                            <!-- MTBF -->
-                                            <div class="bg-white p-4 rounded-lg shadow border">
-                                                <div class="flex items-center justify-between mb-3">
-                                                    <div class="flex items-center gap-2">
-                                                        <i data-lucide="clock" class="w-5 h-5 text-blue-600"></i>
-                                                        <h4 class="font-semibold text-sm text-gray-800">MTBF</h4>
-                                                    </div>
-                                                    <div id="mtbf-trend">
-                                                        <i data-lucide="minus" class="w-4 h-4 text-gray-400"></i>
-                                                    </div>
-                                                </div>
-                                                <div class="text-2xl font-bold text-blue-600 mb-1" id="mtbf-value">--</div>
-                                                <div id="mtbf-status" class="text-xs text-gray-600">Calculando...</div>
-                                                <div class="mt-2 text-xs text-gray-500">
-                                                    Meta: °¥ 168h (1 semana)
-                                                </div>
-                                            </div>
-
-                                            <!-- MTTR -->
-                                            <div class="bg-white p-4 rounded-lg shadow border">
-                                                <div class="flex items-center justify-between mb-3">
-                                                    <div class="flex items-center gap-2">
-                                                        <i data-lucide="tool" class="w-5 h-5 text-orange-600"></i>
-                                                        <h4 class="font-semibold text-sm text-gray-800">MTTR</h4>
-                                                    </div>
-                                                    <div id="mttr-trend">
-                                                        <i data-lucide="minus" class="w-4 h-4 text-gray-400"></i>
-                                                    </div>
-                                                </div>
-                                                <div class="text-2xl font-bold text-orange-600 mb-1" id="mttr-value">--</div>
-                                                <div id="mttr-status" class="text-xs text-gray-600">Calculando...</div>
-                                                <div class="mt-2 text-xs text-gray-500">
-                                                    Meta: °¤ 60 min
-                                                </div>
-                                            </div>
-
-                                            <!-- FPY -->
-                                            <div class="bg-white p-4 rounded-lg shadow border">
-                                                <div class="flex items-center justify-between mb-3">
-                                                    <div class="flex items-center gap-2">
-                                                        <i data-lucide="check-circle" class="w-5 h-5 text-green-600"></i>
-                                                        <h4 class="font-semibold text-sm text-gray-800">FPY</h4>
-                                                    </div>
-                                                    <div id="fpy-trend">
-                                                        <i data-lucide="minus" class="w-4 h-4 text-gray-400"></i>
-                                                    </div>
-                                                </div>
-                                                <div class="text-2xl font-bold text-green-600 mb-1" id="fpy-value">--</div>
-                                                <div id="fpy-status" class="text-xs text-gray-600">Calculando...</div>
-                                                <div class="mt-2 text-xs text-gray-500">
-                                                    Meta: °¥ 95%
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Botão para atualizar KPIs -->
-                                        <div class="mt-4 flex justify-end">
-                                            <button onclick="window.advancedKPIs.calculateAllKPIs()" class="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-                                                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-                                                Atualizar KPIs
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Análise Pareto Automática -->
-                                <div id="predictive-pareto-content" class="predictive-subtab-content hidden">
-                                    <div class="bg-gradient-to-r from-orange-50 to-red-50 p-6 rounded-lg border border-orange-200">
-                                    <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-6">
-                                        <div>
-                                            <h3 class="text-lg font-semibold flex items-center gap-2">
-                                                <i data-lucide="pie-chart" class="w-5 h-5 text-orange-600"></i>
-                                                Análise Pareto Automática
-                                            </h3>
-                                            <p class="text-xs text-gray-600 mt-1">Período ativo: <span id="pareto-period-label" class="font-semibold text-gray-800">Últimos 30 dias</span></p>
-                                        </div>
-                                        <div class="flex flex-col gap-2 lg:items-end">
-                                            <div class="flex flex-wrap gap-2 items-center">
-                                                <input type="date" id="pareto-start-date" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
-                                                <span class="text-sm text-gray-500">at</span>
-                                                <input type="date" id="pareto-end-date" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
-                                                <button onclick="window.autoParetoAnalysis.applyCustomRangeFromInputs()" class="bg-white border border-orange-500 text-orange-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-50">
-                                                    Aplicar período
-                                                </button>
-                                            </div>
-                                            <div class="flex flex-wrap gap-2 items-center">
-                                                <div class="flex gap-1">
-                                                    <button data-pareto-range="7" onclick="window.autoParetoAnalysis.applyQuickRange(7)" class="px-3 py-1 rounded-full text-xs border border-gray-300 text-gray-600 bg-white hover:border-orange-500 hover:text-orange-600">7 dias</button>
-                                                    <button data-pareto-range="15" onclick="window.autoParetoAnalysis.applyQuickRange(15)" class="px-3 py-1 rounded-full text-xs border border-gray-300 text-gray-600 bg-white hover:border-orange-500 hover:text-orange-600">15 dias</button>
-                                                    <button data-pareto-range="30" onclick="window.autoParetoAnalysis.applyQuickRange(30)" class="px-3 py-1 rounded-full text-xs border border-gray-300 text-gray-600 bg-white hover:border-orange-500 hover:text-orange-600">30 dias</button>
-                                                </div>
-                                                <button onclick="window.autoParetoAnalysis.refreshCurrentRange()" class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-                                                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-                                                    Atualizar Análise
-                                                </button>
-                                            </div>
-                                            <p id="pareto-range-feedback" class="text-xs text-red-600 hidden">Selecione o período desejado e aplique.</p>
-                                        </div>
-                                    </div>
-
-                                    <!-- Cards de Resumo -->
-                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                                        <div class="bg-white p-4 rounded-lg shadow border">
-                                            <div id="pareto-downtime-summary">
-                                                <h4 class="font-semibold text-red-600">Principais Causas de Parada</h4>
-                                                <p class="text-gray-500 text-sm">Carregando...</p>
-                                            </div>
-                                        </div>
-                                        <div class="bg-white p-4 rounded-lg shadow border">
-                                            <div id="pareto-quality-summary">
-                                                <h4 class="font-semibold text-orange-600">Problemas de Qualidade</h4>
-                                                <p class="text-gray-500 text-sm">Carregando...</p>
-                                            </div>
-                                        </div>
-                                        <div class="bg-white p-4 rounded-lg shadow border">
-                                            <div id="pareto-production-summary">
-                                                <h4 class="font-semibold text-blue-600">Ineficiências de Produção</h4>
-                                                <p class="text-gray-500 text-sm">Carregando...</p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Gráficos Pareto -->
-                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                                        <div class="bg-white p-4 rounded-lg shadow border">
-                                            <h4 class="font-semibold mb-3 flex items-center gap-2">
-                                                <i data-lucide="clock" class="w-4 h-4 text-red-600"></i>
-                                                Pareto de Paradas
-                                            </h4>
-                                            <div class="chart-container" style="height: 300px;">
-                                                <canvas id="downtime-pareto-chart" class="w-full h-full"></canvas>
-                                            </div>
-                                            <div id="downtime-reason-details" class="mt-4 text-sm text-gray-700 space-y-2">
-                                                <p class="text-xs text-gray-500">Principais motivos detalhados serão exibidos aqui após a análise.</p>
-                                            </div>
-                                        </div>
-                                        <div class="bg-white p-4 rounded-lg shadow border">
-                                            <h4 class="font-semibold mb-3 flex items-center gap-2">
-                                                <i data-lucide="alert-triangle" class="w-4 h-4 text-orange-600"></i>
-                                                Pareto de Qualidade
-                                            </h4>
-                                            <div class="chart-container" style="height: 300px;">
-                                                <canvas id="quality-pareto-chart" class="w-full h-full"></canvas>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Insights Automáticos -->
-                                    <div class="bg-white p-4 rounded-lg shadow border">
-                                        <h4 class="font-semibold mb-4 flex items-center gap-2">
-                                            <i data-lucide="zap" class="w-4 h-4 text-purple-600"></i>
-                                            Insights Automáticos (Regra 80/20)
-                                        </h4>
-                                        <div id="pareto-insights-list" class="space-y-3 max-h-96 overflow-y-auto">
-                                            <!-- Será gerado dinamicamente -->
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- ===== SUBTAB: OEE AVAN¡ADO ===== -->
-                                <div id="predictive-oee-content" class="predictive-subtab-content hidden">
-                                    <div class="bg-gradient-to-r from-purple-50 to-pink-50 p-6 rounded-lg border border-purple-200">
-                                        <div class="flex items-center justify-between mb-6">
-                                            <div>
-                                                <h3 class="text-lg font-semibold flex items-center gap-2">
-                                                    <i data-lucide="target" class="w-5 h-5 text-purple-600"></i>
-                                                    OEE Avançado - Decomposição de Perdas
-                                                </h3>
-                                                <p class="text-xs text-gray-600 mt-1">Análise detalhada dos componentes A × P × Q</p>
-                                            </div>
-                                            <button onclick="window.analyticsIA?.initializeOEEAnalysis()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-                                                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-                                                Atualizar
-                                            </button>
-                                        </div>
-
-                                        <!-- OEE Waterfall -->
-                                        <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
-                                            <div class="bg-white p-4 rounded-lg shadow border text-center">
-                                                <div class="text-xs text-gray-500 mb-1">Tempo Planejado</div>
-                                                <div class="text-2xl font-bold text-gray-800">100%</div>
-                                                <div class="w-full bg-gray-800 h-3 rounded mt-2"></div>
-                                            </div>
-                                            <div class="bg-white p-4 rounded-lg shadow border text-center">
-                                                <div class="text-xs text-gray-500 mb-1">Disponibilidade</div>
-                                                <div id="oee-adv-availability" class="text-2xl font-bold text-blue-600">--</div>
-                                                <div class="w-full bg-gray-200 h-3 rounded mt-2">
-                                                    <div id="oee-adv-availability-bar" class="bg-blue-500 h-3 rounded" style="width: 0%"></div>
-                                                </div>
-                                            </div>
-                                            <div class="bg-white p-4 rounded-lg shadow border text-center">
-                                                <div class="text-xs text-gray-500 mb-1">Performance</div>
-                                                <div id="oee-adv-performance" class="text-2xl font-bold text-green-600">--</div>
-                                                <div class="w-full bg-gray-200 h-3 rounded mt-2">
-                                                    <div id="oee-adv-performance-bar" class="bg-green-500 h-3 rounded" style="width: 0%"></div>
-                                                </div>
-                                            </div>
-                                            <div class="bg-white p-4 rounded-lg shadow border text-center">
-                                                <div class="text-xs text-gray-500 mb-1">Qualidade</div>
-                                                <div id="oee-adv-quality" class="text-2xl font-bold text-teal-600">--</div>
-                                                <div class="w-full bg-gray-200 h-3 rounded mt-2">
-                                                    <div id="oee-adv-quality-bar" class="bg-teal-500 h-3 rounded" style="width: 0%"></div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Gráficos OEE -->
-                                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                                            <div class="bg-white p-4 rounded-lg shadow border">
-                                                <h4 class="font-semibold mb-3 flex items-center gap-2">
-                                                    <i data-lucide="bar-chart-3" class="w-4 h-4 text-purple-600"></i>
-                                                    OEE por Máquina
-                                                </h4>
-                                                <div style="position: relative; height: 300px; width: 100%;">
-                                                    <canvas id="oee-by-machine-chart"></canvas>
-                                                </div>
-                                            </div>
-                                            <div class="bg-white p-4 rounded-lg shadow border">
-                                                <h4 class="font-semibold mb-3 flex items-center gap-2">
-                                                    <i data-lucide="clock" class="w-4 h-4 text-orange-600"></i>
-                                                    OEE por Turno
-                                                </h4>
-                                                <div style="position: relative; height: 300px; width: 100%;">
-                                                    <canvas id="oee-by-shift-chart"></canvas>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Decomposição de Perdas -->
-                                        <div class="bg-white p-4 rounded-lg shadow border">
-                                            <h4 class="font-semibold mb-4 flex items-center gap-2">
-                                                <i data-lucide="layers" class="w-4 h-4 text-red-600"></i>
-                                                Decomposição de Perdas OEE
-                                            </h4>
-                                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                                <div class="border-l-4 border-blue-500 pl-4">
-                                                    <h5 class="font-medium text-blue-700 mb-2">Perdas de Disponibilidade</h5>
-                                                    <div id="oee-availability-losses" class="space-y-2 text-sm">
-                                                        <p class="text-gray-500">Carregando...</p>
-                                                    </div>
-                                                </div>
-                                                <div class="border-l-4 border-green-500 pl-4">
-                                                    <h5 class="font-medium text-green-700 mb-2">Perdas de Performance</h5>
-                                                    <div id="oee-performance-losses" class="space-y-2 text-sm">
-                                                        <p class="text-gray-500">Carregando...</p>
-                                                    </div>
-                                                </div>
-                                                <div class="border-l-4 border-teal-500 pl-4">
-                                                    <h5 class="font-medium text-teal-700 mb-2">Perdas de Qualidade</h5>
-                                                    <div id="oee-quality-losses" class="space-y-2 text-sm">
-                                                        <p class="text-gray-500">Carregando...</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- ===== SUBTAB: BENCHMARK ===== -->
-                                <div id="predictive-benchmark-content" class="predictive-subtab-content hidden">
-                                    <div class="bg-gradient-to-r from-amber-50 to-yellow-50 p-6 rounded-lg border border-amber-200">
-                                        <div class="flex items-center justify-between mb-6">
-                                            <div>
-                                                <h3 class="text-lg font-semibold flex items-center gap-2">
-                                                    <i data-lucide="trophy" class="w-5 h-5 text-amber-600"></i>
-                                                    Benchmarking de Máquinas
-                                                </h3>
-                                                <p class="text-xs text-gray-600 mt-1">Comparativo de performance e identificação de melhores práticas</p>
-                                            </div>
-                                            <button onclick="window.analyticsIA?.initializeBenchmarking()" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-                                                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-                                                Atualizar
-                                            </button>
-                                        </div>
-
-                                        <!-- Cards de Resumo -->
-                                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                                            <div class="bg-white p-4 rounded-lg shadow border">
-                                                <div class="flex items-center gap-2 mb-2">
-                                                    <i data-lucide="award" class="w-5 h-5 text-yellow-500"></i>
-                                                    <span class="text-sm font-medium text-gray-600">Best in Class</span>
-                                                </div>
-                                                <div id="benchmark-best-machine" class="text-xl font-bold text-gray-800">--</div>
-                                                <div id="benchmark-best-oee" class="text-sm text-green-600">--</div>
-                                            </div>
-                                            <div class="bg-white p-4 rounded-lg shadow border">
-                                                <div class="flex items-center gap-2 mb-2">
-                                                    <i data-lucide="bar-chart-2" class="w-5 h-5 text-blue-500"></i>
-                                                    <span class="text-sm font-medium text-gray-600">Média Geral</span>
-                                                </div>
-                                                <div id="benchmark-avg-oee" class="text-xl font-bold text-blue-600">--</div>
-                                                <div class="text-sm text-gray-500">OEE mdio</div>
-                                            </div>
-                                            <div class="bg-white p-4 rounded-lg shadow border">
-                                                <div class="flex items-center gap-2 mb-2">
-                                                    <i data-lucide="trending-up" class="w-5 h-5 text-green-500"></i>
-                                                    <span class="text-sm font-medium text-gray-600">Potencial</span>
-                                                </div>
-                                                <div id="benchmark-potential" class="text-xl font-bold text-green-600">--</div>
-                                                <div class="text-sm text-gray-500">Ganho possível</div>
-                                            </div>
-                                            <div class="bg-white p-4 rounded-lg shadow border">
-                                                <div class="flex items-center gap-2 mb-2">
-                                                    <i data-lucide="cpu" class="w-5 h-5 text-purple-500"></i>
-                                                    <span class="text-sm font-medium text-gray-600">Máquinas</span>
-                                                </div>
-                                                <div id="benchmark-machine-count" class="text-xl font-bold text-purple-600">--</div>
-                                                <div class="text-sm text-gray-500">Analisadas</div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Ranking de Máquinas -->
-                                        <div class="bg-white p-4 rounded-lg shadow border mb-6">
-                                            <h4 class="font-semibold mb-4 flex items-center gap-2">
-                                                <i data-lucide="list-ordered" class="w-4 h-4 text-amber-600"></i>
-                                                Ranking de Máquinas por OEE
-                                            </h4>
-                                            <div class="overflow-x-auto">
-                                                <table class="w-full text-sm">
-                                                    <thead class="bg-gray-50">
-                                                        <tr>
-                                                            <th class="px-4 py-2 text-left font-medium text-gray-600">#</th>
-                                                            <th class="px-4 py-2 text-left font-medium text-gray-600">Máquina</th>
-                                                            <th class="px-4 py-2 text-left font-medium text-gray-600">OEE</th>
-                                                            <th class="px-4 py-2 text-left font-medium text-gray-600">Disponibilidade</th>
-                                                            <th class="px-4 py-2 text-left font-medium text-gray-600">Performance</th>
-                                                            <th class="px-4 py-2 text-left font-medium text-gray-600">Qualidade</th>
-                                                            <th class="px-4 py-2 text-right font-medium text-gray-600">Produção</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody id="benchmark-ranking-table">
-                                                        <tr>
-                                                            <td colspan="7" class="px-4 py-8 text-center text-gray-500">
-                                                                <i data-lucide="loader-2" class="w-6 h-6 mx-auto animate-spin mb-2"></i>
-                                                                Carregando dados...
-                                                            </td>
-                                                        </tr>
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-
-                                        <!-- Insights e Recomendações -->
-                                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                            <div class="bg-white p-4 rounded-lg shadow border">
-                                                <h4 class="font-semibold mb-4 flex items-center gap-2">
-                                                    <i data-lucide="lightbulb" class="w-4 h-4 text-yellow-600"></i>
-                                                    Melhores Práticas Identificadas
-                                                </h4>
-                                                <div id="benchmark-best-practices" class="space-y-3">
-                                                    <p class="text-gray-500 text-sm">Analisando...</p>
-                                                </div>
-                                            </div>
-                                            <div class="bg-white p-4 rounded-lg shadow border">
-                                                <h4 class="font-semibold mb-4 flex items-center gap-2">
-                                                    <i data-lucide="zap" class="w-4 h-4 text-orange-600"></i>
-                                                    Oportunidades de Melhoria
-                                                </h4>
-                                                <div id="benchmark-opportunities" class="space-y-3">
-                                                    <p class="text-gray-500 text-sm">Analisando...</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Sistema SPC (Statistical Process Control) -->
-                                <div id="predictive-spc-content" class="predictive-subtab-content hidden">
-                                    <div class="bg-gradient-to-r from-indigo-50 to-blue-50 p-6 rounded-lg border border-indigo-200">
-                                        <div class="flex items-center justify-between mb-6">
-                                            <h3 class="text-lg font-semibold flex items-center gap-2">
-                                                <i data-lucide="bar-chart-2" class="w-5 h-5 text-indigo-600"></i>
-                                                SPC - Controle Estatístico do Processo
-                                            </h3>
-                                            <div class="flex items-center gap-3">
-                                                <div id="spc-process-status" class="px-3 py-1 rounded-full text-sm font-medium text-green-600 bg-green-50">
-                                                    Inicializando...
-                                                </div>
-                                                <button onclick="window.spcController.initialize()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-                                                    <i data-lucide="play" class="w-4 h-4"></i>
-                                                    Iniciar SPC
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <!-- KPIs de Capacidade -->
-                                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                                            <div class="bg-white p-4 rounded-lg shadow border">
-                                                <div class="flex items-center justify-between mb-2">
-                                                    <h5 class="font-semibold text-sm text-gray-800">Cp</h5>
-                                                    <i data-lucide="target" class="w-4 h-4 text-blue-600"></i>
-                                                </div>
-                                                <div id="spc-cp-value" class="text-2xl font-bold text-blue-600">--</div>
-                                                <div class="text-xs text-gray-600 mt-1">Capacidade Potencial</div>
-                                                <div class="text-xs text-gray-500">Meta: °¥ 1.33</div>
-                                            </div>
-
-                                            <div class="bg-white p-4 rounded-lg shadow border">
-                                                <div class="flex items-center justify-between mb-2">
-                                                    <h5 class="font-semibold text-sm text-gray-800">Cpk</h5>
-                                                    <i data-lucide="crosshair" class="w-4 h-4 text-green-600"></i>
-                                                </div>
-                                                <div id="spc-cpk-value" class="text-2xl font-bold text-green-600">--</div>
-                                                <div class="text-xs text-gray-600 mt-1">Capacidade Real</div>
-                                                <div class="text-xs text-gray-500">Meta: °¥ 1.33</div>
-                                            </div>
-
-                                            <div class="bg-white p-4 rounded-lg shadow border">
-                                                <div class="flex items-center justify-between mb-2">
-                                                    <h5 class="font-semibold text-sm text-gray-800">Taxa Defeitos</h5>
-                                                    <i data-lucide="alert-triangle" class="w-4 h-4 text-red-600"></i>
-                                                </div>
-                                                <div id="spc-defect-rate" class="text-2xl font-bold text-red-600">--</div>
-                                                <div class="text-xs text-gray-600 mt-1">% Fora de Spec</div>
-                                                <div class="text-xs text-gray-500">Meta: < 0.1%</div>
-                                            </div>
-
-                                            <div class="bg-white p-4 rounded-lg shadow border">
-                                                <div class="flex items-center justify-between mb-2">
-                                                    <h5 class="font-semibold text-sm text-gray-800">Nível Sigma</h5>
-                                                    <i data-lucide="trending-up" class="w-4 h-4 text-purple-600"></i>
-                                                </div>
-                                                <div id="spc-sigma-level" class="text-2xl font-bold text-purple-600">--</div>
-                                                <div class="text-xs text-gray-600 mt-1">Six Sigma Level</div>
-                                                <div id="spc-capability-status" class="text-xs font-medium text-gray-500">--</div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Gráficos de Controle -->
-                                        <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
-                                            <div class="bg-white p-4 rounded-lg shadow border">
-                                                <h4 class="font-semibold mb-3 flex items-center gap-2">
-                                                    <i data-lucide="activity" class="w-4 h-4 text-blue-600"></i>
-                                                    Gráfico X (Médias)
-                                                </h4>
-                                                <div class="chart-container" style="position: relative; height: 300px; width: 100%;">
-                                                    <canvas id="spc-xbar-chart"></canvas>
-                                                </div>
-                                            </div>
-
-                                            <div class="bg-white p-4 rounded-lg shadow border">
-                                                <h4 class="font-semibold mb-3 flex items-center gap-2">
-                                                    <i data-lucide="bar-chart" class="w-4 h-4 text-orange-600"></i>
-                                                    Gráfico R (Amplitudes)
-                                                </h4>
-                                                <div class="chart-container" style="position: relative; height: 300px; width: 100%;">
-                                                    <canvas id="spc-r-chart"></canvas>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Histograma e Alertas -->
-                                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                            <div class="bg-white p-4 rounded-lg shadow border">
-                                                <h4 class="font-semibold mb-3 flex items-center gap-2">
-                                                    <i data-lucide="bar-chart-3" class="w-4 h-4 text-purple-600"></i>
-                                                    Distribuição dos Valores
-                                                </h4>
-                                                <div class="chart-container" style="position: relative; height: 300px; width: 100%;">
-                                                    <canvas id="spc-histogram"></canvas>
-                                                </div>
-                                            </div>
-
-                                            <div class="bg-white p-4 rounded-lg shadow border">
-                                                <h4 class="font-semibold mb-3 flex items-center gap-2">
-                                                    <i data-lucide="alert-circle" class="w-4 h-4 text-red-600"></i>
-                                                    Alertas de Controle
-                                                </h4>
-                                                <div id="spc-alerts-container" class="space-y-2 max-h-80 overflow-y-auto">
-                                                    <div class="text-center text-gray-500 py-8">
-                                                        <i data-lucide="shield-check" class="w-8 h-8 mx-auto text-green-500 mb-2"></i>
-                                                        <p class="text-sm">Processo sob controle</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Configurações SPC -->
-                                        <div class="mt-6 bg-white p-4 rounded-lg shadow border">
-                                            <h4 class="font-semibold mb-3 flex items-center gap-2">
-                                                <i data-lucide="settings" class="w-4 h-4 text-gray-600"></i>
-                                                Configurações do SPC
-                                            </h4>
-                                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                                <div>
-                                                    <label class="block text-sm font-medium text-gray-700 mb-1">Tamanho da Amostra</label>
-                                                    <select id="spc-sample-size" class="w-full border-gray-300 rounded-md p-2 text-sm">
-                                                        <option value="3">3</option>
-                                                        <option value="4">4</option>
-                                                        <option value="5" selected>5</option>
-                                                        <option value="6">6</option>
-                                                        <option value="7">7</option>
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label class="block text-sm font-medium text-gray-700 mb-1">Intervalo de Atualização</label>
-                                                    <select id="spc-update-interval" class="w-full border-gray-300 rounded-md p-2 text-sm">
-                                                        <option value="60000">1 minuto</option>
-                                                        <option value="300000" selected>5 minutos</option>
-                                                        <option value="600000">10 minutos</option>
-                                                        <option value="1800000">30 minutos</option>
-                                                    </select>
-                                                </div>
-                                                <div class="flex items-end">
-                                                    <button onclick="window.spcController.stopMonitoring()" class="w-full bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm flex items-center justify-center gap-2">
-                                                        <i data-lucide="pause" class="w-4 h-4"></i>
-                                                        Parar Monitoramento
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- ===== SUBTAB: RANKING E BENCHMARK ===== -->
-                                <div id="predictive-ranking-content" class="predictive-subtab-content hidden">
-                                    <div class="space-y-6">
-                                        <!-- Header -->
-                                        <div class="bg-gradient-to-r from-amber-50 to-orange-50 p-6 rounded-xl border border-amber-200">
-                                            <div class="flex items-center justify-between mb-4">
-                                                <div class="flex items-center gap-3">
-                                                    <div class="p-2 bg-amber-100 rounded-lg">
-                                                        <i data-lucide="trophy" class="w-6 h-6 text-amber-600"></i>
-                                                    </div>
-                                                    <div>
-                                                        <h3 class="text-lg font-semibold text-gray-800">Ranking de Performance</h3>
-                                                        <p class="text-sm text-gray-600">Benchmark entre máquinas, turnos e operadores</p>
-                                                    </div>
-                                                </div>
-                                                <button onclick="window.analyticsIA?.refreshRanking()" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm flex items-center gap-2">
-                                                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-                                                    Atualizar
-                                                </button>
-                                            </div>
-
-                                            <!-- Filtros -->
-                                            <div class="flex flex-wrap gap-4">
-                                                <div>
-                                                    <label class="block text-xs font-medium text-gray-600 mb-1">Tipo de Ranking</label>
-                                                    <select id="ranking-type" onchange="window.analyticsIA?.updateRanking()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                                                        <option value="machines">Por Máquina</option>
-                                                        <option value="shifts">Por Turno</option>
-                                                        <option value="products">Por Produto</option>
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label class="block text-xs font-medium text-gray-600 mb-1">Mtrica</label>
-                                                    <select id="ranking-metric" onchange="window.analyticsIA?.updateRanking()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                                                        <option value="oee">OEE</option>
-                                                        <option value="availability">Disponibilidade</option>
-                                                        <option value="performance">Performance</option>
-                                                        <option value="quality">Qualidade</option>
-                                                        <option value="production">Produção</option>
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label class="block text-xs font-medium text-gray-600 mb-1">Período</label>
-                                                    <select id="ranking-period" onchange="window.analyticsIA?.updateRanking()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                                                        <option value="today">Hoje</option>
-                                                        <option value="week" selected>Esta Semana</option>
-                                                        <option value="month">Este Mês</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Grid de Rankings -->
-                                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                            <!-- Top Performers -->
-                                            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                                                <div class="flex items-center gap-2 mb-4">
-                                                    <div class="p-2 bg-green-100 rounded-lg">
-                                                        <i data-lucide="medal" class="w-5 h-5 text-green-600"></i>
-                                                    </div>
-                                                    <h4 class="font-semibold text-gray-800">Top Performers</h4>
-                                                </div>
-                                                <div id="ranking-top-performers" class="space-y-3">
-                                                    <div class="flex items-center justify-center py-8">
-                                                        <div class="text-center">
-                                                            <i data-lucide="loader-2" class="w-8 h-8 mx-auto animate-spin text-amber-500 mb-2"></i>
-                                                            <p class="text-sm text-gray-500">Calculando ranking...</p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <!-- Gráfico de Comparação -->
-                                            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                                                <div class="flex items-center gap-2 mb-4">
-                                                    <div class="p-2 bg-blue-100 rounded-lg">
-                                                        <i data-lucide="bar-chart-horizontal" class="w-5 h-5 text-blue-600"></i>
-                                                    </div>
-                                                    <h4 class="font-semibold text-gray-800">Comparativo</h4>
-                                                </div>
-                                                <div style="position: relative; height: 300px; width: 100%;">
-                                                    <canvas id="comparison-chart"></canvas>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Tabela Detalhada -->
-                                        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                                            <div class="flex items-center justify-between mb-4">
-                                                <div class="flex items-center gap-2">
-                                                    <div class="p-2 bg-purple-100 rounded-lg">
-                                                        <i data-lucide="table" class="w-5 h-5 text-purple-600"></i>
-                                                    </div>
-                                                    <h4 class="font-semibold text-gray-800">Ranking Detalhado</h4>
-                                                </div>
-                                                <button onclick="window.analyticsIA?.exportRanking()" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm flex items-center gap-2">
-                                                    <i data-lucide="download" class="w-4 h-4"></i>
-                                                    Exportar
-                                                </button>
-                                            </div>
-                                            <div class="overflow-x-auto">
-                                                <table class="w-full text-sm">
-                                                    <thead>
-                                                        <tr class="border-b border-gray-200">
-                                                            <th class="text-left py-3 px-4 font-semibold text-gray-600">#</th>
-                                                            <th class="text-left py-3 px-4 font-semibold text-gray-600">Nome</th>
-                                                            <th class="text-center py-3 px-4 font-semibold text-gray-600">OEE</th>
-                                                            <th class="text-center py-3 px-4 font-semibold text-gray-600">Disponibilidade</th>
-                                                            <th class="text-center py-3 px-4 font-semibold text-gray-600">Performance</th>
-                                                            <th class="text-center py-3 px-4 font-semibold text-gray-600">Qualidade</th>
-                                                            <th class="text-center py-3 px-4 font-semibold text-gray-600">Trend</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody id="ranking-table-body">
-                                                        <tr>
-                                                            <td colspan="7" class="text-center py-8 text-gray-500">
-                                                                <i data-lucide="loader-2" class="w-6 h-6 mx-auto animate-spin mb-2"></i>
-                                                                <p>Carregando dados...</p>
-                                                            </td>
-                                                        </tr>
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-
-                                        <!-- Insights -->
-                                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                            <div class="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-5 border border-green-200">
-                                                <div class="flex items-center gap-2 mb-3">
-                                                    <i data-lucide="trending-up" class="w-5 h-5 text-green-600"></i>
-                                                    <h5 class="font-semibold text-green-800">Melhor Performance</h5>
-                                                </div>
-                                                <p id="ranking-best-insight" class="text-sm text-green-700">Analisando...</p>
-                                            </div>
-                                            <div class="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-5 border border-amber-200">
-                                                <div class="flex items-center gap-2 mb-3">
-                                                    <i data-lucide="lightbulb" class="w-5 h-5 text-amber-600"></i>
-                                                    <h5 class="font-semibold text-amber-800">Oportunidade</h5>
-                                                </div>
-                                                <p id="ranking-opportunity-insight" class="text-sm text-amber-700">Analisando...</p>
-                                            </div>
-                                            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-5 border border-blue-200">
-                                                <div class="flex items-center gap-2 mb-3">
-                                                    <i data-lucide="target" class="w-5 h-5 text-blue-600"></i>
-                                                    <h5 class="font-semibold text-blue-800">Meta Sugerida</h5>
-                                                </div>
-                                                <p id="ranking-goal-insight" class="text-sm text-blue-700">Analisando...</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div><!-- Fim predictive-view -->
+                            <!-- Analytics IA removido - Otimização 02/12/2025 -->
                         
                         </div><!-- Fim área de conteúdo p-4 md:p-6 -->
 
@@ -3912,7 +2510,7 @@
                     <div class="mt-4">
                         <label class="flex items-center gap-2 cursor-pointer">
                             <input type="checkbox" id="import-skip-existing" checked class="w-4 h-4 text-indigo-600 rounded">
-                            <span class="text-sm text-gray-700">Ignorar ordens já existentes (mesmo Nº OP)</span>
+                            <span class="text-sm text-gray-700">Ignorar ordens já existentes (mesmo Nº OP)</span>
                         </label>
                     </div>
                 </div>
@@ -3933,7 +2531,7 @@
                                     <th class="px-3 py-2 text-left font-semibold text-gray-600">
                                         <input type="checkbox" id="import-select-all" checked class="w-4 h-4 text-indigo-600 rounded" onchange="toggleAllImportRows(this.checked)">
                                     </th>
-                                    <th class="px-3 py-2 text-left font-semibold text-gray-600">Nº OP</th>
+                                    <th class="px-3 py-2 text-left font-semibold text-gray-600">Nº OP</th>
                                     <th class="px-3 py-2 text-left font-semibold text-gray-600">Produto</th>
                                     <th class="px-3 py-2 text-left font-semibold text-gray-600">Descrição</th>
                                     <th class="px-3 py-2 text-left font-semibold text-gray-600">Máquina</th>
@@ -4293,8 +2891,8 @@
                 
                 <div>
                     <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Peso Bruto (g) <span class="text-gray-400 normal-case">(opcional se informar quantidade)</span></label>
-                    <input type="number" step="1" id="quick-production-weight" name="weight" min="0" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all" placeholder="Peso em gramas ou kg (ex: 1500 ou 1,5)">
-                    <p id="quick-production-weight-feedback" class="text-xs text-gray-500 mt-1">Aceita valores em gramas ou kg (Ex: 1,5 kg = 1500g)</p>
+                    <input type="number" step="1" id="quick-production-weight" name="weight" min="0" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all" placeholder="Peso em gramas (ex: 1500)">
+                    <p id="quick-production-weight-feedback" class="text-xs text-gray-500 mt-1">Digite o peso em gramas (Ex: 1500g = 1,5kg)</p>
                     <p id="quick-production-weight-converted" class="text-xs text-blue-600 mt-1 font-semibold"></p>
                 </div>
                 
@@ -4374,8 +2972,8 @@
                     <input type="number" id="quick-losses-qty" name="quantity" min="0" step="1" inputmode="numeric" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all" placeholder="Quantidade de peças perdidas" onkeypress="return /[0-9]/.test(String.fromCharCode(event.which))">
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Peso das Perdas (kg) <span class="text-gray-400 normal-case">(opcional se informar quantidade)</span></label>
-                    <input type="text" id="quick-losses-weight" name="weight" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all" placeholder="Ex: 0,980 ou 1.5 ou 1.500,50" inputmode="decimal">
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Peso das Perdas (g) <span class="text-gray-400 normal-case">(opcional se informar quantidade)</span></label>
+                    <input type="number" step="1" id="quick-losses-weight" name="weight" min="0" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all" placeholder="Peso em gramas (ex: 1500)" inputmode="numeric">
                     <div id="weight-feedback-helper" class="mt-2 text-sm"></div>
                     <p id="quick-losses-weight-converted" class="text-xs text-blue-600 mt-1 font-semibold"></p>
                 </div>
@@ -4670,8 +3268,8 @@
                         </div>
                     </div>
                     <div>
-                        <label for="manual-losses-weight" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Borras / Peso Perdido (kg)</label>
-                        <input type="number" step="0.01" id="manual-losses-weight" name="weight" min="0" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all" placeholder="Peso total em kg">
+                        <label for="manual-losses-weight" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Borras / Peso Perdido (g)</label>
+                        <input type="number" step="1" id="manual-losses-weight" name="weight" min="0" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all" placeholder="Peso em gramas (ex: 1500)">
                     </div>
                     <div>
                         <label for="manual-losses-reason" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Motivo da Perda</label>
@@ -4776,8 +3374,8 @@
                     </div>
                 </div>
                 <div>
-                    <label for="manual-borra-weight" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Peso da Borra (kg) *</label>
-                    <input type="number" step="0.01" id="manual-borra-weight" name="weight" min="0.01" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all" placeholder="Peso em kg" required>
+                    <label for="manual-borra-weight" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Peso da Borra (g) *</label>
+                    <input type="number" step="1" id="manual-borra-weight" name="weight" min="1" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all" placeholder="Peso em gramas (ex: 1500)" required>
                 </div>
                 <div>
                     <label for="manual-borra-mp-type" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Tipo de Matria-Prima *</label>
@@ -5148,318 +3746,19 @@
         </div>
     </div>
 
-    <!-- Modal de Triagem - Menu Principal -->
-    <div id="triagem-menu-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
-        <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md border border-gray-100">
-            <div class="flex justify-between items-center border-b border-gray-100 pb-4 mb-6">
-                <div class="flex items-center gap-3">
-                    <div class="p-2 bg-gradient-to-br from-indigo-100 to-indigo-200 rounded-xl">
-                        <i data-lucide="filter" class="w-5 h-5 text-indigo-600"></i>
-                    </div>
-                    <h3 class="text-lg font-semibold text-gray-800">Gestão de Triagem</h3>
-                </div>
-                <button id="triagem-menu-close" class="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-                    <i data-lucide="x" class="w-5 h-5 text-gray-500"></i>
-                </button>
-            </div>
-            
-            <!-- Contexto Máquina/Produto -->
-            <div class="modal-context bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-xl p-3 mb-4 text-xs text-gray-700">
-                <div class="flex items-center justify-between gap-3">
-                    <span>Máquina: <b class="context-machine">-</b></span>
-                    <span>Produto: <b class="context-product">-</b></span>
-                </div>
-            </div>
-
-            <!-- Resumo de Triagem Pendente -->
-            <div id="triagem-pendente-info" class="bg-gradient-to-br from-amber-50 to-amber-100 border border-amber-200 rounded-xl p-3 mb-4">
-                <div class="flex items-center gap-2 mb-2">
-                    <i data-lucide="alert-circle" class="w-4 h-4 text-amber-600"></i>
-                    <span class="text-sm font-semibold text-amber-800">Peças em Triagem</span>
-                </div>
-                <div class="text-2xl font-bold text-amber-700" id="triagem-pendente-qty">0</div>
-                <p class="text-xs text-amber-600 mt-1">Aguardando triagem/reprocessamento</p>
-            </div>
-
-            <!-- Opções de Ação -->
-            <div class="space-y-3">
-                <button id="btn-enviar-triagem" class="w-full flex items-center gap-3 p-4 bg-gradient-to-br from-indigo-50 to-indigo-100 hover:from-indigo-100 hover:to-indigo-200 border border-indigo-200 rounded-xl transition-all group">
-                    <div class="p-2 bg-indigo-500 rounded-lg group-hover:bg-indigo-600 transition-colors">
-                        <i data-lucide="arrow-right-circle" class="w-5 h-5 text-white"></i>
-                    </div>
-                    <div class="text-left">
-                        <span class="block font-semibold text-indigo-800">Enviar para Triagem</span>
-                        <span class="text-xs text-indigo-600">Desconta da produção e envia para análise</span>
-                    </div>
-                </button>
-
-                <button id="btn-volta-triagem" class="w-full flex items-center gap-3 p-4 bg-gradient-to-br from-emerald-50 to-emerald-100 hover:from-emerald-100 hover:to-emerald-200 border border-emerald-200 rounded-xl transition-all group">
-                    <div class="p-2 bg-emerald-500 rounded-lg group-hover:bg-emerald-600 transition-colors">
-                        <i data-lucide="check-circle" class="w-5 h-5 text-white"></i>
-                    </div>
-                    <div class="text-left">
-                        <span class="block font-semibold text-emerald-800">Volta de Triagem</span>
-                        <span class="text-xs text-emerald-600">Peças aprovadas voltam como "Volta de Triagem"</span>
-                    </div>
-                </button>
-
-                <button id="btn-descarte-triagem" class="w-full flex items-center gap-3 p-4 bg-gradient-to-br from-red-50 to-red-100 hover:from-red-100 hover:to-red-200 border border-red-200 rounded-xl transition-all group">
-                    <div class="p-2 bg-red-500 rounded-lg group-hover:bg-red-600 transition-colors">
-                        <i data-lucide="trash-2" class="w-5 h-5 text-white"></i>
-                    </div>
-                    <div class="text-left">
-                        <span class="block font-semibold text-red-800">Descarte Pós-Triagem</span>
-                        <span class="text-xs text-red-600">Peças reprovadas na triagem (perda definitiva)</span>
-                    </div>
-                </button>
-            </div>
-
-            <div class="mt-4 pt-4 border-t border-gray-100">
-                <button type="button" id="triagem-menu-cancel" class="w-full py-2.5 px-4 bg-gray-100 text-gray-700 rounded-xl font-medium text-sm hover:bg-gray-200 transition-colors">
-                    Fechar
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal Enviar para Triagem -->
-    <div id="enviar-triagem-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
-        <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md border border-gray-100">
-            <div class="flex justify-between items-center border-b border-gray-100 pb-4 mb-6">
-                <div class="flex items-center gap-3">
-                    <div class="p-2 bg-gradient-to-br from-indigo-100 to-indigo-200 rounded-xl">
-                        <i data-lucide="arrow-right-circle" class="w-5 h-5 text-indigo-600"></i>
-                    </div>
-                    <h3 class="text-lg font-semibold text-gray-800">Enviar para Triagem</h3>
-                </div>
-                <button id="enviar-triagem-close" class="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-                    <i data-lucide="x" class="w-5 h-5 text-gray-500"></i>
-                </button>
-            </div>
-            
-            <!-- Contexto -->
-            <div class="modal-context bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-xl p-3 mb-4 text-xs text-gray-700">
-                <div class="flex items-center justify-between gap-3">
-                    <span>Máquina: <b class="context-machine">-</b></span>
-                    <span>Produto: <b class="context-product">-</b></span>
-                </div>
-            </div>
-
-            <form id="enviar-triagem-form" class="space-y-4">
-                <div class="bg-gradient-to-br from-indigo-50 to-indigo-100 border border-indigo-200 rounded-xl p-3 mb-4">
-                    <p class="text-sm text-indigo-800">
-                        <i data-lucide="info" class="w-4 h-4 inline mr-1"></i>
-                        Esta quantidade será <strong>descontada da produção</strong> e enviada para triagem.
-                    </p>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Quantidade de Peças</label>
-                    <input type="number" id="enviar-triagem-qty" name="quantity" min="1" step="1" inputmode="numeric" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all" placeholder="Número de peças para triagem" required>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Motivo da Triagem</label>
-                    <select id="enviar-triagem-motivo" name="reason" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all" required>
-                        <option value="">Selecione o motivo...</option>
-                        <optgroup label="DEFEITOS VISUAIS">
-                            <option value="BOLHA">Bolha</option>
-                            <option value="MANCHAS">Manchas</option>
-                            <option value="RISCOS">Riscos</option>
-                            <option value="FORA_DE_COR">Fora de Cor</option>
-                            <option value="CONTAMINACAO">Contaminação</option>
-                        </optgroup>
-                        <optgroup label="DEFEITOS DIMENSIONAIS">
-                            <option value="MEDIDA_FORA">Medida Fora do Especificado</option>
-                            <option value="EMPENAMENTO">Empenamento</option>
-                            <option value="DEFORMACAO">Deformação</option>
-                        </optgroup>
-                        <optgroup label="DEFEITOS DE PROCESSO">
-                            <option value="REBARBA">Rebarba</option>
-                            <option value="FALHA">Falha de Injeção</option>
-                            <option value="CHUPAGEM">Chupagem</option>
-                            <option value="QUEIMA">Queima</option>
-                        </optgroup>
-                        <optgroup label="OUTROS">
-                            <option value="INSPECAO_QUALIDADE">Inspeção de Qualidade</option>
-                            <option value="DUVIDA_CONFORMIDADE">Dúvida de Conformidade</option>
-                            <option value="OUTRO">Outro</option>
-                        </optgroup>
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Observações</label>
-                    <textarea id="enviar-triagem-obs" name="observations" rows="2" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all" placeholder="Detalhes adicionais (opcional)"></textarea>
-                </div>
-
-                <div class="flex gap-3 pt-4 border-t border-gray-100 mt-4">
-                    <button type="button" id="enviar-triagem-cancel" class="flex-1 py-2.5 px-4 bg-gray-100 text-gray-700 rounded-xl font-medium text-sm hover:bg-gray-200 transition-colors">
-                        Cancelar
-                    </button>
-                    <button type="submit" class="flex-1 py-2.5 px-4 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all">
-                        Enviar para Triagem
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Modal Volta de Triagem -->
-    <div id="volta-triagem-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
-        <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md border border-gray-100">
-            <div class="flex justify-between items-center border-b border-gray-100 pb-4 mb-6">
-                <div class="flex items-center gap-3">
-                    <div class="p-2 bg-gradient-to-br from-emerald-100 to-emerald-200 rounded-xl">
-                        <i data-lucide="check-circle" class="w-5 h-5 text-emerald-600"></i>
-                    </div>
-                    <h3 class="text-lg font-semibold text-gray-800">Volta de Triagem</h3>
-                </div>
-                <button id="volta-triagem-close" class="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-                    <i data-lucide="x" class="w-5 h-5 text-gray-500"></i>
-                </button>
-            </div>
-            
-            <!-- Contexto -->
-            <div class="modal-context bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-xl p-3 mb-4 text-xs text-gray-700">
-                <div class="flex items-center justify-between gap-3">
-                    <span>Máquina: <b class="context-machine">-</b></span>
-                    <span>Produto: <b class="context-product">-</b></span>
-                </div>
-            </div>
-
-            <!-- Info de peças em triagem -->
-            <div class="bg-gradient-to-br from-amber-50 to-amber-100 border border-amber-200 rounded-xl p-3 mb-4">
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-amber-800">Peças em triagem:</span>
-                    <span class="text-lg font-bold text-amber-700" id="volta-triagem-pendente">0</span>
-                </div>
-            </div>
-
-            <form id="volta-triagem-form" class="space-y-4">
-                <div class="bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200 rounded-xl p-3 mb-4">
-                    <p class="text-sm text-emerald-800">
-                        <i data-lucide="info" class="w-4 h-4 inline mr-1"></i>
-                        Estas peças serão registradas como <strong>"Volta de Triagem"</strong>, não como produção normal.
-                    </p>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Quantidade Aprovada</label>
-                    <input type="number" id="volta-triagem-qty" name="quantity" min="1" step="1" inputmode="numeric" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" placeholder="Peças aprovadas na triagem" required>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Resultado da Triagem</label>
-                    <select id="volta-triagem-resultado" name="result" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" required>
-                        <option value="">Selecione o resultado...</option>
-                        <option value="APROVADO_SEM_RETRABALHO">Aprovado sem retrabalho</option>
-                        <option value="APROVADO_COM_RETRABALHO">Aprovado após retrabalho</option>
-                        <option value="RECLASSIFICADO">Reclassificado (2ª qualidade)</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Observações</label>
-                    <textarea id="volta-triagem-obs" name="observations" rows="2" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" placeholder="Detalhes da triagem (opcional)"></textarea>
-                </div>
-
-                <div class="flex gap-3 pt-4 border-t border-gray-100 mt-4">
-                    <button type="button" id="volta-triagem-cancel" class="flex-1 py-2.5 px-4 bg-gray-100 text-gray-700 rounded-xl font-medium text-sm hover:bg-gray-200 transition-colors">
-                        Cancelar
-                    </button>
-                    <button type="submit" class="flex-1 py-2.5 px-4 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all">
-                        Registrar Volta
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Modal Descarte Pós-Triagem -->
-    <div id="descarte-triagem-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
-        <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md border border-gray-100">
-            <div class="flex justify-between items-center border-b border-gray-100 pb-4 mb-6">
-                <div class="flex items-center gap-3">
-                    <div class="p-2 bg-gradient-to-br from-red-100 to-red-200 rounded-xl">
-                        <i data-lucide="trash-2" class="w-5 h-5 text-red-600"></i>
-                    </div>
-                    <h3 class="text-lg font-semibold text-gray-800">Descarte Pós-Triagem</h3>
-                </div>
-                <button id="descarte-triagem-close" class="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-                    <i data-lucide="x" class="w-5 h-5 text-gray-500"></i>
-                </button>
-            </div>
-            
-            <!-- Contexto -->
-            <div class="modal-context bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-xl p-3 mb-4 text-xs text-gray-700">
-                <div class="flex items-center justify-between gap-3">
-                    <span>Máquina: <b class="context-machine">-</b></span>
-                    <span>Produto: <b class="context-product">-</b></span>
-                </div>
-            </div>
-
-            <!-- Info de peças em triagem -->
-            <div class="bg-gradient-to-br from-amber-50 to-amber-100 border border-amber-200 rounded-xl p-3 mb-4">
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-amber-800">Peças em triagem:</span>
-                    <span class="text-lg font-bold text-amber-700" id="descarte-triagem-pendente">0</span>
-                </div>
-            </div>
-
-            <form id="descarte-triagem-form" class="space-y-4">
-                <div class="bg-gradient-to-br from-red-50 to-red-100 border border-red-200 rounded-xl p-3 mb-4">
-                    <p class="text-sm text-red-800">
-                        <i data-lucide="alert-triangle" class="w-4 h-4 inline mr-1"></i>
-                        Estas peças serão registradas como <strong>perda definitiva</strong>. Esta ação não pode ser desfeita.
-                    </p>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Quantidade Descartada</label>
-                    <input type="number" id="descarte-triagem-qty" name="quantity" min="1" step="1" inputmode="numeric" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all" placeholder="Peças reprovadas na triagem" required>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Motivo do Descarte</label>
-                    <select id="descarte-triagem-motivo" name="reason" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all" required>
-                        <option value="">Selecione o motivo...</option>
-                        <option value="DEFEITO_IRREPARAVEL">Defeito Irreparável</option>
-                        <option value="CONTAMINACAO_GRAVE">Contaminação Grave</option>
-                        <option value="MEDIDA_FORA_TOLERANCIA">Medida Fora de Tolerância</option>
-                        <option value="DEGRADACAO_MATERIAL">Degradação do Material</option>
-                        <option value="QUEIMA_SEVERA">Queima Severa</option>
-                        <option value="OUTRO">Outro</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Observações</label>
-                    <textarea id="descarte-triagem-obs" name="observations" rows="2" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all" placeholder="Detalhes do descarte (opcional)"></textarea>
-                </div>
-
-                <div class="flex gap-3 pt-4 border-t border-gray-100 mt-4">
-                    <button type="button" id="descarte-triagem-cancel" class="flex-1 py-2.5 px-4 bg-gray-100 text-gray-700 rounded-xl font-medium text-sm hover:bg-gray-200 transition-colors">
-                        Cancelar
-                    </button>
-                    <button type="submit" class="flex-1 py-2.5 px-4 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all">
-                        Confirmar Descarte
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <script src="materia-prima-database.js"></script>
     <script src="database.js"></script>
     <script src="traceability-system.js"></script>
-    <script src="predictive-analytics.js"></script>
+    <!-- MÓDULOS DESATIVADOS - Fase 2 Otimização Firebase (02/12/2025) -->
+    <!-- Estes módulos consomem muitos recursos. Reativar após migrar para Blaze -->
+    <!-- <script src="predictive-analytics.js"></script> -->
+    <!-- <script src="spc-controller.js"></script> -->
+    <!-- <script src="analytics-ia-core.js"></script> -->
+    <!-- <script src="reports-module.js?v=20251201-v5"></script> -->
+    <!-- FIM DOS MÓDULOS DESATIVADOS -->
     <script src="advanced-kpis.js"></script>
     <script src="auto-pareto-analysis.js"></script>
-    <script src="spc-controller.js"></script>
-    <script src="analytics-ia-core.js"></script>
-    <script src="script.js?v=20251201-fix2"></script>
-    <script src="reports-module.js?v=20251201-v5"></script>
+    <script src="script.js?v=20251202-otimizado"></script>
     
     <!-- Script de inicialização -->
     <script>
