@@ -15946,6 +15946,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     // Funções para abrir/fechar modais
     function openProductionModal() {
         currentEditContext = null;
+        
+        // ✅ POKA-YOKE: Bloquear lançamento se OP não estiver ativada
+        if (!validateOrderActivated()) {
+            return;
+        }
+        
         if (!selectedMachineData) {
             alert('Selecione uma máquina primeiro.');
             return;
@@ -15971,6 +15977,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     
     function openLossesModal() {
         currentEditContext = null;
+        
+        // ✅ POKA-YOKE: Bloquear lançamento se OP não estiver ativada
+        if (!validateOrderActivated()) {
+            return;
+        }
+        
         if (!selectedMachineData) {
             alert('Selecione uma máquina primeiro.');
             return;
@@ -16116,6 +16128,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         console.log('[TRACE][openReworkModal] called, selectedMachineData:', selectedMachineData);
         
         currentEditContext = null;
+        
+        // ✅ POKA-YOKE: Bloquear lançamento se OP não estiver ativada
+        if (!validateOrderActivated()) {
+            return;
+        }
+        
         if (!selectedMachineData) {
             console.warn('[WARN][openReworkModal] Nenhuma máquina selecionada');
             alert('Selecione uma máquina primeiro.');
@@ -16150,6 +16168,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     
     function openManualProductionModal() {
         currentEditContext = null;
+        
+        // ✅ POKA-YOKE: Bloquear lançamento se OP não estiver ativada
+        if (!validateOrderActivated()) {
+            return;
+        }
+        
         if (!selectedMachineData) {
             alert('Selecione uma máquina primeiro.');
             return;
@@ -16198,6 +16222,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
     function openManualLossesModal() {
         currentEditContext = null;
+        
+        // ✅ POKA-YOKE: Bloquear lançamento se OP não estiver ativada
+        if (!validateOrderActivated()) {
+            return;
+        }
+        
         if (!selectedMachineData) {
             alert('Selecione uma máquina primeiro.');
             return;
@@ -16248,6 +16278,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         console.log('[TRACE][openManualBorraModal] called, selectedMachineData:', selectedMachineData);
         
         currentEditContext = null;
+        
+        // ✅ POKA-YOKE: Bloquear lançamento se OP não estiver ativada
+        if (!validateOrderActivated()) {
+            return;
+        }
+        
         if (!selectedMachineData) {
             console.warn('[WARN][openManualBorraModal] Nenhuma máquina selecionada');
             alert('Selecione uma máquina primeiro.');
@@ -16427,6 +16463,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     function toggleDowntime() {
         console.log('[TRACE][toggleDowntime] called, selectedMachineData:', selectedMachineData, 'machineStatus:', machineStatus);
         
+        // ✅ POKA-YOKE: Bloquear lançamento se OP não estiver ativada
+        if (!validateOrderActivated()) {
+            return;
+        }
+        
         if (!selectedMachineData) {
             console.warn('[WARN][toggleDowntime] Nenhuma máquina selecionada');
             alert('Selecione uma máquina primeiro.');
@@ -16447,6 +16488,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     // Função para abrir modal de lançamento manual de parada passada
     function openManualDowntimeModal() {
         console.log('[TRACE][openManualDowntimeModal] called, selectedMachineData:', selectedMachineData);
+        
+        // ✅ POKA-YOKE: Bloquear lançamento se OP não estiver ativada
+        if (!validateOrderActivated()) {
+            return;
+        }
         
         if (!selectedMachineData) {
             console.warn('[WARN][openManualDowntimeModal] Nenhuma máquina selecionada');
@@ -17115,6 +17161,16 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         e.preventDefault();
         e.stopPropagation();
         
+        // ✅ POKA-YOKE: Bloquear lançamento se OP não estiver ativada
+        if (!validateOrderActivated()) {
+            return;
+        }
+
+        // ✅ POKA-YOKE: Bloquear lançamento se ciclo/cavidade não informado no turno
+        if (!validateCycleCavityLaunched()) {
+            return;
+        }
+        
         if (!window.authSystem || !window.authSystem.checkPermissionForAction) {
             showNotification('Erro de permissão', 'error');
             return;
@@ -17274,9 +17330,88 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
     }
 
+    // ✅ POKA-YOKE: Validar se a OP está ativada
+    function validateOrderActivated() {
+        if (!currentActiveOrder || !currentActiveOrder.id) {
+            showNotification('⚠️ ORDEM NÃO ATIVADA! Ative a OP antes de fazer qualquer lançamento.', 'error');
+            console.warn('[POKA-YOKE] Tentativa de lançamento bloqueada: OP não ativada');
+            return false;
+        }
+        const status = String(currentActiveOrder.status || '').toLowerCase();
+        if (status !== 'ativa' && status !== 'em_andamento') {
+            showNotification(`⚠️ OP NÃO ESTÁ ATIVA! Status atual: ${currentActiveOrder.status}. Ative antes de registrar.`, 'error');
+            console.warn('[POKA-YOKE] Tentativa de lançamento bloqueada: status inválido -', status);
+            return false;
+        }
+        return true;
+    }
+
+    // ✅ POKA-YOKE: Validar se ciclo e cavidade foram lançados no turno atual
+    function validateCycleCavityLaunched() {
+        if (!selectedMachineData) {
+            console.warn('[POKA-YOKE] Tentativa de validação sem máquina selecionada');
+            return false;
+        }
+        
+        const currentShift = getCurrentShift();
+        const shiftKey = `t${currentShift}`;
+        
+        // Buscar ciclo e cavidade do turno atual nos dados da máquina
+        const realCycle = selectedMachineData[`real_cycle_${shiftKey}`] || selectedMachineData.raw?.[`real_cycle_${shiftKey}`];
+        const activeCavities = selectedMachineData[`active_cavities_${shiftKey}`] || selectedMachineData.raw?.[`active_cavities_${shiftKey}`];
+        
+        const hasCycle = realCycle !== null && realCycle !== undefined && realCycle !== '' && Number(realCycle) > 0;
+        const hasCavities = activeCavities !== null && activeCavities !== undefined && activeCavities !== '' && Number(activeCavities) > 0;
+        
+        if (!hasCycle || !hasCavities) {
+            const turnoNome = currentShift === 1 ? '1º Turno' : currentShift === 2 ? '2º Turno' : '3º Turno';
+            showNotification(
+                `⚠️ CICLO/CAVIDADE NÃO INFORMADO!\n\nAntes de lançar produção, perdas ou paradas, informe o Ciclo Real e Cavidades Ativas do ${turnoNome}.\n\nVá em PLANEJAMENTO → Painel de Ciclo/Cavidades → Clique em "Lançar" na máquina.`,
+                'warning',
+                8000
+            );
+            console.warn('[POKA-YOKE] Tentativa de lançamento bloqueada: ciclo/cavidade não informado no turno', {
+                turno: turnoNome,
+                realCycle,
+                activeCavities
+            });
+            return false;
+        }
+        
+        return true;
+    }
+
+    // ✅ POKA-YOKE: Verificar se existe OP ativa para a máquina atual (função auxiliar)
+    function isOrderActiveForCurrentMachine() {
+        if (!currentActiveOrder || !currentActiveOrder.id) {
+            return false;
+        }
+        const status = String(currentActiveOrder.status || '').toLowerCase();
+        return status === 'ativa' || status === 'em_andamento';
+    }
+
+    // ✅ POKA-YOKE: Verificar se existe OP ativa para a máquina atual (versão booleana simples)
+    function isOrderActiveForCurrentMachine() {
+        if (!currentActiveOrder || !currentActiveOrder.id) {
+            return false;
+        }
+        const status = String(currentActiveOrder.status || '').toLowerCase();
+        return status === 'ativa' || status === 'em_andamento';
+    }
+
     async function handleQuickProductionSubmit(e) {
         e.preventDefault();
         e.stopPropagation();
+
+        // ✅ POKA-YOKE: Bloquear lançamento se OP não estiver ativada
+        if (!validateOrderActivated()) {
+            return;
+        }
+
+        // ✅ POKA-YOKE: Bloquear lançamento se ciclo/cavidade não informado no turno
+        if (!validateCycleCavityLaunched()) {
+            return;
+        }
 
         if (!window.authSystem || !window.authSystem.checkPermissionForAction) {
             showNotification('Erro de permissão', 'error');
@@ -17427,6 +17562,17 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     async function handleManualLossesSubmit(e) {
         e.preventDefault();
         e.stopPropagation();
+
+        // ✅ POKA-YOKE: Bloquear lançamento se OP não estiver ativada
+        if (!isOrderActiveForCurrentMachine()) {
+            showNotification('⚠️ Ative uma OP antes de fazer lançamentos. Vá em "Ordens" e clique em "Ativar" na OP desejada.', 'warning');
+            return;
+        }
+
+        // ✅ POKA-YOKE: Bloquear lançamento se ciclo/cavidade não informado no turno
+        if (!validateCycleCavityLaunched()) {
+            return;
+        }
 
         if (!window.authSystem || !window.authSystem.checkPermissionForAction) {
             showNotification('Erro de permissão', 'error');
@@ -17583,6 +17729,16 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
     async function handleLossesSubmit(e) {
         e.preventDefault();
+        
+        // ✅ POKA-YOKE: Bloquear lançamento se OP não estiver ativada
+        if (!validateOrderActivated()) {
+            return;
+        }
+
+        // ✅ POKA-YOKE: Bloquear lançamento se ciclo/cavidade não informado no turno
+        if (!validateCycleCavityLaunched()) {
+            return;
+        }
         
         // Verificar permissão
         if (!window.authSystem.checkPermissionForAction('add_losses')) {
@@ -17741,6 +17897,16 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
      */
     async function handleDowntimeSubmit(e) {
         e.preventDefault();
+        
+        // ✅ POKA-YOKE: Bloquear lançamento se OP não estiver ativada
+        if (!validateOrderActivated()) {
+            return;
+        }
+
+        // ✅ POKA-YOKE: Bloquear lançamento se ciclo/cavidade não informado no turno
+        if (!validateCycleCavityLaunched()) {
+            return;
+        }
         
         // Verificar permissão
         if (!window.authSystem.checkPermissionForAction('add_downtime')) {
@@ -17924,6 +18090,17 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
     async function handleManualBorraSubmit(e) {
         e.preventDefault();
+
+        // ✅ POKA-YOKE: Bloquear lançamento se OP não estiver ativada
+        if (!isOrderActiveForCurrentMachine()) {
+            showNotification('⚠️ Ative uma OP antes de fazer lançamentos. Vá em "Ordens" e clique em "Ativar" na OP desejada.', 'warning');
+            return;
+        }
+
+        // ✅ POKA-YOKE: Bloquear lançamento se ciclo/cavidade não informado no turno
+        if (!validateCycleCavityLaunched()) {
+            return;
+        }
 
         if (!window.authSystem.checkPermissionForAction('add_losses')) {
             return;
@@ -18220,6 +18397,17 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     // Handler para registrar retrabalho
     async function handleReworkSubmit(e) {
         e.preventDefault();
+        
+        // ✅ POKA-YOKE: Bloquear lançamento se OP não estiver ativada
+        if (!isOrderActiveForCurrentMachine()) {
+            showNotification('⚠️ Ative uma OP antes de fazer lançamentos. Vá em "Ordens" e clique em "Ativar" na OP desejada.', 'warning');
+            return;
+        }
+
+        // ✅ POKA-YOKE: Bloquear lançamento se ciclo/cavidade não informado no turno
+        if (!validateCycleCavityLaunched()) {
+            return;
+        }
         
         // Verificar permissão
         if (!window.authSystem.checkPermissionForAction('add_rework')) {
