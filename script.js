@@ -2831,11 +2831,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 productionModalForm.prepend(planIdInput);
             }
             
-            // Iniciar atualização automática de OEE em tempo real (a cada 15 minutos - otimizado)
-            setInterval(updateRealTimeOeeData, 15 * 60 * 1000);
+            // Iniciar atualização automática de OEE em tempo real (a cada 30 minutos - otimizado para economizar quota)
+            setInterval(updateRealTimeOeeData, 30 * 60 * 1000);
             
-            // Iniciar atualização automática da timeline (a cada 5 minutos - otimizado)
-            setInterval(updateTimelineIfVisible, 5 * 60 * 1000);
+            // Iniciar atualização automática da timeline (a cada 10 minutos - otimizado para economizar quota)
+            setInterval(updateTimelineIfVisible, 10 * 60 * 1000);
             
             // Atualizar imediatamente se estivermos na aba de dashboard ou análise
             setTimeout(updateRealTimeOeeData, 2000);
@@ -4354,10 +4354,14 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         
         const productionData = await getFilteredData('production', startDate, endDate, machine, shift);
         const planData = await getFilteredData('plan', startDate, endDate, machine, shift);
+        const lossesData = await getFilteredData('losses', startDate, endDate, machine, shift);
+        const downtimeData = await getFilteredData('downtime', startDate, endDate, machine, shift);
 
         console.log('[TRACE][loadProductionAnalysis] datasets received', {
             productionCount: productionData.length,
-            planCount: planData.length
+            planCount: planData.length,
+            lossesCount: lossesData.length,
+            downtimeCount: downtimeData.length
         });
         
         // Calcular métricas
@@ -4405,6 +4409,61 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         document.getElementById('production-target-vs-actual').textContent = `${targetVsActual.toFixed(1)}%`;
         document.getElementById('top-machine').textContent = topMachine;
         updateProductionRateDisplay();
+
+        // ========== PREENCHER TOP 5 MÁQUINAS (aba Produção) ==========
+        const machineRankingProduction = document.getElementById('machine-ranking-production');
+        if (machineRankingProduction) {
+            const sortedMachines = Object.entries(machineProduction)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5);
+            
+            if (sortedMachines.length === 0) {
+                machineRankingProduction.innerHTML = '<div class="text-center py-4 text-gray-400"><p class="text-xs">Sem dados de produção</p></div>';
+            } else {
+                const maxProduction = sortedMachines[0][1];
+                machineRankingProduction.innerHTML = sortedMachines.map(([mach, qty], index) => {
+                    const percentage = maxProduction > 0 ? (qty / maxProduction * 100) : 0;
+                    const medalColors = ['bg-amber-500', 'bg-gray-400', 'bg-orange-400', 'bg-blue-400', 'bg-green-400'];
+                    const medalColor = medalColors[index] || 'bg-gray-300';
+                    return `
+                        <div class="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
+                            <div class="w-6 h-6 ${medalColor} text-white rounded-full flex items-center justify-center text-xs font-bold">${index + 1}</div>
+                            <div class="flex-1">
+                                <div class="flex justify-between items-center mb-1">
+                                    <span class="text-sm font-medium text-gray-700">${mach}</span>
+                                    <span class="text-sm font-bold text-blue-600">${qty.toLocaleString('pt-BR')}</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-1.5">
+                                    <div class="bg-blue-500 h-1.5 rounded-full" style="width: ${percentage.toFixed(1)}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        // ========== PREENCHER RESUMO DO DIA ==========
+        const totalLosses = lossesData.reduce((sum, item) => sum + (Number(item.scrapPcs ?? item.quantity ?? 0) || 0), 0);
+        // Filtrar borra de forma consistente com loadLossesAnalysis
+        const borraData = lossesData.filter(item => {
+            const reasonStr = (item.reason || item.raw?.perdas || '').toString().toLowerCase();
+            const isTagged = (item.raw && item.raw.tipo_lancamento === 'borra');
+            return isTagged || reasonStr.includes('borra');
+        });
+        const totalBorra = borraData.reduce((sum, item) => sum + (Number(item.raw?.refugo_kg ?? item.scrapKg ?? item.weight ?? 0) || 0), 0);
+        const totalDowntime = downtimeData.reduce((sum, item) => sum + (Number(item.duration) || 0), 0);
+        const goodProduction = totalProduction; // Produção boa é o total de produção (já exclui refugos)
+
+        const summaryGood = document.getElementById('summary-good-production');
+        const summaryLosses = document.getElementById('summary-losses');
+        const summaryBorra = document.getElementById('summary-borra');
+        const summaryDowntime = document.getElementById('summary-downtime');
+
+        if (summaryGood) summaryGood.textContent = goodProduction.toLocaleString('pt-BR');
+        if (summaryLosses) summaryLosses.textContent = totalLosses.toLocaleString('pt-BR');
+        if (summaryBorra) summaryBorra.textContent = totalBorra.toFixed(2);
+        if (summaryDowntime) summaryDowntime.textContent = totalDowntime.toLocaleString('pt-BR');
 
         // Gerar gráficos
         await generateHourlyProductionChart(productionData, {
@@ -4604,7 +4663,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         console.log('[TRACE][loadEfficiencyAnalysis] oeeData', oeeData);
         
-        // Atualizar gauges
+        // Atualizar gauges dos componentes
         updateGauge('availability-gauge', oeeData.availability);
         updateGauge('performance-gauge', oeeData.performance);
         updateGauge('quality-gauge', oeeData.quality);
@@ -4613,9 +4672,109 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         document.getElementById('performance-value').textContent = `${oeeData.performance.toFixed(1)}%`;
         document.getElementById('quality-value').textContent = `${oeeData.quality.toFixed(1)}%`;
 
+        // ========== PREENCHER OEE GERAL ==========
+        const oeeGeneral = oeeData.oee || ((oeeData.availability * oeeData.performance * oeeData.quality) / 10000);
+        const oeeGeneralValue = document.getElementById('oee-general-value');
+        const oeeClassification = document.getElementById('oee-classification');
+        
+        if (oeeGeneralValue) {
+            oeeGeneralValue.textContent = `${oeeGeneral.toFixed(1)}%`;
+        }
+        
+        // Atualizar gauge OEE principal
+        updateGauge('oee-main-gauge', oeeGeneral);
+        
+        // Classificação do OEE
+        if (oeeClassification) {
+            let classification = 'Inaceitável';
+            let classColor = 'text-red-600';
+            if (oeeGeneral >= 85) {
+                classification = 'Classe Mundial';
+                classColor = 'text-green-600';
+            } else if (oeeGeneral >= 75) {
+                classification = 'Excelente';
+                classColor = 'text-blue-600';
+            } else if (oeeGeneral >= 65) {
+                classification = 'Bom';
+                classColor = 'text-teal-600';
+            } else if (oeeGeneral >= 50) {
+                classification = 'Regular';
+                classColor = 'text-amber-600';
+            }
+            oeeClassification.textContent = classification;
+            oeeClassification.className = `font-semibold ${classColor}`;
+        }
+
+        // ========== PREENCHER RANKING DE OEE POR MÁQUINA ==========
+        const machineOeeRanking = document.getElementById('machine-oee-ranking');
+        if (machineOeeRanking) {
+            try {
+                // Calcular OEE por máquina
+                const productionData = await getFilteredData('production', startDate, endDate, machine === 'all' ? null : machine, shift);
+                const lossesData = await getFilteredData('losses', startDate, endDate, machine === 'all' ? null : machine, shift);
+                const planData = await getFilteredData('plan', startDate, endDate, machine === 'all' ? null : machine, shift);
+                
+                // Agrupar por máquina
+                const machineData = {};
+                
+                productionData.forEach(item => {
+                    const m = item.machine || 'N/A';
+                    if (!machineData[m]) machineData[m] = { production: 0, losses: 0, planned: 0 };
+                    machineData[m].production += Number(item.quantity) || 0;
+                });
+                
+                lossesData.forEach(item => {
+                    const m = item.machine || 'N/A';
+                    if (!machineData[m]) machineData[m] = { production: 0, losses: 0, planned: 0 };
+                    machineData[m].losses += Number(item.scrapPcs ?? item.quantity ?? 0) || 0;
+                });
+                
+                planData.forEach(item => {
+                    const m = item.machine || 'N/A';
+                    if (!machineData[m]) machineData[m] = { production: 0, losses: 0, planned: 0 };
+                    machineData[m].planned += Number(item.quantity) || 0;
+                });
+                
+                // Calcular OEE simplificado por máquina (Performance × Qualidade)
+                const machineEntries = Object.entries(machineData)
+                    .map(([mach, data]) => {
+                        const totalOutput = data.production + data.losses;
+                        const performance = data.planned > 0 ? Math.min((data.production / data.planned) * 100, 100) : 0;
+                        const quality = totalOutput > 0 ? (data.production / totalOutput) * 100 : 100;
+                        const oee = (performance * quality) / 100; // OEE simplificado
+                        return { machine: mach, oee, production: data.production };
+                    })
+                    .filter(e => e.production > 0) // Só máquinas com produção
+                    .sort((a, b) => b.oee - a.oee)
+                    .slice(0, 5);
+                
+                if (machineEntries.length === 0) {
+                    machineOeeRanking.innerHTML = '<div class="text-center py-4 text-gray-400"><p class="text-xs">Sem dados de OEE por máquina</p></div>';
+                } else {
+                    const getOeeColor = (oee) => {
+                        if (oee >= 85) return 'bg-green-500';
+                        if (oee >= 75) return 'bg-blue-500';
+                        if (oee >= 65) return 'bg-teal-500';
+                        if (oee >= 50) return 'bg-amber-500';
+                        return 'bg-red-500';
+                    };
+                    machineOeeRanking.innerHTML = machineEntries.map((e, idx) => `
+                        <div class="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                            <div class="w-5 h-5 ${getOeeColor(e.oee)} text-white rounded-full flex items-center justify-center text-xs font-bold">${idx + 1}</div>
+                            <span class="flex-1 text-sm font-medium text-gray-700">${e.machine}</span>
+                            <span class="text-sm font-bold ${e.oee >= 75 ? 'text-green-600' : e.oee >= 50 ? 'text-amber-600' : 'text-red-600'}">${e.oee.toFixed(1)}%</span>
+                        </div>
+                    `).join('');
+                }
+            } catch (err) {
+                console.error('[loadEfficiencyAnalysis] Erro ao calcular ranking OEE por máquina:', err);
+                machineOeeRanking.innerHTML = '<div class="text-center py-4 text-gray-400"><p class="text-xs">Erro ao carregar</p></div>';
+            }
+        }
+
         // Gerar gráficos
-    await generateOEEComponentsTimeline(startDate, endDate, machine);
-    await generateOEEHeatmap(startDate, endDate, machine);
+        await generateOEEComponentsTimeline(startDate, endDate, machine);
+        await generateOEEHeatmap(startDate, endDate, machine);
     }
 
     // Função para carregar análise de perdas
@@ -8647,7 +8806,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         let totalProgress = 0;
         orders.forEach(o => {
             const lotSize = Number(o.lot_size) || 0;
-            const produced = Number(o.total_produced) || 0;
+            const produced = Number(o.total_produzido ?? o.totalProduced ?? o.total_produced) || 0;
             if (lotSize > 0) {
                 totalProgress += Math.min((produced / lotSize) * 100, 100);
             }
@@ -8701,7 +8860,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     function renderOrderCard(order) {
         const status = (order.status || 'planejada').toLowerCase();
         const lotSize = Number(order.lot_size) || 0;
-        const produced = Number(order.total_produced) || 0;
+        // CORREÇÃO: Usar total_produzido OU totalProduced (nomes corretos do campo no Firebase)
+        const produced = Number(order.total_produzido ?? order.totalProduced ?? order.total_produced) || 0;
         const progress = lotSize > 0 ? Math.min((produced / lotSize) * 100, 100) : 0;
         
         const statusConfig = {
@@ -8768,7 +8928,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     function renderOrderTableRow(order) {
         const status = (order.status || 'planejada').toLowerCase();
         const lotSize = Number(order.lot_size) || 0;
-        const produced = Number(order.total_produced) || 0;
+        // CORREÇÃO: Usar total_produzido OU totalProduced (nomes corretos do campo no Firebase)
+        const produced = Number(order.total_produzido ?? order.totalProduced ?? order.total_produced) || 0;
         const progress = lotSize > 0 ? Math.min((produced / lotSize) * 100, 100) : 0;
         
         const statusBadge = {
@@ -8861,8 +9022,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             filtered.sort((a, b) => {
                 const lotA = Number(a.lot_size) || 0;
                 const lotB = Number(b.lot_size) || 0;
-                const prodA = Number(a.total_produced) || 0;
-                const prodB = Number(b.total_produced) || 0;
+                const prodA = Number(a.total_produzido ?? a.totalProduced ?? a.total_produced) || 0;
+                const prodB = Number(b.total_produzido ?? b.totalProduced ?? b.total_produced) || 0;
                 const progressA = lotA > 0 ? (prodA / lotA) : 0;
                 const progressB = lotB > 0 ? (prodB / lotB) : 0;
                 
@@ -13078,6 +13239,231 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
     }
 
+    // =========================================================================
+    // AJUSTE DE QUANTIDADE EXECUTADA DO PLANEJAMENTO
+    // =========================================================================
+    
+    function openAdjustExecutedModal() {
+        if (!selectedMachineData) {
+            alert('Selecione uma máquina primeiro.');
+            return;
+        }
+
+        // Verificar permissão
+        if (!window.authSystem?.checkPermissionForAction('adjust_executed')) {
+            showPermissionDeniedNotification('ajustar quantidade executada');
+            return;
+        }
+
+        const modal = document.getElementById('adjust-executed-modal');
+        if (!modal) return;
+
+        const machineSpan = document.getElementById('adjust-exec-machine');
+        const productSpan = document.getElementById('adjust-exec-product');
+        const plannedSpan = document.getElementById('adjust-exec-planned');
+        const currentSpan = document.getElementById('adjust-exec-current');
+        const newQtyInput = document.getElementById('adjust-exec-new-qty');
+        const diffDiv = document.getElementById('adjust-exec-diff');
+        const reasonSelect = document.getElementById('adjust-exec-reason');
+        const obsInput = document.getElementById('adjust-exec-obs');
+        const statusDiv = document.getElementById('adjust-executed-status');
+
+        // Calcular quantidade atual baseado nos entries (fonte única de verdade)
+        const planId = selectedMachineData.id;
+        const currentExecuted = Math.round(coerceToNumber(selectedMachineData.totalProduced, 0));
+        const plannedQty = Math.round(coerceToNumber(
+            selectedMachineData.order_lot_size ?? selectedMachineData.lot_size ?? selectedMachineData.planned_quantity, 0
+        ));
+
+        // Preencher informações
+        if (machineSpan) machineSpan.textContent = selectedMachineData.machine || '-';
+        if (productSpan) productSpan.textContent = selectedMachineData.product || '-';
+        if (plannedSpan) plannedSpan.textContent = plannedQty.toLocaleString('pt-BR');
+        if (currentSpan) currentSpan.textContent = currentExecuted.toLocaleString('pt-BR');
+        
+        // Limpar campos
+        if (newQtyInput) {
+            newQtyInput.value = currentExecuted;
+            newQtyInput.dataset.currentQty = currentExecuted.toString();
+            newQtyInput.dataset.planId = planId;
+        }
+        if (diffDiv) diffDiv.textContent = '';
+        if (reasonSelect) reasonSelect.value = '';
+        if (obsInput) obsInput.value = '';
+        if (statusDiv) statusDiv.textContent = '';
+
+        // Listener para mostrar diferença em tempo real
+        if (newQtyInput) {
+            newQtyInput.removeEventListener('input', updateAdjustExecutedDiff);
+            newQtyInput.addEventListener('input', updateAdjustExecutedDiff);
+        }
+
+        modal.classList.remove('hidden');
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    function updateAdjustExecutedDiff() {
+        const newQtyInput = document.getElementById('adjust-exec-new-qty');
+        const diffDiv = document.getElementById('adjust-exec-diff');
+        
+        if (!newQtyInput || !diffDiv) return;
+
+        const currentQty = parseInt(newQtyInput.dataset.currentQty || '0');
+        const newQty = parseInt(newQtyInput.value || '0');
+        const diff = newQty - currentQty;
+
+        if (diff === 0) {
+            diffDiv.textContent = 'Sem alteração';
+            diffDiv.className = 'mt-1 text-xs text-gray-500';
+        } else if (diff > 0) {
+            diffDiv.textContent = `+${diff.toLocaleString('pt-BR')} peças (aumento)`;
+            diffDiv.className = 'mt-1 text-xs text-green-600 font-medium';
+        } else {
+            diffDiv.textContent = `${diff.toLocaleString('pt-BR')} peças (redução)`;
+            diffDiv.className = 'mt-1 text-xs text-orange-600 font-medium';
+        }
+    }
+
+    function closeAdjustExecutedModal() {
+        const modal = document.getElementById('adjust-executed-modal');
+        if (modal) modal.classList.add('hidden');
+    }
+
+    async function handleAdjustExecutedSubmit(e) {
+        e.preventDefault();
+
+        const newQtyInput = document.getElementById('adjust-exec-new-qty');
+        const reasonSelect = document.getElementById('adjust-exec-reason');
+        const obsInput = document.getElementById('adjust-exec-obs');
+        const statusDiv = document.getElementById('adjust-executed-status');
+        const submitBtn = document.getElementById('adjust-executed-save');
+
+        const planId = newQtyInput?.dataset.planId;
+        const currentQty = parseInt(newQtyInput?.dataset.currentQty || '0');
+        const newQty = parseInt(newQtyInput?.value || '0');
+        const reason = reasonSelect?.value;
+        const observations = obsInput?.value?.trim() || '';
+
+        if (!planId) {
+            alert('Erro interno: planejamento não identificado.');
+            return;
+        }
+
+        if (newQty < 0) {
+            alert('A quantidade executada não pode ser negativa.');
+            return;
+        }
+
+        if (!reason) {
+            alert('Por favor, selecione o motivo do ajuste.');
+            return;
+        }
+
+        const diff = newQty - currentQty;
+        if (diff === 0) {
+            alert('A quantidade informada é igual à atual. Nenhuma alteração necessária.');
+            return;
+        }
+
+        // Confirmar alteração
+        const confirmMsg = diff > 0
+            ? `Confirma o AUMENTO de ${diff.toLocaleString('pt-BR')} peças?\n\nDe: ${currentQty.toLocaleString('pt-BR')}\nPara: ${newQty.toLocaleString('pt-BR')}`
+            : `Confirma a REDUÇÃO de ${Math.abs(diff).toLocaleString('pt-BR')} peças?\n\nDe: ${currentQty.toLocaleString('pt-BR')}\nPara: ${newQty.toLocaleString('pt-BR')}`;
+        
+        if (!confirm(confirmMsg)) return;
+
+        try {
+            if (submitBtn) submitBtn.disabled = true;
+            if (statusDiv) {
+                statusDiv.textContent = 'Processando ajuste...';
+                statusDiv.className = 'text-sm font-semibold h-5 text-center mt-2 text-blue-600';
+            }
+
+            const currentUser = getActiveUser();
+            const now = new Date();
+
+            // Criar registro de ajuste como entry especial
+            const adjustmentEntry = {
+                type: 'adjustment',
+                planId: planId,
+                machine: selectedMachineData.machine,
+                product: selectedMachineData.product || '',
+                product_cod: selectedMachineData.product_cod || '',
+                previousQuantity: currentQty,
+                newQuantity: newQty,
+                adjustmentQty: diff,
+                reason: reason,
+                observations: observations,
+                turno: getCurrentShift(),
+                data: now.toISOString().split('T')[0],
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                adjustedBy: currentUser?.username || 'desconhecido',
+                adjustedByName: currentUser?.name || 'Desconhecido',
+                isManualAdjustment: true
+            };
+
+            // Salvar registro do ajuste na collection de entries
+            await db.collection('production_entries').add(adjustmentEntry);
+
+            // Atualizar o planejamento com a nova quantidade
+            await db.collection('planning').doc(planId).update({
+                total_produzido: newQty,
+                totalProduced: newQty,
+                lastManualAdjustment: {
+                    previousValue: currentQty,
+                    newValue: newQty,
+                    diff: diff,
+                    reason: reason,
+                    observations: observations,
+                    adjustedBy: currentUser?.username || 'desconhecido',
+                    adjustedByName: currentUser?.name || 'Desconhecido',
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                },
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            console.log(`[AUDIT] ${currentUser?.name || 'Desconhecido'} ajustou quantidade executada do planejamento ${planId}: ${currentQty} → ${newQty} (${diff > 0 ? '+' : ''}${diff}) - Motivo: ${reason}`);
+
+            if (statusDiv) {
+                statusDiv.textContent = 'Ajuste aplicado com sucesso!';
+                statusDiv.className = 'text-sm font-semibold h-5 text-center mt-2 text-green-600';
+            }
+
+            showNotification(`Quantidade ajustada: ${currentQty.toLocaleString('pt-BR')} → ${newQty.toLocaleString('pt-BR')}`, 'success');
+
+            // Fechar modal após 1.5 segundos
+            setTimeout(() => {
+                closeAdjustExecutedModal();
+                // Forçar atualização do dashboard
+                if (typeof updateDashboard === 'function') {
+                    updateDashboard();
+                }
+            }, 1500);
+
+        } catch (error) {
+            console.error('Erro ao ajustar quantidade executada:', error);
+            if (statusDiv) {
+                statusDiv.textContent = 'Erro ao aplicar ajuste. Tente novamente.';
+                statusDiv.className = 'text-sm font-semibold h-5 text-center mt-2 text-red-600';
+            }
+            showNotification('Erro ao aplicar ajuste', 'error');
+        } finally {
+            if (submitBtn) submitBtn.disabled = false;
+        }
+    }
+
+    // Inicializar listeners do modal de ajuste de quantidade executada
+    function initAdjustExecutedModal() {
+        const closeBtn = document.getElementById('adjust-executed-close');
+        const cancelBtn = document.getElementById('adjust-executed-cancel');
+        const form = document.getElementById('adjust-executed-form');
+
+        if (closeBtn) closeBtn.addEventListener('click', closeAdjustExecutedModal);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeAdjustExecutedModal);
+        if (form) form.addEventListener('submit', handleAdjustExecutedSubmit);
+    }
+
     function handleAdjustQuantityOrder(e) {
         e.preventDefault();
         const orderId = e.currentTarget.dataset.orderId;
@@ -15145,6 +15531,16 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             console.warn('[WARN][setupEventListeners] btn-manual-borra não encontrado no DOM');
         }
 
+        // Botão de ajuste de quantidade executada
+        const btnAdjustExecuted = document.getElementById('btn-adjust-executed');
+        if (btnAdjustExecuted && !btnAdjustExecuted.dataset.listenerAttached) {
+            console.log('[TRACE][setupEventListeners] Anexando listener ao btn-adjust-executed');
+            btnAdjustExecuted.addEventListener('click', openAdjustExecutedModal);
+            btnAdjustExecuted.dataset.listenerAttached = 'true';
+        } else if (btnAdjustExecuted) {
+            console.log('[TRACE][setupEventListeners] btn-adjust-executed listener já anexado');
+        }
+
         // Botão de paradas longas
         const btnExtendedDowntime = document.getElementById('btn-extended-downtime');
         if (btnExtendedDowntime && !btnExtendedDowntime.dataset.listenerAttached) {
@@ -15542,6 +15938,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (adjustQuantityClose) adjustQuantityClose.addEventListener('click', closeAdjustQuantityModal);
         if (adjustQuantityCancel) adjustQuantityCancel.addEventListener('click', closeAdjustQuantityModal);
         if (adjustQuantityForm) adjustQuantityForm.addEventListener('submit', handleAdjustQuantitySubmit);
+
+        // Modal de ajuste de quantidade executada (planejamento)
+        initAdjustExecutedModal();
     }
     
     // Funções para abrir/fechar modais
@@ -24430,7 +24829,7 @@ const OrdersPageModule = (function() {
         const html = orders.map(order => {
             const status = (order.status || 'planejada').toLowerCase();
             const lotSize = Number(order.lot_size) || 0;
-            const produced = Number(order.total_produced) || 0;
+            const produced = Number(order.total_produzido ?? order.totalProduced ?? order.total_produced) || 0;
             const progress = lotSize > 0 ? Math.min((produced / lotSize) * 100, 100) : 0;
             
             const statusConfig = {
@@ -24506,7 +24905,7 @@ const OrdersPageModule = (function() {
         const html = orders.map(order => {
             const status = (order.status || 'planejada').toLowerCase();
             const lotSize = Number(order.lot_size) || 0;
-            const produced = Number(order.total_produced) || 0;
+            const produced = Number(order.total_produzido ?? order.totalProduced ?? order.total_produced) || 0;
             const progress = lotSize > 0 ? Math.min((produced / lotSize) * 100, 100) : 0;
             
             const statusConfig = {

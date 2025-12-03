@@ -3418,6 +3418,111 @@
         </div>
     </div>
 
+    <!-- Modal de Ajuste de Quantidade Executada (Planejamento) -->
+    <div id="adjust-executed-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md border border-gray-100">
+            <div class="flex justify-between items-center border-b border-gray-100 pb-4 mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-gradient-to-br from-emerald-100 to-green-200 rounded-xl">
+                        <i data-lucide="edit-3" class="w-5 h-5 text-emerald-600"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-800">Ajustar Quantidade Executada</h3>
+                </div>
+                <button id="adjust-executed-close" type="button" class="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                    <i data-lucide="x" class="w-5 h-5 text-gray-500"></i>
+                </button>
+            </div>
+            <form id="adjust-executed-form" class="space-y-4">
+                <div class="bg-gradient-to-br from-emerald-50 to-green-50 border border-emerald-200 rounded-xl p-3">
+                    <p class="text-sm text-emerald-800">
+                        <i data-lucide="info" class="w-4 h-4 inline mr-1"></i>
+                        Ajuste a quantidade executada para corrigir divergências com o físico. Esta alteração será registrada para auditoria.
+                    </p>
+                </div>
+                
+                <!-- Informações do Planejamento -->
+                <div class="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-3 space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Máquina:</span>
+                        <span id="adjust-exec-machine" class="text-sm font-bold text-gray-800">-</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Produto:</span>
+                        <span id="adjust-exec-product" class="text-sm text-gray-800 truncate max-w-[180px]">-</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Quantidade Planejada:</span>
+                        <span id="adjust-exec-planned" class="text-sm font-bold text-blue-600">-</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Executado Atual:</span>
+                        <span id="adjust-exec-current" class="text-sm font-bold text-emerald-600">-</span>
+                    </div>
+                </div>
+
+                <!-- Nova Quantidade -->
+                <div>
+                    <label for="adjust-exec-new-qty" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                        Nova Quantidade Executada *
+                    </label>
+                    <input type="number" 
+                           id="adjust-exec-new-qty" 
+                           name="new_qty" 
+                           min="0"
+                           step="1"
+                           class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" 
+                           placeholder="Digite a quantidade correta" 
+                           required>
+                    <div id="adjust-exec-diff" class="mt-1 text-xs text-gray-500"></div>
+                </div>
+
+                <!-- Motivo -->
+                <div>
+                    <label for="adjust-exec-reason" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                        Motivo do Ajuste *
+                    </label>
+                    <select id="adjust-exec-reason" 
+                            name="reason" 
+                            class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" 
+                            required>
+                        <option value="">Selecione o motivo...</option>
+                        <option value="DIVERGENCIA_CONTAGEM">Divergência na Contagem</option>
+                        <option value="AJUSTE_INVENTARIO">Ajuste de Inventário</option>
+                        <option value="ERRO_LANCAMENTO">Erro de Lançamento Anterior</option>
+                        <option value="CORRECAO_SISTEMA">Correção do Sistema</option>
+                        <option value="RECONTAGEM_FISICA">Recontagem Física</option>
+                        <option value="TRANSFERENCIA_TURNO">Transferência de Turno</option>
+                        <option value="PRODUCAO_ENCONTRADA">Produção Encontrada</option>
+                        <option value="PRODUCAO_NAO_REGISTRADA">Produção Não Registrada</option>
+                        <option value="OUTROS">Outros</option>
+                    </select>
+                </div>
+
+                <!-- Observações -->
+                <div>
+                    <label for="adjust-exec-obs" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                        Observações
+                    </label>
+                    <textarea id="adjust-exec-obs" 
+                              name="observations" 
+                              rows="2" 
+                              class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" 
+                              placeholder="Detalhes adicionais sobre o ajuste (opcional)"></textarea>
+                </div>
+
+                <div class="flex gap-3 pt-4 border-t border-gray-100 mt-4">
+                    <button type="button" id="adjust-executed-cancel" class="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium text-sm hover:bg-gray-200 transition-colors">
+                        Cancelar
+                    </button>
+                    <button type="submit" id="adjust-executed-save" class="flex-1 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all">
+                        Aplicar Ajuste
+                    </button>
+                </div>
+                <div id="adjust-executed-status" class="text-sm font-semibold h-5 text-center mt-2"></div>
+            </form>
+        </div>
+    </div>
+
     <!-- Modal de Ajuste de Quantidade da OP -->
     <div id="adjust-quantity-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
         <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md border border-gray-100">

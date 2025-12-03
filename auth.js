@@ -347,6 +347,7 @@ class AuthSystem {
             'add_losses': 'lancamento',
             'add_downtime': 'lancamento',
             'add_rework': 'lancamento',
+            'adjust_executed': 'lancamento',
             'view_analysis': 'analise',
             'export_data': 'analise',
             'close_production_order': 'mixed',
