@@ -15412,10 +15412,28 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const prodDocs = prodSnapshot.docs;
             let totalProduced = 0;
             let totalLosses = 0;
+            
+            // Produção por turno
+            let producedT1 = 0;
+            let producedT2 = 0;
+            let producedT3 = 0;
+            
             prodDocs.forEach(doc => {
                 const data = doc.data();
-                totalProduced += Number(data.produzido || data.quantity || 0) || 0;
+                const quantidade = Number(data.produzido || data.quantity || 0) || 0;
+                const turno = Number(data.turno || data.shift || 0);
+                
+                totalProduced += quantidade;
                 totalLosses += Number(data.refugo_kg || 0) || 0;
+                
+                // Separar por turno
+                if (turno === 1) {
+                    producedT1 += quantidade;
+                } else if (turno === 2) {
+                    producedT2 += quantidade;
+                } else if (turno === 3) {
+                    producedT3 += quantidade;
+                }
             });
             
             // Carregar paradas (duas consultas por data para evitar índice composto)
@@ -15448,7 +15466,15 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const dailyTarget = Number(selectedMachineData.daily_target || selectedMachineData.planned_quantity || 0);
             const efficiency = dailyTarget > 0 ? (totalProduced / dailyTarget * 100) : 0;
             
-            // Atualizar display
+            // Atualizar display - produção por turno
+            const producedT1El = document.getElementById('produced-t1');
+            const producedT2El = document.getElementById('produced-t2');
+            const producedT3El = document.getElementById('produced-t3');
+            if (producedT1El) producedT1El.textContent = producedT1.toLocaleString('pt-BR');
+            if (producedT2El) producedT2El.textContent = producedT2.toLocaleString('pt-BR');
+            if (producedT3El) producedT3El.textContent = producedT3.toLocaleString('pt-BR');
+            
+            // Atualizar display - totais
             if (producedToday) producedToday.textContent = totalProduced.toLocaleString('pt-BR');
             if (efficiencyToday) efficiencyToday.textContent = efficiency.toFixed(1) + '%';
             if (lossesToday) lossesToday.textContent = totalLosses.toFixed(2);
@@ -21011,9 +21037,29 @@ function sendDowntimeNotification() {
                         ]);
                         const downtimes = [...dtSnapToday.docs, ...dtSnapTomorrow.docs].map(doc => doc.data());
             
-            // Calcular totais
-            const totalProduced = productions.reduce((sum, prod) => sum + (prod.produzido || 0), 0);
-            const totalLosses = productions.reduce((sum, prod) => sum + (prod.refugo_kg || 0), 0);
+            // Calcular totais e produção por turno
+            let totalProduced = 0;
+            let totalLosses = 0;
+            let producedT1 = 0;
+            let producedT2 = 0;
+            let producedT3 = 0;
+            
+            productions.forEach(prod => {
+                const quantidade = Number(prod.produzido || prod.quantity || 0) || 0;
+                const turno = Number(prod.turno || prod.shift || 0);
+                
+                totalProduced += quantidade;
+                totalLosses += Number(prod.refugo_kg || 0) || 0;
+                
+                // Separar por turno
+                if (turno === 1) {
+                    producedT1 += quantidade;
+                } else if (turno === 2) {
+                    producedT2 += quantidade;
+                } else if (turno === 3) {
+                    producedT3 += quantidade;
+                }
+            });
             
             // Somar apenas a interseção com a janela de produção (evita inflar com 00:00-07:00 que pertence ao dia anterior)
             let totalDowntime = 0;
@@ -21034,7 +21080,15 @@ function sendDowntimeNotification() {
             const dailyTarget = Number(selectedMachineData.daily_target || selectedMachineData.planned_quantity || 0);
             const efficiency = dailyTarget > 0 ? (totalProduced / dailyTarget * 100) : 0;
             
-            // Atualizar displays
+            // Atualizar display - produção por turno
+            const producedT1El = document.getElementById('produced-t1');
+            const producedT2El = document.getElementById('produced-t2');
+            const producedT3El = document.getElementById('produced-t3');
+            if (producedT1El) producedT1El.textContent = producedT1.toLocaleString('pt-BR');
+            if (producedT2El) producedT2El.textContent = producedT2.toLocaleString('pt-BR');
+            if (producedT3El) producedT3El.textContent = producedT3.toLocaleString('pt-BR');
+            
+            // Atualizar displays - totais
             if (producedToday) producedToday.textContent = totalProduced.toLocaleString('pt-BR');
             if (efficiencyToday) efficiencyToday.textContent = `${efficiency.toFixed(1)}%`;
             if (lossesToday) lossesToday.textContent = totalLosses.toFixed(2);
