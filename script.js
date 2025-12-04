@@ -16776,10 +16776,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
     async function carregarDadosAcompanhamento() {
         const data = document.getElementById('acompanhamento-data')?.value;
-        const turno = document.getElementById('acompanhamento-turno')?.value;
 
-        if (!data || !turno) {
-            showNotification('⚠️ Selecione a data e o turno!', 'warning');
+        if (!data) {
+            showNotification('⚠️ Selecione a data!', 'warning');
             return;
         }
 
@@ -16788,7 +16787,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         tbody.innerHTML = `
             <tr>
-                <td colspan="6" class="px-4 py-10 text-center text-gray-400">
+                <td colspan="10" class="px-4 py-10 text-center text-gray-400">
                     <i data-lucide="loader-2" class="w-10 h-10 mx-auto mb-3 animate-spin opacity-50"></i>
                     <p>Carregando dados do SYNCHRO...</p>
                 </td>
@@ -16797,32 +16796,34 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (typeof lucide !== 'undefined') lucide.createIcons();
 
         try {
-            // Buscar lançamentos de produção do dia/turno
-            const snapshot = await db.collection('production_entries')
-                .where('data', '==', data)
-                .where('turno', '==', parseInt(turno))
-                .get();
-
-            // Agrupar por máquina
+            // Buscar todos os 3 turnos
+            const turnosParaBuscar = [1, 2, 3];
+            
+            // Estrutura: { maquina: { t1: synchro, t2: synchro, t3: synchro } }
             const producaoPorMaquina = new Map();
 
-            snapshot.docs.forEach(doc => {
-                const d = doc.data();
-                const machine = d.machine || d.machine_id || d.maquina || 'N/A';
-                const quantidade = parseFloat(d.produzido || d.quantity || d.peso_liquido || 0);
+            for (const t of turnosParaBuscar) {
+                // Buscar por 'turno'
+                const snapshot = await db.collection('production_entries')
+                    .where('data', '==', data)
+                    .where('turno', '==', t)
+                    .get();
 
-                if (producaoPorMaquina.has(machine)) {
-                    producaoPorMaquina.set(machine, producaoPorMaquina.get(machine) + quantidade);
-                } else {
-                    producaoPorMaquina.set(machine, quantidade);
-                }
-            });
+                snapshot.docs.forEach(doc => {
+                    const d = doc.data();
+                    const machine = d.machine || d.machine_id || d.maquina || 'N/A';
+                    const quantidade = parseFloat(d.produzido || d.quantity || d.peso_liquido || 0);
 
-            // Se não encontrou nada, tentar buscar por shift
-            if (producaoPorMaquina.size === 0) {
+                    if (!producaoPorMaquina.has(machine)) {
+                        producaoPorMaquina.set(machine, { t1: 0, t2: 0, t3: 0 });
+                    }
+                    producaoPorMaquina.get(machine)[`t${t}`] += quantidade;
+                });
+
+                // Buscar por 'shift' também
                 const snapshotShift = await db.collection('production_entries')
                     .where('data', '==', data)
-                    .where('shift', '==', parseInt(turno))
+                    .where('shift', '==', t)
                     .get();
 
                 snapshotShift.docs.forEach(doc => {
@@ -16830,11 +16831,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     const machine = d.machine || d.machine_id || d.maquina || 'N/A';
                     const quantidade = parseFloat(d.produzido || d.quantity || d.peso_liquido || 0);
 
-                    if (producaoPorMaquina.has(machine)) {
-                        producaoPorMaquina.set(machine, producaoPorMaquina.get(machine) + quantidade);
-                    } else {
-                        producaoPorMaquina.set(machine, quantidade);
+                    if (!producaoPorMaquina.has(machine)) {
+                        producaoPorMaquina.set(machine, { t1: 0, t2: 0, t3: 0 });
                     }
+                    producaoPorMaquina.get(machine)[`t${t}`] += quantidade;
                 });
             }
 
@@ -16844,9 +16844,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             if (producaoPorMaquina.size === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="6" class="px-4 py-10 text-center text-gray-400">
+                        <td colspan="10" class="px-4 py-10 text-center text-gray-400">
                             <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
-                            <p>Nenhum lançamento encontrado para esta data/turno</p>
+                            <p>Nenhum lançamento encontrado para esta data</p>
                         </td>
                     </tr>
                 `;
@@ -16855,54 +16855,81 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 return;
             }
 
-            // Ordenar máquinas
+            // Ordenar por máquina
             const maquinasOrdenadas = Array.from(producaoPorMaquina.entries()).sort((a, b) => a[0].localeCompare(b[0]));
 
-            // Tentar carregar dados salvos anteriormente
+            // Carregar dados salvos dos 3 turnos
             let dadosSalvos = {};
             try {
-                const docId = `${data}_T${turno}`;
-                const docSalvo = await db.collection('acompanhamento_turno').doc(docId).get();
-                if (docSalvo.exists) {
-                    const saved = docSalvo.data();
-                    if (saved.registros) {
-                        saved.registros.forEach(r => {
-                            dadosSalvos[r.maquina] = { cedoc: r.cedoc, operador: r.operador };
-                        });
+                for (const t of ['1', '2', '3']) {
+                    const docId = `${data}_T${t}`;
+                    const docSalvo = await db.collection('acompanhamento_turno').doc(docId).get();
+                    if (docSalvo.exists) {
+                        const saved = docSalvo.data();
+                        if (saved.registros) {
+                            saved.registros.forEach(r => {
+                                const key = `${r.maquina}_T${t}`;
+                                dadosSalvos[key] = { cedoc: r.cedoc };
+                            });
+                        }
                     }
-                    console.log('[ACOMPANHAMENTO] Dados salvos carregados:', Object.keys(dadosSalvos).length, 'máquinas');
                 }
+                console.log('[ACOMPANHAMENTO] Dados salvos carregados:', Object.keys(dadosSalvos).length, 'registros');
             } catch (e) {
                 console.warn('[ACOMPANHAMENTO] Não foi possível carregar dados salvos:', e);
             }
 
-            maquinasOrdenadas.forEach(([maquina, synchro]) => {
-                const salvo = dadosSalvos[maquina] || {};
-                const cedocValue = salvo.cedoc || '';
-                const operadorValue = salvo.operador || '';
+            maquinasOrdenadas.forEach(([maquina, synchros]) => {
+                const salvoT1 = dadosSalvos[`${maquina}_T1`] || {};
+                const salvoT2 = dadosSalvos[`${maquina}_T2`] || {};
+                const salvoT3 = dadosSalvos[`${maquina}_T3`] || {};
                 
                 const linha = document.createElement('tr');
                 linha.className = 'hover:bg-gray-50 transition-colors';
                 linha.innerHTML = `
-                    <td class="px-4 py-3"><strong class="text-blue-600">${maquina}</strong></td>
-                    <td class="px-4 py-3"><span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-semibold">T${turno}</span></td>
-                    <td class="px-4 py-3 text-center">
-                        <input type="number" class="acompanhamento-cedoc w-24 p-2 border border-gray-200 rounded-lg text-center text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                               data-maquina="${maquina}" placeholder="0" step="1" value="${cedocValue}">
+                    <td class="px-3 py-2 border-r border-gray-200"><strong class="text-blue-600 text-sm">${maquina}</strong></td>
+                    
+                    <!-- T1 -->
+                    <td class="px-1 py-2 text-center bg-blue-50/30">
+                        <input type="number" class="acompanhamento-cedoc w-20 p-1.5 border border-gray-200 rounded text-center text-xs focus:ring-1 focus:ring-blue-500" 
+                               data-maquina="${maquina}" data-turno="1" placeholder="0" value="${salvoT1.cedoc || ''}">
                     </td>
-                    <td class="px-4 py-3 text-center">
-                        <span class="bg-green-100 text-green-700 px-3 py-1.5 rounded-lg font-semibold">${Math.round(synchro)}</span>
+                    <td class="px-1 py-2 text-center bg-blue-50/30">
+                        <span class="text-xs font-semibold acompanhamento-synchro" data-turno="1">${Math.round(synchros.t1)}</span>
                     </td>
-                    <td class="px-4 py-3 text-center acompanhamento-diferenca font-bold" data-maquina="${maquina}">0</td>
-                    <td class="px-4 py-3">
-                        <input type="text" class="acompanhamento-operador w-full p-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                               data-maquina="${maquina}" placeholder="Nome do operador" value="${operadorValue}">
+                    <td class="px-1 py-2 text-center border-r border-gray-200 bg-blue-50/30">
+                        <span class="acompanhamento-diferenca text-xs font-bold" data-maquina="${maquina}" data-turno="1">0</span>
+                    </td>
+                    
+                    <!-- T2 -->
+                    <td class="px-1 py-2 text-center bg-purple-50/30">
+                        <input type="number" class="acompanhamento-cedoc w-20 p-1.5 border border-gray-200 rounded text-center text-xs focus:ring-1 focus:ring-purple-500" 
+                               data-maquina="${maquina}" data-turno="2" placeholder="0" value="${salvoT2.cedoc || ''}">
+                    </td>
+                    <td class="px-1 py-2 text-center bg-purple-50/30">
+                        <span class="text-xs font-semibold acompanhamento-synchro" data-turno="2">${Math.round(synchros.t2)}</span>
+                    </td>
+                    <td class="px-1 py-2 text-center border-r border-gray-200 bg-purple-50/30">
+                        <span class="acompanhamento-diferenca text-xs font-bold" data-maquina="${maquina}" data-turno="2">0</span>
+                    </td>
+                    
+                    <!-- T3 -->
+                    <td class="px-1 py-2 text-center bg-orange-50/30">
+                        <input type="number" class="acompanhamento-cedoc w-20 p-1.5 border border-gray-200 rounded text-center text-xs focus:ring-1 focus:ring-orange-500" 
+                               data-maquina="${maquina}" data-turno="3" placeholder="0" value="${salvoT3.cedoc || ''}">
+                    </td>
+                    <td class="px-1 py-2 text-center bg-orange-50/30">
+                        <span class="text-xs font-semibold acompanhamento-synchro" data-turno="3">${Math.round(synchros.t3)}</span>
+                    </td>
+                    <td class="px-1 py-2 text-center bg-orange-50/30">
+                        <span class="acompanhamento-diferenca text-xs font-bold" data-maquina="${maquina}" data-turno="3">0</span>
                     </td>
                 `;
 
-                // Adicionar listener para calcular diferença
-                const cedocInput = linha.querySelector('.acompanhamento-cedoc');
-                cedocInput.addEventListener('input', calcularDiferencasAcompanhamento);
+                // Adicionar listeners para calcular diferenças
+                linha.querySelectorAll('.acompanhamento-cedoc').forEach(input => {
+                    input.addEventListener('input', calcularDiferencasAcompanhamento);
+                });
 
                 tbody.appendChild(linha);
             });
@@ -16928,49 +16955,52 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     }
 
     function calcularDiferencasAcompanhamento() {
-        let maquinasComDiferenca = 0;
+        let celulasComDiferenca = 0;
 
         document.querySelectorAll('#acompanhamento-tbody tr').forEach(row => {
-            const cedocInput = row.querySelector('.acompanhamento-cedoc');
-            const synchroSpan = row.querySelector('.bg-green-100');
-            const diferencaCell = row.querySelector('.acompanhamento-diferenca');
+            // Para cada linha, processar os 3 turnos
+            row.querySelectorAll('.acompanhamento-cedoc').forEach(cedocInput => {
+                const turno = cedocInput.dataset.turno;
+                const maquina = cedocInput.dataset.maquina;
+                
+                // Encontrar o synchro e diferença correspondentes na mesma linha
+                const synchroSpan = row.querySelector(`.acompanhamento-synchro[data-turno="${turno}"]`);
+                const diferencaCell = row.querySelector(`.acompanhamento-diferenca[data-turno="${turno}"]`);
 
-            if (cedocInput && synchroSpan && diferencaCell) {
-                const cedoc = parseFloat(cedocInput.value) || 0;
-                const synchro = parseFloat(synchroSpan.textContent) || 0;
-                const diferenca = cedoc - synchro;
+                if (cedocInput && synchroSpan && diferencaCell) {
+                    const cedoc = parseFloat(cedocInput.value) || 0;
+                    const synchro = parseFloat(synchroSpan.textContent) || 0;
+                    const diferenca = cedoc - synchro;
 
-                diferencaCell.textContent = Math.round(diferenca);
+                    diferencaCell.textContent = Math.round(diferenca);
 
-                // Resetar classes
-                diferencaCell.classList.remove('text-red-600', 'bg-red-100', 'text-yellow-600', 'bg-yellow-100', 'text-green-600', 'bg-green-100');
+                    // Resetar classes
+                    diferencaCell.classList.remove('text-red-600', 'bg-red-100', 'text-yellow-600', 'bg-yellow-100', 'text-green-600', 'bg-green-100', 'rounded', 'px-1');
 
-                if (diferenca > 0) {
-                    diferencaCell.classList.add('text-red-600', 'bg-red-100', 'rounded-lg', 'px-2', 'py-1');
-                    maquinasComDiferenca++;
-                } else if (diferenca < 0) {
-                    diferencaCell.classList.add('text-yellow-600', 'bg-yellow-100', 'rounded-lg', 'px-2', 'py-1');
-                    maquinasComDiferenca++;
-                } else if (cedoc > 0) {
-                    diferencaCell.classList.add('text-green-600', 'bg-green-100', 'rounded-lg', 'px-2', 'py-1');
+                    if (diferenca > 0) {
+                        diferencaCell.classList.add('text-red-600', 'bg-red-100', 'rounded', 'px-1');
+                        celulasComDiferenca++;
+                    } else if (diferenca < 0) {
+                        diferencaCell.classList.add('text-yellow-600', 'bg-yellow-100', 'rounded', 'px-1');
+                        celulasComDiferenca++;
+                    } else if (cedoc > 0) {
+                        diferencaCell.classList.add('text-green-600', 'bg-green-100', 'rounded', 'px-1');
+                    }
                 }
-            }
+            });
         });
 
         // Atualizar resumo
         const maquinasDiffEl = document.getElementById('acompanhamento-maquinas-diff');
         if (maquinasDiffEl) {
-            maquinasDiffEl.textContent = maquinasComDiferenca;
+            maquinasDiffEl.textContent = celulasComDiferenca;
         }
     }
 
     function limparCedocAcompanhamento() {
-        if (!confirm('⚠️ Limpar todos os valores CEDOC e operadores?')) return;
+        if (!confirm('⚠️ Limpar todos os valores CEDOC?')) return;
 
         document.querySelectorAll('.acompanhamento-cedoc').forEach(input => {
-            input.value = '';
-        });
-        document.querySelectorAll('.acompanhamento-operador').forEach(input => {
             input.value = '';
         });
         calcularDiferencasAcompanhamento();
@@ -16979,62 +17009,65 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
     async function salvarDadosAcompanhamento() {
         const data = document.getElementById('acompanhamento-data')?.value;
-        const turno = document.getElementById('acompanhamento-turno')?.value;
 
-        if (!data || !turno) {
-            showNotification('⚠️ Selecione data e turno primeiro!', 'warning');
+        if (!data) {
+            showNotification('⚠️ Selecione a data primeiro!', 'warning');
             return;
         }
 
-        const registros = [];
+        // Agrupar registros por turno
+        const registrosPorTurno = { 1: [], 2: [], 3: [] };
         let temDados = false;
 
         document.querySelectorAll('#acompanhamento-tbody tr').forEach(row => {
-            const cedocInput = row.querySelector('.acompanhamento-cedoc');
-            const operadorInput = row.querySelector('.acompanhamento-operador');
-            const synchroSpan = row.querySelector('.bg-green-100');
-            const diferencaCell = row.querySelector('.acompanhamento-diferenca');
+            // Processar cada input CEDOC da linha (3 turnos)
+            row.querySelectorAll('.acompanhamento-cedoc').forEach(cedocInput => {
+                const maquina = cedocInput.dataset.maquina;
+                const turnoLinha = parseInt(cedocInput.dataset.turno);
+                const synchroSpan = row.querySelector(`.acompanhamento-synchro[data-turno="${turnoLinha}"]`);
+                const diferencaCell = row.querySelector(`.acompanhamento-diferenca[data-turno="${turnoLinha}"]`);
 
-            if (cedocInput && cedocInput.dataset.maquina) {
                 const cedoc = parseFloat(cedocInput.value) || 0;
                 const synchro = parseFloat(synchroSpan?.textContent) || 0;
                 const diferenca = parseFloat(diferencaCell?.textContent) || 0;
-                const operador = operadorInput?.value?.trim() || '';
 
-                if (cedoc > 0 || operador) {
+                if (cedoc > 0) {
                     temDados = true;
                 }
 
-                registros.push({
-                    maquina: cedocInput.dataset.maquina,
+                registrosPorTurno[turnoLinha].push({
+                    maquina: maquina,
                     cedoc: cedoc,
                     synchro: synchro,
-                    diferenca: diferenca,
-                    operador: operador
+                    diferenca: diferenca
                 });
-            }
+            });
         });
 
         if (!temDados) {
-            showNotification('⚠️ Preencha ao menos um valor CEDOC ou operador!', 'warning');
+            showNotification('⚠️ Preencha ao menos um valor CEDOC!', 'warning');
             return;
         }
 
         try {
-            const docId = `${data}_T${turno}`;
             const usuario = window.authSystem?.getCurrentUser()?.name || 'Desconhecido';
 
-            await db.collection('acompanhamento_turno').doc(docId).set({
-                data: data,
-                turno: parseInt(turno),
-                registros: registros,
-                salvoEm: firebase.firestore.FieldValue.serverTimestamp(),
-                salvoEmLocal: new Date().toLocaleString('pt-BR'),
-                usuario: usuario
-            }, { merge: true });
-
+            // Salvar cada turno separadamente
+            for (const t of [1, 2, 3]) {
+                if (registrosPorTurno[t].length > 0) {
+                    const docId = `${data}_T${t}`;
+                    await db.collection('acompanhamento_turno').doc(docId).set({
+                        data: data,
+                        turno: t,
+                        registros: registrosPorTurno[t],
+                        salvoEm: firebase.firestore.FieldValue.serverTimestamp(),
+                        salvoEmLocal: new Date().toLocaleString('pt-BR'),
+                        usuario: usuario
+                    }, { merge: true });
+                }
+            }
             showNotification('✅ Acompanhamento salvo com sucesso!', 'success');
-            console.log('[ACOMPANHAMENTO] Dados salvos:', docId, registros.length, 'registros');
+            console.log('[ACOMPANHAMENTO] Dados salvos para todos os turnos');
 
         } catch (error) {
             console.error('[ACOMPANHAMENTO] Erro ao salvar:', error);
