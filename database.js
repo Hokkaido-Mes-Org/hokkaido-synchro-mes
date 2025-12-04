@@ -254,9 +254,11 @@ const productDatabase = [
     { "cod": 5802, "client": "SUNVISOR", "name": "BASE TRIANGULAR - KG 3 REC", "cavities": 1, "cycle": 60, "weight": 1.25, "pieces_per_hour_goal": 60, "mp": "" },
     { "cod": 5803, "client": "SUNVISOR", "name": "FIXADOR FUNDO FECHADO 6M SEM FURO - KG 4A REC", "cavities": 1, "cycle": 60, "weight": 1.25, "pieces_per_hour_goal": 60, "mp": "" },
     { "cod": 5805, "client": "SUNVISOR", "name": "CORREDICA FUNDO VAZADO 6M SEM FURO - KG 4B REC", "cavities": 1, "cycle": 60, "weight": 1.25, "pieces_per_hour_goal": 60, "mp": "" },
+    { "cod": 1912, "client": "PARKER", "name": "SUPORTE PLÁSTICO", "cavities": 2, "cycle": 30.41, "weight": 48, "pieces_per_hour_goal": 236, "mp": "" },
 
     // --- NOVO PRODUTO ---
-    { "cod": 5048, "client": "OUTROS", "name": "BASE CASSETE MONTADA - 510080655PLP", "cavities": 1, "cycle": 40, "weight": 0, "pieces_per_hour_goal": 90, "mp": "" }
+    { "cod": 5048, "client": "OUTROS", "name": "BASE CASSETE MONTADA - 510080655PLP", "cavities": 1, "cycle": 40, "weight": 0, "pieces_per_hour_goal": 90, "mp": "" },
+    { "cod": 5050, "client": "OUTROS", "name": "TAMPA CASSETE", "cavities": 1, "cycle": 40, "weight": 20, "pieces_per_hour_goal": 90, "mp": "" }
 ];
 
 // Catálogo de máquinas (fonte única para app)
@@ -337,7 +339,7 @@ const groupedLossReasons = {
 // Motivos de parada (agrupados)
 const groupedDowntimeReasons = {
     "FERRAMENTARIA": ["CORRETIVA DE MOLDE", "PREVENTIVA DE MOLDE", "TROCA DE VERSÃO"],
-    "PROCESSO": ["ABERTURA DE CAVIDADE", "AJUSTE DE PROCESSO", "TRY OUT"],
+    "PROCESSO": ["ABERTURA DE CAVIDADE", "AJUSTE DE PROCESSO", "FECHAMENTO DE CAVIDADE", "TRY OUT"],
     "COMPRAS": ["FALTA DE INSUMO PLANEJADA", "FALTA DE INSUMO NÃO PLANEJADA"],
     "PREPARAÇÃO": ["AGUARDANDO PREPARAÇÃO DE MATERIAL"],
     "QUALIDADE": ["AGUARDANDO CLIENTE/FORNECEDOR", "LIBERAÇÃO"],

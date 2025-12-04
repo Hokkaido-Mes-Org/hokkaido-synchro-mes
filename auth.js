@@ -147,6 +147,14 @@ class AuthSystem {
             return false;
         }
         
+        // ⚙️ ACESSO EXCLUSIVO: Aba Acompanhamento apenas para usuários específicos
+        if (tabName === 'acompanhamento') {
+            const allowedUsers = ['Leandro Camargo', 'Michelle Benjamin', 'Tiago Oliveira', 'Davi Batista', 'Luciano'];
+            if (!allowedUsers.includes(this.currentUser.name)) {
+                return false;
+            }
+        }
+        
         const tabPermissions = {
             planejamento: ['planejamento', 'lancamento'], // Operadores também acessam
             ordens: ['planejamento', 'lancamento'],
@@ -156,7 +164,8 @@ class AuthSystem {
             processo: ['analise', 'lancamento'], // Restrito a Leandro acima
             relatorios: ['analise', 'planejamento', 'lancamento'], // Gestores + Leandro
             ajustes: ['planejamento', 'lancamento', 'analise'], // Gestores + Leandro
-            'paradas-longas': ['lancamento', 'planejamento', 'analise']
+            'paradas-longas': ['lancamento', 'planejamento', 'analise'],
+            'acompanhamento': ['lancamento', 'analise'] // Restrito a Leandro e Michelle acima
         };
         
         const requiredPermissions = tabPermissions[tabName];

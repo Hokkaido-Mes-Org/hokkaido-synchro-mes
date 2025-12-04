@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acompanhamento de Turno - Syncrho MES</title>
+    <link rel="icon" href="https://i.postimg.cc/B6w5mWry/Design-sem-nome-3.png" type="image/png">
+    
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary-blue': '#0077C2',
+                        'text-dark': '#1F2937',
+                        'background-light': '#F9FAFB',
+                        'accent-1': '#4F46E5',
+                        'accent-2': '#10B981',
+                        'status-success': '#16A34A',
+                        'status-warning': '#F59E0B',
+                        'status-error': '#DC2626',
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F9FAFB;
+            min-height: 100vh;
+        }
+
+        /* Header com grid pattern */
+        .header-gradient {
+            background: linear-gradient(135deg, #0077C2 0%, #4F46E5 100%);
+            background-image: 
+                linear-gradient(135deg, #0077C2 0%, #4F46E5 100%),
+                linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+            background-size: 100% 100%, 32px 32px, 32px 32px;
+        }
+
+        /* Card moderno */
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+            border: 1px solid #E5E7EB;
+        }
+
+        /* Tabela moderna */
+        .table-modern {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+
+        .table-modern thead th {
+            background: linear-gradient(135deg, #0077C2 0%, #4F46E5 100%);
+            color: white;
+            padding: 14px 16px;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            text-align: left;
+        }
+
+        .table-modern thead th:first-child {
+            border-radius: 8px 0 0 0;
+        }
+
+        .table-modern thead th:last-child {
+            border-radius: 0 8px 0 0;
+        }
+
+        .table-modern tbody tr {
+            transition: all 0.2s ease;
+        }
+
+        .table-modern tbody tr:hover {
+            background-color: #F3F4F6;
+        }
+
+        .table-modern tbody td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #E5E7EB;
+            font-size: 14px;
+            color: #374151;
+        }
+
+        .table-modern tbody tr:last-child td:first-child {
+            border-radius: 0 0 0 8px;
+        }
+
+        .table-modern tbody tr:last-child td:last-child {
+            border-radius: 0 0 8px 0;
+        }
+
+        /* Inputs modernos */
+        .input-modern {
+            width: 100%;
+            padding: 10px 14px;
+            border: 2px solid #E5E7EB;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            background: white;
+        }
+
+        .input-modern:focus {
+            outline: none;
+            border-color: #0077C2;
+            box-shadow: 0 0 0 3px rgba(0, 119, 194, 0.1);
+        }
+
+        .input-modern:disabled {
+            background: #F3F4F6;
+            cursor: not-allowed;
+        }
+
+        /* Valores SYNCHRO */
+        .synchro-value {
+            background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
+            color: #065F46;
+            font-weight: 600;
+            text-align: center;
+            padding: 10px !important;
+            border-radius: 6px;
+        }
+
+        /* Diferenças */
+        .diferenca-positiva {
+            background: linear-gradient(135deg, #FEF2F2 0%, #FECACA 100%) !important;
+            color: #991B1B !important;
+            font-weight: 700;
+            text-align: center;
+            border-radius: 6px;
+        }
+
+        .diferenca-negativa {
+            background: linear-gradient(135deg, #FFFBEB 0%, #FDE68A 100%) !important;
+            color: #92400E !important;
+            font-weight: 700;
+            text-align: center;
+            border-radius: 6px;
+        }
+
+        .diferenca-ok {
+            background: linear-gradient(135deg, #ECFDF5 0%, #A7F3D0 100%) !important;
+            color: #065F46 !important;
+            font-weight: 700;
+            text-align: center;
+            border-radius: 6px;
+        }
+
+        /* Botões modernos */
+        .btn-primary {
+            background: linear-gradient(135deg, #0077C2 0%, #4F46E5 100%);
+            color: white;
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 119, 194, 0.3);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+        }
+
+        .btn-success:hover {
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+        }
+
+        .btn-danger:hover {
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-outline {
+            background: white;
+            color: #374151;
+            border: 2px solid #E5E7EB;
+        }
+
+        .btn-outline:hover {
+            background: #F3F4F6;
+            border-color: #D1D5DB;
+            box-shadow: none;
+        }
+
+        /* Status badge */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-connected {
+            background: #D1FAE5;
+            color: #065F46;
+        }
+
+        .status-disconnected {
+            background: #FEE2E2;
+            color: #991B1B;
+        }
+
+        .status-loading {
+            background: #DBEAFE;
+            color: #1E40AF;
+        }
+
+        /* Card de resumo */
+        .resumo-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #E5E7EB;
+            border-left: 4px solid #DC2626;
+            transition: all 0.2s ease;
+        }
+
+        .resumo-card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .resumo-card .label {
+            font-size: 12px;
+            color: #6B7280;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .resumo-card .valor {
+            font-size: 32px;
+            font-weight: 700;
+            color: #DC2626;
+            margin-top: 4px;
+        }
+
+        /* Loading animation */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #9CA3AF;
+        }
+
+        .empty-state i {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .table-modern thead th,
+            .table-modern tbody td {
+                padding: 10px 8px;
+                font-size: 12px;
+            }
+
+            .input-modern {
+                padding: 8px 10px;
+                font-size: 13px;
+            }
+        }
+
+        @media print {
+            body { background: white; }
+            .no-print { display: none !important; }
+            .card { box-shadow: none; border: 1px solid #ccc; }
+        }
+    </style>
+</head>
+<body class="bg-background-light">
+    
+    <!-- Header -->
+    <header class="header-gradient text-white py-6 px-4 md:px-8">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                        <i data-lucide="clipboard-check" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl md:text-3xl font-bold">Acompanhamento de Turno</h1>
+                        <p class="text-white/80 text-sm mt-1">Validação CEDOC vs SYNCHRO</p>
+                    </div>
+                </div>
+                <div id="firebase-status" class="status-badge status-loading no-print">
+                    <i data-lucide="loader" class="w-4 h-4 animate-spin"></i>
+                    <span>Conectando...</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 md:px-8 py-6">
+        
+        <!-- Filtros -->
+        <div class="card p-6 mb-6 no-print">
+            <div class="flex flex-wrap items-end gap-4">
+                <div class="flex-1 min-w-[150px]">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i data-lucide="calendar" class="w-4 h-4 inline mr-1"></i>
+                        Data
+                    </label>
+                    <input type="date" id="data" class="input-modern">
+                </div>
+                <div class="flex-1 min-w-[150px]">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i data-lucide="clock" class="w-4 h-4 inline mr-1"></i>
+                        Turno
+                    </label>
+                    <select id="turno" class="input-modern">
+                        <option value="">-- Selecione --</option>
+                        <option value="1">T1 (07h - 15h)</option>
+                        <option value="2">T2 (15h - 23h)</option>
+                        <option value="3">T3 (23h - 07h)</option>
+                    </select>
+                </div>
+                <button class="btn-primary btn-success" id="btn-carregar" onclick="carregarDados()">
+                    <i data-lucide="search" class="w-4 h-4"></i>
+                    Carregar Dados
+                </button>
+            </div>
+        </div>
+
+        <!-- Resumo -->
+        <div class="mb-6" id="resumo" style="display: none;">
+            <div class="resumo-card">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
+                        <i data-lucide="alert-triangle" class="w-6 h-6 text-red-600"></i>
+                    </div>
+                    <div>
+                        <div class="label">Máquinas com Diferença</div>
+                        <div class="valor" id="maquinas-diferenca">0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabela -->
+        <div class="card overflow-hidden mb-6">
+            <div class="p-4 border-b border-gray-200 bg-gray-50">
+                <h2 class="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                    <i data-lucide="factory" class="w-5 h-5 text-primary-blue"></i>
+                    Acompanhamento por Máquina
+                </h2>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="table-modern" id="tabelaDados">
+                    <thead>
+                        <tr>
+                            <th>Máquina</th>
+                            <th>Turno</th>
+                            <th>CEDOC (Manual)</th>
+                            <th>SYNCHRO (Sistema)</th>
+                            <th>Diferença</th>
+                            <th>Operador</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody">
+                        <tr>
+                            <td colspan="6">
+                                <div class="empty-state">
+                                    <i data-lucide="database" class="w-16 h-16 mx-auto text-gray-300"></i>
+                                    <p class="text-gray-500 mt-4">Selecione a data e turno e clique em <strong>"Carregar Dados"</strong></p>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Ações -->
+        <div class="flex justify-end gap-3 no-print">
+            <button class="btn-primary btn-outline" onclick="window.print()">
+                <i data-lucide="printer" class="w-4 h-4"></i>
+                Imprimir
+            </button>
+            <button class="btn-primary btn-danger" onclick="limparCedoc()">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                Limpar CEDOC
+            </button>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center py-4 text-gray-400 text-sm">
+        Syncrho MES v2.0 - Industry 4.0 Manufacturing Execution System
+    </footer>
+
+    <script>
+        // Firebase Config
+        const firebaseConfig = {
+            apiKey: "AIzaSyB1YrMK07_7QROsCJQqE0MFsmJncfjphmI",
+            authDomain: "hokkaido-synchro.firebaseapp.com",
+            projectId: "hokkaido-synchro",
+            storageBucket: "hokkaido-synchro.firebasestorage.app",
+            messagingSenderId: "635645564631",
+            appId: "1:635645564631:web:1e19be7957e39d1adc8292"
+        };
+
+        let db;
+        const STORAGE_KEY = 'acompanhamento_turno_cedoc';
+
+        // Inicializar Firebase
+        function initFirebase() {
+            try {
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(firebaseConfig);
+                }
+                db = firebase.firestore();
+                updateStatus('connected', '✓ Conectado');
+            } catch (error) {
+                console.error('Erro ao conectar Firebase:', error);
+                updateStatus('disconnected', '✗ Erro de conexão');
+            }
+        }
+
+        function updateStatus(type, text) {
+            const el = document.getElementById('firebase-status');
+            el.className = `status-badge status-${type} no-print`;
+            el.innerHTML = `<span>${text}</span>`;
+        }
+
+        // Data padrão = hoje
+        window.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('data').valueAsDate = new Date();
+            initFirebase();
+            lucide.createIcons();
+        });
+
+        // Carregar dados do Firebase
+        async function carregarDados() {
+            const data = document.getElementById('data').value;
+            const turno = document.getElementById('turno').value;
+
+            if (!data || !turno) {
+                alert('⚠️ Selecione a data e o turno!');
+                return;
+            }
+
+            const tbody = document.getElementById('tbody');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6">
+                        <div class="empty-state">
+                            <div class="loading-spinner" style="border-color: #0077C2; border-top-color: transparent; width: 40px; height: 40px; margin: 0 auto;"></div>
+                            <p class="text-gray-500 mt-4">Carregando dados do SYNCHRO...</p>
+                        </div>
+                    </td>
+                </tr>
+            `;
+
+            try {
+                // Buscar lançamentos de produção do dia/turno
+                const snapshot = await db.collection('production_entries')
+                    .where('data', '==', data)
+                    .where('turno', '==', parseInt(turno))
+                    .get();
+
+                // Agrupar por máquina
+                const producaoPorMaquina = new Map();
+
+                snapshot.docs.forEach(doc => {
+                    const d = doc.data();
+                    const machine = d.machine || d.machine_id || d.maquina || 'N/A';
+                    const quantidade = parseFloat(d.produzido || d.quantity || d.peso_liquido || 0);
+
+                    if (producaoPorMaquina.has(machine)) {
+                        producaoPorMaquina.set(machine, producaoPorMaquina.get(machine) + quantidade);
+                    } else {
+                        producaoPorMaquina.set(machine, quantidade);
+                    }
+                });
+
+                // Se não encontrou nada, tentar buscar por shift
+                if (producaoPorMaquina.size === 0) {
+                    const snapshotShift = await db.collection('production_entries')
+                        .where('data', '==', data)
+                        .where('shift', '==', parseInt(turno))
+                        .get();
+
+                    snapshotShift.docs.forEach(doc => {
+                        const d = doc.data();
+                        const machine = d.machine || d.machine_id || d.maquina || 'N/A';
+                        const quantidade = parseFloat(d.produzido || d.quantity || d.peso_liquido || 0);
+
+                        if (producaoPorMaquina.has(machine)) {
+                            producaoPorMaquina.set(machine, producaoPorMaquina.get(machine) + quantidade);
+                        } else {
+                            producaoPorMaquina.set(machine, quantidade);
+                        }
+                    });
+                }
+
+                // Carregar dados salvos anteriormente
+                const dadosSalvos = carregarDadosSalvos(data, turno);
+
+                // Renderizar tabela
+                tbody.innerHTML = '';
+
+                if (producaoPorMaquina.size === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="6">
+                                <div class="empty-state">
+                                    <i data-lucide="inbox" class="w-16 h-16 mx-auto text-gray-300"></i>
+                                    <p class="text-gray-500 mt-4">Nenhum lançamento encontrado para esta data/turno</p>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                    document.getElementById('resumo').style.display = 'none';
+                    lucide.createIcons();
+                    return;
+                }
+
+                // Ordenar máquinas
+                const maquinasOrdenadas = Array.from(producaoPorMaquina.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+                maquinasOrdenadas.forEach(([maquina, synchro]) => {
+                    const cedocValor = dadosSalvos.cedoc?.[maquina] || '';
+                    const operadorValor = dadosSalvos.operadores?.[maquina] || '';
+                    const linha = document.createElement('tr');
+                    linha.innerHTML = `
+                        <td><strong class="text-primary-blue">${maquina}</strong></td>
+                        <td><span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-semibold">T${turno}</span></td>
+                        <td><input type="number" class="input-modern cedoc text-center" data-maquina="${maquina}" value="${cedocValor}" placeholder="0" step="1"></td>
+                        <td class="synchro-value">${Math.round(synchro)}</td>
+                        <td class="diferenca text-center font-bold" data-maquina="${maquina}">0.00</td>
+                        <td><input type="text" class="input-modern operador" data-maquina="${maquina}" value="${operadorValor}" placeholder="Nome do operador"></td>
+                    `;
+
+                    linha.querySelector('.cedoc').addEventListener('input', calcularDiferencas);
+                    tbody.appendChild(linha);
+                });
+
+                document.getElementById('resumo').style.display = 'block';
+                calcularDiferencas();
+                lucide.createIcons();
+
+            } catch (error) {
+                console.error('Erro ao carregar dados:', error);
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6">
+                            <div class="empty-state">
+                                <i data-lucide="alert-circle" class="w-16 h-16 mx-auto text-red-300"></i>
+                                <p class="text-red-500 mt-4">Erro ao carregar: ${error.message}</p>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                lucide.createIcons();
+            }
+        }
+
+        // Calcular diferenças
+        function calcularDiferencas() {
+            let maquinasComDiferenca = 0;
+
+            document.querySelectorAll('#tbody tr').forEach(row => {
+                const cedocInput = row.querySelector('.cedoc');
+                const synchroCell = row.querySelector('.synchro-value');
+                const diferencaCell = row.querySelector('.diferenca');
+
+                if (cedocInput && synchroCell && diferencaCell) {
+                    const cedoc = parseFloat(cedocInput.value) || 0;
+                    const synchro = parseFloat(synchroCell.textContent) || 0;
+                    const diferenca = cedoc - synchro;
+
+                    diferencaCell.textContent = Math.round(diferenca);
+
+                    // Colorir diferença
+                    diferencaCell.classList.remove('diferenca-positiva', 'diferenca-negativa', 'diferenca-ok');
+                    if (diferenca > 0) {
+                        diferencaCell.classList.add('diferenca-positiva');
+                        maquinasComDiferenca++;
+                    } else if (diferenca < 0) {
+                        diferencaCell.classList.add('diferenca-negativa');
+                        maquinasComDiferenca++;
+                    } else if (cedoc > 0) {
+                        diferencaCell.classList.add('diferenca-ok');
+                    }
+                }
+            });
+
+            // Atualizar resumo
+            document.getElementById('maquinas-diferenca').textContent = maquinasComDiferenca;
+        }
+
+        // Salvar dados no localStorage
+        function salvarDados() {
+            const data = document.getElementById('data').value;
+            const turno = document.getElementById('turno').value;
+            const lider = document.getElementById('lider').value;
+
+            if (!data || !turno) {
+                alert('⚠️ Selecione data e turno!');
+                return;
+            }
+
+            const cedocData = {};
+            const operadoresData = {};
+            
+            document.querySelectorAll('.cedoc').forEach(input => {
+                const maquina = input.dataset.maquina;
+                const valor = parseFloat(input.value) || 0;
+                if (valor > 0) {
+                    cedocData[maquina] = valor;
+                }
+            });
+
+            document.querySelectorAll('.operador').forEach(input => {
+                const maquina = input.dataset.maquina;
+                const valor = input.value.trim();
+                if (valor) {
+                    operadoresData[maquina] = valor;
+                }
+            });
+
+            const chave = `${STORAGE_KEY}_${data}_${turno}`;
+            const dados = {
+                data,
+                turno,
+                lider,
+                cedoc: cedocData,
+                operadores: operadoresData,
+                salvoEm: new Date().toLocaleString('pt-BR')
+            };
+
+            localStorage.setItem(chave, JSON.stringify(dados));
+            alert('✅ Dados salvos com sucesso!');
+        }
+
+        // Carregar dados salvos do localStorage
+        function carregarDadosSalvos(data, turno) {
+            const chave = `${STORAGE_KEY}_${data}_${turno}`;
+            const dados = localStorage.getItem(chave);
+            if (dados) {
+                const parsed = JSON.parse(dados);
+                document.getElementById('lider').value = parsed.lider || '';
+                return parsed;
+            }
+            return { cedoc: {}, operadores: {} };
+        }
+
+        // Limpar CEDOC
+        function limparCedoc() {
+            if (confirm('⚠️ Limpar todos os valores CEDOC e operadores?')) {
+                document.querySelectorAll('.cedoc').forEach(input => {
+                    input.value = '';
+                });
+                document.querySelectorAll('.operador').forEach(input => {
+                    input.value = '';
+                });
+                calcularDiferencas();
+            }
+        }
+    </script>
+</body>
+</html>

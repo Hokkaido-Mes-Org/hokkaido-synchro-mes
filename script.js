@@ -9557,6 +9557,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             loadExtendedDowntimeList();
         }
 
+        if (page === 'acompanhamento') {
+            setupAcompanhamentoTurno();
+        }
+
         if (page === 'qualidade') {
             // Página em construção - apenas renderizar ícones
             if (typeof lucide !== 'undefined') {
@@ -16714,6 +16718,330 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             dateEnd.addEventListener('change', updateDuration);
         }
     }
+
+    // ==================== ACOMPANHAMENTO DE TURNO ====================
+    let acompanhamentoInitialized = false;
+
+    function setupAcompanhamentoTurno() {
+        if (acompanhamentoInitialized) return;
+        acompanhamentoInitialized = true;
+
+        console.log('[ACOMPANHAMENTO] Inicializando aba de acompanhamento de turno...');
+
+        // Definir data padrão = hoje
+        const dataInput = document.getElementById('acompanhamento-data');
+        if (dataInput && !dataInput.value) {
+            dataInput.value = getProductionDateString();
+        }
+
+        // Atualizar status de conexão
+        const statusEl = document.getElementById('acompanhamento-status');
+        if (statusEl && db) {
+            statusEl.textContent = '✅ Conectado';
+            statusEl.classList.remove('text-blue-600', 'bg-blue-100');
+            statusEl.classList.add('text-green-600', 'bg-green-100');
+        }
+
+        // Event listeners
+        const btnCarregar = document.getElementById('acompanhamento-carregar');
+        const btnLimpar = document.getElementById('acompanhamento-limpar');
+        const btnImprimir = document.getElementById('acompanhamento-imprimir');
+
+        if (btnCarregar && !btnCarregar.dataset.listenerAttached) {
+            btnCarregar.addEventListener('click', carregarDadosAcompanhamento);
+            btnCarregar.dataset.listenerAttached = 'true';
+        }
+
+        if (btnLimpar && !btnLimpar.dataset.listenerAttached) {
+            btnLimpar.addEventListener('click', limparCedocAcompanhamento);
+            btnLimpar.dataset.listenerAttached = 'true';
+        }
+
+        if (btnImprimir && !btnImprimir.dataset.listenerAttached) {
+            btnImprimir.addEventListener('click', () => window.print());
+            btnImprimir.dataset.listenerAttached = 'true';
+        }
+
+        const btnSalvar = document.getElementById('acompanhamento-salvar');
+        if (btnSalvar && !btnSalvar.dataset.listenerAttached) {
+            btnSalvar.addEventListener('click', salvarDadosAcompanhamento);
+            btnSalvar.dataset.listenerAttached = 'true';
+        }
+
+        // Renderizar ícones Lucide
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+
+    async function carregarDadosAcompanhamento() {
+        const data = document.getElementById('acompanhamento-data')?.value;
+        const turno = document.getElementById('acompanhamento-turno')?.value;
+
+        if (!data || !turno) {
+            showNotification('⚠️ Selecione a data e o turno!', 'warning');
+            return;
+        }
+
+        const tbody = document.getElementById('acompanhamento-tbody');
+        if (!tbody) return;
+
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="px-4 py-10 text-center text-gray-400">
+                    <i data-lucide="loader-2" class="w-10 h-10 mx-auto mb-3 animate-spin opacity-50"></i>
+                    <p>Carregando dados do SYNCHRO...</p>
+                </td>
+            </tr>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+
+        try {
+            // Buscar lançamentos de produção do dia/turno
+            const snapshot = await db.collection('production_entries')
+                .where('data', '==', data)
+                .where('turno', '==', parseInt(turno))
+                .get();
+
+            // Agrupar por máquina
+            const producaoPorMaquina = new Map();
+
+            snapshot.docs.forEach(doc => {
+                const d = doc.data();
+                const machine = d.machine || d.machine_id || d.maquina || 'N/A';
+                const quantidade = parseFloat(d.produzido || d.quantity || d.peso_liquido || 0);
+
+                if (producaoPorMaquina.has(machine)) {
+                    producaoPorMaquina.set(machine, producaoPorMaquina.get(machine) + quantidade);
+                } else {
+                    producaoPorMaquina.set(machine, quantidade);
+                }
+            });
+
+            // Se não encontrou nada, tentar buscar por shift
+            if (producaoPorMaquina.size === 0) {
+                const snapshotShift = await db.collection('production_entries')
+                    .where('data', '==', data)
+                    .where('shift', '==', parseInt(turno))
+                    .get();
+
+                snapshotShift.docs.forEach(doc => {
+                    const d = doc.data();
+                    const machine = d.machine || d.machine_id || d.maquina || 'N/A';
+                    const quantidade = parseFloat(d.produzido || d.quantity || d.peso_liquido || 0);
+
+                    if (producaoPorMaquina.has(machine)) {
+                        producaoPorMaquina.set(machine, producaoPorMaquina.get(machine) + quantidade);
+                    } else {
+                        producaoPorMaquina.set(machine, quantidade);
+                    }
+                });
+            }
+
+            // Renderizar tabela
+            tbody.innerHTML = '';
+
+            if (producaoPorMaquina.size === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="px-4 py-10 text-center text-gray-400">
+                            <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
+                            <p>Nenhum lançamento encontrado para esta data/turno</p>
+                        </td>
+                    </tr>
+                `;
+                document.getElementById('acompanhamento-resumo')?.classList.add('hidden');
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+                return;
+            }
+
+            // Ordenar máquinas
+            const maquinasOrdenadas = Array.from(producaoPorMaquina.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+            // Tentar carregar dados salvos anteriormente
+            let dadosSalvos = {};
+            try {
+                const docId = `${data}_T${turno}`;
+                const docSalvo = await db.collection('acompanhamento_turno').doc(docId).get();
+                if (docSalvo.exists) {
+                    const saved = docSalvo.data();
+                    if (saved.registros) {
+                        saved.registros.forEach(r => {
+                            dadosSalvos[r.maquina] = { cedoc: r.cedoc, operador: r.operador };
+                        });
+                    }
+                    console.log('[ACOMPANHAMENTO] Dados salvos carregados:', Object.keys(dadosSalvos).length, 'máquinas');
+                }
+            } catch (e) {
+                console.warn('[ACOMPANHAMENTO] Não foi possível carregar dados salvos:', e);
+            }
+
+            maquinasOrdenadas.forEach(([maquina, synchro]) => {
+                const salvo = dadosSalvos[maquina] || {};
+                const cedocValue = salvo.cedoc || '';
+                const operadorValue = salvo.operador || '';
+                
+                const linha = document.createElement('tr');
+                linha.className = 'hover:bg-gray-50 transition-colors';
+                linha.innerHTML = `
+                    <td class="px-4 py-3"><strong class="text-blue-600">${maquina}</strong></td>
+                    <td class="px-4 py-3"><span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-semibold">T${turno}</span></td>
+                    <td class="px-4 py-3 text-center">
+                        <input type="number" class="acompanhamento-cedoc w-24 p-2 border border-gray-200 rounded-lg text-center text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                               data-maquina="${maquina}" placeholder="0" step="1" value="${cedocValue}">
+                    </td>
+                    <td class="px-4 py-3 text-center">
+                        <span class="bg-green-100 text-green-700 px-3 py-1.5 rounded-lg font-semibold">${Math.round(synchro)}</span>
+                    </td>
+                    <td class="px-4 py-3 text-center acompanhamento-diferenca font-bold" data-maquina="${maquina}">0</td>
+                    <td class="px-4 py-3">
+                        <input type="text" class="acompanhamento-operador w-full p-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                               data-maquina="${maquina}" placeholder="Nome do operador" value="${operadorValue}">
+                    </td>
+                `;
+
+                // Adicionar listener para calcular diferença
+                const cedocInput = linha.querySelector('.acompanhamento-cedoc');
+                cedocInput.addEventListener('input', calcularDiferencasAcompanhamento);
+
+                tbody.appendChild(linha);
+            });
+
+            document.getElementById('acompanhamento-resumo')?.classList.remove('hidden');
+            calcularDiferencasAcompanhamento();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+            console.log('[ACOMPANHAMENTO] Dados carregados:', producaoPorMaquina.size, 'máquinas');
+
+        } catch (error) {
+            console.error('[ACOMPANHAMENTO] Erro ao carregar dados:', error);
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="px-4 py-10 text-center text-red-400">
+                        <i data-lucide="alert-circle" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
+                        <p>Erro ao carregar: ${error.message}</p>
+                    </td>
+                </tr>
+            `;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+    }
+
+    function calcularDiferencasAcompanhamento() {
+        let maquinasComDiferenca = 0;
+
+        document.querySelectorAll('#acompanhamento-tbody tr').forEach(row => {
+            const cedocInput = row.querySelector('.acompanhamento-cedoc');
+            const synchroSpan = row.querySelector('.bg-green-100');
+            const diferencaCell = row.querySelector('.acompanhamento-diferenca');
+
+            if (cedocInput && synchroSpan && diferencaCell) {
+                const cedoc = parseFloat(cedocInput.value) || 0;
+                const synchro = parseFloat(synchroSpan.textContent) || 0;
+                const diferenca = cedoc - synchro;
+
+                diferencaCell.textContent = Math.round(diferenca);
+
+                // Resetar classes
+                diferencaCell.classList.remove('text-red-600', 'bg-red-100', 'text-yellow-600', 'bg-yellow-100', 'text-green-600', 'bg-green-100');
+
+                if (diferenca > 0) {
+                    diferencaCell.classList.add('text-red-600', 'bg-red-100', 'rounded-lg', 'px-2', 'py-1');
+                    maquinasComDiferenca++;
+                } else if (diferenca < 0) {
+                    diferencaCell.classList.add('text-yellow-600', 'bg-yellow-100', 'rounded-lg', 'px-2', 'py-1');
+                    maquinasComDiferenca++;
+                } else if (cedoc > 0) {
+                    diferencaCell.classList.add('text-green-600', 'bg-green-100', 'rounded-lg', 'px-2', 'py-1');
+                }
+            }
+        });
+
+        // Atualizar resumo
+        const maquinasDiffEl = document.getElementById('acompanhamento-maquinas-diff');
+        if (maquinasDiffEl) {
+            maquinasDiffEl.textContent = maquinasComDiferenca;
+        }
+    }
+
+    function limparCedocAcompanhamento() {
+        if (!confirm('⚠️ Limpar todos os valores CEDOC e operadores?')) return;
+
+        document.querySelectorAll('.acompanhamento-cedoc').forEach(input => {
+            input.value = '';
+        });
+        document.querySelectorAll('.acompanhamento-operador').forEach(input => {
+            input.value = '';
+        });
+        calcularDiferencasAcompanhamento();
+        showNotification('✅ Campos limpos!', 'success');
+    }
+
+    async function salvarDadosAcompanhamento() {
+        const data = document.getElementById('acompanhamento-data')?.value;
+        const turno = document.getElementById('acompanhamento-turno')?.value;
+
+        if (!data || !turno) {
+            showNotification('⚠️ Selecione data e turno primeiro!', 'warning');
+            return;
+        }
+
+        const registros = [];
+        let temDados = false;
+
+        document.querySelectorAll('#acompanhamento-tbody tr').forEach(row => {
+            const cedocInput = row.querySelector('.acompanhamento-cedoc');
+            const operadorInput = row.querySelector('.acompanhamento-operador');
+            const synchroSpan = row.querySelector('.bg-green-100');
+            const diferencaCell = row.querySelector('.acompanhamento-diferenca');
+
+            if (cedocInput && cedocInput.dataset.maquina) {
+                const cedoc = parseFloat(cedocInput.value) || 0;
+                const synchro = parseFloat(synchroSpan?.textContent) || 0;
+                const diferenca = parseFloat(diferencaCell?.textContent) || 0;
+                const operador = operadorInput?.value?.trim() || '';
+
+                if (cedoc > 0 || operador) {
+                    temDados = true;
+                }
+
+                registros.push({
+                    maquina: cedocInput.dataset.maquina,
+                    cedoc: cedoc,
+                    synchro: synchro,
+                    diferenca: diferenca,
+                    operador: operador
+                });
+            }
+        });
+
+        if (!temDados) {
+            showNotification('⚠️ Preencha ao menos um valor CEDOC ou operador!', 'warning');
+            return;
+        }
+
+        try {
+            const docId = `${data}_T${turno}`;
+            const usuario = window.authSystem?.getCurrentUser()?.name || 'Desconhecido';
+
+            await db.collection('acompanhamento_turno').doc(docId).set({
+                data: data,
+                turno: parseInt(turno),
+                registros: registros,
+                salvoEm: firebase.firestore.FieldValue.serverTimestamp(),
+                salvoEmLocal: new Date().toLocaleString('pt-BR'),
+                usuario: usuario
+            }, { merge: true });
+
+            showNotification('✅ Acompanhamento salvo com sucesso!', 'success');
+            console.log('[ACOMPANHAMENTO] Dados salvos:', docId, registros.length, 'registros');
+
+        } catch (error) {
+            console.error('[ACOMPANHAMENTO] Erro ao salvar:', error);
+            showNotification('❌ Erro ao salvar: ' + error.message, 'error');
+        }
+    }
+    // ==================== FIM ACOMPANHAMENTO DE TURNO ====================
 
     function openExtendedDowntimeModal() {
         if (!selectedMachineData) {
