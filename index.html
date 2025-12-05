@@ -357,6 +357,14 @@
                     <i data-lucide="clipboard-check" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Acompanhamento</span>
                     <span class="nav-tooltip">Acompanhamento</span>
                 </a>
+                <a href="#" class="nav-btn group" data-page="historico-sistema" title="Histórico do Sistema">
+                    <i data-lucide="history" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Histórico</span>
+                    <span class="nav-tooltip">Histórico</span>
+                </a>
+                <a href="dashboard-tv.html" target="_blank" rel="noopener" id="nav-dashboard-tv" class="nav-btn group" title="Dashboard TV">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 flex-shrink-0"><rect width="20" height="15" x="2" y="7" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg><span class="nav-text transition-opacity duration-300">Dashboard TV</span>
+                    <span class="nav-tooltip">Dashboard TV</span>
+                </a>
                 <!-- Abas Qualidade e Processo removidas - Otimização 02/12/2025 -->
 
             </nav>
@@ -896,63 +904,56 @@
                         </div>
 
                         <form id="extended-downtime-form" class="space-y-5">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label for="extended-downtime-machine" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Máquinas *</label>
-                                    <select id="extended-downtime-machine" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" multiple size="6" required>
-                                        <option value="">Selecione uma ou mais máquinas...</option>
-                                    </select>
-                                    <p class="mt-1.5 text-xs text-gray-500">Use Ctrl (ou Shift) para selecionar várias máquinas ao mesmo tempo.</p>
-                                </div>
-                                <div>
-                                    <label for="extended-downtime-type" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Tipo de Parada *</label>
-                                    <select id="extended-downtime-type" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition cursor-pointer" required>
-                                        <option value="">Selecione...</option>
-                                        <option value="weekend">Fim de Semana</option>
-                                        <option value="scheduled-maintenance">Manutenção Programada</option>
-                                        <option value="holiday">Feriado</option>
-                                        <option value="shift-off">Turno Desligado</option>
-                                        <option value="other">Outro</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label for="extended-downtime-date-start" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Data Início *</label>
-                                    <input type="date" id="extended-downtime-date-start" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" required>
-                                </div>
-                                <div>
-                                    <label for="extended-downtime-date-end" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Data Fim *</label>
-                                    <input type="date" id="extended-downtime-date-end" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" required>
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label for="extended-downtime-time-start" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Hora Início</label>
-                                    <input type="time" id="extended-downtime-time-start" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
-                                </div>
-                                <div>
-                                    <label for="extended-downtime-time-end" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Hora Fim</label>
-                                    <input type="time" id="extended-downtime-time-end" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
-                                </div>
+                            <div class="bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-3 mb-4">
+                                <p class="text-sm text-blue-800 flex items-center gap-2">
+                                    <i data-lucide="info" class="w-4 h-4"></i>
+                                    <strong>Registre o início da parada</strong> (Data e hora podem ser customizados)
+                                </p>
                             </div>
 
                             <div>
-                                <label for="extended-downtime-reason" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Motivo/Descrição *</label>
-                                <select id="extended-downtime-reason" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition cursor-pointer" required>
-                                    <option value="">Selecione um motivo...</option>
+                                <label for="extended-downtime-machine" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Máquina em Parada *</label>
+                                <select id="extended-downtime-machine" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition cursor-pointer" required>
+                                    <option value="">Selecione uma máquina...</option>
                                 </select>
                             </div>
 
-                            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4">
-                                <p class="text-sm text-blue-700 flex items-center gap-2"><i data-lucide="clock" class="w-4 h-4"></i> <strong>Duração estimada:</strong> <span id="extended-downtime-duration">-</span></p>
+                            <div>
+                                <label for="extended-downtime-reason" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Motivo/Tipo de Parada *</label>
+                                <select id="extended-downtime-reason" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition cursor-pointer" required>
+                                    <option value="">Selecione o motivo...</option>
+                                </select>
                             </div>
 
-                            <button type="submit" id="extended-downtime-submit" class="w-full bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-800 hover:to-slate-900 text-white font-semibold py-3 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2">
-                                <i data-lucide="save" class="w-4 h-4"></i>
-                                <span>Registrar Parada Longa</span>
+                            <div class="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 space-y-3">
+                                <div class="flex items-center gap-2 text-sm text-amber-700">
+                                    <i data-lucide="clock" class="w-4 h-4"></i> 
+                                    <strong>Data e Hora de Início da Parada</strong>
+                                </div>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="text-xs font-medium text-amber-700 block mb-1">Data de Início</label>
+                                        <input type="date" id="extended-downtime-start-date" class="w-full px-3 py-2 bg-white border border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500" />
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-medium text-amber-700 block mb-1">Horário de Início</label>
+                                        <input type="time" id="extended-downtime-custom-time" class="w-full px-3 py-2 bg-white border border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500" />
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center gap-2 pt-2">
+                                    <button type="button" id="extended-downtime-use-now" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1">
+                                        <i data-lucide="clock" class="w-3 h-3"></i>
+                                        Usar Data/Hora Atual
+                                    </button>
+                                    <span id="extended-downtime-start-time" class="text-xs text-amber-600 ml-2"></span>
+                                </div>
+                            </div>
+
+                            <button type="submit" id="extended-downtime-submit" class="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold py-3 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2">
+                                <i data-lucide="pause-circle" class="w-5 h-5"></i>
+                                <span>🚨 REGISTRAR PARADA</span>
                             </button>
                             <div id="extended-downtime-status" class="text-sm font-semibold h-5 text-center"></div>
                         </form>
@@ -1073,6 +1074,150 @@
                     </div>
                 </div>
 
+                <!-- PÁGINA: Histórico do Sistema -->
+                <div id="historico-sistema-page" class="page-content hidden space-y-4 p-2">
+                    <div class="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+                        <!-- Header -->
+                        <div class="bg-gradient-to-r from-slate-700 to-slate-800 px-6 py-4">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="p-2 bg-white/10 rounded-xl">
+                                        <i data-lucide="history" class="w-6 h-6 text-white"></i>
+                                    </div>
+                                    <div>
+                                        <h2 class="text-xl font-bold text-white">Histórico do Sistema</h2>
+                                        <p class="text-slate-300 text-sm">Registro de todas as ações realizadas</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button id="historico-teste" class="bg-green-500/80 hover:bg-green-500 text-white px-3 py-2 rounded-lg transition flex items-center gap-2 text-sm">
+                                        <i data-lucide="plus" class="w-4 h-4"></i>
+                                        Gerar Teste
+                                    </button>
+                                    <button id="historico-refresh" class="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg transition flex items-center gap-2">
+                                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                                        Atualizar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Filtros -->
+                        <div class="p-4 bg-gray-50 border-b border-gray-200">
+                            <div class="flex flex-wrap items-end gap-4">
+                                <!-- Seleção rápida de data -->
+                                <div class="flex-1 min-w-[200px]">
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                                        <i data-lucide="calendar" class="w-3 h-3 inline mr-1"></i> Data
+                                    </label>
+                                    <div class="flex gap-2">
+                                        <button id="historico-hoje" class="flex-1 px-3 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition">
+                                            Hoje
+                                        </button>
+                                        <button id="historico-ontem" class="flex-1 px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
+                                            Ontem
+                                        </button>
+                                        <input type="date" id="historico-data-especifica" class="flex-1 p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-500">
+                                    </div>
+                                </div>
+                                <div class="flex-1 min-w-[150px]">
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                                        <i data-lucide="filter" class="w-3 h-3 inline mr-1"></i> Tipo de Ação
+                                    </label>
+                                    <select id="historico-tipo-acao" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-500">
+                                        <option value="">Todas as ações</option>
+                                        <option value="producao">📦 Lançamento de Produção</option>
+                                        <option value="perda">⚠️ Lançamento de Perda</option>
+                                        <option value="parada">⏸️ Registro de Parada</option>
+                                        <option value="retrabalho">🔄 Retrabalho</option>
+                                        <option value="ordem">📋 Ordens de Produção</option>
+                                        <option value="planejamento">📅 Planejamento</option>
+                                        <option value="qualidade">✓ Qualidade</option>
+                                        <option value="acompanhamento">📊 Acompanhamento</option>
+                                        <option value="exclusao">🗑️ Exclusão</option>
+                                        <option value="edicao">✏️ Edição</option>
+                                        <option value="login">🔐 Login</option>
+                                        <option value="logout">🚪 Logout</option>
+                                    </select>
+                                </div>
+                                <div class="flex-1 min-w-[150px]">
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                                        <i data-lucide="user" class="w-3 h-3 inline mr-1"></i> Usuário
+                                    </label>
+                                    <input type="text" id="historico-usuario" placeholder="Filtrar por usuário..." class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-500">
+                                </div>
+                                <div class="flex-1 min-w-[150px]">
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                                        <i data-lucide="cpu" class="w-3 h-3 inline mr-1"></i> Máquina
+                                    </label>
+                                    <input type="text" id="historico-maquina" placeholder="Filtrar por máquina..." class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-500">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Estatísticas Rápidas -->
+                        <div class="p-4 grid grid-cols-2 md:grid-cols-5 gap-3" id="historico-stats">
+                            <div class="bg-blue-50 rounded-xl p-3 text-center border border-blue-100">
+                                <p class="text-2xl font-bold text-blue-600" id="historico-total">0</p>
+                                <p class="text-xs text-blue-700">Total de Ações</p>
+                            </div>
+                            <div class="bg-green-50 rounded-xl p-3 text-center border border-green-100">
+                                <p class="text-2xl font-bold text-green-600" id="historico-producao-count">0</p>
+                                <p class="text-xs text-green-700">Produções</p>
+                            </div>
+                            <div class="bg-orange-50 rounded-xl p-3 text-center border border-orange-100">
+                                <p class="text-2xl font-bold text-orange-600" id="historico-paradas-count">0</p>
+                                <p class="text-xs text-orange-700">Paradas</p>
+                            </div>
+                            <div class="bg-purple-50 rounded-xl p-3 text-center border border-purple-100">
+                                <p class="text-2xl font-bold text-purple-600" id="historico-ordens-count">0</p>
+                                <p class="text-xs text-purple-700">Ordens</p>
+                            </div>
+                            <div class="bg-red-50 rounded-xl p-3 text-center border border-red-100">
+                                <p class="text-2xl font-bold text-red-600" id="historico-exclusoes-count">0</p>
+                                <p class="text-xs text-red-700">Exclusões</p>
+                            </div>
+                        </div>
+
+                        <!-- Tabela de Histórico -->
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead>
+                                    <tr class="bg-gray-100 text-gray-700">
+                                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Data/Hora</th>
+                                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Tipo</th>
+                                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Descrição</th>
+                                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Máquina</th>
+                                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Usuário</th>
+                                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Detalhes</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="historico-tbody" class="divide-y divide-gray-200">
+                                    <tr>
+                                        <td colspan="6" class="px-4 py-10 text-center text-gray-400">
+                                            <i data-lucide="history" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
+                                            <p>Clique em <strong>"Buscar"</strong> para carregar o histórico</p>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Paginação -->
+                        <div class="p-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+                            <p class="text-sm text-gray-600" id="historico-info">Mostrando 0 registros</p>
+                            <div class="flex gap-2">
+                                <button id="historico-prev" class="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50" disabled>
+                                    <i data-lucide="chevron-left" class="w-4 h-4 inline"></i> Anterior
+                                </button>
+                                <button id="historico-next" class="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50" disabled>
+                                    Próximo <i data-lucide="chevron-right" class="w-4 h-4 inline"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- PÁGINA: Lançamento -->
                 <div id="lancamento-page" class="page-content space-y-3 p-2">
 
@@ -1108,6 +1253,30 @@
                             
                             <!-- Grid de Máquinas -->
                             <div class="mt-4">
+                                <!-- NOVO: Barra de Status das Máquinas (estilo Excel) -->
+                                <div id="machine-status-bar" class="mb-3 p-2 bg-slate-800/50 rounded-lg border border-slate-700">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Status das Máquinas</span>
+                                        <div class="flex items-center gap-3 text-xs">
+                                            <span class="flex items-center gap-1">
+                                                <span class="w-3 h-3 bg-emerald-500 rounded-sm"></span>
+                                                <span class="text-slate-400">Produzindo</span>
+                                            </span>
+                                            <span class="flex items-center gap-1">
+                                                <span class="w-3 h-3 bg-red-500 rounded-sm"></span>
+                                                <span class="text-slate-400">Parada</span>
+                                            </span>
+                                            <span class="flex items-center gap-1">
+                                                <span class="w-3 h-3 bg-slate-600 rounded-sm"></span>
+                                                <span class="text-slate-400">Sem OP</span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div id="machine-status-cells" class="flex flex-wrap gap-1">
+                                        <!-- Células serão preenchidas via JavaScript -->
+                                    </div>
+                                </div>
+                                
                                 <select id="machine-selector" class="hidden"></select>
                                 <div id="machine-card-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-5 gap-2"></div>
                                 <p id="machine-card-empty" class="hidden text-sm text-slate-400 text-center py-4">

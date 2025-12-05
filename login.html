@@ -125,8 +125,10 @@
     </div>
 
     <script>
-        // Inicializar ícones Lucide
-        lucide.createIcons();
+        // Inicializar ícones Lucide (com verificação de segurança)
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
 
         // Alternar visibilidade da senha
         document.getElementById('toggle-password').addEventListener('click', function() {
@@ -140,7 +142,9 @@
                 passwordInput.type = 'password';
                 eyeIcon.setAttribute('data-lucide', 'eye');
             }
-            lucide.createIcons();
+            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                lucide.createIcons();
+            }
         });
 
         // Base de usuários (em produção, usar Firebase Auth ou API)

@@ -1,5 +1,5 @@
-// Popular o select de MP no cadastro de ordem de produção
-document.addEventListener('DOMContentLoaded', function() {
+﻿// Popular o select de MP no cadastro de ordem de produção
+document.addEventListener('DOMContentLoaded', async function() {
     // Ocultar subaba Analytics IA para todos, exceto usuários autorizados (Leandro Camargo ou role 'suporte')
     setTimeout(() => {
         try {
@@ -205,10 +205,10 @@ document.addEventListener('DOMContentLoaded', function() {
 // All functionalities, including the new database with product codes, are implemented here.
 
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🔍 [DEBUG] script.js DOMContentLoaded iniciado');
-    console.log('🔍 [DEBUG] window.authSystem disponível?', window.authSystem);
+    console.log('📍 [DEBUG] script.js DOMContentLoaded iniciado');
+    console.log('📍 [DEBUG] window.authSystem disponível?', window.authSystem);
     if (window.authSystem) {
-        console.log('🔍 [DEBUG] currentUser:', window.authSystem.getCurrentUser?.());
+        console.log('📍 [DEBUG] currentUser:', window.authSystem.getCurrentUser?.());
     }
     
     // Firebase Configuration
@@ -744,6 +744,10 @@ document.addEventListener('DOMContentLoaded', function() {
     let pilotTabInitialized = false;
     let isSubmittingPilotReport = false;
 
+    // Timer para atualização automática de paradas longas (a cada 30 minutos)
+    let extendedDowntimeUpdateTimer = null;
+    const EXTENDED_DOWNTIME_UPDATE_INTERVAL = 30 * 60 * 1000; // 30 minutos em ms
+
     // Flags de configuração
     const QUALITY_AUTOFILL_ENABLED = false;
     const PIECE_WEIGHT_TOLERANCE_PERCENT = 1;
@@ -1137,7 +1141,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.observacoes) parts.push(data.observacoes);
                 if (data.manual) parts.push('Origem: Manual');
                 if (data.horaInformada) parts.push(`Hora ${data.horaInformada}`);
-                return parts.filter(Boolean).join(' • ') || 'Lançamento de produção';
+                return parts.filter(Boolean).join(' – ') || 'Lançamento de produção';
             }
         },
         losses: {
@@ -1170,7 +1174,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.perdas) parts.push(`Motivo: ${data.perdas}`);
                 if (data.observacoes) parts.push(data.observacoes);
                 if (data.manual) parts.push('Origem: Manual');
-                return parts.filter(Boolean).join(' • ') || 'Registro de perda';
+                return parts.filter(Boolean).join(' – ') || 'Registro de perda';
             }
         },
         planning: {
@@ -1195,7 +1199,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.product) parts.push(`Produto: ${data.product}`);
                 if (data.client) parts.push(`Cliente: ${data.client}`);
                 if (data.order_number) parts.push(`OP ${data.order_number}`);
-                return parts.filter(Boolean).join(' • ') || 'Item do planejamento';
+                return parts.filter(Boolean).join(' – ') || 'Item do planejamento';
             }
         },
         production_orders: {
@@ -1221,7 +1225,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.product) parts.push(`Produto: ${data.product}`);
                 if (data.status) parts.push(`Status: ${data.status}`);
                 if (data.customer) parts.push(`Cliente: ${data.customer}`);
-                return parts.filter(Boolean).join(' • ') || 'Ordem de produção';
+                return parts.filter(Boolean).join(' – ') || 'Ordem de produção';
             }
         },
         downtime_entries: {
@@ -1244,7 +1248,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.reason) parts.push(`Motivo: ${data.reason}`);
                 if (data.observations) parts.push(data.observations);
                 if (data.startTime && data.endTime) parts.push(`${data.startTime} - ${data.endTime}`);
-                return parts.filter(Boolean).join(' • ') || 'Registro de parada';
+                return parts.filter(Boolean).join(' – ') || 'Registro de parada';
             }
         }
     };
@@ -1546,7 +1550,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="flex items-center justify-between">
                         <div>
                             <span class="font-bold text-blue-600 text-sm">${orderNum}</span>
-                            <span class="text-gray-400 mx-1">•</span>
+                            <span class="text-gray-400 mx-1">–</span>
                             <span class="text-gray-700 text-xs">${productName || 'Sem produto'}</span>
                         </div>
                         ${lot > 0 ? `<span class="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">${lot.toLocaleString('pt-BR')} pcs</span>` : ''}
@@ -1955,7 +1959,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (parsed && typeof parsed === 'object' && typeof parsed.name === 'string') {
                         parsed.name = parsed.name.trim();
                     }
-                    console.log('🔍 [DEBUG] getStoredUserSession() encontrou:', parsed);
+                    console.log('📍 [DEBUG] getStoredUserSession() encontrou:', parsed);
                     return parsed;
                 }
             } catch (error) {
@@ -2012,7 +2016,7 @@ document.addEventListener('DOMContentLoaded', function() {
      * Exibe notificação de permissão negada para operações restritas
      */
     function showPermissionDeniedNotification(action = 'realizar esta ação') {
-        const message = `⛔ Permissão negada: Apenas gestores podem ${action}.`;
+        const message = `⮝ Permissão negada: Apenas gestores podem ${action}.`;
         showNotification(message, 'error');
         return false;
     }
@@ -2022,7 +2026,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const trimmed = identifier.trim();
         if (!trimmed) return '';
         const base = trimmed.includes('@') ? trimmed.split('@')[0] : trimmed;
-        const sanitized = base.replace(/[^\wÀ-ÿ.\-_\s]/g, ' ');
+        const sanitized = base.replace(/[^\w�-�.\-_\s]/g, ' ');
         const parts = sanitized.split(/[._\-\s]+/).filter(Boolean);
         if (!parts.length) return '';
         return parts.map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()).join(' ');
@@ -2049,7 +2053,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const currentUser = getActiveUser();
-        console.log('🔍 [DEBUG] getCurrentUserName() - currentUser:', currentUser);
+        console.log('📍 [DEBUG] getCurrentUserName() - currentUser:', currentUser);
 
         const candidateSources = [
             currentUser?.name,
@@ -2340,11 +2344,11 @@ document.addEventListener('DOMContentLoaded', function() {
     function formatShiftLabel(shiftKey) {
         switch (shiftKey) {
             case 'T1':
-                return '1º Turno';
+                return '1ú Turno';
             case 'T2':
-                return '2º Turno';
+                return '2ú Turno';
             case 'T3':
-                return '3º Turno';
+                return '3ú Turno';
             default:
                 return 'Turno atual';
         }
@@ -2547,6 +2551,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
             await docRef.delete();
             try { showNotification('Item excluído com sucesso.', 'success'); } catch(e) { /* noop */ }
+            
+            // Registrar log da exclusão
+            registrarLogSistema('EXCLUSÃO DE REGISTRO', collectionToDelete, {
+                docId: docIdToDelete,
+                collection: collectionToDelete
+            });
             
             if (pageTitle && pageTitle.textContent === 'Análise' && currentAnalysisView === 'resumo') {
                 loadResumoData();
@@ -2807,14 +2817,16 @@ document.addEventListener('DOMContentLoaded', function() {
             setupQualityTab();
             populateLossOptions();
             
+            // Iniciar timer de atualização automática de paradas longas (a cada 30 min)
+            startExtendedDowntimeAutoUpdate();
+            
             // Inicializar dados básicos
             loadAnalysisMachines();
             populateQuickFormOptions();
-            populateLaunchMachineSelector();
             
             // Verificar se os elementos críticos existem
             setTimeout(() => {
-                console.log('🔍 Verificando elementos críticos...');
+                console.log('📍 Verificando elementos críticos...');
                 console.log('machine-selector:', !!document.getElementById('machine-selector'));
                 console.log('quick-production-form:', !!document.getElementById('quick-production-form'));
                 console.log('quick-losses-form:', !!document.getElementById('quick-losses-form'));
@@ -3728,6 +3740,14 @@ document.addEventListener('DOMContentLoaded', function() {
                             activatedAt: firebase.firestore.FieldValue.serverTimestamp()
                         });
                         showNotification('Ordem ativada com sucesso!', 'success');
+
+                        // Registrar no histórico do sistema
+                        if (typeof logSystemAction === 'function') {
+                            logSystemAction('ordem_ativada', `Ordem ${orderId} ativada`, {
+                                maquina: machineId,
+                                orderId: orderId
+                            });
+                        }
                         
                         // Atualizar cache e recarregar
                         productionOrdersCache = null;
@@ -4006,7 +4026,7 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
     const totalLosses = lossesData.reduce((sum, item) => sum + (Number(item.scrapPcs ?? item.quantity ?? 0) || 0), 0);
         const totalDowntime = downtimeData.reduce((sum, item) => sum + (item.duration || 0), 0);
         
-        // Calcular OEE real usando disponibilidade × performance × qualidade
+        // Calcular OEE real usando disponibilidade  x  performance  x  qualidade
         const { overallOee, filteredOee } = calculateOverviewOEE(
             productionAll,
             lossesAll,
@@ -4329,7 +4349,7 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
             shiftFilter
         );
 
-        // Padrão A: OEE = Disponibilidade × Performance × Qualidade (produto das médias dos componentes)
+        // Padrão A: OEE = Disponibilidade  x  Performance  x  Qualidade (produto das médias dos componentes)
         const safeMul = (...vals) => vals.reduce((acc, v) => acc * (Number.isFinite(v) ? v : 0), 1);
 
         const overallOee = safeMul(
@@ -4514,7 +4534,7 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
             valueEl.textContent = '--- pcs/h';
             if (subtextEl) {
                 const modeLabel = productionRateMode === 'shift' ? 'Modo turno' : 'Modo dia';
-                subtextEl.textContent = `${modeLabel} • Sem registros no período selecionado.`;
+                subtextEl.textContent = `${modeLabel} – Sem registros no período selecionado.`;
             }
             return;
         }
@@ -4550,7 +4570,7 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
             if (subtextEl) {
                 const daysLabel = effectiveDays > 1 ? `${effectiveDays} dias` : '1 dia';
                 const dataDaysLabel = workDaysCount && workDaysCount !== effectiveDays ? `, ${workDaysCount} com lançamentos` : '';
-                subtextEl.textContent = `Modo dia • ${totalProduction.toLocaleString('pt-BR')} peças em ${daysLabel}${dataDaysLabel}.`;
+                subtextEl.textContent = `Modo dia – ${totalProduction.toLocaleString('pt-BR')} peças em ${daysLabel}${dataDaysLabel}.`;
             }
             return;
         }
@@ -4611,7 +4631,7 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
                 detailParts.push(`Sem turno: ${unknownTotal.toLocaleString('pt-BR')} pcs`);
             }
             const daysLabel = effectiveDays > 1 ? `${effectiveDays} dias` : '1 dia';
-            subtextEl.textContent = `Modo turno • ${detailParts.join(' • ')} • ${daysLabel} analisado(s).`;
+            subtextEl.textContent = `Modo turno – ${detailParts.join(' – ')} – ${daysLabel} analisado(s).`;
         }
     }
 
@@ -4735,7 +4755,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     machineData[m].planned += Number(item.quantity) || 0;
                 });
                 
-                // Calcular OEE simplificado por máquina (Performance × Qualidade)
+                // Calcular OEE simplificado por máquina (Performance  x  Qualidade)
                 const machineEntries = Object.entries(machineData)
                     .map(([mach, data]) => {
                         const totalOutput = data.production + data.losses;
@@ -5262,12 +5282,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     
     // Função de diagnóstico para verificar dados no Firestore
     async function diagnosticFirestoreData() {
-        console.log('🔍 [DIAGNOSTIC] Iniciando diagnóstico de dados do Firestore...');
+        console.log('📍 [DIAGNOSTIC] Iniciando diagnóstico de dados do Firestore...');
         
         try {
             // Verificar production_entries
             const prodSnapshot = await db.collection('production_entries').limit(5).get();
-            console.log('🔍 [DIAGNOSTIC] production_entries:', {
+            console.log('📍 [DIAGNOSTIC] production_entries:', {
                 size: prodSnapshot.size,
                 samples: prodSnapshot.docs.map(d => ({
                     id: d.id,
@@ -5280,7 +5300,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             
             // Verificar downtime_entries
             const downtimeSnapshot = await db.collection('downtime_entries').limit(5).get();
-            console.log('🔍 [DIAGNOSTIC] downtime_entries:', {
+            console.log('📍 [DIAGNOSTIC] downtime_entries:', {
                 size: downtimeSnapshot.size,
                 samples: downtimeSnapshot.docs.map(d => ({
                     id: d.id,
@@ -5293,7 +5313,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             
             // Verificar planning
             const planningSnapshot = await db.collection('planning').limit(5).get();
-            console.log('🔍 [DIAGNOSTIC] planning:', {
+            console.log('📍 [DIAGNOSTIC] planning:', {
                 size: planningSnapshot.size,
                 samples: planningSnapshot.docs.map(d => ({
                     id: d.id,
@@ -5304,7 +5324,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             });
             
         } catch (error) {
-            console.error('🔍 [DIAGNOSTIC] Erro ao buscar dados:', error);
+            console.error('📍 [DIAGNOSTIC] Erro ao buscar dados:', error);
         }
     }
 
@@ -6770,8 +6790,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         clearNoDataMessage('shift-production-chart');
 
-        const shiftData = [0, 0, 0]; // 1º, 2º, 3º turno
-        const shiftLabels = ['1º Turno', '2º Turno', '3º Turno'];
+        const shiftData = [0, 0, 0]; // 1ú, 2ú, 3ú turno
+        const shiftLabels = ['1ú Turno', '2ú Turno', '3ú Turno'];
 
         productionData.forEach(item => {
             if (item.shift) {
@@ -8327,9 +8347,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             }
 
             const shiftLabels = [
-                { key: 1, label: '1º Turno' },
-                { key: 2, label: '2º Turno' },
-                { key: 3, label: '3º Turno' }
+                { key: 1, label: '1ú Turno' },
+                { key: 2, label: '2ú Turno' },
+                { key: 3, label: '3ú Turno' }
             ];
 
             const machineMap = new Map();
@@ -8440,7 +8460,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
     // Funções de comparação faltantes
     async function compareByShifts(metric, startDate, endDate) {
-        const shifts = ['1º Turno', '2º Turno', '3º Turno'];
+        const shifts = ['1ú Turno', '2ú Turno', '3ú Turno'];
         const results = [];
 
         for (let i = 1; i <= 3; i++) {
@@ -8542,6 +8562,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             navContainer.addEventListener('click', (e) => {
                 const navBtn = e.target.closest('.nav-btn');
                 if (navBtn) {
+                    // Se for link externo (sem data-page), deixar comportamento padrão
+                    if (!navBtn.dataset.page) {
+                        return; // Não interceptar
+                    }
+                    e.preventDefault();
                     handleNavClick({ currentTarget: navBtn, preventDefault: () => {} });
                 }
             });
@@ -9189,6 +9214,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 console.log('📝 [saveOrderForm] Atualizando ordem:', id);
                 await db.collection('production_orders').doc(id).update(orderData);
                 showNotification('Ordem atualizada com sucesso!', 'success');
+                
+                // Registrar log de edição
+                registrarLogSistema('EDIÇÃO DE ORDEM DE PRODUÇÃO', 'ordem', {
+                    orderId: id,
+                    orderNumber: orderData.order_number,
+                    product: orderData.product,
+                    lotSize: orderData.lot_size
+                });
             } else {
                 console.log('📝 [saveOrderForm] Criando nova ordem...');
                 orderData.status = 'planejada';
@@ -9197,6 +9230,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 const docRef = await db.collection('production_orders').add(orderData);
                 console.log('✅ [saveOrderForm] Ordem criada com ID:', docRef.id);
                 showNotification('Ordem cadastrada com sucesso!', 'success');
+                
+                // Registrar log de criação
+                registrarLogSistema('CRIAÇÃO DE ORDEM DE PRODUÇÃO', 'ordem', {
+                    orderId: docRef.id,
+                    orderNumber: orderData.order_number,
+                    product: orderData.product,
+                    lotSize: orderData.lot_size
+                });
             }
             
             closeOrderFormModal();
@@ -9289,7 +9330,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (!code || code.trim() === '') return;
         
         const partCode = code.trim();
-        console.log('🔍 Buscando produto pelo código:', partCode);
+        console.log('📍 Buscando produto pelo código:', partCode);
         
         // Buscar no productDatabase pelo código
         if (typeof productDatabase !== 'undefined' && productDatabase.length > 0) {
@@ -9461,12 +9502,28 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     if (id) {
                         await db.collection('production_orders').doc(id).update(orderData);
                         showNotification('Ordem atualizada!', 'success');
+                        
+                        // Registrar log de edição
+                        registrarLogSistema('EDIÇÃO DE ORDEM DE PRODUÇÃO', 'ordem', {
+                            orderId: id,
+                            orderNumber: orderData.order_number,
+                            product: orderData.product,
+                            lotSize: orderData.lot_size
+                        });
                     } else {
                         orderData.status = 'planejada';
                         orderData.total_produced = 0;
                         orderData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-                        await db.collection('production_orders').add(orderData);
+                        const docRef = await db.collection('production_orders').add(orderData);
                         showNotification('Ordem cadastrada!', 'success');
+                        
+                        // Registrar log de criação
+                        registrarLogSistema('CRIAÇÃO DE ORDEM DE PRODUÇÃO', 'ordem', {
+                            orderId: docRef.id,
+                            orderNumber: orderData.order_number,
+                            product: orderData.product,
+                            lotSize: orderData.lot_size
+                        });
                     }
                     closeOrderFormModal();
                     loadProductionOrders();
@@ -9479,8 +9536,15 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
     // --- NAVEGAÇÃO ---
     function handleNavClick(e) {
-        e.preventDefault();
         const page = e.currentTarget.dataset.page;
+        
+        // Se for um link externo (sem data-page), não interceptar
+        if (!page) {
+            // Permitir comportamento padrão do link
+            return;
+        }
+        
+        e.preventDefault();
         
         // Verificar se o usuário tem permissão para acessar esta aba
         if (!window.authSystem.canAccessTab(page)) {
@@ -9561,6 +9625,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             setupAcompanhamentoTurno();
         }
 
+        if (page === 'historico-sistema') {
+            setupHistoricoSistema();
+        }
+
         if (page === 'qualidade') {
             // Página em construção - apenas renderizar ícones
             if (typeof lucide !== 'undefined') {
@@ -9613,7 +9681,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (versionEl) versionEl.textContent = 'v8.0 - Modo Teste';
         if (datetimeEl) datetimeEl.textContent = timeStr;
         if (userEl) userEl.textContent = userName;
-        if (shiftEl) shiftEl.textContent = `${shift}º Turno`;
+        if (shiftEl) shiftEl.textContent = `${shift}ú Turno`;
     }
 
     function setupTestConsole() {
@@ -9633,9 +9701,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             try {
                 addTestLog(`▶ Executando: ${code.substring(0, 50)}...`, 'info');
                 const result = eval(code);
-                addTestLog(`✓ Resultado: ${JSON.stringify(result)}`, 'success');
+                addTestLog(`✔ Resultado: ${JSON.stringify(result)}`, 'success');
             } catch (error) {
-                addTestLog(`✗ Erro: ${error.message}`, 'error');
+                addTestLog(`✖ Erro: ${error.message}`, 'error');
             }
         });
     }
@@ -9649,13 +9717,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             clearCacheBtn.addEventListener('click', () => {
                 localStorage.clear();
                 sessionStorage.clear();
-                addTestLog('✓ Cache limpo!', 'success');
+                addTestLog('✔ Cache limpo!', 'success');
             });
         }
         
         if (reloadBtn) {
             reloadBtn.addEventListener('click', () => {
-                addTestLog('⟳ Recarregando página...', 'info');
+                addTestLog('↻ Recarregando página...', 'info');
                 setTimeout(() => location.reload(), 500);
             });
         }
@@ -9672,12 +9740,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const container = document.getElementById('test-logs-container');
         if (!container) return;
         
-        const icons = { success: '✓', error: '✗', info: 'ℹ', warning: '⚠' };
+        const icons = { success: '✔', error: '✖', info: 'ℹ', warning: '⚠ ' };
         const colors = { success: 'text-green-400', error: 'text-red-400', info: 'text-blue-400', warning: 'text-yellow-400' };
         
         const line = document.createElement('p');
         line.className = colors[type] || colors.info;
-        line.textContent = `${icons[type] || '•'} ${message}`;
+        line.textContent = `${icons[type] || '–'} ${message}`;
         
         container.appendChild(line);
         container.scrollTop = container.scrollHeight;
@@ -10433,7 +10501,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             if (record.lossesPcs !== null && !Number.isNaN(record.lossesPcs)) {
                 qtySegments.push(`${formatPieces(record.lossesPcs)} peças refugo`);
             }
-            const qtyDisplay = qtySegments.length ? qtySegments.join(' • ') : '-';
+            const qtyDisplay = qtySegments.length ? qtySegments.join(' – ') : '-';
             const plannedDisplay = record.planned !== null && !Number.isNaN(record.planned)
                 ? `${formatPieces(record.planned)} un`
                 : '-';
@@ -10623,7 +10691,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (value === undefined || value === null) return null;
         const numeric = Number(value);
         if (Number.isFinite(numeric) && numeric >= 1 && numeric <= 3) {
-            return `${numeric}º Turno`;
+            return `${numeric}ú Turno`;
         }
         if (typeof value === 'string' && value.trim()) return value.trim();
         return null;
@@ -10887,8 +10955,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     function formatLogFields(fields) {
         if (!fields || typeof fields !== 'object') return '-';
         return Object.entries(fields)
-            .map(([field, value]) => `${field}: ${value === null || value === undefined ? '∅' : escapeHtml(String(value))}`)
-            .join(' • ');
+            .map(([field, value]) => `${field}: ${value === null || value === undefined ? 'âˆ…' : escapeHtml(String(value))}`)
+            .join(' – ');
     }
 
     function renderAjustesLogPlaceholder(message, tone = 'info') {
@@ -11410,19 +11478,19 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const shifts = [
             {
                 id: 1,
-                title: '1º TURNO · 07h às 14h',
+                title: '1ú TURNO Â· 07h às 14h',
                 theme: 'blue',
                 data: collectQualityShiftData(1, shiftHours[1])
             },
             {
                 id: 2,
-                title: '2º TURNO · 15h às 22h',
+                title: '2ú TURNO Â· 15h às 22h',
                 theme: 'green',
                 data: collectQualityShiftData(2, shiftHours[2])
             },
             {
                 id: 3,
-                title: '3º TURNO · 23h às 06h',
+                title: '3ú TURNO Â· 23h às 06h',
                 theme: 'amber',
                 data: collectQualityShiftData(3, shiftHours[3])
             }
@@ -11720,8 +11788,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 return;
             }
 
-            const snapshot = await db.collection('planning').where('date', '==', effectiveDate).get();
-            const plans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // NOVO: Buscar todos os planejamentos e filtrar os ATIVOS no cliente
+            const snapshot = await db.collection('planning').get();
+            const allPlans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const plans = allPlans.filter(isPlanActive);
             plans.sort((a, b) => (a.machine || '').localeCompare(b.machine || ''));
             qualityPlansCache = { lastDate: effectiveDate, plans };
 
@@ -11739,8 +11809,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (!qualityPlanSelect) return;
 
         if (!Array.isArray(plans) || plans.length === 0) {
-            qualityPlanSelect.innerHTML = '<option value="">Nenhum plano para a data selecionada</option>';
-            setQualityStatus('Nenhum plano encontrado para a data informada.', 'warning');
+            qualityPlanSelect.innerHTML = '<option value="">Nenhum plano ativo encontrado</option>';
+            setQualityStatus('Nenhum plano ativo encontrado. Crie um planejamento para continuar.', 'warning');
             return;
         }
 
@@ -11749,7 +11819,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const machineLabel = escapeHtml(plan.machine || 'Máquina não definida');
             const productLabel = escapeHtml(plan.product || plan.product_cod || 'Produto não informado');
             const statusLabel = (plan.status || 'planejado').toString().replace(/_/g, ' ');
-            const optionLabel = `${machineLabel} • ${productLabel} • ${escapeHtml(statusLabel.toUpperCase())}`;
+            const optionLabel = `${machineLabel} – ${productLabel} – ${escapeHtml(statusLabel.toUpperCase())}`;
             options.push(`<option value="${plan.id}">${optionLabel}</option>`);
         });
 
@@ -12021,9 +12091,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm flex items-start gap-3">
                     <div class="rounded-full bg-emerald-50 p-2 text-emerald-600"><i data-lucide="calendar" class="w-5 h-5"></i></div>
                     <div class="space-y-1">
-                        <p class="text-xs uppercase font-semibold text-gray-500">Data · Turno sugerido</p>
+                        <p class="text-xs uppercase font-semibold text-gray-500">Data Â· Turno sugerido</p>
                         <p class="text-sm font-semibold text-gray-800">${date.split('-').reverse().join('/')}</p>
-                        <p class="text-xs text-gray-500">Turno destaque: ${metrics.shiftSuggestion}º</p>
+                        <p class="text-xs text-gray-500">Turno destaque: ${metrics.shiftSuggestion}ú</p>
                     </div>
                 </div>
                 <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm flex items-start gap-3">
@@ -12083,7 +12153,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 const data = metrics.shifts[shift] || { produced: 0, pesoBruto: 0, refugoQty: 0, refugoKg: 0 };
                 return `
                     <tr>
-                        <td class="px-4 py-3 text-sm font-semibold text-gray-700">${shift}º Turno</td>
+                        <td class="px-4 py-3 text-sm font-semibold text-gray-700">${shift}ú Turno</td>
                         <td class="px-4 py-3 text-right text-sm text-gray-700">${formatLocaleNumber(data.produced)}</td>
                         <td class="px-4 py-3 text-right text-sm text-gray-700">${formatLocaleNumber(data.refugoQty)}</td>
                         <td class="px-4 py-3 text-right text-sm text-gray-700">${formatLocaleNumber(data.refugoKg, 2)}</td>
@@ -12122,7 +12192,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         if (qualityHourlyTotal) {
             qualityHourlyTotal.textContent = metrics.hourly.entries > 0
-                ? `${metrics.hourly.entries} registro(s) · ${formatLocaleNumber(metrics.hourly.totalKg, 2)} kg`
+                ? `${metrics.hourly.entries} registro(s) Â· ${formatLocaleNumber(metrics.hourly.totalKg, 2)} kg`
                 : '';
         }
 
@@ -12132,7 +12202,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 if (qualityDowntimeEmpty) qualityDowntimeEmpty.classList.remove('hidden');
             } else {
                 const reasonChips = Object.entries(metrics.downtime.reasons || {}).map(([reason, minutes]) => {
-                    return `<span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700">${escapeHtml(reason)} · ${formatMinutesToHuman(minutes)}</span>`;
+                    return `<span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700">${escapeHtml(reason)} Â· ${formatMinutesToHuman(minutes)}</span>`;
                 }).join('');
 
                 const cards = downtimeEntries
@@ -12145,7 +12215,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                                 <div class="flex items-start justify-between gap-3">
                                     <div>
                                         <p class="text-sm font-semibold text-rose-800">${escapeHtml(entry.reason || 'Sem motivo')}</p>
-                                        <p class="text-xs text-gray-500">${escapeHtml(entry.startTime || '--:--')} ➜ ${escapeHtml(entry.endTime || '--:--')} · ${duration}</p>
+                                        <p class="text-xs text-gray-500">${escapeHtml(entry.startTime || '--:--')} ➜ ${escapeHtml(entry.endTime || '--:--')} Â· ${duration}</p>
                                         ${obs}
                                     </div>
                                 </div>
@@ -12176,7 +12246,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
 
         if (qualityChecklistStatus) {
-            qualityChecklistStatus.textContent = `Plano vinculado: ${escapeHtml(plan.machine || '---')} · ${escapeHtml(plan.product || '---')}`;
+            qualityChecklistStatus.textContent = `Plano vinculado: ${escapeHtml(plan.machine || '---')} Â· ${escapeHtml(plan.product || '---')}`;
         }
 
         // Renderizar tabelas de controle de processos
@@ -12320,10 +12390,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             console.log(`  Hora ${hh}h: ${totalCycles} ciclos reais, ${totalQuantity} peças produzidas`);
 
             // Determinar turno baseado nos horários corretos:
-            // 1º Turno: 7h - 14h
-            // 2º Turno: 15h - 22h
-            // 3º Turno: 23h - 6h
-            let shift = 3; // Default para 3º turno
+            // 1ú Turno: 7h - 14h
+            // 2ú Turno: 15h - 22h
+            // 3ú Turno: 23h - 6h
+            let shift = 3; // Default para 3ú turno
             if (hh >= 7 && hh <= 14) {
                 shift = 1;
             } else if (hh >= 15 && hh <= 22) {
@@ -12471,7 +12541,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                         <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-2">
                             <div class="flex-1">
                                 <p class="text-sm font-semibold text-gray-800">${escapeHtml(statusLabel)}</p>
-                                <p class="text-xs text-gray-500">${createdDateLabel} · ${createdTimeLabel} · Turno ${record.turno || '-'} · ${escapeHtml(record.createdByName || 'Responsável não identificado')}</p>
+                                <p class="text-xs text-gray-500">${createdDateLabel} Â· ${createdTimeLabel} Â· Turno ${record.turno || '-'} Â· ${escapeHtml(record.createdByName || 'Responsável não identificado')}</p>
                             </div>
                             <button class="quality-delete-history-btn inline-flex items-center justify-center gap-1 rounded-lg bg-red-100 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-200 transition" data-record-id="${record.id}" title="Excluir este lançamento">
                                 <i data-lucide="trash-2" class="w-3 h-3"></i>
@@ -12519,6 +12589,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         try {
             await db.collection('process_control_checks').doc(recordId).delete();
             showNotification('Lançamento excluído com sucesso!', 'success');
+            
+            // Registrar log
+            registrarLogSistema('EXCLUSÃO DE CHECKLIST QUALIDADE', 'qualidade', {
+                recordId: recordId
+            });
             
             // Recarregar histórico
             if (currentQualityContext && currentQualityContext.plan) {
@@ -12773,7 +12848,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         if (product) {
             fillProductionOrderFields(product);
-            const clientLabel = product.client ? ` • ${product.client}` : '';
+            const clientLabel = product.client ? ` – ${product.client}` : '';
             setProductionOrderFeedback(`Produto carregado: ${product.name}${clientLabel}`, 'success');
             return;
         }
@@ -13165,6 +13240,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             
             if (success) {
                 setProductionOrderStatus('Ordem ativada com sucesso!', 'success');
+                
+                // Registrar log
+                registrarLogSistema('ATIVAÇÃO DE ORDEM', 'ordem', {
+                    orderId: orderId,
+                    orderNumber: order.order_number || order.codigoOP,
+                    machine: machineId
+                });
+                
                 // Atualizar listas e painel
                 if (typeof loadProductionOrders === 'function') {
                     await loadProductionOrders();
@@ -13200,6 +13283,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             if (success) {
                 setProductionOrderStatus('Ordem finalizada com sucesso!', 'success');
                 setTimeout(() => setProductionOrderStatus('', 'info'), 2000);
+                
+                // Registrar log
+                registrarLogSistema('FINALIZAÇÃO DE ORDEM', 'ordem', {
+                    orderId: orderId,
+                    codigoOP: order.codigoOP || order.opNumber,
+                    produto: order.produto || order.productName
+                });
             } else {
                 setProductionOrderStatus('Operação cancelada.', 'info');
             }
@@ -13237,6 +13327,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             await db.collection('production_orders').doc(orderId).delete();
             setProductionOrderStatus('Ordem excluída com sucesso!', 'success');
             setTimeout(() => setProductionOrderStatus('', 'info'), 2000);
+            
+            // Registrar log
+            registrarLogSistema('EXCLUSÃO DE ORDEM', 'ordem', {
+                orderId: orderId,
+                orderNumber: order.order_number,
+                produto: order.produto || order.productName
+            });
         } catch (error) {
             console.error('Erro ao excluir ordem:', error);
             setProductionOrderStatus('Erro ao excluir ordem. Tente novamente.', 'error');
@@ -13428,6 +13525,17 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             });
 
             console.log(`[AUDIT] ${currentUser?.name || 'Desconhecido'} ajustou quantidade executada do planejamento ${planId}: ${currentQty} → ${newQty} (${diff > 0 ? '+' : ''}${diff}) - Motivo: ${reason}`);
+
+            // Registrar log do ajuste
+            registrarLogSistema('AJUSTE DE QUANTIDADE EXECUTADA', 'planejamento', {
+                planId: planId,
+                machine: selectedMachineData?.machine,
+                previousQty: currentQty,
+                newQty: newQty,
+                diff: diff,
+                motivo: reason,
+                observacoes: observations
+            });
 
             if (statusDiv) {
                 statusDiv.textContent = 'Ajuste aplicado com sucesso!';
@@ -14058,9 +14166,25 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             if (editingOrderId) {
                 await db.collection('production_orders').doc(editingOrderId).update(docData);
                 setProductionOrderStatus('Ordem atualizada com sucesso!', 'success');
+                
+                // Registrar log de edição
+                registrarLogSistema('EDIÇÃO DE ORDEM DE PRODUÇÃO', 'ordem', {
+                    orderId: editingOrderId,
+                    orderNumber: normalizedOrderNumber,
+                    product: docData.product,
+                    lotSize: docData.lot_size
+                });
             } else {
-                await db.collection('production_orders').add(docData);
+                const docRef = await db.collection('production_orders').add(docData);
                 setProductionOrderStatus('Ordem cadastrada com sucesso!', 'success');
+                
+                // Registrar log de criação
+                registrarLogSistema('CRIAÇÃO DE ORDEM DE PRODUÇÃO', 'ordem', {
+                    orderId: docRef.id,
+                    orderNumber: normalizedOrderNumber,
+                    product: docData.product,
+                    lotSize: docData.lot_size
+                });
             }
 
             productionOrderForm.reset();
@@ -14205,7 +14329,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         submitButton.disabled = true;
         submitButton.innerHTML = `<i data-lucide="loader-2" class="animate-spin"></i><span>A Adicionar...</span>`;
-        lucide.createIcons();
+        if (typeof lucide !== 'undefined') lucide.createIcons();
         
         try {
             let linkedOrder = null;
@@ -14286,16 +14410,34 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             }
             await db.collection('planning').add(docData);
             
+            // Registrar log
+            registrarLogSistema('CRIAÇÃO DE PLANEJAMENTO', 'planejamento', {
+                machine: data.machine,
+                date: data.date,
+                product: resolvedProductName,
+                productCod: product.cod,
+                plannedQuantity: resolvedPlannedQuantity,
+                orderNumber: linkedOrder?.order_number || null
+            });
+            
             if (statusMessage) {
                 statusMessage.textContent = 'Item adicionado com sucesso!';
                 statusMessage.className = 'text-status-success text-sm font-semibold h-5 text-center';
             }
             form.reset();
-            document.getElementById('budgeted-cycle').value = '';
-            document.getElementById('mold-cavities').value = '';
-            document.getElementById('piece-weight').value = '';
-            document.getElementById('quantidade-embalagem').value = '';
-            document.getElementById('planned-quantity').value = '';
+            
+            // Limpar campos com verificação de existência
+            const budgetedCycleEl = document.getElementById('budgeted-cycle');
+            const moldCavitiesEl = document.getElementById('mold-cavities');
+            const pieceWeightEl = document.getElementById('piece-weight');
+            const quantidadeEmbalagemEl = document.getElementById('quantidade-embalagem');
+            const plannedQuantityEl = document.getElementById('planned-quantity');
+            
+            if (budgetedCycleEl) budgetedCycleEl.value = '';
+            if (moldCavitiesEl) moldCavitiesEl.value = '';
+            if (pieceWeightEl) pieceWeightEl.value = '';
+            if (quantidadeEmbalagemEl) quantidadeEmbalagemEl.value = '';
+            if (plannedQuantityEl) plannedQuantityEl.value = '';
             if (planningMpInput) planningMpInput.value = '';
             if (planningOrderSelect) {
                 planningOrderSelect.value = '';
@@ -14320,7 +14462,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         } finally {
             submitButton.disabled = false;
             submitButton.innerHTML = `<i data-lucide="plus-circle"></i><span>Adicionar ao Plano</span>`;
-            lucide.createIcons();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
             if (statusMessage) {
                 setTimeout(() => statusMessage.textContent = '', 3000);
             }
@@ -14436,7 +14578,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         let downtimeEntries = [];
         let activeDowntimeSet = new Set();
 
-        const render = () => {
+        const render = async () => {
             const combinedData = planningItems.map(plan => {
                 const shifts = { T1: 0, T2: 0, T3: 0 };
 
@@ -14463,7 +14605,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             renderPlanningTable(combinedData);
             renderLeaderPanel(planningItems);
             const activePlans = planningItems.filter(isPlanActive);
-            renderMachineCards(activePlans, productionEntries, downtimeEntries, activeDowntimeSet);
+            
+            // NOVO: Carregar paradas ativas para mostrar no painel de máquinas
+            const machinesDowntime = await getAllMachinesDowntimeStatus();
+            renderMachineCards(activePlans, productionEntries, downtimeEntries, activeDowntimeSet, machinesDowntime);
             showLoadingState('leader-panel', false, planningItems.length === 0);
             
             // Atualizar contagem no painel
@@ -14473,16 +14618,27 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             }
         };
 
+        // Chamar render de forma assíncrona quando necessário
+        const scheduleRender = () => {
+            requestAnimationFrame(() => render().catch(e => console.error('Erro em render:', e)));
+        };
+
         // Limpar listeners anteriores se existirem
         listenerManager.unsubscribe('planning');
         listenerManager.unsubscribe('productionEntries');
         listenerManager.unsubscribe('downtime');
         listenerManager.unsubscribe('activeDowntimes');
 
-        const planningQuery = db.collection('planning').where('date', '==', date);
+        // NOVO: Buscar todos os planejamentos e filtrar os ATIVOS no cliente
+        // Os planejamentos permanecem visíveis até serem explicitamente finalizados
+        // A produção é resetada diariamente porque production_entries continua filtrado por data
+        const planningQuery = db.collection('planning');
         listenerManager.subscribe('planning', planningQuery,
             (snapshot) => {
-                planningItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                // Filtrar apenas planejamentos ativos (não concluídos/finalizados/cancelados)
+                planningItems = snapshot.docs
+                    .map(doc => ({ id: doc.id, ...doc.data() }))
+                    .filter(isPlanActive);
                 planningItems.sort((a, b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0));
                 if (machineSelector) {
                     machineSelector.machineData = {};
@@ -14515,7 +14671,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                         }
                     }
                 }
-                render();
+                scheduleRender();
             },
             (error) => {
                 console.error("Erro ao carregar planejamentos:", error);
@@ -14528,7 +14684,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         listenerManager.subscribe('productionEntries', entriesQuery,
             (snapshot) => {
                 productionEntries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                render();
+                scheduleRender();
             },
             (error) => console.error("Erro ao carregar lançamentos de produção:", error)
         );
@@ -14544,7 +14700,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         listenerManager.subscribe('downtime', downtimeQuery,
             (snapshot) => {
                 downtimeEntries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                render();
+                scheduleRender();
             },
             (error) => console.error('Erro ao carregar paradas:', error)
         );
@@ -14554,7 +14710,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         listenerManager.subscribe('activeDowntimes', activeDowntimesQuery,
             (snapshot) => {
                 activeDowntimeSet = new Set(snapshot.docs.map(doc => doc.id));
-                render();
+                scheduleRender();
             },
             (error) => console.error('Erro ao carregar paradas ativas:', error)
         );
@@ -14750,9 +14906,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                         </div>
                     </div>
                     <div class="grid grid-cols-3 gap-2 mt-4">
-                        <button data-id="${idsCsv}" data-turno="T1" class="setup-btn ${btnClasses[0]} text-white font-bold py-2 px-3 rounded-lg text-sm">1º Turno</button>
-                        <button data-id="${idsCsv}" data-turno="T2" class="setup-btn ${btnClasses[1]} text-white font-bold py-2 px-3 rounded-lg text-sm">2º Turno</button>
-                        <button data-id="${idsCsv}" data-turno="T3" class="setup-btn ${btnClasses[2]} text-white font-bold py-2 px-3 rounded-lg text-sm">3º Turno</button>
+                        <button data-id="${idsCsv}" data-turno="T1" class="setup-btn ${btnClasses[0]} text-white font-bold py-2 px-3 rounded-lg text-sm">1ú Turno</button>
+                        <button data-id="${idsCsv}" data-turno="T2" class="setup-btn ${btnClasses[1]} text-white font-bold py-2 px-3 rounded-lg text-sm">2ú Turno</button>
+                        <button data-id="${idsCsv}" data-turno="T3" class="setup-btn ${btnClasses[2]} text-white font-bold py-2 px-3 rounded-lg text-sm">3ú Turno</button>
                     </div>
                 </div>
             `;
@@ -14899,10 +15055,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         listenerManager.unsubscribe('launchPlanning');
         listenerManager.unsubscribe('launchProductions');
 
-        const planningQuery = db.collection('planning').where('date', '==', date);
+        // NOVO: Buscar todos os planejamentos e filtrar os ATIVOS no cliente
+        const planningQuery = db.collection('planning');
         listenerManager.subscribe('launchPlanning', planningQuery,
             (snapshot) => {
-                planningItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                // Filtrar apenas planejamentos ativos (não concluídos/finalizados/cancelados)
+                planningItems = snapshot.docs
+                    .map(doc => ({ id: doc.id, ...doc.data() }))
+                    .filter(isPlanActive);
                 planningItems.sort((a, b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0));
                 render();
             },
@@ -15036,7 +15196,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                             : 'Peso da peça: -'
                     ];
                     if (planData.mp) infoParts.push(`MP: ${planData.mp}`);
-                    productWeightInfo.textContent = infoParts.join(' • ');
+                    productWeightInfo.textContent = infoParts.join(' – ');
                 }
                 
                 // Configurar caixa de tara
@@ -16098,7 +16258,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (weightGrams > 0) {
             // Entrada em gramas - mostrar conversão para kg
             const weightKg = (weightGrams / 1000).toFixed(3);
-            feedbackHTML = `✓ ${weightGrams}g = <strong>${weightKg} kg</strong>`;
+            feedbackHTML = `✔ ${weightGrams}g = <strong>${weightKg} kg</strong>`;
             
             // Calcular e mostrar quantidade de peças
             if (pieceWeightGrams > 0) {
@@ -16639,7 +16799,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         startDowntimeTimer();
         
         // Notificação com informações contextuais
-        const shiftLabel = currentShift === 1 ? '1º Turno' : currentShift === 2 ? '2º Turno' : '3º Turno';
+        const shiftLabel = currentShift === 1 ? '1ú Turno' : currentShift === 2 ? '2ú Turno' : '3ú Turno';
         showNotification(`Máquina parada às ${formatTimeHM(now)} (${shiftLabel}). Clique em START quando retomar.`, 'warning');
     }
     
@@ -16661,12 +16821,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
     // ======== PARADAS LONGAS (Fim de Semana, Manutenção, etc.) ========
     
+    // Função para popular motivos de parada - ATIVA
+    // extended-downtime-reason agora é um SELECT com optgroups
     function populateExtendedDowntimeReasons() {
         const reasonSelect = document.getElementById('extended-downtime-reason');
         if (!reasonSelect) return;
 
         const groupedReasons = getGroupedDowntimeReasons();
-        let options = '<option value="">Selecione um motivo...</option>';
+        let options = '<option value="">Selecione o motivo...</option>';
 
         Object.entries(groupedReasons).forEach(([group, reasons]) => {
             options += `<optgroup label="${group}">`;
@@ -16677,6 +16839,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         });
 
         reasonSelect.innerHTML = options;
+        console.log('[PARADAS-LONGAS] Motivos carregados:', Object.keys(groupedReasons).length, 'grupos');
     }
 
     function populateExtendedDowntimeMachines() {
@@ -16706,42 +16869,51 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         populateExtendedDowntimeReasons();
         populateExtendedDowntimeMachines();
 
+        // Elementos do formulário
+        const startDateInput = document.getElementById('extended-downtime-start-date');
+        const customTimeInput = document.getElementById('extended-downtime-custom-time');
+        const useNowBtn = document.getElementById('extended-downtime-use-now');
+        const startTimeElement = document.getElementById('extended-downtime-start-time');
+        
+        // Função para preencher com data/hora atual
+        function setCurrentDateTime() {
+            const now = new Date();
+            const dateString = now.toISOString().split('T')[0];  // YYYY-MM-DD
+            const timeString = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+            
+            if (startDateInput) startDateInput.value = dateString;
+            if (customTimeInput) customTimeInput.value = timeString;
+            if (startTimeElement) startTimeElement.textContent = `Definido: ${dateString} às ${timeString}`;
+        }
+        
+        // Preencher com data/hora atual ao carregar
+        setCurrentDateTime();
+        
+        // Botão para usar data/hora atual
+        if (useNowBtn) {
+            useNowBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                setCurrentDateTime();
+                showNotification('✅ Data e hora atualizados para agora', 'success');
+            });
+        }
+        
+        // Atualizar display quando campos mudarem
+        function updateDisplay() {
+            if (startDateInput && customTimeInput && startTimeElement) {
+                const date = startDateInput.value || '--';
+                const time = customTimeInput.value || '--:--';
+                startTimeElement.textContent = `Selecionado: ${date} às ${time}`;
+            }
+        }
+        
+        if (startDateInput) startDateInput.addEventListener('change', updateDisplay);
+        if (customTimeInput) customTimeInput.addEventListener('change', updateDisplay);
+
         const form = document.getElementById('extended-downtime-form');
         if (form && !form.dataset.listenerAttached) {
             form.addEventListener('submit', handleExtendedDowntimeFormSubmit);
             form.dataset.listenerAttached = 'true';
-        }
-
-        // Attach duration calculator listeners
-        const dateStart = document.getElementById('extended-downtime-date-start');
-        const dateEnd = document.getElementById('extended-downtime-date-end');
-        const durationDisplay = document.getElementById('extended-downtime-duration');
-
-        const updateDuration = () => {
-            if (dateStart.value && dateEnd.value) {
-                const start = new Date(dateStart.value);
-                const end = new Date(dateEnd.value);
-                const diffMs = end - start;
-                const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-                const diffDays = Math.floor(diffHours / 24);
-                
-                if (diffDays > 0) {
-                    durationDisplay.textContent = `${diffDays} dia(s) e ${diffHours % 24}h`;
-                } else if (diffHours > 0) {
-                    durationDisplay.textContent = `${diffHours}h`;
-                } else {
-                    durationDisplay.textContent = '-';
-                }
-            }
-        };
-
-        if (dateStart) {
-            dateStart.removeEventListener('change', updateDuration);
-            dateStart.addEventListener('change', updateDuration);
-        }
-        if (dateEnd) {
-            dateEnd.removeEventListener('change', updateDuration);
-            dateEnd.addEventListener('change', updateDuration);
         }
     }
 
@@ -17094,6 +17266,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             }
             showNotification('✅ Acompanhamento salvo com sucesso!', 'success');
             console.log('[ACOMPANHAMENTO] Dados salvos para todos os turnos');
+            
+            // Registrar log
+            registrarLogSistema('SALVAMENTO DE ACOMPANHAMENTO', 'acompanhamento', {
+                data: data,
+                turnosRegistrados: Object.keys(registrosPorTurno).filter(t => registrosPorTurno[t].length > 0).length,
+                totalRegistros: registrosPorTurno[1].length + registrosPorTurno[2].length + registrosPorTurno[3].length
+            });
 
         } catch (error) {
             console.error('[ACOMPANHAMENTO] Erro ao salvar:', error);
@@ -17101,6 +17280,429 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
     }
     // ==================== FIM ACOMPANHAMENTO DE TURNO ====================
+
+    // ==================== HISTÓRICO DO SISTEMA ====================
+    
+    // Função global para registrar ações no sistema
+    window.logSystemAction = async function(tipo, descricao, detalhes = {}) {
+        try {
+            const usuario = window.authSystem?.getCurrentUser();
+            const now = new Date();
+            
+            await db.collection('system_logs').add({
+                tipo: tipo,
+                descricao: descricao,
+                maquina: detalhes.maquina || selectedMachineData?.machine || null,
+                usuario: usuario?.name || 'Desconhecido',
+                userId: usuario?.id || null,
+                detalhes: detalhes,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                timestampLocal: now.toISOString(),
+                data: now.toISOString().split('T')[0],
+                hora: now.toTimeString().split(' ')[0]
+            });
+            
+            console.log('[SYSTEM_LOG]', tipo, descricao);
+        } catch (error) {
+            console.error('[SYSTEM_LOG] Erro ao registrar ação:', error);
+        }
+    };
+    
+    // Função interna para registrar logs (usada em diversos pontos do sistema)
+    async function registrarLogSistema(acao, tipo, detalhes = {}) {
+        try {
+            const usuario = window.authSystem?.getCurrentUser();
+            const now = new Date();
+            
+            await db.collection('system_logs').add({
+                acao: acao,
+                tipo: tipo,
+                descricao: acao,
+                maquina: detalhes.machine || detalhes.maquina || selectedMachineData?.machine || null,
+                usuario: usuario?.name || 'Desconhecido',
+                userId: usuario?.id || null,
+                detalhes: detalhes,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                timestampLocal: now.toISOString(),
+                data: now.toISOString().split('T')[0],
+                hora: now.toTimeString().split(' ')[0]
+            });
+            
+            console.log('[SYSTEM_LOG]', acao, tipo, detalhes);
+        } catch (error) {
+            console.error('[SYSTEM_LOG] Erro ao registrar log:', error);
+        }
+    }
+
+    let historicoCurrentPage = 0;
+    let historicoPageSize = 50;
+    let historicoLastDoc = null;
+    let historicoFirstDoc = null;
+    let historicoDataSelecionada = null; // 'hoje', 'ontem' ou data específica
+    let historicoSetupDone = false; // Flag para evitar setup duplicado
+
+    function setupHistoricoSistema() {
+        // Evitar configuração duplicada de event listeners
+        if (historicoSetupDone) {
+            // Apenas recarregar os dados
+            carregarHistorico();
+            return;
+        }
+        historicoSetupDone = true;
+
+        const btnHoje = document.getElementById('historico-hoje');
+        const btnOntem = document.getElementById('historico-ontem');
+        const dataEspecifica = document.getElementById('historico-data-especifica');
+        const btnRefresh = document.getElementById('historico-refresh');
+        const btnPrev = document.getElementById('historico-prev');
+        const btnNext = document.getElementById('historico-next');
+
+        // Função para atualizar visual dos botões
+        function atualizarBotaoAtivo(ativo) {
+            if (btnHoje) {
+                btnHoje.className = ativo === 'hoje' 
+                    ? 'flex-1 px-3 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition'
+                    : 'flex-1 px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50 transition';
+            }
+            if (btnOntem) {
+                btnOntem.className = ativo === 'ontem'
+                    ? 'flex-1 px-3 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition'
+                    : 'flex-1 px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50 transition';
+            }
+            if (dataEspecifica && ativo !== 'hoje' && ativo !== 'ontem') {
+                dataEspecifica.classList.add('ring-2', 'ring-blue-500');
+            } else if (dataEspecifica) {
+                dataEspecifica.classList.remove('ring-2', 'ring-blue-500');
+            }
+        }
+
+        // Definir data padrão como hoje
+        historicoDataSelecionada = new Date().toISOString().split('T')[0];
+        atualizarBotaoAtivo('hoje');
+
+        // Evento botão Hoje
+        if (btnHoje) btnHoje.addEventListener('click', () => {
+            historicoDataSelecionada = new Date().toISOString().split('T')[0];
+            if (dataEspecifica) dataEspecifica.value = '';
+            atualizarBotaoAtivo('hoje');
+            historicoCurrentPage = 0;
+            historicoLastDoc = null;
+            carregarHistorico();
+        });
+
+        // Evento botão Ontem
+        if (btnOntem) btnOntem.addEventListener('click', () => {
+            const ontem = new Date();
+            ontem.setDate(ontem.getDate() - 1);
+            historicoDataSelecionada = ontem.toISOString().split('T')[0];
+            if (dataEspecifica) dataEspecifica.value = '';
+            atualizarBotaoAtivo('ontem');
+            historicoCurrentPage = 0;
+            historicoLastDoc = null;
+            carregarHistorico();
+        });
+
+        // Evento seleção de data específica
+        if (dataEspecifica) dataEspecifica.addEventListener('change', () => {
+            if (dataEspecifica.value) {
+                historicoDataSelecionada = dataEspecifica.value;
+                atualizarBotaoAtivo('especifica');
+                historicoCurrentPage = 0;
+                historicoLastDoc = null;
+                carregarHistorico();
+            }
+        });
+        
+        if (btnRefresh) btnRefresh.addEventListener('click', () => {
+            historicoCurrentPage = 0;
+            historicoLastDoc = null;
+            carregarHistorico();
+        });
+
+        if (btnPrev) btnPrev.addEventListener('click', () => {
+            if (historicoCurrentPage > 0) {
+                historicoCurrentPage--;
+                carregarHistorico('prev');
+            }
+        });
+
+        if (btnNext) btnNext.addEventListener('click', () => {
+            historicoCurrentPage++;
+            carregarHistorico('next');
+        });
+
+        // Event listeners para os filtros
+        const tipoAcaoSelect = document.getElementById('historico-tipo-acao');
+        const usuarioInput = document.getElementById('historico-usuario');
+        const maquinaInput = document.getElementById('historico-maquina');
+
+        if (tipoAcaoSelect) {
+            tipoAcaoSelect.addEventListener('change', () => {
+                historicoCurrentPage = 0;
+                historicoLastDoc = null;
+                carregarHistorico();
+            });
+        }
+
+        // Debounce para inputs de texto (evita muitas requisições)
+        let debounceTimer = null;
+        const debounceCarregar = () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                historicoCurrentPage = 0;
+                historicoLastDoc = null;
+                carregarHistorico();
+            }, 500);
+        };
+
+        if (usuarioInput) {
+            usuarioInput.addEventListener('input', debounceCarregar);
+        }
+
+        if (maquinaInput) {
+            maquinaInput.addEventListener('input', debounceCarregar);
+        }
+
+        // Botão para gerar dados de teste
+        const btnTeste = document.getElementById('historico-teste');
+        if (btnTeste) btnTeste.addEventListener('click', async () => {
+            try {
+                btnTeste.disabled = true;
+                btnTeste.textContent = 'Gerando...';
+                
+                const usuario = window.authSystem?.getCurrentUser();
+                const now = new Date();
+                const dataHoje = now.toISOString().split('T')[0];
+                
+                // Criar alguns registros de teste
+                const testeLogs = [
+                    { acao: 'LANÇAMENTO DE PRODUÇÃO', tipo: 'producao', descricao: 'Produção de teste - 500 peças', maquina: 'H-01', detalhes: { quantidade: 500, turno: 1 } },
+                    { acao: 'ATIVAÇÃO DE ORDEM', tipo: 'ordem', descricao: 'Ordem OP-12345 ativada', maquina: 'H-05', detalhes: { orderNumber: 'OP-12345' } },
+                    { acao: 'LANÇAMENTO DE PERDA', tipo: 'perda', descricao: 'Perda registrada - 20 peças', maquina: 'H-11', detalhes: { quantidade: 20, motivo: 'Material fora de especificação' } },
+                    { acao: 'REGISTRO DE PARADA', tipo: 'parada', descricao: 'Parada por manutenção - 45min', maquina: 'H-01', detalhes: { duracao: 45, motivo: 'Manutenção preventiva' } },
+                ];
+                
+                for (const log of testeLogs) {
+                    await db.collection('system_logs').add({
+                        ...log,
+                        usuario: usuario?.name || 'Teste',
+                        userId: usuario?.id || null,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                        timestampLocal: now.toISOString(),
+                        data: dataHoje,
+                        hora: now.toTimeString().split(' ')[0]
+                    });
+                }
+                
+                showNotification('✅ 4 registros de teste criados!', 'success');
+                carregarHistorico();
+            } catch (error) {
+                console.error('Erro ao gerar teste:', error);
+                showNotification('Erro ao gerar dados de teste', 'error');
+            } finally {
+                btnTeste.disabled = false;
+                btnTeste.innerHTML = '<i data-lucide="plus" class="w-4 h-4"></i> Gerar Teste';
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
+        });
+
+        // Carregar dados iniciais (hoje)
+        carregarHistorico();
+    }
+
+    async function carregarHistorico(direction = 'first') {
+        const tbody = document.getElementById('historico-tbody');
+        if (!tbody) return;
+
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="px-4 py-10 text-center text-gray-400">
+                    <i data-lucide="loader-2" class="w-10 h-10 mx-auto mb-3 animate-spin opacity-50"></i>
+                    <p>Carregando histórico...</p>
+                </td>
+            </tr>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+
+        try {
+            const dataSelecionada = historicoDataSelecionada || new Date().toISOString().split('T')[0];
+            const tipoAcao = document.getElementById('historico-tipo-acao')?.value;
+            const usuarioFiltro = document.getElementById('historico-usuario')?.value?.toLowerCase();
+            const maquinaFiltro = document.getElementById('historico-maquina')?.value?.toLowerCase();
+
+            // Construir query base - filtra apenas pela data selecionada
+            // Nota: ordenação será feita localmente para evitar necessidade de índice composto
+            let query = db.collection('system_logs')
+                .where('data', '==', dataSelecionada)
+                .limit(500); // Buscar mais registros e ordenar localmente
+
+            const snapshot = await query.get();
+            
+            if (snapshot.empty) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="px-4 py-10 text-center text-gray-400">
+                            <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
+                            <p>Nenhum registro encontrado para a data selecionada</p>
+                        </td>
+                    </tr>
+                `;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+                atualizarEstatisticasHistorico([]);
+                return;
+            }
+
+            // Converter para array e ordenar localmente por timestamp (mais recente primeiro)
+            let registros = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            registros.sort((a, b) => {
+                const tsA = a.timestamp?.toDate?.() || new Date(a.timestampLocal || 0);
+                const tsB = b.timestamp?.toDate?.() || new Date(b.timestampLocal || 0);
+                return tsB - tsA; // Ordem decrescente
+            });
+
+            // Aplicar filtros locais
+            if (tipoAcao) {
+                registros = registros.filter(r => r.tipo === tipoAcao);
+            }
+            if (usuarioFiltro) {
+                registros = registros.filter(r => (r.usuario || '').toLowerCase().includes(usuarioFiltro));
+            }
+            if (maquinaFiltro) {
+                registros = registros.filter(r => (r.maquina || '').toLowerCase().includes(maquinaFiltro));
+            }
+
+            // Atualizar estatísticas antes de paginar
+            atualizarEstatisticasHistorico(registros);
+
+            tbody.innerHTML = '';
+
+            if (registros.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="px-4 py-10 text-center text-gray-400">
+                            <i data-lucide="filter-x" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
+                            <p>Nenhum registro corresponde aos filtros aplicados</p>
+                        </td>
+                    </tr>
+                `;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+                return;
+            }
+
+            registros.forEach(log => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 transition-colors';
+                
+                const tipoInfo = getTipoInfo(log.tipo);
+                const dataHora = formatarDataHoraLog(log);
+                const detalhesStr = formatarDetalhes(log.detalhes);
+                
+                row.innerHTML = `
+                    <td class="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">${dataHora}</td>
+                    <td class="px-4 py-3">
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${tipoInfo.class}">
+                            ${tipoInfo.icon} ${tipoInfo.label}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-800">${log.descricao || log.acao || '-'}</td>
+                    <td class="px-4 py-3 text-sm font-medium text-blue-600">${log.maquina || '-'}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${log.usuario || '-'}</td>
+                    <td class="px-4 py-3 text-xs text-gray-500 max-w-xs truncate" title="${detalhesStr}">${detalhesStr || '-'}</td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+
+            // Atualizar info de paginação
+            const info = document.getElementById('historico-info');
+            if (info) {
+                info.textContent = `Mostrando ${registros.length} registros`;
+            }
+
+            // Esconder botões de paginação (não necessário com ordenação local)
+            const btnPrev = document.getElementById('historico-prev');
+            const btnNext = document.getElementById('historico-next');
+            if (btnPrev) btnPrev.style.display = 'none';
+            if (btnNext) btnNext.style.display = 'none';
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+        } catch (error) {
+            console.error('[HISTORICO] Erro ao carregar:', error);
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="px-4 py-10 text-center text-red-400">
+                        <i data-lucide="alert-circle" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
+                        <p>Erro ao carregar: ${error.message}</p>
+                    </td>
+                </tr>
+            `;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+    }
+
+    function getTipoInfo(tipo) {
+        const tipos = {
+            'producao': { label: 'Produção', icon: '📦', class: 'bg-green-100 text-green-800' },
+            'perda': { label: 'Perda', icon: '⚠️', class: 'bg-orange-100 text-orange-800' },
+            'parada': { label: 'Parada', icon: '⏸️', class: 'bg-red-100 text-red-800' },
+            'ordem': { label: 'Ordem', icon: '📋', class: 'bg-blue-100 text-blue-800' },
+            'ordem_ativada': { label: 'Ordem Ativada', icon: '✅', class: 'bg-blue-100 text-blue-800' },
+            'ordem_finalizada': { label: 'Ordem Finalizada', icon: '🏁', class: 'bg-purple-100 text-purple-800' },
+            'ordem_criada': { label: 'Ordem Criada', icon: '📋', class: 'bg-indigo-100 text-indigo-800' },
+            'exclusao': { label: 'Exclusão', icon: '🗑️', class: 'bg-red-100 text-red-800' },
+            'edicao': { label: 'Edição', icon: '✏️', class: 'bg-yellow-100 text-yellow-800' },
+            'login': { label: 'Login', icon: '🔐', class: 'bg-emerald-100 text-emerald-800' },
+            'logout': { label: 'Logout', icon: '🚪', class: 'bg-gray-100 text-gray-800' },
+            'ciclo_cavidade': { label: 'Ciclo/Cavidade', icon: '⚙️', class: 'bg-cyan-100 text-cyan-800' },
+            'acompanhamento': { label: 'Acompanhamento', icon: '📊', class: 'bg-violet-100 text-violet-800' },
+            'planejamento': { label: 'Planejamento', icon: '📅', class: 'bg-teal-100 text-teal-800' },
+            'qualidade': { label: 'Qualidade', icon: '✔', class: 'bg-sky-100 text-sky-800' },
+            'retrabalho': { label: 'Retrabalho', icon: '🔄', class: 'bg-amber-100 text-amber-800' }
+        };
+        return tipos[tipo] || { label: tipo || 'Outro', icon: '📝', class: 'bg-gray-100 text-gray-800' };
+    }
+
+    function formatarDataHoraLog(log) {
+        if (log.timestamp?.toDate) {
+            const d = log.timestamp.toDate();
+            return d.toLocaleString('pt-BR');
+        }
+        if (log.timestampLocal) {
+            return new Date(log.timestampLocal).toLocaleString('pt-BR');
+        }
+        return `${log.data || ''} ${log.hora || ''}`;
+    }
+
+    function formatarDetalhes(detalhes) {
+        if (!detalhes || typeof detalhes !== 'object') return '';
+        
+        const partes = [];
+        if (detalhes.quantidade) partes.push(`Qtd: ${detalhes.quantidade}`);
+        if (detalhes.op) partes.push(`OP: ${detalhes.op}`);
+        if (detalhes.produto) partes.push(`Prod: ${detalhes.produto}`);
+        if (detalhes.motivo) partes.push(`Motivo: ${detalhes.motivo}`);
+        if (detalhes.duracao) partes.push(`Dur: ${detalhes.duracao}min`);
+        if (detalhes.turno) partes.push(`T${detalhes.turno}`);
+        
+        return partes.join(' | ') || JSON.stringify(detalhes).substring(0, 100);
+    }
+
+    function atualizarEstatisticasHistorico(registros) {
+        const total = document.getElementById('historico-total');
+        const producao = document.getElementById('historico-producao-count');
+        const paradas = document.getElementById('historico-paradas-count');
+        const ordens = document.getElementById('historico-ordens-count');
+        const exclusoes = document.getElementById('historico-exclusoes-count');
+
+        if (total) total.textContent = registros.length;
+        if (producao) producao.textContent = registros.filter(r => r.tipo === 'producao').length;
+        if (paradas) paradas.textContent = registros.filter(r => r.tipo === 'parada').length;
+        if (ordens) ordens.textContent = registros.filter(r => r.tipo === 'ordem' || r.tipo?.startsWith('ordem')).length;
+        if (exclusoes) exclusoes.textContent = registros.filter(r => r.tipo === 'exclusao' || (r.acao && r.acao.includes('EXCLUSÃO'))).length;
+    }
+
+    // ==================== FIM HISTÓRICO DO SISTEMA ====================
 
     function openExtendedDowntimeModal() {
         if (!selectedMachineData) {
@@ -17208,140 +17810,213 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
     }
 
+    // ============================================================
+    // ATUALIZAÇÃO AUTOMÁTICA DE PARADAS LONGAS (a cada 30 minutos)
+    // ============================================================
+    
+    /**
+     * Inicia o timer de atualização automática de paradas longas ativas
+     * Atualiza o campo duration_minutes no Firebase a cada 30 minutos
+     */
+    function startExtendedDowntimeAutoUpdate() {
+        // Limpar timer anterior se existir
+        if (extendedDowntimeUpdateTimer) {
+            clearInterval(extendedDowntimeUpdateTimer);
+        }
+        
+        console.log('[PARADAS-LONGAS] Iniciando atualização automática a cada 30 minutos');
+        
+        // Executar imediatamente na primeira vez
+        updateActiveExtendedDowntimes();
+        
+        // Agendar execução a cada 30 minutos
+        extendedDowntimeUpdateTimer = setInterval(() => {
+            updateActiveExtendedDowntimes();
+        }, EXTENDED_DOWNTIME_UPDATE_INTERVAL);
+    }
+    
+    /**
+     * Atualiza o tempo de todas as paradas longas ativas no Firebase
+     */
+    async function updateActiveExtendedDowntimes() {
+        try {
+            console.log('[PARADAS-LONGAS] Atualizando tempo de paradas ativas...');
+            
+            // Buscar todas as paradas ativas
+            const snapshot = await db.collection('extended_downtime_logs')
+                .where('status', '==', 'active')
+                .get();
+            
+            if (snapshot.empty) {
+                console.log('[PARADAS-LONGAS] Nenhuma parada ativa para atualizar');
+                return;
+            }
+            
+            const now = new Date();
+            const batch = db.batch();
+            let updatedCount = 0;
+            
+            snapshot.docs.forEach(doc => {
+                const data = doc.data();
+                
+                // Calcular duração atual
+                let startDatetime;
+                if (data.start_datetime?.toDate) {
+                    startDatetime = data.start_datetime.toDate();
+                } else if (data.start_date && data.start_time) {
+                    startDatetime = new Date(`${data.start_date}T${data.start_time}:00`);
+                } else {
+                    console.warn('[PARADAS-LONGAS] Registro sem data de início válida:', doc.id);
+                    return;
+                }
+                
+                const durationMinutes = Math.floor((now - startDatetime) / (1000 * 60));
+                
+                // Atualizar no batch
+                batch.update(doc.ref, {
+                    duration_minutes: durationMinutes,
+                    last_duration_update: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                updatedCount++;
+                
+                console.log(`[PARADAS-LONGAS] ${data.machine_id || 'N/A'}: ${Math.floor(durationMinutes/60)}h ${durationMinutes % 60}m`);
+            });
+            
+            if (updatedCount > 0) {
+                await batch.commit();
+                console.log(`[PARADAS-LONGAS] ✅ ${updatedCount} parada(s) atualizada(s)`);
+            }
+            
+        } catch (error) {
+            console.error('[PARADAS-LONGAS] Erro ao atualizar paradas ativas:', error);
+        }
+    }
+    
+    /**
+     * Para o timer de atualização automática
+     */
+    function stopExtendedDowntimeAutoUpdate() {
+        if (extendedDowntimeUpdateTimer) {
+            clearInterval(extendedDowntimeUpdateTimer);
+            extendedDowntimeUpdateTimer = null;
+            console.log('[PARADAS-LONGAS] Timer de atualização automática parado');
+        }
+    }
+
     async function handleExtendedDowntimeFormSubmit(e) {
         e.preventDefault();
 
         const machineSelect = document.getElementById('extended-downtime-machine');
-        const typeSelect = document.getElementById('extended-downtime-type');
-        const dateStart = document.getElementById('extended-downtime-date-start');
-        const dateEnd = document.getElementById('extended-downtime-date-end');
-        const timeStart = document.getElementById('extended-downtime-time-start');
-        const timeEnd = document.getElementById('extended-downtime-time-end');
         const reasonSelect = document.getElementById('extended-downtime-reason');
+        const startDateInput = document.getElementById('extended-downtime-start-date');
+        const startTimeInput = document.getElementById('extended-downtime-custom-time');
         const statusDiv = document.getElementById('extended-downtime-status');
         const submitBtn = document.getElementById('extended-downtime-submit');
 
-        const selectedOptions = Array.from(machineSelect?.selectedOptions || [])
-            .map(opt => opt.value)
-            .filter(v => v && v.trim() !== '');
-        const machine = selectedOptions[0] || '';
-        const type = typeSelect?.value?.trim() || '';
-        const startDate = dateStart?.value?.trim() || '';
-        const endDate = dateEnd?.value?.trim() || '';
-        const startTime = timeStart?.value?.trim() || '00:00';
-        const endTime = timeEnd?.value?.trim() || '23:59';
+        // SINGLE MACHINE (not array)
+        const selectedMachine = machineSelect?.value?.trim() || '';
         const reason = reasonSelect?.value?.trim() || '';
+        const selectedDate = startDateInput?.value || '';
+        const selectedTime = startTimeInput?.value || '';
 
-        console.log('[PARADAS-LONGAS] Valores do formulário:', { machines: selectedOptions, type, startDate, endDate, startTime, endTime, reason });
+        console.log('[PARADAS-LONGAS] Registrando parada ATIVA:', { machine: selectedMachine, reason, date: selectedDate, time: selectedTime });
 
-        if (selectedOptions.length === 0 || !type || !startDate || !endDate || !reason) {
+        // Validação
+        if (!selectedMachine || !reason) {
             const missing = [];
-            if (selectedOptions.length === 0) missing.push('máquinas');
-            if (!type) missing.push('tipo');
-            if (!startDate) missing.push('data início');
-            if (!endDate) missing.push('data fim');
+            if (!selectedMachine) missing.push('máquina');
             if (!reason) missing.push('motivo');
             
-            statusDiv.textContent = `Preencha: ${missing.join(', ')}`;
+            statusDiv.textContent = `❌ Preencha: ${missing.join(', ')}`;
+            statusDiv.className = 'text-sm font-semibold h-5 text-center text-red-600';
+            return;
+        }
+
+        // Validar data e hora
+        if (!selectedDate || !selectedTime) {
+            statusDiv.textContent = `❌ Preencha a data e hora de início`;
             statusDiv.className = 'text-sm font-semibold h-5 text-center text-red-600';
             return;
         }
 
         try {
             submitBtn.disabled = true;
-            const isEditing = submitBtn.dataset.editingId;
-            statusDiv.textContent = isEditing ? 'Atualizando...' : 'Registrando...';
+            statusDiv.textContent = 'Registrando parada...';
             statusDiv.className = 'text-sm font-semibold h-5 text-center text-blue-600';
 
-            const startDateTime = new Date(`${startDate}T${startTime}`);
-            const endDateTime = new Date(`${endDate}T${endTime}`);
-            const durationMinutes = Math.floor((endDateTime - startDateTime) / (1000 * 60));
+            // Criar data/hora a partir dos inputs
+            const [hours, minutes] = selectedTime.split(':');
+            const startDateTime = new Date(selectedDate + 'T' + selectedTime + ':00');
+            
+            console.log('[PARADAS-LONGAS] Data/hora selecionada:', { date: selectedDate, time: selectedTime, datetime: startDateTime });
+            
+            const userName = getActiveUser()?.name || 'Sistema';
+            const normalizedMachineId = normalizeMachineId(selectedMachine);
+            
+            // Criar um ÚNICO documento para esta parada
+            const downtimeData = {
+                machine_id: normalizedMachineId,
+                type: reason,  // Usar reason como tipo (vem da lista de motivos)
+                reason: reason,  // Manter também como reason para compatibilidade
+                
+                // Data/hora de início = SELECIONADA pelo usuário
+                start_date: selectedDate,
+                start_time: selectedTime,
+                start_datetime: firebase.firestore.Timestamp.fromDate(startDateTime),
+                
+                // Data/hora de fim: NOT SET (vai ser preenchido ao finalizar)
+                end_date: null,
+                end_time: null,
+                end_datetime: null,
+                
+                // Status: ATIVA (não finalized yet)
+                status: 'active',
+                
+                // Auditoria
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                createdBy: userName,
+                shift: getCurrentShift(startDateTime),
+                date: selectedDate
+            };
 
-            // Quando em modo edição, sempre tratar como edição de UM registro
-            if (isEditing) {
-                const downtimeData = {
-                    machine_id: machine,
-                    type: type,
-                    reason: reason,
-                    start_date: startDate,
-                    end_date: endDate,
-                    start_time: startTime,
-                    end_time: endTime,
-                    start_datetime: firebase.firestore.Timestamp.fromDate(startDateTime),
-                    end_datetime: firebase.firestore.Timestamp.fromDate(endDateTime),
-                    duration_minutes: durationMinutes,
-                    status: 'registered',
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    updatedBy: getActiveUser()?.name || 'Sistema',
-                    createdBy: getActiveUser()?.name || 'Sistema',
-                    shift: getCurrentShift(startDateTime),
-                    date: startDate
-                };
+            // Adicionar à Firestore
+            const docRef = await db.collection('extended_downtime_logs').add(downtimeData);
+            
+            console.log('[PARADAS-LONGAS] Parada registrada com sucesso:', {
+                recordId: docRef.id,
+                machine: normalizedMachineId,
+                startTime: `${selectedDate} ${selectedTime}`
+            });
 
-                await db.collection('extended_downtime_logs').doc(isEditing).update(downtimeData);
-                statusDiv.textContent = '✓ Parada longa atualizada com sucesso!';
-            } else {
-                // Novo registro: criar um documento por máquina selecionada
-                const batch = db.batch();
-                const downtimeCollection = db.collection('extended_downtime_logs');
-                const userName = getActiveUser()?.name || 'Sistema';
-
-                selectedOptions.forEach(machineId => {
-                    const docRef = downtimeCollection.doc();
-                    const downtimeData = {
-                        machine_id: machineId,
-                        type: type,
-                        reason: reason,
-                        start_date: startDate,
-                        end_date: endDate,
-                        start_time: startTime,
-                        end_time: endTime,
-                        start_datetime: firebase.firestore.Timestamp.fromDate(startDateTime),
-                        end_datetime: firebase.firestore.Timestamp.fromDate(endDateTime),
-                        duration_minutes: durationMinutes,
-                        status: 'registered',
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                        createdBy: userName,
-                        shift: getCurrentShift(startDateTime),
-                        date: startDate
-                    };
-                    batch.set(docRef, downtimeData);
-                });
-
-                await batch.commit();
-                statusDiv.textContent = `✓ Parada longa registrada para ${selectedOptions.length} máquina(s)!`;
-            }
-
+            statusDiv.textContent = `✅ Parada iniciada para ${normalizedMachineId} em ${selectedDate} às ${selectedTime}`;
             statusDiv.className = 'text-sm font-semibold h-5 text-center text-green-600';
 
-            // Clear form
+            // Limpar formulário
             document.getElementById('extended-downtime-form').reset();
+            setupExtendedDowntimeTab();  // Reinicializar (vai preencher com data/hora atual)
             
-            // Limpar ID de edição e resetar botão
-            submitBtn.dataset.editingId = '';
-            submitBtn.innerHTML = '<i data-lucide="save" class="w-4 h-4"></i><span>Registrar Parada Longa</span>';
             submitBtn.disabled = false;
             lucide.createIcons();
             
-            // Reload list
-            await loadExtendedDowntimeList();
+            // Recarregar painel de máquinas (vai mostrar a parada ativa)
+            const machinesDowntime = await getAllMachinesDowntimeStatus();
+            await renderMachineCards([], [], [], new Set(), machinesDowntime);
             
-            // Se estiver na análise, recarregar também
-            if (document.querySelector('#extended-downtime-analysis-list')) {
-                const { startDate, endDate, machine } = currentAnalysisFilters;
-                await loadExtendedDowntimeAnalysis(startDate, endDate, machine);
+            // Se lista de paradas está visível, atualizar
+            if (typeof loadExtendedDowntimeList === 'function') {
+                await loadExtendedDowntimeList();
             }
 
             setTimeout(() => {
                 statusDiv.textContent = '';
                 statusDiv.className = 'text-sm font-semibold h-5 text-center';
-            }, 3000);
+            }, 5000);
 
         } catch (error) {
-            console.error('Erro ao registrar parada longa:', error);
-            statusDiv.textContent = '✗ Erro: ' + error.message;
+            console.error('[PARADAS-LONGAS] Erro ao registrar parada:', error);
+            statusDiv.textContent = `❌ Erro: ${error.message}`;
             statusDiv.className = 'text-sm font-semibold h-5 text-center text-red-600';
-        } finally {
             submitBtn.disabled = false;
         }
     }
@@ -17386,6 +18061,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 maintenance: 'Manutenção Preventiva',
                 preventive: 'Manutenção Preventiva',
                 maintenance_planned: 'Manutenção Programada',
+                maintenance_emergency: 'Manutenção Emergencial',
+                no_order: 'Sem Pedido',
+                commercial: 'Parada Comercial',
                 holiday: 'Feriado',
                 setup: 'Setup/Troca',
                 other: 'Outro'
@@ -17395,6 +18073,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 maintenance: 'bg-blue-100 text-blue-700',
                 preventive: 'bg-blue-100 text-blue-700',
                 maintenance_planned: 'bg-blue-100 text-blue-700',
+                maintenance_emergency: 'bg-red-100 text-red-700',
+                no_order: 'bg-orange-100 text-orange-700',
+                commercial: 'bg-amber-100 text-amber-700',
                 holiday: 'bg-amber-100 text-amber-700',
                 setup: 'bg-purple-100 text-purple-700',
                 other: 'bg-red-100 text-red-700'
@@ -17525,6 +18206,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
             console.log('[EXTENDED-DOWNTIME] Registro excluído com sucesso');
             
+            // Registrar log
+            registrarLogSistema('EXCLUSÃO DE PARADA ESTENDIDA', 'parada', {
+                recordId: recordId,
+                machine: machine
+            });
+            
             // Recarregar lista e análise
             await loadExtendedDowntimeList();
             
@@ -17550,11 +18237,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         // ✅ POKA-YOKE: Bloquear lançamento se OP não estiver ativada
         if (!validateOrderActivated()) {
-            return;
-        }
-
-        // ✅ POKA-YOKE: Bloquear lançamento se ciclo/cavidade não informado no turno
-        if (!validateCycleCavityLaunched()) {
             return;
         }
         
@@ -17703,6 +18385,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     console.warn('[SYNC-PLAN] Falha ao atualizar total do plano:', planErr);
                 }
             }
+
+            // Registrar no histórico do sistema
+            if (typeof logSystemAction === 'function') {
+                logSystemAction('producao', `Produção manual: ${resolvedQuantity} peças`, {
+                    quantidade: resolvedQuantity,
+                    maquina: selectedMachineData.machine,
+                    op: linkedOrderId || planId,
+                    turno: turno,
+                    data: dateValue,
+                    peso: netWeightKg
+                });
+            }
             
             closeModal('manual-production-modal');
             await populateMachineSelector();
@@ -17733,42 +18427,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         return true;
     }
 
-    // ✅ POKA-YOKE: Validar se ciclo e cavidade foram lançados no turno atual
+    // Função validateCycleCavityLaunched() DESABILITADA - ciclo/cavidade não é mais obrigatório
     function validateCycleCavityLaunched() {
-        if (!selectedMachineData) {
-            console.warn('[POKA-YOKE] Tentativa de validação sem máquina selecionada');
-            return false;
-        }
-        
-        const currentShift = getCurrentShift();
-        const shiftKey = `t${currentShift}`;
-        
-        // Buscar ciclo e cavidade do turno atual nos dados da máquina
-        const realCycle = selectedMachineData[`real_cycle_${shiftKey}`] || selectedMachineData.raw?.[`real_cycle_${shiftKey}`];
-        const activeCavities = selectedMachineData[`active_cavities_${shiftKey}`] || selectedMachineData.raw?.[`active_cavities_${shiftKey}`];
-        
-        const hasCycle = realCycle !== null && realCycle !== undefined && realCycle !== '' && Number(realCycle) > 0;
-        const hasCavities = activeCavities !== null && activeCavities !== undefined && activeCavities !== '' && Number(activeCavities) > 0;
-        
-        if (!hasCycle || !hasCavities) {
-            const turnoNome = currentShift === 1 ? '1º Turno' : currentShift === 2 ? '2º Turno' : '3º Turno';
-            showNotification(
-                `⚠️ CICLO/CAVIDADE NÃO INFORMADO!\n\nAntes de lançar produção, perdas ou paradas, informe o Ciclo Real e Cavidades Ativas do ${turnoNome}.\n\nVá em PLANEJAMENTO → Painel de Ciclo/Cavidades → Clique em "Lançar" na máquina.`,
-                'warning',
-                8000
-            );
-            console.warn('[POKA-YOKE] Tentativa de lançamento bloqueada: ciclo/cavidade não informado no turno', {
-                turno: turnoNome,
-                realCycle,
-                activeCavities
-            });
-            return false;
-        }
-        
+        // Sempre retorna true - validação desabilitada por solicitação do usuário
         return true;
     }
 
-    // ✅ POKA-YOKE: Verificar se existe OP ativa para a máquina atual (função auxiliar)
+    //  POKA-YOKE: Verificar se existe OP ativa para a máquina atual
     function isOrderActiveForCurrentMachine() {
         if (!currentActiveOrder || !currentActiveOrder.id) {
             return false;
@@ -17777,14 +18442,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         return status === 'ativa' || status === 'em_andamento';
     }
 
-    // ✅ POKA-YOKE: Verificar se existe OP ativa para a máquina atual (versão booleana simples)
-    function isOrderActiveForCurrentMachine() {
-        if (!currentActiveOrder || !currentActiveOrder.id) {
-            return false;
-        }
-        const status = String(currentActiveOrder.status || '').toLowerCase();
-        return status === 'ativa' || status === 'em_andamento';
-    }
 
     async function handleQuickProductionSubmit(e) {
         e.preventDefault();
@@ -17795,10 +18452,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
 
-        // ✅ POKA-YOKE: Bloquear lançamento se ciclo/cavidade não informado no turno
-        if (!validateCycleCavityLaunched()) {
-            return;
-        }
 
         if (!window.authSystem || !window.authSystem.checkPermissionForAction) {
             showNotification('Erro de permissão', 'error');
@@ -17933,6 +18586,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 }
             }
 
+            // Registrar no histórico do sistema
+            if (typeof logSystemAction === 'function') {
+                logSystemAction('producao', `Produção rápida: ${resolvedQuantity} peças`, {
+                    quantidade: resolvedQuantity,
+                    maquina: selectedMachineData.machine,
+                    op: linkedOrderId || planId,
+                    turno: turno,
+                    data: getProductionDateString(),
+                    peso: netWeightKg
+                });
+            }
+
             closeModal('quick-production-modal');
             await populateMachineSelector();
             await refreshLaunchCharts();
@@ -17956,10 +18621,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
 
-        // ✅ POKA-YOKE: Bloquear lançamento se ciclo/cavidade não informado no turno
-        if (!validateCycleCavityLaunched()) {
-            return;
-        }
 
         if (!window.authSystem || !window.authSystem.checkPermissionForAction) {
             showNotification('Erro de permissão', 'error');
@@ -18073,6 +18734,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
+            // Registrar no histórico do sistema
+            if (typeof logSystemAction === 'function') {
+                logSystemAction('perda', `Perda manual: ${payloadBase.refugo_qty || 0} peças (${payloadBase.refugo_kg || 0}kg)`, {
+                    quantidade: payloadBase.refugo_qty,
+                    pesoKg: payloadBase.refugo_kg,
+                    maquina: selectedMachineData?.machine,
+                    motivo: payloadBase.perdas,
+                    turno: payloadBase.turno,
+                    data: payloadBase.data
+                });
+            }
+
             closeModal('manual-losses-modal');
             await populateMachineSelector();
             await refreshLaunchCharts();
@@ -18122,10 +18795,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
 
-        // ✅ POKA-YOKE: Bloquear lançamento se ciclo/cavidade não informado no turno
-        if (!validateCycleCavityLaunched()) {
-            return;
-        }
         
         // Verificar permissão
         if (!window.authSystem.checkPermissionForAction('add_losses')) {
@@ -18183,7 +18852,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             }
             const conversion = calculateQuantityFromGrams(weightGrams, pieceWeightGrams);
             refugoQty = conversion.quantity > 0 ? conversion.quantity : 1;
-            console.log(`[TRACE][handleLossesSubmit] Conversão: ${weightGrams}g ÷ ${pieceWeightGrams}g/peça = ${refugoQty} peças`);
+            console.log(`[TRACE][handleLossesSubmit] Conversão: ${weightGrams}g  /  ${pieceWeightGrams}g/peça = ${refugoQty} peças`);
             showNotification(`Convertido: ${weightGrams}g = ${refugoQty} peças`, 'info');
         }
         
@@ -18210,7 +18879,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const machineRef = isEditing ? (originalData?.machine || selectedMachineData?.machine) : selectedMachineData?.machine;
         const mpValue = isEditing ? (originalData?.mp || selectedMachineData?.mp || '') : (selectedMachineData?.mp || '');
 
-        // Calcular peso total se necessário (peças × peso médio)
+        // Calcular peso total se necessário (peças  x  peso médio)
         let pesoTotalKg = weightGrams > 0 ? gramsToKg(weightGrams) : 0;
         if (pesoTotalKg <= 0 && refugoQty > 0 && pieceWeightGrams > 0) {
             pesoTotalKg = (refugoQty * pieceWeightGrams) / 1000;
@@ -18270,6 +18939,15 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             // Atualizar aba de análise se estiver aberta
             await refreshAnalysisIfActive();
             showNotification(successMessage, 'success');
+            
+            // Registrar log
+            registrarLogSistema(isEditing ? 'EDIÇÃO DE PERDA' : 'LANÇAMENTO DE PERDA', 'perda', {
+                machine: machineRef,
+                refugoQty: refugoQty,
+                pesoKg: pesoTotalKg,
+                motivo: reason,
+                observacoes: obs
+            });
 
             console.log('[TRACE][handleLossesSubmit] success path completed');
         } catch (error) {
@@ -18290,10 +18968,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
 
-        // ✅ POKA-YOKE: Bloquear lançamento se ciclo/cavidade não informado no turno
-        if (!validateCycleCavityLaunched()) {
-            return;
-        }
         
         // Verificar permissão
         if (!window.authSystem.checkPermissionForAction('add_downtime')) {
@@ -18469,6 +19143,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             if (!erroFinal) {
                 showNotification('Parada finalizada e registrada com sucesso!', 'success');
                 console.log('[TRACE][handleDowntimeSubmit] success path completed');
+                
+                // Registrar log de parada
+                registrarLogSistema('REGISTRO DE PARADA', 'parada', {
+                    machine: currentDowntimeStart?.machine || selectedMachineData?.machine,
+                    motivo: document.getElementById('downtime-reason')?.value || '-',
+                    duracao: downtimeElapsedSeconds ? Math.round(downtimeElapsedSeconds / 60) + ' min' : '-'
+                });
             } else {
                 showNotification('Parada finalizada localmente, mas houve erro ao registrar no banco.', 'warning');
             }
@@ -18484,10 +19165,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
 
-        // ✅ POKA-YOKE: Bloquear lançamento se ciclo/cavidade não informado no turno
-        if (!validateCycleCavityLaunched()) {
-            return;
-        }
 
         if (!window.authSystem.checkPermissionForAction('add_losses')) {
             return;
@@ -18596,6 +19273,19 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             
             console.log('[TRACE][handleManualBorraSubmit] borra saved successfully', { docId: docRef.id });
 
+            // Registrar no histórico do sistema
+            if (typeof logSystemAction === 'function') {
+                logSystemAction('perda', `Borra registrada: ${weightKg.toFixed(3)}kg`, {
+                    pesoKg: weightKg,
+                    pesoGramas: weightGrams,
+                    maquina: normalizedMachine,
+                    motivo: reasonValue,
+                    tipoMp: mpTypeValue,
+                    turno: borraData.turno,
+                    data: dateValue
+                });
+            }
+
             if (statusDiv) statusDiv.textContent = 'Borra registrada com sucesso!';
             showNotification(`Borra de ${weightGrams}g (${weightKg.toFixed(3)}kg) registrada com sucesso!`, 'success');
 
@@ -18701,6 +19391,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 await db.collection('downtime_entries').add(downtimeData);
             }
 
+            // Registrar no histórico do sistema
+            if (typeof logSystemAction === 'function') {
+                logSystemAction('parada', `Parada manual registrada: ${reason}`, {
+                    maquina: selectedMachineData?.machine,
+                    motivo: reason,
+                    inicio: startTimeStr,
+                    fim: endTimeStr,
+                    duracao: duration,
+                    data: dateStr
+                });
+            }
+
             closeModal('manual-downtime-modal');
             await loadTodayStats();
             await loadRecentEntries(false);
@@ -18791,10 +19493,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
 
-        // ✅ POKA-YOKE: Bloquear lançamento se ciclo/cavidade não informado no turno
-        if (!validateCycleCavityLaunched()) {
-            return;
-        }
         
         // Verificar permissão
         if (!window.authSystem.checkPermissionForAction('add_rework')) {
@@ -19066,6 +19764,15 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             } else {
                 showNotification('Retrabalho registrado. Nenhum lançamento de produção foi ajustado para este turno.', 'warning');
             }
+            
+            // Registrar log de retrabalho
+            registrarLogSistema('LANÇAMENTO DE RETRABALHO', 'retrabalho', {
+                machine: selectedMachineData?.machine,
+                quantidade: quantity,
+                peso_kg: weight,
+                motivo: reason,
+                observacoes: observations
+            });
 
             console.log('[TRACE][handleReworkSubmit] success path completed', transactionResult);
         } catch (error) {
@@ -19099,11 +19806,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const hour = reference.getHours();
         
         if (hour >= 7 && hour < 15) {
-            return 1; // 1º Turno
+            return 1; // 1ú Turno
         } else if (hour >= 15 && hour < 23) {
-            return 2; // 2º Turno
+            return 2; // 2ú Turno
         } else {
-            return 3; // 3º Turno
+            return 3; // 3ú Turno
         }
     }
 
@@ -19596,7 +20303,7 @@ function sendDowntimeNotification() {
                             <span class="px-2 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-200">👤 ${registradoPorNome}</span>
                         </div>
                         <div class="text-sm text-gray-700 space-x-2">
-                            ${details.join('<span class="text-gray-300">•</span>')}
+                            ${details.join('<span class="text-gray-300">–</span>')}
                         </div>
                         ${observations ? `<div class="text-xs text-gray-500">Obs.: ${observations}</div>` : ''}
                     </div>
@@ -20102,7 +20809,89 @@ function sendDowntimeNotification() {
         return true;
     }
 
-    function renderMachineCards(plans = [], productionEntries = [], downtimeEntries = [], activeDowntimeMachines = new Set()) {
+    /**
+     * Renderiza a barra de status das máquinas (estilo Excel)
+     * Mostra todas as máquinas como células coloridas de acordo com o status
+     */
+    function renderMachineStatusBar(activePlans = [], activeDowntimeSet = new Set(), machinesDowntime = {}) {
+        const statusBar = document.getElementById('machine-status-cells');
+        if (!statusBar) return;
+        
+        // Criar set de máquinas com planejamento ativo
+        const machinesWithPlan = new Set();
+        activePlans.forEach(plan => {
+            if (plan && plan.machine) {
+                machinesWithPlan.add(normalizeMachineId(plan.machine));
+            }
+        });
+        
+        // Ordenar todas as máquinas do banco
+        const sortedMachines = [...machineDatabase].sort((a, b) => 
+            normalizeMachineId(a.id).localeCompare(normalizeMachineId(b.id), 'pt-BR', { numeric: true })
+        );
+        
+        // Renderizar células
+        statusBar.innerHTML = sortedMachines.map(machine => {
+            const mid = normalizeMachineId(machine.id);
+            const hasActiveDowntime = activeDowntimeSet.has(mid);
+            const hasExtendedDowntime = machinesDowntime && machinesDowntime[mid];
+            const hasPlan = machinesWithPlan.has(mid);
+            
+            // Determinar status e cor
+            let statusClass = '';
+            let statusTitle = '';
+            
+            if (hasActiveDowntime || hasExtendedDowntime) {
+                // Máquina parada (normal ou longa)
+                statusClass = 'bg-red-500 text-white border-red-600';
+                const downtimeInfo = hasExtendedDowntime ? machinesDowntime[mid] : null;
+                statusTitle = downtimeInfo 
+                    ? `${mid} - PARADA: ${downtimeInfo.reason || downtimeInfo.type || 'Parada longa'}`
+                    : `${mid} - PARADA`;
+            } else if (hasPlan) {
+                // Máquina produzindo (tem OP ativa)
+                statusClass = 'bg-emerald-500 text-white border-emerald-600';
+                statusTitle = `${mid} - Produzindo`;
+            } else {
+                // Máquina sem OP
+                statusClass = 'bg-slate-600 text-slate-300 border-slate-500';
+                statusTitle = `${mid} - Sem OP`;
+            }
+            
+            // Extrair número da máquina para exibição compacta
+            const machineNumber = mid.replace(/[^\d]/g, '') || mid.slice(-2);
+            
+            return `
+                <div class="machine-status-cell ${statusClass} w-8 h-8 flex items-center justify-center 
+                            text-xs font-bold rounded border cursor-pointer transition-all duration-200
+                            hover:scale-110 hover:shadow-lg hover:z-10"
+                     data-machine="${mid}"
+                     title="${statusTitle}">
+                    ${machineNumber}
+                </div>
+            `;
+        }).join('');
+        
+        // Adicionar evento de clique nas células
+        statusBar.querySelectorAll('.machine-status-cell').forEach(cell => {
+            cell.addEventListener('click', () => {
+                const machineId = cell.dataset.machine;
+                // Scroll para o card da máquina se existir
+                const machineCard = document.querySelector(`.machine-card[data-machine="${machineId}"]`);
+                if (machineCard) {
+                    machineCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    machineCard.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2');
+                    setTimeout(() => {
+                        machineCard.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2');
+                    }, 2000);
+                    // Simular clique no card
+                    machineCard.click();
+                }
+            });
+        });
+    }
+
+    function renderMachineCards(plans = [], productionEntries = [], downtimeEntries = [], activeDowntimeMachines = new Set(), machinesDowntime = {}) {
         if (!machineCardGrid) {
             if (machineSelector) {
                 machineSelector.machineData = {};
@@ -20112,7 +20901,7 @@ function sendDowntimeNotification() {
         }
 
         if (machineCardEmptyState) {
-            machineCardEmptyState.textContent = 'Nenhuma máquina planejada para hoje.';
+            machineCardEmptyState.textContent = 'Nenhuma máquina com planejamento ativo.';
             machineCardEmptyState.classList.add('hidden');
             machineCardEmptyState.classList.remove('text-red-100');
         }
@@ -20122,21 +20911,35 @@ function sendDowntimeNotification() {
             ? activeDowntimeMachines 
             : new Set(Array.isArray(activeDowntimeMachines) ? activeDowntimeMachines : []);
 
-        const activePlans = Array.isArray(plans) ? plans.filter(isPlanActive) : [];
+        // NOVO: Cache de status de paradas para cronômetro
+        downtimeStatusCache = machinesDowntime;
 
-        if (activePlans.length === 0) {
-            machineCardData = {};
-            machineCardGrid.innerHTML = '';
-            if (machineSelector) {
-                machineSelector.machineData = {};
-                machineSelector.innerHTML = '<option value="">Selecione uma máquina...</option>';
+        const activePlans = Array.isArray(plans) ? plans.filter(isPlanActive) : [];
+        
+        // NOVO: Renderizar barra de status das máquinas (estilo Excel)
+        renderMachineStatusBar(activePlans, activeDowntimeSet, machinesDowntime);
+
+        // NOVO: Mostrar TODAS as máquinas (planejadas + paradas + inativas)
+        // Em vez de apenas as planejadas
+        const allMachineIds = new Set();
+        
+        // Adicionar máquinas com planejamento
+        activePlans.forEach(plan => {
+            if (plan && plan.machine) {
+                allMachineIds.add(normalizeMachineId(plan.machine));
             }
-            if (machineCardEmptyState) {
-                machineCardEmptyState.textContent = 'Nenhuma OP ativa no momento.';
-                machineCardEmptyState.classList.remove('hidden');
-            }
-            setActiveMachineCard(null);
-            return;
+        });
+        
+        // Adicionar máquinas com parada longa ativa
+        Object.keys(machinesDowntime).forEach(machineId => {
+            allMachineIds.add(machineId);
+        });
+        
+        // Se nenhuma máquina, mostrar todas (painel vazio mas existem)
+        if (allMachineIds.size === 0) {
+            machineDatabase.forEach(m => {
+                allMachineIds.add(normalizeMachineId(m.id));
+            });
         }
 
         machineCardData = {};
@@ -20145,19 +20948,16 @@ function sendDowntimeNotification() {
         }
 
         const planById = {};
-        const machineOrder = [];
+        const machineOrder = Array.from(allMachineIds).sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
 
+        // Mapear plans por máquina
         activePlans.forEach(plan => {
             if (!plan || !plan.machine) return;
+            const mid = normalizeMachineId(plan.machine);
             const enrichedPlan = { id: plan.id, ...plan };
-            machineCardData[plan.machine] = enrichedPlan;
+            machineCardData[mid] = enrichedPlan;
             planById[plan.id] = enrichedPlan;
-            if (!machineOrder.includes(plan.machine)) {
-                machineOrder.push(plan.machine);
-            }
         });
-
-        machineOrder.sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
 
         if (machineSelector) {
             const selectorOptions = ['<option value="">Selecione uma máquina...</option>']
@@ -20168,10 +20968,11 @@ function sendDowntimeNotification() {
             });
         }
 
+        // IMPORTANTE: Inicializar aggregated para TODAS as máquinas (mesmo sem planejamento)
         const aggregated = {};
         machineOrder.forEach(machine => {
             aggregated[machine] = {
-                plan: machineCardData[machine],
+                plan: machineCardData[machine] || {},  // Plan pode ser vazio para máquinas sem planejamento
                 totalProduced: 0,
                 totalLossesKg: 0,
                 entries: [],
@@ -20407,11 +21208,12 @@ function sendDowntimeNotification() {
         const mpLine = plan.mp ? `<p class=\"text-xs text-slate-400 mt-1\">MP: ${plan.mp}</p>` : '';
         const shiftProduced = data.byShift[currentShiftKey] ?? data.byShift[fallbackShiftKey] ?? 0;
 
-        // Lógica de cor do card: vermelho se houver parada ativa (na collection active_downtimes)
+        // Lógica de cor do card: vermelho se houver parada ativa (normal OU longa)
         let cardColorClass = '';
         const hasActiveDowntime = activeDowntimeSet.has(machine);
-        if (hasActiveDowntime) {
-            cardColorClass = 'machine-stopped'; // vermelho para parada ativa
+        const hasExtendedDowntime = downtimeStatusCache && downtimeStatusCache[machine];
+        if (hasActiveDowntime || hasExtendedDowntime) {
+            cardColorClass = 'machine-stopped'; // vermelho para parada ativa (normal ou longa)
         }
 
         return `
@@ -20464,11 +21266,8 @@ function sendDowntimeNotification() {
                     </div>
                 </div>
 
-
-
-
                 <!-- Status compacto -->
-                <div class="flex items-center justify-between text-xs">
+                <div class="flex items-center justify-between text-xs mb-2">
                     <div class="flex gap-1">
                         <span class="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[10px]" title="Tempo rodando">${runtimeHours.toFixed(1)}h</span>
                         ${downtimeHours > 0 ? `<span class="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px]" title="Tempo parado">${downtimeHours.toFixed(1)}h</span>` : ''}
@@ -20478,19 +21277,52 @@ function sendDowntimeNotification() {
                     </div>
                 </div>
 
-                                                <!-- Mini card de parada ativa -->
-                                                ${(() => {
-                                                    // Verifica se há parada ativa (downtime sem fim) para esta máquina
-                                                    const paradaAtiva = filteredDowntimeEntries.some(dt => dt && dt.machine === machine && (!dt.endTime && !dt.endDate));
-                                                    return paradaAtiva ? `
-                                                        <div class="absolute left-1/2 -translate-x-1/2 bottom-3 bg-red-600 text-white text-xs rounded-lg px-3 py-1 shadow font-bold z-20 animate-pulse flex items-center gap-2" style="min-width: 120px; justify-content: center;">
-                                                            <i data-lucide="alert-triangle" class="w-4 h-4"></i>
-                                                            PARADA ATIVA
-                                                        </div>
-                                                    ` : '';
-                                                })()}
+                <!-- Indicador de Parada Longa (NOVO) -->
+                ${(() => {
+                    const hasMachineDowntime = machinesDowntime && machinesDowntime[machine];
+                    if (hasMachineDowntime) {
+                        const typeLabel = getDowntimeTypeLabel(hasMachineDowntime.type);
+                        const typeColor = getDowntimeTypeColor(hasMachineDowntime.type);
+                        const startDate = new Date(hasMachineDowntime.startDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+                        const endDate = hasMachineDowntime.endDate ? new Date(hasMachineDowntime.endDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : '∞';
+                        const duration = getDowntimeDuration(hasMachineDowntime.startDate);
+                        const recordId = hasMachineDowntime.recordId || '';  // ID do documento Firestore
+                        return `
+                            <div class="mb-2 p-2 rounded-lg bg-amber-50 border border-amber-200">
+                                <div class="flex items-center justify-between mb-1">
+                                    <div class="flex items-center gap-2">
+                                        <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600"></i>
+                                        <span class="text-xs font-bold text-amber-700">PARADA ATIVA</span>
+                                    </div>
+                                    <span class="inline-block px-2 py-0.5 text-xs font-mono font-bold text-amber-700 bg-amber-100 rounded">⏱️ ${duration}</span>
+                                </div>
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="inline-block px-2 py-0.5 text-xs font-semibold rounded ${typeColor}">${typeLabel}</span>
+                                    <span class="text-xs text-amber-700">Desde ${startDate}</span>
+                                </div>
+                                <p class="text-xs text-amber-600 mb-2">${hasMachineDowntime.reason}</p>
+                                <button type="button" 
+                                        onclick="finalizarParada('${recordId}', '${machine}')"
+                                        class="w-full py-1 px-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded transition-colors">
+                                    🛑 FINALIZAR PARADA
+                                </button>
+                            </div>
+                        `;
+                    }
+                    return '';
+                })()}
 
-                ${lotCompleted ? `
+                <!-- Mini card de parada ativa -->
+                ${(() => {
+                    // Verifica se há parada ativa (downtime sem fim) para esta máquina
+                    const paradaAtiva = filteredDowntimeEntries.some(dt => dt && dt.machine === machine && (!dt.endTime && !dt.endDate));
+                    return paradaAtiva ? `
+                        <div class="mb-2 p-2 rounded-lg bg-red-50 border border-red-200 flex items-center gap-2">
+                            <i data-lucide="alert-circle" class="w-4 h-4 text-red-600 animate-pulse"></i>
+                            <span class="text-xs font-bold text-red-700">PARADA ATIVA - MÁQUINA PARADA</span>
+                        </div>
+                    ` : '';
+                })()}                ${lotCompleted ? `
                     <div class="card-actions flex gap-2 mt-3">
                         ${String(plan.status||'').toLowerCase()!=='concluida' && plan.order_id ? `
                             <button type="button" class="btn btn-finalize card-finalize-btn" data-plan-id="${plan.id}" data-order-id="${plan.order_id}" title="Finalizar OP">
@@ -20512,6 +21344,16 @@ function sendDowntimeNotification() {
 
         machineOrder.forEach(machine => {
             renderMachineCardProgress(machine, machineProgressInfo[machine]);
+        });
+
+        // NOVO: Iniciar cronômetros para máquinas paradas
+        machineOrder.forEach(machine => {
+            if (machinesDowntime && machinesDowntime[machine]) {
+                const cardElement = machineCardGrid.querySelector(`[data-machine="${machine}"]`);
+                if (cardElement) {
+                    startDowntimeTimer(machine, cardElement);
+                }
+            }
         });
 
         if (selectedMachineData && selectedMachineData.machine && machineCardData[selectedMachineData.machine]) {
@@ -20735,7 +21577,9 @@ function sendDowntimeNotification() {
                 console.warn('Erro ao buscar paradas ativas:', e);
             }
 
-            renderMachineCards(activePlans, productionEntries, downtimeEntries, activeDowntimeSet);
+            // NOVO: Carregar paradas longas para mostrar no painel de máquinas
+            const machinesDowntime = await getAllMachinesDowntimeStatus();
+            renderMachineCards(activePlans, productionEntries, downtimeEntries, activeDowntimeSet, machinesDowntime);
             
             // Disparar evento para sinalizar que dados foram atualizados
             document.dispatchEvent(new CustomEvent('machineDataUpdated', { detail: { machineCardData, activePlans } }));
@@ -20817,6 +21661,38 @@ function sendDowntimeNotification() {
         
         // Mostrar painel
         productionControlPanel.classList.remove('hidden');
+        
+        // NOVO: Verificar e alertar sobre paradas longas
+        const downtime = await getActiveMachineDowntime(machine);
+        if (downtime) {
+            const typeLabel = getDowntimeTypeLabel(downtime.type);
+            const startDate = new Date(downtime.startDate).toLocaleDateString('pt-BR');
+            const endDate = new Date(downtime.endDate).toLocaleDateString('pt-BR');
+            
+            // Criar alerta visual
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'fixed top-4 right-4 bg-amber-100 border-l-4 border-amber-500 text-amber-800 p-4 rounded shadow-lg max-w-md z-50 animate-pulse';
+            alertDiv.innerHTML = `
+                <div class="flex items-start gap-3">
+                    <i data-lucide="alert-triangle" class="w-6 h-6 flex-shrink-0"></i>
+                    <div>
+                        <h3 class="font-bold mb-1">⚠️ Máquina em Parada Longa</h3>
+                        <p class="text-sm mb-2"><strong>${machine}</strong> está registrada em parada:</p>
+                        <p class="text-sm font-semibold text-amber-700 mb-1">${typeLabel}</p>
+                        <p class="text-xs mb-2"><strong>Período:</strong> ${startDate} a ${endDate}</p>
+                        <p class="text-xs"><strong>Motivo:</strong> ${downtime.reason}</p>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(alertDiv);
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            
+            // Remover alerta após 8 segundos
+            setTimeout(() => {
+                alertDiv.style.animation = 'fadeOut 0.5s ease-out';
+                setTimeout(() => alertDiv.remove(), 500);
+            }, 8000);
+        }
         
         // Carregar dados
         await refreshLaunchCharts();
@@ -21127,8 +22003,10 @@ function sendDowntimeNotification() {
         if (showLoading) showLoadingState('resumo', true);
 
         try {
-            const planSnapshot = await db.collection('planning').where('date', '==', date).get();
-            const plans = planSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // NOVO: Buscar todos os planejamentos e filtrar os ATIVOS no cliente
+            const planSnapshot = await db.collection('planning').get();
+            const allPlans = planSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const plans = allPlans.filter(isPlanActive);
 
             if (plans.length === 0) {
                 showLoadingState('resumo', false, true);
@@ -21617,9 +22495,9 @@ function sendDowntimeNotification() {
             <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <h4 class="font-semibold text-blue-800 mb-2">Legenda:</h4>
                 <div class="flex flex-wrap gap-4 text-sm">
-                    <span class="text-status-success">● ≥85% - Excelente</span>
-                    <span class="text-status-warning">● 70-84% - Aceitável</span>
-                    <span class="text-status-error">● <70% - Crítico</span>
+                    <span class="text-status-success">★ ≥85% - Excelente</span>
+                    <span class="text-status-warning">★ 70-84% - Aceitável</span>
+                    <span class="text-status-error">★ <70% - Crítico</span>
                     ${isToday ? '<span class="text-green-600">⚡ Tempo Real</span>' : ''}
                 </div>
             </div>
@@ -22339,31 +23217,292 @@ function sendDowntimeNotification() {
         }
     }
 
-    // Função para popular o seletor de máquinas da aba de lançamento
-    function populateLaunchMachineSelector() {
-        const launchMachineSelector = document.getElementById('machine-selector');
-        if (launchMachineSelector) {
-            console.log('🔧 Populando seletor de máquinas da aba de lançamento');
+    // ================================
+    // NOVO: Função para buscar paradas ativas por máquina
+    // ================================
+    async function getActiveMachineDowntime(machineId) {
+        try {
+            if (!window.db) return null;
             
-            launchMachineSelector.innerHTML = '<option value="">Selecione uma máquina...</option>';
+            const normalizedId = normalizeMachineId(machineId);
+            const now = new Date();
+            const todayStr = now.toISOString().split('T')[0];  // YYYY-MM-DD
             
-            machineDatabase.forEach(machine => {
-                const option = document.createElement('option');
+            // PRIORIDADE 1: Buscar paradas com status='active' (paradas em andamento)
+            const activeSnap = await window.db
+                .collection('extended_downtime_logs')
+                .where('machine_id', '==', normalizedId)
+                .where('status', '==', 'active')
+                .get();
+            
+            // Se encontrou parada ativa, retorna imediatamente
+            for (const doc of activeSnap.docs) {
+                const data = doc.data();
+                console.log('[MACHINE-DOWNTIME] Parada ATIVA encontrada:', { id: doc.id, machine: normalizedId, status: data.status });
+                return {
+                    recordId: doc.id,
+                    type: data.type || 'maintenance',
+                    reason: data.reason || 'Parada longa ativa',
+                    startDate: data.start_date,
+                    endDate: data.end_date,
+                    status: 'active',
+                    durationMinutes: data.duration_minutes
+                };
+            }
+            
+            // PRIORIDADE 2: Buscar paradas programadas (com end_date futuro)
+            const extendedSnap = await window.db
+                .collection('extended_downtime_logs')
+                .where('machine_id', '==', normalizedId)
+                .get();
+            
+            for (const doc of extendedSnap.docs) {
+                const data = doc.data();
+                
+                // Ignorar paradas já finalizadas
+                if (data.status === 'inactive' || data.status === 'finalized') {
+                    continue;
+                }
+                
+                // Verificar se a parada está dentro do período válido
+                const startDate = data.start_date ? new Date(data.start_date + 'T00:00:00') : null;
+                const endDate = data.end_date ? new Date(data.end_date + 'T23:59:59') : null;
+                
+                // Parada válida: já começou E (não tem fim OU fim é futuro)
+                const hasStarted = startDate && startDate <= now;
+                const isOngoing = !endDate || endDate >= now;
+                
+                if (hasStarted && isOngoing) {
+                    return {
+                        recordId: doc.id,
+                        type: data.type || 'maintenance',
+                        reason: data.reason || 'Parada longa ativa',
+                        startDate: data.start_date,
+                        endDate: data.end_date,
+                        status: data.status || 'active',
+                        durationMinutes: data.duration_minutes
+                    };
+                }
+            }
+            
+            return null;
+        } catch (error) {
+            console.warn('[MACHINE-DOWNTIME] Erro ao buscar paradas:', error);
+            return null;
+        }
+    }
+
+    // NOVO: Função para buscar status de todas as máquinas
+    async function getAllMachinesDowntimeStatus() {
+        const statusMap = {};
+        
+        try {
+            const promises = machineDatabase.map(async (machine) => {
                 const mid = normalizeMachineId(machine.id);
-                option.value = mid;
-                option.textContent = `${mid} - ${machine.model}`;
-                launchMachineSelector.appendChild(option);
+                const downtime = await getActiveMachineDowntime(mid);
+                if (downtime) {
+                    statusMap[mid] = downtime;
+                }
             });
             
-            console.log('✅ Seletor de máquinas populado com', machineDatabase.length, 'máquinas');
-        } else {
-            console.log('❌ Elemento machine-selector não encontrado');
+            await Promise.all(promises);
+        } catch (error) {
+            console.error('[MACHINE-STATUS] Erro ao carregar status:', error);
+        }
+        
+        return statusMap;
+    }
+
+    // ================================
+    // NOVO: Variáveis globais do downtime
+    // ================================
+    // Armazenar timers de paradas
+    const downtimeTimers = new Map();
+    
+    // downtimeStatusCache é inicializado em renderMachineCards() 
+    // Aqui apenas garantimos que existe
+
+    // ============================================================
+    // FINALIZAR PARADA - Encerra parada ativa
+    // ============================================================
+    async function finalizarParada(recordId, machineId) {
+        console.log('[FINALIZAR-PARADA] Encerrando parada:', { recordId, machineId });
+        
+        if (!recordId || !machineId) {
+            console.error('[FINALIZAR-PARADA] IDs inválidos');
+            return;
+        }
+
+        try {
+            // 1. Buscar o registro de parada
+            const recordSnapshot = await db.collection('extended_downtime_logs').doc(recordId).get();
+            if (!recordSnapshot.exists) {
+                showNotification('Registro de parada não encontrado', 'error');
+                return;
+            }
+
+            const downtimeData = recordSnapshot.data();
+            const now = new Date();
+            const endDate = now.toISOString().split('T')[0];  // YYYY-MM-DD
+            const endTime = now.toTimeString().split(' ')[0].substring(0, 5);  // HH:MM
+
+            // 2. Calcular duração
+            const startDatetime = downtimeData.start_datetime?.toDate?.() || new Date(downtimeData.start_date);
+            const durationMinutes = Math.floor((now - startDatetime) / (1000 * 60));
+
+            // 3. Atualizar registro: marcar como inativo/finalizado
+            await db.collection('extended_downtime_logs').doc(recordId).update({
+                end_date: endDate,
+                end_time: endTime,
+                end_datetime: firebase.firestore.Timestamp.fromDate(now),
+                duration_minutes: durationMinutes,
+                status: 'inactive',  // Muda de 'active' para 'inactive'
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedBy: getActiveUser()?.name || 'Sistema'
+            });
+
+            console.log('[FINALIZAR-PARADA] Registrado como finalizado:', { 
+                recordId, 
+                machineId, 
+                durationMinutes: `${Math.floor(durationMinutes/60)}h ${durationMinutes % 60}m`
+            });
+
+            // 4. Limpar cache e timers
+            const mid = normalizeMachineId(machineId);
+            
+            // Limpar status cache
+            if (window.downtimeStatusCache && window.downtimeStatusCache[mid]) {
+                delete window.downtimeStatusCache[mid];
+            }
+
+            // Limpar timer de cronômetro
+            if (window.downtimeTimers && window.downtimeTimers.has(mid)) {
+                clearInterval(window.downtimeTimers.get(mid));
+                window.downtimeTimers.delete(mid);
+            }
+
+            // 5. Mostrar notificação
+            showNotification(
+                `✅ Parada finalizada para ${mid} após ${Math.floor(durationMinutes/60)}h ${durationMinutes % 60}m`,
+                'success'
+            );
+
+            // 6. Re-renderizar painel de máquinas (recarrega todos os dados)
+            if (typeof populateMachineSelector === 'function') {
+                console.log('[FINALIZAR-PARADA] Recarregando painel de máquinas...');
+                await populateMachineSelector();
+            }
+
+            // 7. Recarregar lista de paradas (se tab está aberta)
+            if (typeof loadExtendedDowntimeList === 'function') {
+                await loadExtendedDowntimeList();
+            }
+
+        } catch (error) {
+            console.error('[FINALIZAR-PARADA] Erro:', error);
+            showNotification(`Erro ao finalizar parada: ${error.message}`, 'error');
+        }
+    }
+
+    // NOVO: Função auxiliar para obter cor do badge baseado no tipo
+    function getDowntimeTypeColor(type) {
+        const colors = {
+            'maintenance': 'bg-blue-100 text-blue-800',
+            'preventive': 'bg-blue-100 text-blue-800',
+            'maintenance_planned': 'bg-blue-100 text-blue-800',
+            'no_order': 'bg-red-100 text-red-800',
+            'commercial': 'bg-amber-100 text-amber-800',
+            'weekend': 'bg-gray-100 text-gray-800',
+            'holiday': 'bg-purple-100 text-purple-800',
+            'setup': 'bg-green-100 text-green-800',
+            'other': 'bg-gray-100 text-gray-800'
+        };
+        return colors[type] || 'bg-gray-100 text-gray-800';
+    }
+
+    // NOVO: Função auxiliar para obter rótulo do tipo
+    function getDowntimeTypeLabel(type) {
+        const labels = {
+            'maintenance': 'Manutenção Preventiva',
+            'preventive': 'Manutenção Preventiva',
+            'maintenance_planned': 'Manutenção Programada',
+            'maintenance_emergency': 'Manutenção Emergencial',
+            'no_order': 'Sem Pedido',
+            'commercial': 'Parada Comercial',
+            'weekend': 'Fim de Semana',
+            'holiday': 'Feriado',
+            'setup': 'Setup/Troca',
+            'other': 'Outro'
+        };
+        return labels[type] || type;
+    }
+
+    // ================================
+    // NOVO: Funções para cronômetro de parada
+    // ================================
+    
+    // Calcular duração da parada em tempo real
+    function getDowntimeDuration(startDate) {
+        try {
+            const start = new Date(startDate);
+            const now = new Date();
+            const diffMs = now.getTime() - start.getTime();
+            
+            if (diffMs < 0) return '0h 0m';
+            
+            const totalSeconds = Math.floor(diffMs / 1000);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            
+            if (hours > 0) {
+                return `${hours}h ${minutes}m`;
+            } else if (minutes > 0) {
+                return `${minutes}m ${seconds}s`;
+            } else {
+                return `${seconds}s`;
+            }
+        } catch (e) {
+            return '0h 0m';
+        }
+    }
+    
+    // Iniciar cronômetro para uma máquina parada
+    function startDowntimeTimer(machineId, cardElement) {
+        try {
+            // Limpar timer anterior se existir
+            if (downtimeTimers.has(machineId)) {
+                clearInterval(downtimeTimers.get(machineId));
+            }
+            
+            // Atualizar a cada segundo
+            const interval = setInterval(() => {
+                const timerElement = cardElement.querySelector(`[data-timer-machine="${machineId}"]`);
+                if (timerElement && window.db) {
+                    // Buscar parada atual
+                    const statusMap = downtimeStatusCache || {};
+                    const downtime = statusMap[machineId];
+                    
+                    if (downtime) {
+                        const duration = getDowntimeDuration(downtime.startDate);
+                        timerElement.textContent = duration;
+                    }
+                } else if (!timerElement) {
+                    // Elemento removido, limpar interval
+                    clearInterval(interval);
+                    downtimeTimers.delete(machineId);
+                }
+            }, 1000);
+            
+            downtimeTimers.set(machineId, interval);
+        } catch (e) {
+            console.warn('[DOWNTIME-TIMER] Erro ao iniciar timer:', e);
         }
     }
 
 // Função de debug para modais
 window.debugModals = function() {
-    console.log('🔍 DEBUG MODALS - Checking all modals...');
+    console.log('📍 DEBUG MODALS - Checking all modals...');
     
     const allModals = document.querySelectorAll('[id$="-modal"]');
     allModals.forEach(modal => {
@@ -22452,7 +23591,7 @@ window.forceOpenModal = function(modalId) {
     // ======================================
 
     function loadQualityHourlyRecords() {
-        console.log(`🔍 loadQualityHourlyRecords() chamada`);
+        console.log(`📍 loadQualityHourlyRecords() chamada`);
         console.log(`  currentQualityContext:`, currentQualityContext);
         
         if (!currentQualityContext) {
@@ -22621,6 +23760,27 @@ window.forceOpenModal = function(modalId) {
             lucide.createIcons();
         });
     }
+
+    // ============================================================
+    // EXPOR FUNÇÕES GLOBALMENTE para HTML onclick handlers
+    // ============================================================
+    // Essas funções estão definidas dentro do DOMContentLoaded, mas precisam
+    // ser acessadas pelo HTML onclick. Exposição via window permite acesso global.
+    window.finalizarParada = finalizarParada;
+    window.getActiveUser = getActiveUser;
+    window.showNotification = showNotification;
+    window.getActiveMachineDowntime = getActiveMachineDowntime;
+    window.getAllMachinesDowntimeStatus = getAllMachinesDowntimeStatus;
+    window.normalizeMachineId = normalizeMachineId;
+    window.renderMachineCards = renderMachineCards;
+    window.loadExtendedDowntimeList = loadExtendedDowntimeList;
+    window.populateMachineSelector = populateMachineSelector;
+    
+    // Expor variáveis de cache para acesso em finalizarParada
+    window.downtimeStatusCache = downtimeStatusCache;
+    window.downtimeTimers = downtimeTimers;
+    
+    console.log('[GLOBAL-EXPOSURES] Funções de parada expostas no window global');
 });
 
 // Funções globais para navegação de subtabs Analytics IA
@@ -23118,7 +24278,7 @@ async function executeImportOrders() {
         let details = [];
         if (skipped > 0) details.push(`${skipped} ignorada(s) (já existem)`);
         if (errors > 0) details.push(`${errors} erro(s)`);
-        document.getElementById('import-result-details').textContent = details.length > 0 ? details.join(' • ') : '';
+        document.getElementById('import-result-details').textContent = details.length > 0 ? details.join(' – ') : '';
         
         if (typeof lucide !== 'undefined') lucide.createIcons();
         
@@ -23299,7 +24459,7 @@ async function saveNewProduct() {
     }
     
     try {
-        showNewProductFeedback('⏳ Verificando código do produto...', 'info');
+        showNewProductFeedback('âó Verificando código do produto...', 'info');
         
         // Verificar se o código já existe no Firestore
         const existingSnapshot = await db.collection('products')
@@ -23311,7 +24471,7 @@ async function saveNewProduct() {
             return;
         }
         
-        showNewProductFeedback('⏳ Salvando produto...', 'info');
+        showNewProductFeedback('âó Salvando produto...', 'info');
         
         // Criar objeto do produto
         const newProduct = {
@@ -23375,7 +24535,7 @@ window.saveNewProduct = saveNewProduct;
 
 // Listar TODAS as ordens no Firebase (para diagnóstico)
 window.listarTodasOrdens = async function() {
-    console.log('🔍 Buscando TODAS as ordens no Firebase...');
+    console.log('📍 Buscando TODAS as ordens no Firebase...');
     try {
         const snapshot = await db.collection('production_orders').get();
         console.log(`📋 Total de ordens no banco: ${snapshot.size}`);
@@ -23461,7 +24621,7 @@ window.excluirOrdensPorIndices = async function(indices) {
         return;
     }
     
-    console.log(`🔍 Buscando ordens nos índices: ${indices.join(', ')}...`);
+    console.log(`📍 Buscando ordens nos índices: ${indices.join(', ')}...`);
     
     try {
         const snapshot = await db.collection('production_orders').get();
@@ -23698,7 +24858,7 @@ function showImportPreview(orders) {
                 <table class="min-w-full divide-y divide-gray-200 border border-gray-300 text-xs">
                     <thead class="bg-gray-100">
                         <tr>
-                            <th class="px-3 py-2 text-left font-semibold">OP Nº</th>
+                            <th class="px-3 py-2 text-left font-semibold">OP Nú</th>
                             <th class="px-3 py-2 text-left font-semibold">Produto</th>
                             <th class="px-3 py-2 text-left font-semibold">MP</th>
                             <th class="px-3 py-2 text-left font-semibold">Máquina</th>
@@ -23810,8 +24970,16 @@ async function confirmImportOrders(orders) {
                 continue;
             }
 
-            await db.collection('production_orders').add(docData);
+            const docRef = await db.collection('production_orders').add(docData);
             successCount++;
+            
+            // Registrar log de importação
+            registrarLogSistema('IMPORTAÇÃO DE ORDEM DE PRODUÇÃO', 'ordem', {
+                orderId: docRef.id,
+                orderNumber: order.order_number,
+                product: docData.product,
+                lotSize: docData.lot_size
+            });
         } catch (error) {
             console.error(`Erro ao importar OP ${order.order_number}:`, error);
             errorCount++;
@@ -25561,6 +26729,13 @@ const OrdersPageModule = (function() {
                 activatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
             showNotification('Ordem ativada com sucesso!', 'success');
+            
+            // Registrar log
+            registrarLogSistema('ATIVAÇÃO DE ORDEM', 'ordem', {
+                orderId: orderId,
+                machine: machineId
+            });
+            
             await refreshOrders();
         } catch (error) {
             console.error('Erro ao ativar ordem:', error);
@@ -25574,6 +26749,12 @@ const OrdersPageModule = (function() {
         try {
             await db.collection('production_orders').doc(orderId).update({ status: 'ativa' });
             showNotification('Ordem reativada com sucesso!', 'success');
+            
+            // Registrar log
+            registrarLogSistema('REATIVAÇÃO DE ORDEM', 'ordem', {
+                orderId: orderId
+            });
+            
             await refreshOrders();
         } catch (error) {
             console.error('Erro ao reativar ordem:', error);
@@ -25585,8 +26766,16 @@ const OrdersPageModule = (function() {
         if (!confirm('Deseja excluir esta ordem? Esta ação não pode ser desfeita.')) return;
         
         try {
+            const order = ordersCache.find(o => o.id === orderId);
             await db.collection('production_orders').doc(orderId).delete();
             showNotification('Ordem excluída com sucesso!', 'success');
+            
+            // Registrar log
+            registrarLogSistema('EXCLUSÃO DE ORDEM', 'ordem', {
+                orderId: orderId,
+                orderNumber: order?.order_number || 'N/A'
+            });
+            
             await refreshOrders();
         } catch (error) {
             console.error('Erro ao excluir ordem:', error);
@@ -25706,12 +26895,28 @@ const OrdersPageModule = (function() {
             if (id) {
                 await db.collection('production_orders').doc(id).update(orderData);
                 showNotification('Ordem atualizada com sucesso!', 'success');
+                
+                // Registrar log de edição
+                registrarLogSistema('EDIÇÃO DE ORDEM DE PRODUÇÃO', 'ordem', {
+                    orderId: id,
+                    orderNumber: orderData.order_number,
+                    product: orderData.product,
+                    lotSize: orderData.lot_size
+                });
             } else {
                 orderData.status = 'planejada';
                 orderData.total_produced = 0;
                 orderData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-                await db.collection('production_orders').add(orderData);
+                const docRef = await db.collection('production_orders').add(orderData);
                 showNotification('Ordem cadastrada com sucesso!', 'success');
+                
+                // Registrar log de criação
+                registrarLogSistema('CRIAÇÃO DE ORDEM DE PRODUÇÃO', 'ordem', {
+                    orderId: docRef.id,
+                    orderNumber: orderData.order_number,
+                    product: orderData.product,
+                    lotSize: orderData.lot_size
+                });
             }
             
             closeOrderFormModal();
@@ -25748,6 +26953,10 @@ const OrdersPageModule = (function() {
     };
 })();
 
+// ============================================================
+// FINALIZADOR DE PARADAS - Ativa downtime finalization
+// ============================================================
+// ============================================================
 // Expor funções globalmente
 window.OrdersPageModule = OrdersPageModule;
 window.openOrderFormModal = function() { OrdersPageModule.openOrderFormModal(); };

@@ -121,6 +121,9 @@ class AuthSystem {
     canAccessTab(tabName) {
         if (!this.currentUser) return false;
         
+        // Links externos (sem data-page) são sempre permitidos
+        if (!tabName) return true;
+        
         // Usuários com acesso total (Leandro Camargo, role 'suporte')
         const isAuthorizedAdmin = 
             this.currentUser.name === 'Leandro Camargo' || this.currentUser.email === 'leandro@hokkaido.com.br' ||
@@ -154,6 +157,14 @@ class AuthSystem {
                 return false;
             }
         }
+
+        // ⚙️ ACESSO EXCLUSIVO: Aba Histórico do Sistema apenas para Leandro e Michelle
+        if (tabName === 'historico-sistema') {
+            const allowedHistorico = ['Leandro Camargo', 'Michelle Benjamin'];
+            if (!allowedHistorico.includes(this.currentUser.name)) {
+                return false;
+            }
+        }
         
         const tabPermissions = {
             planejamento: ['planejamento', 'lancamento'], // Operadores também acessam
@@ -165,7 +176,8 @@ class AuthSystem {
             relatorios: ['analise', 'planejamento', 'lancamento'], // Gestores + Leandro
             ajustes: ['planejamento', 'lancamento', 'analise'], // Gestores + Leandro
             'paradas-longas': ['lancamento', 'planejamento', 'analise'],
-            'acompanhamento': ['lancamento', 'analise'] // Restrito a Leandro e Michelle acima
+            'acompanhamento': ['lancamento', 'analise'],
+            'historico-sistema': ['analise', 'planejamento'] // Gestores e admins
         };
         
         const requiredPermissions = tabPermissions[tabName];
@@ -184,6 +196,9 @@ class AuthSystem {
         
         navButtons.forEach(btn => {
             const tabName = btn.getAttribute('data-page');
+            
+            // Ignorar links externos (sem data-page, como Dashboard TV)
+            if (!tabName) return;
             
             if (!this.canAccessTab(tabName)) {
                 // Usar múltiplos métodos para garantir ocultação
@@ -211,6 +226,25 @@ class AuthSystem {
                 console.log(`✅ Aba '${tabName}' disponível para usuário: ${this.currentUser?.name}`);
             }
         });
+
+        // Controlar visibilidade do link externo do Dashboard TV (id nav-dashboard-tv)
+        try {
+            const tvLink = document.getElementById('nav-dashboard-tv');
+            const isLeandro = this.currentUser?.name === 'Leandro Camargo' || this.currentUser?.email === 'leandro@hokkaido.com.br' || this.currentUser?.email === 'leandro.camargo@hokkaido.com';
+            if (tvLink) {
+                if (isLeandro) {
+                    tvLink.style.display = '';
+                    tvLink.classList.remove('hidden');
+                    tvLink.style.visibility = 'visible';
+                } else {
+                    tvLink.style.display = 'none';
+                    tvLink.classList.add('hidden');
+                    tvLink.style.visibility = 'hidden';
+                }
+            }
+        } catch (e) {
+            console.warn('Não foi possível ajustar visibilidade do Dashboard TV:', e);
+        }
         
         // Controlar visibilidade dos botões de lançamento manual
         this.filterManualEntriesButtons();
@@ -326,7 +360,9 @@ class AuthSystem {
             roleChip.className = `${baseClasses} ${roleStyles[role] || 'bg-gray-100 text-gray-700 ring-1 ring-gray-200'}`;
         }
 
-        lucide.createIcons();
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
     }
 
     addLogoutButton() {

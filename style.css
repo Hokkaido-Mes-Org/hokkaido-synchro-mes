@@ -1540,3 +1540,15 @@ select {
         padding-bottom: 0.5rem !important;
     }
 }
+
+/* ==================== ANIMAÇÃO FADEOUT PARA ALERTAS ==================== */
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+}

@@ -1,0 +1,2412 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="300"> <!-- Auto-refresh a cada 5 min -->
+    <title>Hokkaido Plastics | Painel Industrial</title>
+    <link rel="icon" href="https://i.postimg.cc/5jdHwhF9/hokkaido-logo-110.png" type="image/png">
+    
+    <!-- Google Fonts - Roboto (padrão industrial) -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    
+    <style>
+        /* ==================== INDUSTRIAL 4.0 DESIGN SYSTEM ==================== */
+        /* Inspirado em: GE Predix, Siemens MindSphere, PTC ThingWorx */
+        
+        :root {
+            /* Core Industrial Palette - MindSphere/Predix Style */
+            --industrial-black: #0a0e14;
+            --industrial-dark: #0d1117;
+            --industrial-panel: #151b23;
+            --industrial-card: #1c2431;
+            --industrial-border: #2d3748;
+            --industrial-hover: #252d3a;
+            
+            /* Accent Colors - Siemens Teal/Cyan */
+            --accent-primary: #00b4d8;
+            --accent-secondary: #0096c7;
+            --accent-tertiary: #48cae4;
+            --accent-glow: rgba(0, 180, 216, 0.4);
+            
+            /* Status Colors - Industrial Standard */
+            --status-running: #00e676;
+            --status-warning: #ffab00;
+            --status-critical: #ff1744;
+            --status-idle: #78909c;
+            --status-maintenance: #7c4dff;
+            
+            /* OEE Component Colors */
+            --oee-availability: #00b4d8;
+            --oee-performance: #00e676;
+            --oee-quality: #7c4dff;
+            
+            /* Text Hierarchy */
+            --text-primary: #ffffff;
+            --text-secondary: #b0bec5;
+            --text-tertiary: #78909c;
+            --text-data: #00e5ff;
+            
+            /* Gradients */
+            --gradient-header: linear-gradient(180deg, #151b23 0%, #0d1117 100%);
+            --gradient-card: linear-gradient(145deg, #1c2431 0%, #151b23 100%);
+            --gradient-accent: linear-gradient(135deg, #00b4d8 0%, #0077b6 100%);
+            --gradient-success: linear-gradient(135deg, #00e676 0%, #00c853 100%);
+            --gradient-danger: linear-gradient(135deg, #ff1744 0%, #d50000 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--industrial-black);
+            color: var(--text-primary);
+            line-height: 1.4;
+        }
+
+        /* ==================== HEADER - MINDSPHERE STYLE ==================== */
+        .industrial-header {
+            background: var(--gradient-header);
+            border-bottom: 1px solid var(--industrial-border);
+            height: 64px;
+            display: grid;
+            grid-template-columns: 280px 1fr auto;
+            align-items: center;
+            padding: 0 24px;
+            position: relative;
+        }
+
+        .industrial-header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent-primary), transparent);
+            opacity: 0.5;
+        }
+
+        .brand-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px;
+        }
+
+        .brand-logo img {
+            height: 42px;
+            width: auto;
+            object-fit: contain;
+        }
+
+        .brand-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .brand-name {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: var(--text-primary);
+        }
+
+        .brand-type {
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 1.5px;
+            color: var(--accent-primary);
+            text-transform: uppercase;
+        }
+
+        .system-status {
+            display: flex;
+            align-items: center;
+            gap: 32px;
+            justify-self: center;
+        }
+
+        .status-module {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(0, 180, 216, 0.08);
+            border: 1px solid rgba(0, 180, 216, 0.2);
+            border-radius: 4px;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--status-running);
+            box-shadow: 0 0 8px var(--status-running);
+            animation: pulse-glow 2s infinite;
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--status-running); }
+            50% { opacity: 0.6; box-shadow: 0 0 16px var(--status-running); }
+        }
+
+        .status-label {
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+
+        .shift-module {
+            background: var(--industrial-card);
+            border: 1px solid var(--industrial-border);
+            padding: 6px 20px;
+            border-radius: 4px;
+        }
+
+        .shift-label {
+            font-size: 10px;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .shift-value {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--accent-primary);
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .datetime-section {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .datetime-display {
+            text-align: right;
+        }
+
+        .time-value {
+            font-size: 28px;
+            font-weight: 300;
+            font-family: 'Roboto Mono', monospace;
+            color: var(--text-primary);
+            letter-spacing: 2px;
+        }
+
+        .date-value {
+            font-size: 11px;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .live-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255, 23, 68, 0.15);
+            border: 1px solid rgba(255, 23, 68, 0.3);
+            padding: 6px 12px;
+            border-radius: 4px;
+        }
+
+        .live-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--status-critical);
+            border-radius: 50%;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .live-text {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: var(--status-critical);
+        }
+
+        /* ==================== MAIN DASHBOARD GRID ==================== */
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 320px;
+            grid-template-rows: auto 1fr 1fr auto;
+            gap: 12px;
+            padding: 12px 24px;
+            height: calc(100vh - 64px);
+            background: 
+                radial-gradient(ellipse at top left, rgba(0, 180, 216, 0.03) 0%, transparent 50%),
+                radial-gradient(ellipse at bottom right, rgba(124, 77, 255, 0.03) 0%, transparent 50%),
+                var(--industrial-black);
+        }
+
+        /* ==================== KPI STRIP - TOP ROW ==================== */
+        .kpi-strip {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 12px;
+        }
+
+        .kpi-module {
+            background: var(--gradient-card);
+            border: 1px solid var(--industrial-border);
+            border-radius: 4px;
+            padding: 16px 20px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .kpi-module:hover {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 20px rgba(0, 180, 216, 0.1);
+        }
+
+        .kpi-module::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 3px;
+            height: 100%;
+        }
+
+        .kpi-module.oee::before { background: var(--gradient-accent); }
+        .kpi-module.availability::before { background: var(--oee-availability); }
+        .kpi-module.performance::before { background: var(--oee-performance); }
+        .kpi-module.quality::before { background: var(--oee-quality); }
+        .kpi-module.production::before { background: var(--status-running); }
+        .kpi-module.downtime::before { background: var(--status-critical); }
+
+        .kpi-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .kpi-title {
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--text-tertiary);
+        }
+
+        .kpi-trend {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 2px;
+        }
+
+        .kpi-trend.positive {
+            background: rgba(0, 230, 118, 0.15);
+            color: var(--status-running);
+        }
+
+        .kpi-trend.negative {
+            background: rgba(255, 23, 68, 0.15);
+            color: var(--status-critical);
+        }
+
+        .kpi-trend.neutral {
+            background: rgba(255, 171, 0, 0.15);
+            color: var(--status-warning);
+        }
+
+        .kpi-value-container {
+            display: flex;
+            align-items: baseline;
+            gap: 4px;
+        }
+
+        .kpi-value {
+            font-size: 32px;
+            font-weight: 300;
+            font-family: 'Roboto Mono', monospace;
+            letter-spacing: -1px;
+        }
+
+        .kpi-module.oee .kpi-value { color: var(--accent-primary); }
+        .kpi-module.availability .kpi-value { color: var(--oee-availability); }
+        .kpi-module.performance .kpi-value { color: var(--oee-performance); }
+        .kpi-module.quality .kpi-value { color: var(--oee-quality); }
+        .kpi-module.production .kpi-value { color: var(--status-running); }
+        .kpi-module.downtime .kpi-value { color: var(--status-critical); }
+
+        .kpi-unit {
+            font-size: 14px;
+            color: var(--text-tertiary);
+            font-weight: 400;
+        }
+
+        .kpi-target {
+            font-size: 10px;
+            color: var(--text-tertiary);
+            margin-top: 4px;
+        }
+
+        .kpi-target span {
+            color: var(--text-secondary);
+        }
+
+        /* ==================== DATA PANELS ==================== */
+        .data-panel {
+            background: var(--gradient-card);
+            border: 1px solid var(--industrial-border);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 1px solid var(--industrial-border);
+        }
+
+        .panel-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+
+        .panel-title i {
+            color: var(--accent-primary);
+            opacity: 0.8;
+        }
+
+        .panel-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .panel-tag {
+            font-size: 9px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 2px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .panel-tag.live {
+            background: rgba(0, 230, 118, 0.15);
+            color: var(--status-running);
+            border: 1px solid rgba(0, 230, 118, 0.3);
+        }
+
+        .panel-body {
+            flex: 1;
+            padding: 16px;
+            position: relative;
+            min-height: 0;
+        }
+
+        .panel-body canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        /* ==================== MACHINE GRID - PREDIX STYLE ==================== */
+        .machines-panel {
+            grid-row: span 2;
+        }
+
+        .machines-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+            height: 100%;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .machines-grid::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .machines-grid::-webkit-scrollbar-track {
+            background: var(--industrial-dark);
+        }
+
+        .machines-grid::-webkit-scrollbar-thumb {
+            background: var(--industrial-border);
+            border-radius: 2px;
+        }
+
+        .machine-row {
+            display: grid;
+            grid-template-columns: 80px 1fr 80px 60px;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: var(--industrial-panel);
+            border: 1px solid var(--industrial-border);
+            border-radius: 4px;
+            position: relative;
+            transition: all 0.2s ease;
+        }
+
+        .machine-row:hover {
+            background: var(--industrial-hover);
+        }
+
+        .machine-row::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            border-radius: 4px 0 0 4px;
+        }
+
+        .machine-row.running::before { background: var(--status-running); }
+        .machine-row.stopped::before { background: var(--status-critical); }
+        .machine-row.setup::before { background: var(--status-warning); }
+        .machine-row.maintenance::before { background: var(--status-maintenance); }
+        .machine-row.idle::before { background: var(--status-idle); }
+
+        .machine-row.stopped {
+            animation: alert-pulse 2s infinite;
+        }
+
+        @keyframes alert-pulse {
+            0%, 100% { background: var(--industrial-panel); }
+            50% { background: rgba(255, 23, 68, 0.1); }
+        }
+
+        .machine-id {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .machine-name {
+            font-size: 14px;
+            font-weight: 700;
+            font-family: 'Roboto Mono', monospace;
+            color: var(--text-primary);
+        }
+
+        .machine-type {
+            font-size: 9px;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .machine-info {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .machine-product {
+            font-size: 11px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .machine-order {
+            font-size: 9px;
+            color: var(--text-tertiary);
+        }
+
+        .machine-oee {
+            text-align: right;
+        }
+
+        .machine-oee-value {
+            font-size: 18px;
+            font-weight: 700;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .machine-row.running .machine-oee-value { color: var(--status-running); }
+        .machine-row.stopped .machine-oee-value { color: var(--status-critical); }
+        .machine-row.setup .machine-oee-value { color: var(--status-warning); }
+        .machine-row.maintenance .machine-oee-value { color: var(--status-maintenance); }
+        .machine-row.idle .machine-oee-value { color: var(--status-idle); }
+
+        .machine-oee-label {
+            font-size: 8px;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .machine-status {
+            text-align: center;
+        }
+
+        .status-badge {
+            font-size: 8px;
+            font-weight: 700;
+            padding: 4px 8px;
+            border-radius: 2px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .machine-row.running .status-badge {
+            background: rgba(0, 230, 118, 0.15);
+            color: var(--status-running);
+            border: 1px solid rgba(0, 230, 118, 0.3);
+        }
+
+        .machine-row.stopped .status-badge {
+            background: rgba(255, 23, 68, 0.15);
+            color: var(--status-critical);
+            border: 1px solid rgba(255, 23, 68, 0.3);
+        }
+
+        .machine-row.setup .status-badge {
+            background: rgba(255, 171, 0, 0.15);
+            color: var(--status-warning);
+            border: 1px solid rgba(255, 171, 0, 0.3);
+        }
+
+        .machine-row.maintenance .status-badge {
+            background: rgba(124, 77, 255, 0.15);
+            color: var(--status-maintenance);
+            border: 1px solid rgba(124, 77, 255, 0.3);
+        }
+
+        /* ==================== OEE GAUGE - MINDSPHERE STYLE ==================== */
+        .oee-gauge-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            padding: 20px;
+        }
+
+        .gauge-wrapper {
+            position: relative;
+            width: 180px;
+            height: 180px;
+        }
+
+        .gauge-svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        .gauge-bg {
+            fill: none;
+            stroke: var(--industrial-border);
+            stroke-width: 12;
+        }
+
+        .gauge-fill {
+            fill: none;
+            stroke-width: 12;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 1s ease;
+        }
+
+        .gauge-fill.availability { stroke: var(--oee-availability); }
+        .gauge-fill.performance { stroke: var(--oee-performance); }
+        .gauge-fill.quality { stroke: var(--oee-quality); }
+
+        .gauge-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .gauge-value {
+            font-size: 42px;
+            font-weight: 300;
+            font-family: 'Roboto Mono', monospace;
+            color: var(--accent-primary);
+            line-height: 1;
+        }
+
+        .gauge-label {
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 2px;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
+
+        .oee-breakdown {
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            margin-top: 20px;
+        }
+
+        .oee-factor {
+            text-align: center;
+        }
+
+        .oee-factor-value {
+            font-size: 18px;
+            font-weight: 500;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .oee-factor.availability .oee-factor-value { color: var(--oee-availability); }
+        .oee-factor.performance .oee-factor-value { color: var(--oee-performance); }
+        .oee-factor.quality .oee-factor-value { color: var(--oee-quality); }
+
+        .oee-factor-label {
+            font-size: 9px;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 2px;
+        }
+
+        /* ==================== LOSSES TABLE ==================== */
+        .losses-table {
+            width: 100%;
+        }
+
+        .loss-row {
+            display: grid;
+            grid-template-columns: 24px 1fr 60px 50px;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            background: var(--industrial-panel);
+            border-radius: 4px;
+            margin-bottom: 6px;
+            border-left: 3px solid var(--status-critical);
+        }
+
+        .loss-rank {
+            font-size: 12px;
+            font-weight: 700;
+            font-family: 'Roboto Mono', monospace;
+            color: var(--text-tertiary);
+        }
+
+        .loss-info {
+            overflow: hidden;
+        }
+
+        .loss-reason {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .loss-machine {
+            font-size: 10px;
+            color: var(--text-tertiary);
+        }
+
+        .loss-time {
+            font-size: 14px;
+            font-weight: 700;
+            font-family: 'Roboto Mono', monospace;
+            color: var(--status-critical);
+            text-align: right;
+        }
+
+        .loss-percent {
+            font-size: 11px;
+            color: var(--text-tertiary);
+            text-align: right;
+        }
+
+        /* ==================== FOOTER TICKER ==================== */
+        .industrial-footer {
+            grid-column: 1 / -1;
+            background: var(--industrial-panel);
+            border: 1px solid var(--industrial-border);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            height: 40px;
+            overflow: hidden;
+        }
+
+        .footer-label {
+            background: var(--gradient-accent);
+            padding: 0 16px;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .footer-label i {
+            width: 14px;
+            height: 14px;
+        }
+
+        .footer-label span {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+        }
+
+        .footer-ticker {
+            flex: 1;
+            overflow: hidden;
+            padding: 0 20px;
+        }
+
+        .ticker-track {
+            display: flex;
+            animation: ticker-scroll 40s linear infinite;
+        }
+
+        .ticker-item {
+            white-space: nowrap;
+            padding: 0 40px;
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .ticker-item strong {
+            color: var(--accent-primary);
+            font-weight: 600;
+        }
+
+        .ticker-item .highlight-good {
+            color: var(--status-running);
+        }
+
+        .ticker-item .highlight-warning {
+            color: var(--status-warning);
+        }
+
+        .ticker-item .highlight-critical {
+            color: var(--status-critical);
+        }
+
+        /* ==================== SHIFT KPIs GRID ==================== */
+        .shift-kpis-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            height: 100%;
+        }
+
+        .shift-kpi-card {
+            background: linear-gradient(135deg, rgba(30, 40, 55, 0.9), rgba(20, 30, 45, 0.95));
+            border: 1px solid var(--industrial-border);
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .shift-kpi-card.total {
+            background: linear-gradient(135deg, rgba(0, 180, 216, 0.15), rgba(0, 230, 118, 0.1));
+            border-color: var(--industrial-cyan);
+        }
+
+        .shift-kpi-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--industrial-border);
+        }
+
+        .shift-badge {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .shift-badge.t1 { background: rgba(0, 180, 216, 0.2); color: var(--industrial-cyan); }
+        .shift-badge.t2 { background: rgba(255, 171, 0, 0.2); color: var(--status-warning); }
+        .shift-badge.t3 { background: rgba(156, 39, 176, 0.2); color: #ce93d8; }
+        .shift-badge.total { background: rgba(0, 230, 118, 0.2); color: var(--status-success); }
+
+        .shift-time {
+            font-size: 10px;
+            color: var(--text-secondary);
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .shift-kpi-body {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            flex: 1;
+        }
+
+        .shift-metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .shift-metric .metric-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .shift-metric .metric-label {
+            font-size: 10px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .shift-kpi-card.total .metric-value {
+            color: var(--industrial-cyan);
+        }
+
+        /* ==================== ACCESS CONTROL ==================== */
+        .access-block {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(circle at 20% 20%, rgba(0,180,216,0.08), transparent 45%), #0a0e14;
+            color: #e0e0e0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 9999;
+        }
+        .access-block h2 {
+            font-size: 20px;
+            letter-spacing: 0.5px;
+            color: #90caf9;
+            text-align: center;
+        }
+        .access-block p {
+            color: #9eabb3;
+            font-size: 14px;
+            text-align: center;
+        }
+        .access-block .badge {
+            padding: 6px 12px;
+            border-radius: 12px;
+            background: rgba(255,23,68,0.15);
+            border: 1px solid rgba(255,23,68,0.4);
+            color: #ff8a80;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+
+        @keyframes ticker-scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+
+        .footer-timestamp {
+            padding: 0 16px;
+            font-size: 10px;
+            font-family: 'Roboto Mono', monospace;
+            color: var(--text-tertiary);
+            border-left: 1px solid var(--industrial-border);
+            height: 100%;
+            display: flex;
+            align-items: center;
+        }
+
+        /* ==================== RESPONSIVE ADJUSTMENTS ==================== */
+        @media (max-width: 1600px) {
+            .kpi-strip {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            .kpi-value {
+                font-size: 28px;
+            }
+        }
+
+        @media (max-width: 1400px) {
+            .dashboard-container {
+                grid-template-columns: 1fr 1fr 280px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="accessDenied" class="access-block">
+        <div class="badge">Acesso Restrito</div>
+        <h2>Somente Leandro Camargo pode visualizar este painel.</h2>
+        <p>Entre com o usuário autorizado para continuar.</p>
+    </div>
+    <!-- ==================== INDUSTRIAL HEADER ==================== -->
+    <header class="industrial-header">
+        <div class="brand-section">
+            <div class="brand-logo">
+                <img src="https://i.postimg.cc/5jdHwhF9/hokkaido-logo-110.png" alt="Hokkaido">
+            </div>
+        </div>
+
+        <div class="system-status">
+            <div class="status-module">
+                <div class="status-indicator"></div>
+                <span class="status-label">Sistema Online</span>
+            </div>
+            <div class="shift-module">
+                <div class="shift-label">Turno Atual</div>
+                <div class="shift-value" id="currentShift">1º TURNO</div>
+            </div>
+            <div class="status-module">
+                <span class="status-label" id="headerMachineCount">-- Máquinas Conectadas</span>
+            </div>
+        </div>
+
+        <div class="datetime-section">
+            <div class="live-badge">
+                <div class="live-dot"></div>
+                <span class="live-text">AO VIVO</span>
+            </div>
+            <div class="datetime-display">
+                <div class="time-value" id="currentTime">00:00:00</div>
+                <div class="date-value" id="currentDate">Carregando...</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ==================== MAIN DASHBOARD ==================== -->
+    <main class="dashboard-container">
+        <!-- KPI STRIP - DADOS REAIS DO DIA -->
+        <div class="kpi-strip">
+            <!-- 1. PEÇAS PRODUZIDAS HOJE -->
+            <div class="kpi-module production">
+                <div class="kpi-header">
+                    <span class="kpi-title">Produção Hoje</span>
+                    <span class="kpi-trend" id="kpiProductionTrend">
+                        <i data-lucide="minus" style="width:12px;height:12px"></i>
+                        --
+                    </span>
+                </div>
+                <div class="kpi-value-container">
+                    <span class="kpi-value" id="kpiProduction">0</span>
+                    <span class="kpi-unit">pçs</span>
+                </div>
+                <div class="kpi-target">Meta: <span id="kpiProductionTarget">0 pçs</span></div>
+            </div>
+
+            <!-- 2. % CONCLUSÃO DO DIA -->
+            <div class="kpi-module oee">
+                <div class="kpi-header">
+                    <span class="kpi-title">Conclusão Dia</span>
+                    <span class="kpi-trend" id="kpiCompletionTrend">
+                        <i data-lucide="minus" style="width:12px;height:12px"></i>
+                        --
+                    </span>
+                </div>
+                <div class="kpi-value-container">
+                    <span class="kpi-value" id="kpiCompletion">0</span>
+                    <span class="kpi-unit">%</span>
+                </div>
+                <div class="kpi-target">Realizado / Planejado</div>
+            </div>
+
+            <!-- 3. ORDENS ATIVAS -->
+            <div class="kpi-module availability">
+                <div class="kpi-header">
+                    <span class="kpi-title">Ordens Ativas</span>
+                    <span class="kpi-trend neutral" id="kpiOrdersTrend">
+                        <i data-lucide="activity" style="width:12px;height:12px"></i>
+                        Hoje
+                    </span>
+                </div>
+                <div class="kpi-value-container">
+                    <span class="kpi-value" id="kpiOrders">0</span>
+                    <span class="kpi-unit">OPs</span>
+                </div>
+                <div class="kpi-target">Máquinas: <span id="kpiMachinesActive">0</span></div>
+            </div>
+
+            <!-- 4. REFUGO / QUALIDADE -->
+            <div class="kpi-module quality">
+                <div class="kpi-header">
+                    <span class="kpi-title">Taxa Qualidade</span>
+                    <span class="kpi-trend" id="kpiQualityTrend">
+                        <i data-lucide="minus" style="width:12px;height:12px"></i>
+                        --
+                    </span>
+                </div>
+                <div class="kpi-value-container">
+                    <span class="kpi-value" id="kpiQuality">100</span>
+                    <span class="kpi-unit">%</span>
+                </div>
+                <div class="kpi-target">Refugo: <span id="kpiRefugo">0 pçs</span></div>
+            </div>
+
+            <!-- 5. TEMPO PARADO HOJE -->
+            <div class="kpi-module downtime">
+                <div class="kpi-header">
+                    <span class="kpi-title">Paradas Hoje</span>
+                    <span class="kpi-trend" id="kpiDowntimeTrend">
+                        <i data-lucide="minus" style="width:12px;height:12px"></i>
+                        --
+                    </span>
+                </div>
+                <div class="kpi-value-container">
+                    <span class="kpi-value" id="kpiDowntime">0</span>
+                    <span class="kpi-unit">min</span>
+                </div>
+                <div class="kpi-target">Eventos: <span id="kpiDowntimeEvents">0</span></div>
+            </div>
+
+            <!-- 6. LANÇAMENTOS HOJE -->
+            <div class="kpi-module performance">
+                <div class="kpi-header">
+                    <span class="kpi-title">Lançamentos</span>
+                    <span class="kpi-trend neutral" id="kpiEntriesTrend">
+                        <i data-lucide="clipboard-list" style="width:12px;height:12px"></i>
+                        Hoje
+                    </span>
+                </div>
+                <div class="kpi-value-container">
+                    <span class="kpi-value" id="kpiEntries">0</span>
+                    <span class="kpi-unit">reg</span>
+                </div>
+                <div class="kpi-target">Última: <span id="kpiLastEntry">--:--</span></div>
+            </div>
+        </div>
+
+        <!-- KPIs ADICIONAIS -->
+        <div class="data-panel" style="grid-column: span 2;">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <i data-lucide="bar-chart-3" style="width:14px;height:14px"></i>
+                    Indicadores por Turno
+                </div>
+                <div class="panel-actions">
+                    <span class="panel-tag live">Tempo Real</span>
+                </div>
+            </div>
+            <div class="panel-body">
+                <div class="shift-kpis-grid" id="shiftKpisGrid">
+                    <!-- T1 -->
+                    <div class="shift-kpi-card">
+                        <div class="shift-kpi-header">
+                            <span class="shift-badge t1">T1</span>
+                            <span class="shift-time">07:00 - 15:00</span>
+                        </div>
+                        <div class="shift-kpi-body">
+                            <div class="shift-metric">
+                                <span class="metric-value" id="t1Production">0</span>
+                                <span class="metric-label">Peças</span>
+                            </div>
+                            <div class="shift-metric">
+                                <span class="metric-value" id="t1Efficiency">0%</span>
+                                <span class="metric-label">Eficiência</span>
+                            </div>
+                            <div class="shift-metric">
+                                <span class="metric-value" id="t1Downtime">0min</span>
+                                <span class="metric-label">Paradas</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- T2 -->
+                    <div class="shift-kpi-card">
+                        <div class="shift-kpi-header">
+                            <span class="shift-badge t2">T2</span>
+                            <span class="shift-time">15:00 - 23:00</span>
+                        </div>
+                        <div class="shift-kpi-body">
+                            <div class="shift-metric">
+                                <span class="metric-value" id="t2Production">0</span>
+                                <span class="metric-label">Peças</span>
+                            </div>
+                            <div class="shift-metric">
+                                <span class="metric-value" id="t2Efficiency">0%</span>
+                                <span class="metric-label">Eficiência</span>
+                            </div>
+                            <div class="shift-metric">
+                                <span class="metric-value" id="t2Downtime">0min</span>
+                                <span class="metric-label">Paradas</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- T3 -->
+                    <div class="shift-kpi-card">
+                        <div class="shift-kpi-header">
+                            <span class="shift-badge t3">T3</span>
+                            <span class="shift-time">23:00 - 07:00</span>
+                        </div>
+                        <div class="shift-kpi-body">
+                            <div class="shift-metric">
+                                <span class="metric-value" id="t3Production">0</span>
+                                <span class="metric-label">Peças</span>
+                            </div>
+                            <div class="shift-metric">
+                                <span class="metric-value" id="t3Efficiency">0%</span>
+                                <span class="metric-label">Eficiência</span>
+                            </div>
+                            <div class="shift-metric">
+                                <span class="metric-value" id="t3Downtime">0min</span>
+                                <span class="metric-label">Paradas</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- TOTAIS -->
+                    <div class="shift-kpi-card total">
+                        <div class="shift-kpi-header">
+                            <span class="shift-badge total">TOTAL</span>
+                            <span class="shift-time">Dia Completo</span>
+                        </div>
+                        <div class="shift-kpi-body">
+                            <div class="shift-metric">
+                                <span class="metric-value" id="totalDayProduction">0</span>
+                                <span class="metric-label">Peças</span>
+                            </div>
+                            <div class="shift-metric">
+                                <span class="metric-value" id="totalDayEfficiency">0%</span>
+                                <span class="metric-label">Eficiência</span>
+                            </div>
+                            <div class="shift-metric">
+                                <span class="metric-value" id="totalDayDowntime">0min</span>
+                                <span class="metric-label">Paradas</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- OEE GAUGE -->
+        <div class="data-panel">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <i data-lucide="gauge" style="width:14px;height:14px"></i>
+                    Composição do OEE
+                </div>
+            </div>
+            <div class="panel-body">
+                <div class="oee-gauge-container">
+                    <div class="gauge-wrapper">
+                        <svg class="gauge-svg" viewBox="0 0 200 200">
+                            <!-- Background circles -->
+                            <circle class="gauge-bg" cx="100" cy="100" r="85"/>
+                            <circle class="gauge-bg" cx="100" cy="100" r="70"/>
+                            <circle class="gauge-bg" cx="100" cy="100" r="55"/>
+                            
+                            <!-- Availability (outer) -->
+                            <circle class="gauge-fill availability" cx="100" cy="100" r="85"
+                                stroke-dasharray="534" stroke-dashoffset="47" id="gaugeAvailability"/>
+                            
+                            <!-- Performance (middle) -->
+                            <circle class="gauge-fill performance" cx="100" cy="100" r="70"
+                                stroke-dasharray="440" stroke-dashoffset="23" id="gaugePerformance"/>
+                            
+                            <!-- Quality (inner) -->
+                            <circle class="gauge-fill quality" cx="100" cy="100" r="55"
+                                stroke-dasharray="346" stroke-dashoffset="3" id="gaugeQuality"/>
+                        </svg>
+                        <div class="gauge-center">
+                            <div class="gauge-value" id="gaugeOEE">--</div>
+                            <div class="gauge-label">OEE %</div>
+                        </div>
+                    </div>
+                    <div class="oee-breakdown">
+                        <div class="oee-factor availability">
+                            <div class="oee-factor-value" id="oeeAvailValue">--%</div>
+                            <div class="oee-factor-label">Disponib.</div>
+                        </div>
+                        <div class="oee-factor performance">
+                            <div class="oee-factor-value" id="oeePerformValue">--%</div>
+                            <div class="oee-factor-label">Perform.</div>
+                        </div>
+                        <div class="oee-factor quality">
+                            <div class="oee-factor-value" id="oeeQualValue">--%</div>
+                            <div class="oee-factor-label">Qualidade</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MACHINES LIST -->
+        <div class="data-panel machines-panel">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <i data-lucide="cpu" style="width:14px;height:14px"></i>
+                    Status das Máquinas
+                </div>
+                <div class="panel-actions">
+                    <span class="panel-tag live" id="machinesTag">-- Máquinas</span>
+                </div>
+            </div>
+            <div class="panel-body" style="padding: 12px;">
+                <div class="machines-grid" id="machinesGrid">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- PARETO CHART -->
+        <div class="data-panel" style="grid-column: span 2;">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <i data-lucide="bar-chart-2" style="width:14px;height:14px"></i>
+                    Análise Pareto de Perdas
+                </div>
+                <div class="panel-actions">
+                    <span class="panel-tag live">Hoje</span>
+                </div>
+            </div>
+            <div class="panel-body">
+                <canvas id="paretoChart"></canvas>
+            </div>
+        </div>
+
+        <!-- TOP LOSSES -->
+        <div class="data-panel">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <i data-lucide="alert-triangle" style="width:14px;height:14px"></i>
+                    Principais Paradas
+                </div>
+            </div>
+            <div class="panel-body" style="padding: 12px;">
+                <div class="losses-table" id="lossesTable">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- FOOTER TICKER -->
+        <footer class="industrial-footer">
+            <div class="footer-label">
+                <i data-lucide="radio"></i>
+                <span>Avisos</span>
+            </div>
+            <div class="footer-ticker">
+                <div class="ticker-track">
+                    <span class="ticker-item"><strong>PRODUÇÃO:</strong> Meta diária em <span class="highlight-good">84,9%</span> de conclusão (127,4K / 150K peças)</span>
+                    <span class="ticker-item"><strong>QUALIDADE:</strong> <span class="highlight-good">Zero defeitos críticos</span> nas últimas 4 horas</span>
+                    <span class="ticker-item"><strong>MANUTENÇÃO:</strong> Manutenção preventiva agendada para <span class="highlight-warning">INJ-05 às 14:00h</span></span>
+                    <span class="ticker-item"><strong>ALERTA:</strong> <span class="highlight-critical">INJ-03</span> parada - Troca de molde em andamento</span>
+                    <span class="ticker-item"><strong>DESTAQUE:</strong> INJ-02 com maior OEE do turno: <span class="highlight-good">94,2%</span></span>
+                    <span class="ticker-item"><strong>PRODUÇÃO:</strong> Meta diária em <span class="highlight-good">84,9%</span> de conclusão (127,4K / 150K peças)</span>
+                    <span class="ticker-item"><strong>QUALIDADE:</strong> <span class="highlight-good">Zero defeitos críticos</span> nas últimas 4 horas</span>
+                    <span class="ticker-item"><strong>MANUTENÇÃO:</strong> Manutenção preventiva agendada para <span class="highlight-warning">INJ-05 às 14:00h</span></span>
+                    <span class="ticker-item"><strong>ALERTA:</strong> <span class="highlight-critical">INJ-03</span> parada - Troca de molde em andamento</span>
+                    <span class="ticker-item"><strong>DESTAQUE:</strong> INJ-02 com maior OEE do turno: <span class="highlight-good">94,2%</span></span>
+                </div>
+            </div>
+            <div class="footer-timestamp">
+                Última Atualização: <span id="lastUpdate">--:--:--</span>
+            </div>
+        </footer>
+    </main>
+
+    <!-- ==================== SCRIPTS ==================== -->
+    <script>
+        // ==================== FIREBASE CONFIG ====================
+        const firebaseConfig = {
+            apiKey: "AIzaSyB1YrMK07_7QROsCJQqE0MFsmJncfjphmI",
+            authDomain: "hokkaido-synchro.firebaseapp.com",
+            projectId: "hokkaido-synchro",
+            storageBucket: "hokkaido-synchro.firebasestorage.app",
+            messagingSenderId: "635645564631",
+            appId: "1:635645564631:web:1e19be7957e39d1adc8292"
+        };
+
+        let db;
+        let paretoChartInstance = null;
+        
+        // Cache de dados
+        let cachedMachines = [];
+        let cachedProductions = [];
+        let cachedPlanning = [];
+        let cachedDowntimes = [];
+
+        // ==================== INITIALIZATION ====================
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('[Dashboard TV] Iniciando...');
+            
+            // Criar ícones Lucide com verificação
+            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                lucide.createIcons();
+                console.log('[Dashboard TV] Lucide icons criados');
+            } else {
+                console.warn('[Dashboard TV] Lucide não encontrado');
+            }
+            
+            initDateTime();
+            console.log('[Dashboard TV] DateTime inicializado');
+            
+            // Verificar acesso - comentado para debug, descomentar para produção
+            // if (!checkAccess()) return;
+            
+            // Inicializar Firebase
+            try {
+                console.log('[Dashboard TV] Verificando Firebase...');
+                if (typeof firebase === 'undefined') {
+                    throw new Error('Firebase SDK não carregado');
+                }
+                
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(firebaseConfig);
+                    console.log('[Dashboard TV] Firebase app inicializado');
+                }
+                db = firebase.firestore();
+                console.log('[Dashboard TV] Firestore conectado');
+                
+                // Carregar dados reais
+                console.log('[Dashboard TV] Carregando dados...');
+                await loadRealTimeData();
+                console.log('[Dashboard TV] Dados carregados com sucesso');
+                
+            } catch (error) {
+                console.error('[Dashboard TV] Erro ao carregar dados:', error);
+                // Mostrar mensagem de erro na interface
+                showNoDataMessage('Erro ao conectar com o banco de dados');
+            }
+            
+            // Auto-update intervals
+            setInterval(updateDateTime, 1000);
+            setInterval(loadRealTimeData, 60000); // Atualiza a cada 1 minuto
+            console.log('[Dashboard TV] Inicialização completa!');
+        });
+
+        function checkAccess() {
+            const overlay = document.getElementById('accessDenied');
+            const allowedEmails = ['leandro.camargo@hokkaido.com', 'leandro.camargo@synchro.com'];
+            const allowedNames = ['leandro camargo', 'leandro c.'];
+
+            let userEmail = null;
+            let userName = null;
+
+            if (window.authSystem && typeof window.authSystem.getCurrentUser === 'function') {
+                const u = window.authSystem.getCurrentUser();
+                userEmail = (u?.email || '').toLowerCase();
+                userName = (u?.displayName || u?.name || '').toLowerCase();
+            }
+
+            if (!userEmail && window.localStorage) {
+                try {
+                    const raw = localStorage.getItem('synchroCurrentUser');
+                    if (raw) {
+                        const parsed = JSON.parse(raw);
+                        userEmail = (parsed?.email || '').toLowerCase();
+                        userName = (parsed?.displayName || parsed?.name || '').toLowerCase();
+                    }
+                } catch (e) {
+                    console.warn('Não foi possível ler usuário do storage:', e);
+                }
+            }
+
+            const emailAllowed = userEmail && allowedEmails.includes(userEmail);
+            const nameAllowed = userName && allowedNames.some(n => userName.includes(n));
+
+            if (emailAllowed || nameAllowed) {
+                return true;
+            }
+
+            if (overlay) {
+                overlay.style.display = 'flex';
+            }
+            console.warn('[Dashboard TV] Acesso negado para usuário não autorizado');
+            return false;
+        }
+
+        // ==================== DATE & TIME ====================
+        function initDateTime() {
+            updateDateTime();
+        }
+
+        function updateDateTime() {
+            const now = new Date();
+            
+            // Time
+            const time = now.toLocaleTimeString('pt-BR', { 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit' 
+            });
+            document.getElementById('currentTime').textContent = time;
+            document.getElementById('lastUpdate').textContent = time;
+            
+            // Date
+            const options = { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' };
+            const date = now.toLocaleDateString('pt-BR', options).toUpperCase();
+            document.getElementById('currentDate').textContent = date;
+            
+            // Shift
+            const hour = now.getHours();
+            let shift = '1º TURNO';
+            if (hour >= 7 && hour < 15) shift = '1º TURNO (07:00-15:00)';
+            else if (hour >= 15 && hour < 23) shift = '2º TURNO (15:00-23:00)';
+            else shift = '3º TURNO (23:00-07:00)';
+            document.getElementById('currentShift').textContent = shift;
+        }
+
+        // ==================== REAL-TIME DATA LOADING ====================
+        async function loadRealTimeData() {
+            try {
+                console.log('[Dashboard TV] Carregando dados reais...');
+                const today = getTodayString();
+                const yesterday = getYesterdayString();
+                console.log('[Dashboard TV] Data de hoje (produção):', today);
+                console.log('[Dashboard TV] Data de ontem:', yesterday);
+
+                // Planejamentos: buscar todos e filtrar ativos no cliente
+                console.log('[Dashboard TV] Buscando planejamentos...');
+                const planningSnapshot = await db.collection('planning').get();
+                console.log('[Dashboard TV] Total de planejamentos no banco:', planningSnapshot.docs.length);
+                
+                cachedPlanning = planningSnapshot.docs
+                    .map(doc => ({ id: doc.id, ...doc.data() }))
+                    .filter(isPlanActive);
+                console.log('[Dashboard TV] Planejamentos ativos após filtro:', cachedPlanning.length);
+
+                // Entradas de produção do dia atual
+                console.log('[Dashboard TV] Buscando produção para data:', today);
+                const prodSnapshot = await db.collection('production_entries')
+                    .where('data', '==', today)
+                    .get();
+                cachedProductions = prodSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                console.log('[Dashboard TV] Produções encontradas:', cachedProductions.length);
+
+                // Paradas do dia
+                console.log('[Dashboard TV] Buscando paradas...', 'yesterday:', yesterday, 'today:', today);
+                const downtimeSnapshot = await db.collection('downtime_entries')
+                    .where('date', 'in', [yesterday, today])
+                    .get();
+                cachedDowntimes = downtimeSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                console.log('[Dashboard TV] Paradas encontradas:', cachedDowntimes.length);
+                
+                // Debug: mostrar amostra de parada
+                if (cachedDowntimes.length > 0) {
+                    console.log('[Dashboard TV] Amostra parada:', JSON.stringify(cachedDowntimes[0], null, 2));
+                }
+                
+                // Debug: mostrar amostra de dados
+                if (cachedPlanning.length > 0) {
+                    console.log('[Dashboard TV] Amostra planejamento:', JSON.stringify(cachedPlanning[0], null, 2));
+                }
+                if (cachedProductions.length > 0) {
+                    console.log('[Dashboard TV] Amostra produção:', JSON.stringify(cachedProductions[0], null, 2));
+                }
+
+                // Atualizar interface
+                console.log('[Dashboard TV] Atualizando interface...');
+                updateMachinesGrid();
+                updateKPIs();
+                updateShiftKPIs();
+                updateParetoChart();
+                updateLossesTable();
+                updateTicker();
+                
+                // Se não houver dados de planejamento, mostrar mensagem
+                if (cachedPlanning.length === 0) {
+                    console.log('[Dashboard TV] Sem planejamentos ativos');
+                    showNoDataMessage('Nenhum planejamento ativo no momento');
+                }
+                
+                console.log('[Dashboard TV] Dados carregados com sucesso!');
+
+            } catch (error) {
+                console.error('[Dashboard TV] Erro ao carregar dados:', error);
+                showNoDataMessage('Erro ao carregar dados: ' + error.message);
+            }
+        }
+
+        // Alinha com a lógica do app principal: dia de produção vira "ontem" antes das 07:00
+        function getTodayString(date = new Date()) {
+            const localDate = new Date(date);
+            if (localDate.getHours() < 7) {
+                localDate.setDate(localDate.getDate() - 1);
+            }
+            return new Date(localDate.getTime() - (localDate.getTimezoneOffset() * 60000))
+                .toISOString()
+                .split('T')[0];
+        }
+
+        function getYesterdayString() {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            return getTodayString(yesterday);
+        }
+
+        function isPlanActive(plan) {
+            const status = (plan.status || '').toLowerCase();
+            return !['concluida', 'finalizada', 'finalizado', 'cancelada', 'cancelado'].includes(status);
+        }
+
+        // Mostrar mensagem quando não houver dados
+        function showNoDataMessage(message) {
+            const grid = document.getElementById('machinesGrid');
+            if (grid) {
+                grid.innerHTML = `
+                    <div style="grid-column: span 2; text-align: center; padding: 40px; color: #78909c;">
+                        <i data-lucide="alert-circle" style="width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.5;"></i>
+                        <p style="font-size: 14px;">${message}</p>
+                        <p style="font-size: 11px; margin-top: 8px;">Aguardando dados do Firebase...</p>
+                    </div>
+                `;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
+        }
+
+        // ==================== MACHINES GRID - REAL DATA ====================
+        function updateMachinesGrid() {
+            const grid = document.getElementById('machinesGrid');
+            if (!grid) {
+                console.error('[Dashboard TV] Elemento machinesGrid não encontrado!');
+                return;
+            }
+            
+            const statusLabels = {
+                running: 'RODANDO',
+                stopped: 'PARADA',
+                setup: 'SETUP',
+                maintenance: 'MANUT.',
+                idle: 'OCIOSA'
+            };
+            
+            // Agrupar produção por máquina
+            const machineData = {};
+            
+            cachedPlanning.forEach(plan => {
+                const machineId = plan.machine || plan.machineId || plan.maquina || 'N/A';
+                if (!machineData[machineId]) {
+                    machineData[machineId] = {
+                        id: machineId,
+                        type: 'Injetora',
+                        product: plan.product || plan.product_cod || plan.produto || plan.descricao || 'Sem produto',
+                        order: plan.order_number || plan.id || 'N/A',
+                        produced: 0,
+                        target: getPlanTarget(plan),
+                        cycleTime: plan.budgeted_cycle || plan.tempoCiclo || 0,
+                        status: plan.status || 'running'
+                    };
+                }
+            });
+            
+            // Somar produções por máquina (via planId ou diretamente pela máquina)
+            cachedProductions.forEach(prod => {
+                const planId = prod.planId;
+                const prodMachine = prod.machine || prod.machineId || prod.maquina;
+                
+                // Tentar encontrar plano pelo planId
+                let plan = cachedPlanning.find(p => p.id === planId);
+                
+                // Se não encontrou pelo planId, tentar pela máquina
+                if (!plan && prodMachine) {
+                    plan = cachedPlanning.find(p => 
+                        (p.machine || p.machineId || p.maquina) === prodMachine
+                    );
+                }
+                
+                if (plan) {
+                    const machineId = plan.machine || plan.machineId || plan.maquina;
+                    if (machineData[machineId]) {
+                        machineData[machineId].produced += getProducedQty(prod);
+                    }
+                } else if (prodMachine && machineData[prodMachine]) {
+                    // Associar diretamente à máquina se existir
+                    machineData[prodMachine].produced += getProducedQty(prod);
+                }
+            });
+            
+            // Calcular OEE por máquina
+            const machines = Object.values(machineData).map(m => {
+                let oee = 0;
+                if (m.target > 0) {
+                    oee = Math.min((m.produced / m.target) * 100, 100);
+                }
+                
+                // Determinar status baseado em atividade
+                let status = 'running';
+                if (oee === 0 && m.produced === 0) status = 'idle';
+                
+                return {
+                    ...m,
+                    oee: oee,
+                    status: status
+                };
+            });
+            
+            // Se não houver máquinas reais, mostrar mensagem
+            if (machines.length === 0) {
+                grid.innerHTML = `
+                    <div style="grid-column: span 2; text-align: center; padding: 40px; color: #78909c;">
+                        <i data-lucide="inbox" style="width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.5;"></i>
+                        <p style="font-size: 14px;">Nenhuma máquina com planejamento ativo</p>
+                        <p style="font-size: 11px; margin-top: 8px;">Os dados serão exibidos quando houver ordens de produção</p>
+                    </div>
+                `;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+                return;
+            }
+            
+            grid.innerHTML = machines.slice(0, 8).map(m => `
+                <div class="machine-row ${m.status}">
+                    <div class="machine-id">
+                        <span class="machine-name">${m.id}</span>
+                        <span class="machine-type">${m.type}</span>
+                    </div>
+                    <div class="machine-info">
+                        <span class="machine-product">${m.product}</span>
+                        <span class="machine-order">${m.order.substring(0, 15)}</span>
+                    </div>
+                    <div class="machine-oee">
+                        <span class="machine-oee-value">${m.oee.toFixed(1)}%</span>
+                        <span class="machine-oee-label">OEE</span>
+                    </div>
+                    <div class="machine-status">
+                        <span class="status-badge">${statusLabels[m.status]}</span>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Atualizar contadores de máquinas
+            const machineCount = machines.length;
+            const headerStatus = document.getElementById('headerMachineCount');
+            const machinesTag = document.getElementById('machinesTag');
+            
+            if (headerStatus) headerStatus.textContent = `${machineCount} Máquinas Conectadas`;
+            if (machinesTag) machinesTag.textContent = `${machineCount} Máquinas`;
+        }
+
+        // ==================== KPIs UPDATE - DADOS REAIS ====================
+        function updateKPIs() {
+            // ========== CÁLCULOS DE PRODUÇÃO ==========
+            let totalProduced = 0;      // Total de peças boas
+            let totalRefugo = 0;        // Total de refugo
+            let totalTarget = 0;        // Meta total do dia
+            let totalDowntimeMinutes = 0; // Tempo total de paradas
+            let lastHourProduced = 0;
+            
+            console.log('[Dashboard TV] updateKPIs - cachedProductions:', cachedProductions.length);
+            console.log('[Dashboard TV] updateKPIs - cachedPlanning:', cachedPlanning.length);
+            
+            // Somar produção do dia
+            cachedProductions.forEach(prod => {
+                const good = getProducedQty(prod);
+                const bad = prod.pecasRuins || prod.refugo_pcs || prod.refugo || prod.scrap || 0;
+                totalProduced += good;
+                totalRefugo += bad;
+
+                // Produção da última hora
+                const now = new Date();
+                const hourStr = prod.hora || prod.hour || prod.horaInformada;
+                if (hourStr && hourStr.length >= 2) {
+                    const h = parseInt(hourStr.slice(0, 2));
+                    if (!Number.isNaN(h)) {
+                        const currentHour = now.getHours();
+                        if (h === currentHour || h === (currentHour - 1)) {
+                            lastHourProduced += good;
+                        }
+                    }
+                }
+            });
+            
+            // Somar metas do planejamento ativo
+            cachedPlanning.forEach(plan => {
+                totalTarget += getPlanTarget(plan);
+            });
+            
+            console.log('[Dashboard TV] KPIs calculados - Produção:', totalProduced, 'Meta:', totalTarget);
+            
+            // Somar tempo de paradas do dia
+            const today = getTodayString();
+            cachedDowntimes.filter(dt => (dt.date || dt.data) === today).forEach(dt => {
+                // Campo 'duration' é em minutos no Firebase (não 'duration_minutes')
+                let minutes = dt.duration || dt.duration_minutes || 0;
+                if (!minutes && dt.startTime && dt.endTime) {
+                    const s = new Date(`1970-01-01T${dt.startTime}:00`);
+                    const e = new Date(`1970-01-01T${dt.endTime}:00`);
+                    minutes = Math.max(0, Math.round((e - s) / 60000));
+                }
+                totalDowntimeMinutes += minutes;
+            });
+            
+            console.log('[Dashboard TV] Paradas do dia:', today, 'Total minutos:', totalDowntimeMinutes);
+            
+            // ========== 1. PRODUÇÃO HOJE ==========
+            const prodEl = document.getElementById('kpiProduction');
+            const prodTargetEl = document.getElementById('kpiProductionTarget');
+            const prodTrendEl = document.getElementById('kpiProductionTrend');
+            
+            if (prodEl) prodEl.textContent = formatNumber(totalProduced);
+            if (prodTargetEl) prodTargetEl.textContent = formatNumber(totalTarget) + ' pçs';
+            
+            // Tendência baseada na meta
+            const prodPercent = totalTarget > 0 ? (totalProduced / totalTarget) * 100 : 0;
+            if (prodTrendEl) {
+                prodTrendEl.className = 'kpi-trend neutral';
+                prodTrendEl.innerHTML = `<i data-lucide="clock" style="width:12px;height:12px"></i>Últ. hora: ${formatNumber(lastHourProduced)} pçs`;
+            }
+            
+            // ========== 2. % CONCLUSÃO DO DIA ==========
+            const completionEl = document.getElementById('kpiCompletion');
+            const completionTrendEl = document.getElementById('kpiCompletionTrend');
+            const safeTarget = totalTarget || totalProduced || 1;
+            const completionPercent = Math.min((totalProduced / safeTarget) * 100, 150);
+            
+            if (completionEl) completionEl.textContent = completionPercent.toFixed(1);
+            if (completionTrendEl) {
+                if (completionPercent >= 100) {
+                    completionTrendEl.className = 'kpi-trend positive';
+                    completionTrendEl.innerHTML = `<i data-lucide="check-circle" style="width:12px;height:12px"></i>Meta batida!`;
+                } else if (completionPercent >= 70) {
+                    completionTrendEl.className = 'kpi-trend positive';
+                    completionTrendEl.innerHTML = `<i data-lucide="trending-up" style="width:12px;height:12px"></i>Em dia`;
+                } else if (completionPercent >= 40) {
+                    completionTrendEl.className = 'kpi-trend neutral';
+                    completionTrendEl.innerHTML = `<i data-lucide="clock" style="width:12px;height:12px"></i>Atenção`;
+                } else {
+                    completionTrendEl.className = 'kpi-trend negative';
+                    completionTrendEl.innerHTML = `<i data-lucide="alert-triangle" style="width:12px;height:12px"></i>Atrasado`;
+                }
+            }
+            
+            // ========== 3. ORDENS ATIVAS ==========
+            const ordersEl = document.getElementById('kpiOrders');
+            const machinesActiveEl = document.getElementById('kpiMachinesActive');
+            
+            // Contar máquinas únicas
+            const uniqueMachines = new Set();
+            cachedPlanning.forEach(plan => {
+                const machineId = plan.machine || plan.machineId || plan.maquina;
+                if (machineId) uniqueMachines.add(machineId);
+            });
+            
+            if (ordersEl) ordersEl.textContent = cachedPlanning.length;
+            if (machinesActiveEl) machinesActiveEl.textContent = uniqueMachines.size;
+            
+            // ========== 4. QUALIDADE ==========
+            const qualityEl = document.getElementById('kpiQuality');
+            const refugoEl = document.getElementById('kpiRefugo');
+            const qualityTrendEl = document.getElementById('kpiQualityTrend');
+            
+            const totalPcs = totalProduced + totalRefugo;
+            const qualityPercent = totalPcs > 0 ? (totalProduced / totalPcs) * 100 : 100;
+            
+            if (qualityEl) qualityEl.textContent = qualityPercent.toFixed(1);
+            if (refugoEl) refugoEl.textContent = formatNumber(totalRefugo) + ' pçs';
+            if (qualityTrendEl) {
+                if (qualityPercent >= 99) {
+                    qualityTrendEl.className = 'kpi-trend positive';
+                    qualityTrendEl.innerHTML = `<i data-lucide="shield-check" style="width:12px;height:12px"></i>Excelente`;
+                } else if (qualityPercent >= 95) {
+                    qualityTrendEl.className = 'kpi-trend positive';
+                    qualityTrendEl.innerHTML = `<i data-lucide="trending-up" style="width:12px;height:12px"></i>Bom`;
+                } else if (qualityPercent >= 90) {
+                    qualityTrendEl.className = 'kpi-trend neutral';
+                    qualityTrendEl.innerHTML = `<i data-lucide="minus" style="width:12px;height:12px"></i>Regular`;
+                } else {
+                    qualityTrendEl.className = 'kpi-trend negative';
+                    qualityTrendEl.innerHTML = `<i data-lucide="trending-down" style="width:12px;height:12px"></i>Crítico`;
+                }
+            }
+            
+            // ========== 5. PARADAS HOJE ==========
+            const downtimeEl = document.getElementById('kpiDowntime');
+            const downtimeEventsEl = document.getElementById('kpiDowntimeEvents');
+            const downtimeTrendEl = document.getElementById('kpiDowntimeTrend');
+            
+            const todayDowntimes = cachedDowntimes.filter(dt => (dt.date || dt.data) === today);
+            
+            if (downtimeEl) {
+                if (totalDowntimeMinutes >= 60) {
+                    const hours = Math.floor(totalDowntimeMinutes / 60);
+                    const mins = totalDowntimeMinutes % 60;
+                    downtimeEl.textContent = `${hours}h${mins > 0 ? mins : ''}`;
+                } else {
+                    downtimeEl.textContent = totalDowntimeMinutes;
+                }
+            }
+            if (downtimeEventsEl) downtimeEventsEl.textContent = todayDowntimes.length;
+            if (downtimeTrendEl) {
+                if (totalDowntimeMinutes <= 30) {
+                    downtimeTrendEl.className = 'kpi-trend positive';
+                    downtimeTrendEl.innerHTML = `<i data-lucide="thumbs-up" style="width:12px;height:12px"></i>Baixo`;
+                } else if (totalDowntimeMinutes <= 90) {
+                    downtimeTrendEl.className = 'kpi-trend neutral';
+                    downtimeTrendEl.innerHTML = `<i data-lucide="minus" style="width:12px;height:12px"></i>Normal`;
+                } else {
+                    downtimeTrendEl.className = 'kpi-trend negative';
+                    downtimeTrendEl.innerHTML = `<i data-lucide="alert-circle" style="width:12px;height:12px"></i>Alto`;
+                }
+            }
+            
+            // ========== 6. LANÇAMENTOS HOJE ==========
+            const entriesEl = document.getElementById('kpiEntries');
+            const lastEntryEl = document.getElementById('kpiLastEntry');
+            
+            if (entriesEl) entriesEl.textContent = cachedProductions.length;
+            
+            // Encontrar última entrada
+            if (lastEntryEl) {
+                let lastTime = '--:--';
+                if (cachedProductions.length > 0) {
+                    // Tentar encontrar o horário mais recente
+                    const sorted = [...cachedProductions].sort((a, b) => {
+                        // Converter para string de forma segura
+                        const getTimeStr = (val) => {
+                            if (!val) return '';
+                            if (typeof val === 'string') return val;
+                            if (val.toDate) return val.toDate().toISOString(); // Firebase Timestamp
+                            if (val instanceof Date) return val.toISOString();
+                            return String(val);
+                        };
+                        const timeA = getTimeStr(a.hora || a.hour || a.createdAt);
+                        const timeB = getTimeStr(b.hora || b.hour || b.createdAt);
+                        return timeB.localeCompare(timeA);
+                    });
+                    const lastProd = sorted[0];
+                    let lastTimeVal = lastProd.hora || lastProd.hour;
+                    if (typeof lastTimeVal === 'string' && lastTimeVal.length >= 5) {
+                        lastTime = lastTimeVal.substring(0, 5);
+                    } else {
+                        lastTime = '--:--';
+                    }
+                }
+                lastEntryEl.textContent = lastTime;
+            }
+            
+            // ========== CÁLCULO DO OEE REAL ==========
+            // Disponibilidade: tempo produzindo / tempo total programado
+            // Considerando 8h por turno = 480min
+            const now = new Date();
+            const currentHour = now.getHours();
+            let minutesSinceShiftStart = 0;
+            
+            // Calcular minutos desde início do turno atual
+            if (currentHour >= 7 && currentHour < 15) {
+                minutesSinceShiftStart = (currentHour - 7) * 60 + now.getMinutes();
+            } else if (currentHour >= 15 && currentHour < 23) {
+                minutesSinceShiftStart = (currentHour - 15) * 60 + now.getMinutes();
+            } else {
+                minutesSinceShiftStart = currentHour < 7 ? (currentHour + 1) * 60 + now.getMinutes() : (currentHour - 23) * 60 + now.getMinutes();
+            }
+            
+            // Tempo programado hoje (baseado na hora atual)
+            const scheduledMinutes = Math.max(minutesSinceShiftStart, 60); // mínimo 60min para evitar divisão problemática
+            const availableMinutes = Math.max(scheduledMinutes - totalDowntimeMinutes, 0);
+            
+            // Disponibilidade (%)
+            const availability = scheduledMinutes > 0 ? (availableMinutes / scheduledMinutes) * 100 : 100;
+            
+            // Performance: produção real / produção esperada no tempo disponível  
+            // Se temos meta e produção, calculamos a performance baseada na conclusão
+            const performance = completionPercent > 0 ? Math.min(completionPercent, 100) : (totalProduced > 0 ? 85 : 0);
+            
+            // Qualidade já foi calculada acima (qualityPercent)
+            updateOEERing(availability, performance, qualityPercent);
+            
+            // Recriar ícones Lucide
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        }
+
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return Math.round(num / 1000) + 'K';
+            return num.toLocaleString('pt-BR');
+        }
+
+        function updateOEERing(availability, performance, quality) {
+            // Garantir valores válidos
+            const safeAvail = Number.isFinite(availability) ? Math.max(0, Math.min(availability, 100)) : 0;
+            const safePerf = Number.isFinite(performance) ? Math.max(0, Math.min(performance, 100)) : 0;
+            const safeQual = Number.isFinite(quality) ? Math.max(0, Math.min(quality, 100)) : 100;
+            
+            // Calcular OEE (A x P x Q / 10000)
+            const oee = (safeAvail * safePerf * safeQual) / 10000;
+            
+            // Atualizar valor central
+            const oeeEl = document.getElementById('gaugeOEE');
+            if (oeeEl) oeeEl.textContent = oee.toFixed(1);
+            
+            // Atualizar valores breakdown
+            const availEl = document.getElementById('oeeAvailValue');
+            const perfEl = document.getElementById('oeePerformValue');
+            const qualEl = document.getElementById('oeeQualValue');
+            
+            if (availEl) availEl.textContent = safeAvail.toFixed(1) + '%';
+            if (perfEl) perfEl.textContent = safePerf.toFixed(1) + '%';
+            if (qualEl) qualEl.textContent = safeQual.toFixed(1) + '%';
+            
+            // Atualizar arcos do gauge SVG - raios conforme definido no HTML
+            // Availability (outer) - radius 85, circunferência = 2 * PI * 85 = 534.07
+            const availCircle = document.getElementById('gaugeAvailability');
+            if (availCircle) {
+                const circumference = 2 * Math.PI * 85;
+                const offset = circumference * (1 - safeAvail / 100);
+                availCircle.setAttribute('stroke-dasharray', circumference.toFixed(2));
+                availCircle.setAttribute('stroke-dashoffset', offset.toFixed(2));
+            }
+            
+            // Performance (middle) - radius 70, circunferência = 2 * PI * 70 = 439.82
+            const perfCircle = document.getElementById('gaugePerformance');
+            if (perfCircle) {
+                const circumference = 2 * Math.PI * 70;
+                const offset = circumference * (1 - safePerf / 100);
+                perfCircle.setAttribute('stroke-dasharray', circumference.toFixed(2));
+                perfCircle.setAttribute('stroke-dashoffset', offset.toFixed(2));
+            }
+            
+            // Quality (inner) - radius 55, circunferência = 2 * PI * 55 = 345.58
+            const qualCircle = document.getElementById('gaugeQuality');
+            if (qualCircle) {
+                const circumference = 2 * Math.PI * 55;
+                const offset = circumference * (1 - safeQual / 100);
+                qualCircle.setAttribute('stroke-dasharray', circumference.toFixed(2));
+                qualCircle.setAttribute('stroke-dashoffset', offset.toFixed(2));
+            }
+        }
+
+        // ==================== SHIFT KPIs UPDATE ====================
+        function updateShiftKPIs() {
+            // Inicializar contadores por turno
+            const shifts = {
+                T1: { production: 0, target: 0, downtime: 0 },
+                T2: { production: 0, target: 0, downtime: 0 },
+                T3: { production: 0, target: 0, downtime: 0 }
+            };
+            
+            // Contar produção por turno
+            cachedProductions.forEach(prod => {
+                // Converter turno para string de forma segura (pode vir como número)
+                const turnoRaw = prod.turno;
+                let turno = '';
+                if (typeof turnoRaw === 'string') {
+                    turno = turnoRaw.toUpperCase();
+                } else if (typeof turnoRaw === 'number') {
+                    turno = 'T' + turnoRaw;
+                } else if (turnoRaw) {
+                    turno = String(turnoRaw).toUpperCase();
+                }
+                
+                const qty = getProducedQty(prod);
+                if (shifts[turno]) {
+                    shifts[turno].production += qty;
+                }
+            });
+            
+            // Calcular meta por turno (dividir meta total por 3)
+            const totalTarget = cachedPlanning.reduce((sum, p) => sum + getPlanTarget(p), 0);
+            const targetPerShift = Math.round(totalTarget / 3);
+            shifts.T1.target = targetPerShift;
+            shifts.T2.target = targetPerShift;
+            shifts.T3.target = targetPerShift;
+            
+            // Contar paradas por turno
+            const today = getTodayString();
+            cachedDowntimes.filter(dt => (dt.date || dt.data) === today).forEach(dt => {
+                // Converter turno para string de forma segura
+                const turnoRaw = dt.turno || dt.shift;
+                let turno = '';
+                if (typeof turnoRaw === 'string') {
+                    turno = turnoRaw.toUpperCase();
+                } else if (typeof turnoRaw === 'number') {
+                    turno = 'T' + turnoRaw;
+                } else if (turnoRaw) {
+                    turno = String(turnoRaw).toUpperCase();
+                }
+                
+                let minutes = dt.duration || dt.duration_minutes || 0;
+                if (!minutes && dt.startTime && dt.endTime) {
+                    const s = new Date(`1970-01-01T${dt.startTime}:00`);
+                    const e = new Date(`1970-01-01T${dt.endTime}:00`);
+                    minutes = Math.max(0, Math.round((e - s) / 60000));
+                }
+                if (shifts[turno]) {
+                    shifts[turno].downtime += minutes;
+                }
+            });
+            
+            // Atualizar elementos do DOM
+            const formatQty = (n) => n >= 1000 ? (n/1000).toFixed(1) + 'K' : n.toLocaleString('pt-BR');
+            const calcEfficiency = (prod, target) => target > 0 ? Math.min((prod / target) * 100, 150).toFixed(0) : 0;
+            
+            // T1
+            const t1Prod = document.getElementById('t1Production');
+            const t1Eff = document.getElementById('t1Efficiency');
+            const t1Down = document.getElementById('t1Downtime');
+            if (t1Prod) t1Prod.textContent = formatQty(shifts.T1.production);
+            if (t1Eff) t1Eff.textContent = calcEfficiency(shifts.T1.production, shifts.T1.target) + '%';
+            if (t1Down) t1Down.textContent = shifts.T1.downtime + 'min';
+            
+            // T2
+            const t2Prod = document.getElementById('t2Production');
+            const t2Eff = document.getElementById('t2Efficiency');
+            const t2Down = document.getElementById('t2Downtime');
+            if (t2Prod) t2Prod.textContent = formatQty(shifts.T2.production);
+            if (t2Eff) t2Eff.textContent = calcEfficiency(shifts.T2.production, shifts.T2.target) + '%';
+            if (t2Down) t2Down.textContent = shifts.T2.downtime + 'min';
+            
+            // T3
+            const t3Prod = document.getElementById('t3Production');
+            const t3Eff = document.getElementById('t3Efficiency');
+            const t3Down = document.getElementById('t3Downtime');
+            if (t3Prod) t3Prod.textContent = formatQty(shifts.T3.production);
+            if (t3Eff) t3Eff.textContent = calcEfficiency(shifts.T3.production, shifts.T3.target) + '%';
+            if (t3Down) t3Down.textContent = shifts.T3.downtime + 'min';
+            
+            // Totais
+            const totalProd = shifts.T1.production + shifts.T2.production + shifts.T3.production;
+            const totalDown = shifts.T1.downtime + shifts.T2.downtime + shifts.T3.downtime;
+            
+            const totalDayProd = document.getElementById('totalDayProduction');
+            const totalDayEff = document.getElementById('totalDayEfficiency');
+            const totalDayDown = document.getElementById('totalDayDowntime');
+            if (totalDayProd) totalDayProd.textContent = formatQty(totalProd);
+            if (totalDayEff) totalDayEff.textContent = calcEfficiency(totalProd, totalTarget) + '%';
+            if (totalDayDown) totalDayDown.textContent = totalDown >= 60 ? Math.floor(totalDown/60) + 'h' + (totalDown%60) + 'm' : totalDown + 'min';
+        }
+
+        // ==================== PRODUCTION CHART - REAL DATA ====================
+        function updateProductionChart() {
+            // Removido - substituído por KPIs por turno
+            return;
+        }
+
+        // ==================== PARETO CHART - REAL DATA ====================
+        function updateParetoChart() {
+            const canvas = document.getElementById('paretoChart');
+            if (!canvas) {
+                console.error('[Dashboard TV] Elemento paretoChart não encontrado!');
+                return;
+            }
+            const ctx = canvas.getContext('2d');
+            
+            // Agrupar perdas por motivo
+            const lossData = {};
+            
+            cachedDowntimes.forEach(dt => {
+                const motivo = dt.reason || dt.tipo || dt.motivo || 'Outros';
+                const start = dt.startTime;
+                const end = dt.endTime;
+                let minutes = dt.duration || dt.duration_minutes || 0;
+                if (!minutes && start && end) {
+                    const s = new Date(`1970-01-01T${start}:00`);
+                    const e = new Date(`1970-01-01T${end}:00`);
+                    minutes = Math.max(0, Math.round((e - s) / 60000));
+                }
+                if (!lossData[motivo]) lossData[motivo] = 0;
+                lossData[motivo] += minutes;
+            });
+            
+            // Se não houver dados de perdas, mostrar mensagem
+            if (Object.keys(lossData).length === 0) {
+                const canvas = document.getElementById('paretoChart');
+                if (canvas) {
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#78909c';
+                    ctx.font = '14px Roboto';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('Sem paradas registradas hoje', canvas.width / 2, canvas.height / 2);
+                }
+                return;
+            }
+            
+            // Ordenar por valor
+            const sorted = Object.entries(lossData).sort((a, b) => b[1] - a[1]);
+            const categories = sorted.map(s => s[0]);
+            const times = sorted.map(s => s[1]);
+            
+            // Calcular acumulado
+            const total = times.reduce((a, b) => a + b, 0);
+            const cumulative = [];
+            let sum = 0;
+            times.forEach(t => {
+                sum += t;
+                cumulative.push((sum / total) * 100);
+            });
+            
+            // Destruir gráfico anterior se existir
+            if (paretoChartInstance) {
+                paretoChartInstance.destroy();
+            }
+            
+            paretoChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: categories.slice(0, 7),
+                    datasets: [
+                        {
+                            label: 'Tempo Parado (min)',
+                            data: times.slice(0, 7),
+                            backgroundColor: (context) => {
+                                const index = context.dataIndex;
+                                if (index === 0) return 'rgba(255, 23, 68, 0.8)';
+                                if (index === 1) return 'rgba(255, 23, 68, 0.65)';
+                                if (index === 2) return 'rgba(255, 23, 68, 0.5)';
+                                return 'rgba(255, 23, 68, 0.35)';
+                            },
+                            borderColor: 'rgba(255, 23, 68, 1)',
+                            borderWidth: 0,
+                            borderRadius: 2,
+                            barPercentage: 0.7,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Acumulado %',
+                            data: cumulative.slice(0, 7),
+                            type: 'line',
+                            borderColor: 'rgba(0, 180, 216, 1)',
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            pointRadius: 4,
+                            pointBackgroundColor: 'rgba(0, 180, 216, 1)',
+                            pointBorderColor: '#0d1117',
+                            pointBorderWidth: 2,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: getParetoChartOptions()
+            });
+        }
+
+        function getParetoChartOptions() {
+            return {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        align: 'end',
+                        labels: {
+                            color: '#78909c',
+                            font: { size: 10, family: 'Roboto' },
+                            usePointStyle: true,
+                            padding: 16
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#78909c', font: { size: 9, family: 'Roboto' }, maxRotation: 0 }
+                    },
+                    y: {
+                        position: 'left',
+                        grid: { color: 'rgba(45, 55, 72, 0.5)', drawBorder: false },
+                        ticks: { 
+                            color: '#78909c', 
+                            font: { size: 10, family: 'Roboto Mono' },
+                            callback: v => v + ' min'
+                        },
+                        title: { display: true, text: 'Duração (min)', color: '#78909c', font: { size: 10 } }
+                    },
+                    y1: {
+                        position: 'right',
+                        min: 0,
+                        max: 100,
+                        grid: { display: false },
+                        ticks: { 
+                            color: '#00b4d8', 
+                            font: { size: 10, family: 'Roboto Mono' },
+                            callback: v => v + '%'
+                        },
+                        title: { display: true, text: 'Acumulado %', color: '#00b4d8', font: { size: 10 } }
+                    }
+                }
+            };
+        }
+
+        // ==================== LOSSES TABLE - REAL DATA ====================
+        function updateLossesTable() {
+            const table = document.getElementById('lossesTable');
+            if (!table) {
+                console.error('[Dashboard TV] Elemento lossesTable não encontrado!');
+                return;
+            }
+            
+            // Agrupar perdas
+            const lossData = {};
+            
+            cachedDowntimes.forEach(dt => {
+                const motivo = dt.reason || dt.tipo || dt.motivo || 'Outros';
+                const machine = dt.machine || dt.maquina || 'N/A';
+                const start = dt.startTime;
+                const end = dt.endTime;
+                let minutes = dt.duration || dt.duration_minutes || 0;
+                if (!minutes && start && end) {
+                    const s = new Date(`1970-01-01T${start}:00`);
+                    const e = new Date(`1970-01-01T${end}:00`);
+                    minutes = Math.max(0, Math.round((e - s) / 60000));
+                }
+                if (!lossData[motivo]) {
+                    lossData[motivo] = { time: 0, machine: machine };
+                }
+                lossData[motivo].time += minutes;
+            });
+            
+            // Se não houver dados, mostrar mensagem
+            if (Object.keys(lossData).length === 0) {
+                table.innerHTML = `
+                    <div style="text-align: center; padding: 30px; color: #78909c;">
+                        <i data-lucide="check-circle" style="width: 32px; height: 32px; margin-bottom: 8px; color: #00e676;"></i>
+                        <p style="font-size: 12px;">Sem paradas registradas hoje</p>
+                    </div>
+                `;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+                return;
+            }
+            
+            // Ordenar e calcular percentuais
+            const sorted = Object.entries(lossData).sort((a, b) => b[1].time - a[1].time);
+            const total = sorted.reduce((sum, s) => sum + s[1].time, 0);
+            
+            const losses = sorted.slice(0, 5).map((s, i) => ({
+                rank: i + 1,
+                reason: s[0],
+                machine: s[1].machine,
+                time: s[1].time,
+                percent: total > 0 ? Math.round((s[1].time / total) * 100) : 0
+            }));
+            
+            table.innerHTML = losses.map(l => `
+                <div class="loss-row">
+                    <span class="loss-rank">#${l.rank}</span>
+                    <div class="loss-info">
+                        <span class="loss-reason">${l.reason}</span>
+                        <span class="loss-machine">${l.machine}</span>
+                    </div>
+                    <span class="loss-time">${l.time}min</span>
+                    <span class="loss-percent">${l.percent}%</span>
+                </div>
+            `).join('');
+        }
+
+        // ==================== TICKER UPDATE ====================
+        function updateTicker() {
+            const ticker = document.querySelector('.ticker-track');
+            if (!ticker) return;
+            
+            // Calcular estatísticas de produção
+            const totalProduced = cachedProductions.reduce((sum, p) => sum + getProducedQty(p), 0);
+            const totalRefugo = cachedProductions.reduce((sum, p) => sum + (p.pecasRuins || p.refugo_pcs || p.refugo || 0), 0);
+            const totalTarget = cachedPlanning.reduce((sum, p) => sum + getPlanTarget(p), 0);
+            const completion = totalTarget > 0 ? ((totalProduced / totalTarget) * 100).toFixed(1) : 0;
+            
+            // Calcular paradas do dia
+            const today = getTodayString();
+            const todayDowntimes = cachedDowntimes.filter(dt => (dt.date || dt.data) === today);
+            let totalDowntimeMinutes = 0;
+            todayDowntimes.forEach(dt => {
+                let minutes = dt.duration || dt.duration_minutes || 0;
+                if (!minutes && dt.startTime && dt.endTime) {
+                    const s = new Date(`1970-01-01T${dt.startTime}:00`);
+                    const e = new Date(`1970-01-01T${dt.endTime}:00`);
+                    minutes = Math.max(0, Math.round((e - s) / 60000));
+                }
+                totalDowntimeMinutes += minutes;
+            });
+            
+            // Encontrar melhor máquina
+            const machineOEE = {};
+            cachedProductions.forEach(prod => {
+                const plan = cachedPlanning.find(p => p.id === prod.planId);
+                if (plan) {
+                    const machineId = plan.machine || plan.machineId || plan.maquina;
+                    if (!machineOEE[machineId]) machineOEE[machineId] = { produced: 0, target: getPlanTarget(plan) };
+                    machineOEE[machineId].produced += getProducedQty(prod);
+                }
+            });
+            
+            let bestMachine = 'N/A';
+            let bestOEE = 0;
+            Object.entries(machineOEE).forEach(([id, data]) => {
+                const oee = data.target > 0 ? (data.produced / data.target) * 100 : 0;
+                if (oee > bestOEE) {
+                    bestOEE = oee;
+                    bestMachine = id;
+                }
+            });
+            
+            // Classes de destaque
+            const completionClass = completion >= 80 ? 'highlight-good' : (completion >= 50 ? 'highlight-warning' : 'highlight-critical');
+            const qualityClass = totalRefugo === 0 ? 'highlight-good' : (totalRefugo < 100 ? 'highlight-warning' : 'highlight-critical');
+            const downtimeClass = totalDowntimeMinutes <= 30 ? 'highlight-good' : (totalDowntimeMinutes <= 90 ? 'highlight-warning' : 'highlight-critical');
+            
+            // Atualizar ticker com dados reais
+            ticker.innerHTML = `
+                <span class="ticker-item"><strong>PRODUÇÃO:</strong> Meta diária em <span class="${completionClass}">${completion}%</span> de conclusão (${formatNumber(totalProduced)} / ${formatNumber(totalTarget)} pçs)</span>
+                <span class="ticker-item"><strong>QUALIDADE:</strong> <span class="${qualityClass}">${totalRefugo === 0 ? 'Zero refugo hoje' : formatNumber(totalRefugo) + ' pçs refugo'}</span></span>
+                <span class="ticker-item"><strong>PARADAS:</strong> <span class="${downtimeClass}">${totalDowntimeMinutes}min</span> em ${todayDowntimes.length} eventos hoje</span>
+                <span class="ticker-item"><strong>DESTAQUE:</strong> ${bestMachine !== 'N/A' ? bestMachine + ' com ' : 'Aguardando dados - '}${bestOEE > 0 ? '<span class="highlight-good">' + bestOEE.toFixed(1) + '%</span> OEE' : ''}</span>
+                <span class="ticker-item"><strong>ORDENS:</strong> ${cachedPlanning.length} ordens ativas | ${cachedProductions.length} lançamentos hoje</span>
+            `;
+        }
+
+        // ==================== HELPERS ====================
+        function getPlanTarget(plan) {
+            return plan.lot_size || plan.order_lot_size || plan.planned_quantity || plan.planned_qty || plan.quantidade || plan.meta || plan.target || plan.qtdPlanejada || 0;
+        }
+
+        function getProducedQty(prod) {
+            return prod.produzido || prod.pecasBoas || prod.quantity || prod.produced || prod.qtd || prod.quantidade || prod.total_produzido || 0;
+        }
+    </script>
+</body>
+</html>
