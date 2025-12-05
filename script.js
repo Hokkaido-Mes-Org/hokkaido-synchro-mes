@@ -4951,29 +4951,52 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         console.log('[EXTENDED-DOWNTIME] Carregando paradas longas para análise', { startDate, endDate, machine });
         
         try {
-            let query = db.collection('extended_downtime_logs')
-                .where('start_date', '>=', startDate)
-                .where('start_date', '<=', endDate);
+            // Buscar TODOS os registros da coleção para evitar problemas de filtro
+            const allSnap = await db.collection('extended_downtime_logs').get();
             
-            const snap = await query.get();
             let data = [];
             const seenAnalysisIds = new Set();
             
-            snap.forEach(doc => {
+            console.log('[EXTENDED-DOWNTIME] Total de registros na coleção:', allSnap.size);
+            
+            allSnap.forEach(doc => {
                 const d = doc.data();
                 if (!doc.id) return;
-                if (seenAnalysisIds.has(doc.id)) {
-                    console.warn('[EXTENDED-DOWNTIME][ANALYSIS] Registro duplicado ignorado:', doc.id);
+                if (seenAnalysisIds.has(doc.id)) return;
+                
+                // Pegar data do registro (pode estar em diferentes campos)
+                const recordDate = d.start_date || d.date || '';
+                
+                // Verificar se está no período OU se está ativa (paradas ativas sempre aparecem)
+                const isActive = d.status === 'active';
+                const isInPeriod = recordDate >= startDate && recordDate <= endDate;
+                
+                if (!isActive && !isInPeriod) {
+                    return; // Fora do período e não está ativa
+                }
+                
+                // Filtrar por máquina se selecionada
+                const machineId = d.machine_id || d.machine || '';
+                if (machine && machine !== 'all' && machine !== '' && machineId !== machine) {
                     return;
                 }
-                // Filtrar por máquina se selecionada
-                if (!machine || machine === 'all' || d.machine_id === machine) {
-                    seenAnalysisIds.add(doc.id);
-                    data.push({ id: doc.id, ...d });
+                
+                seenAnalysisIds.add(doc.id);
+                data.push({ id: doc.id, ...d, machine_id: machineId }); // Garantir machine_id
+                
+                // Log para debug
+                if (isActive) {
+                    console.log('[EXTENDED-DOWNTIME] Incluindo ATIVA:', machineId, recordDate, d.status);
                 }
             });
 
-            console.log('[EXTENDED-DOWNTIME] Registros encontrados:', data.length);
+            console.log('[EXTENDED-DOWNTIME] Registros filtrados:', data.length);
+            console.log('[EXTENDED-DOWNTIME] Máquinas:', [...new Set(data.map(d => d.machine_id))].join(', '));
+            
+            // Log detalhado de cada registro
+            data.forEach((d, i) => {
+                console.log(`[EXTENDED-DOWNTIME] [${i+1}] ${d.machine_id} | ${d.start_date || d.date} | status: ${d.status || 'N/A'} | type: ${d.type}`);
+            });
 
             // Calcular totais por tipo
             const typeHours = {
@@ -4984,7 +5007,19 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             };
 
             data.forEach(item => {
-                const hours = (item.duration_minutes || 0) / 60;
+                // Calcular duração: se parada está finalizada, usar duration_minutes; senão calcular do início até agora
+                let hours = 0;
+                if (item.status === 'active' && item.start_datetime) {
+                    // Parada ativa - calcular tempo desde o início até agora
+                    const startTime = item.start_datetime?.toDate?.() || new Date(item.start_date);
+                    const now = new Date();
+                    const durationMin = Math.floor((now - startTime) / (1000 * 60));
+                    hours = durationMin / 60;
+                } else {
+                    // Parada finalizada - usar duration_minutes
+                    hours = (item.duration_minutes || 0) / 60;
+                }
+                
                 const type = item.type || 'other';
                 
                 if (type === 'weekend') typeHours.weekend += hours;
@@ -5026,21 +5061,60 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 };
 
                 listContainer.innerHTML = data.map(item => {
-                    const hours = ((item.duration_minutes || 0) / 60).toFixed(1);
-                    const typeLabel = typeLabels[item.type] || item.type;
+                    // Calcular duração: se ativa, calcular do início até agora; senão usar duration_minutes
+                    let hours;
+                    const isActive = item.status === 'active';
+                    
+                    if (isActive) {
+                        // Parada ativa - calcular tempo desde o início até agora
+                        let startTime;
+                        if (item.start_datetime?.toDate) {
+                            startTime = item.start_datetime.toDate();
+                        } else if (item.start_date && item.start_time) {
+                            startTime = new Date(`${item.start_date}T${item.start_time}`);
+                        } else if (item.start_date) {
+                            startTime = new Date(item.start_date);
+                        } else {
+                            startTime = new Date();
+                        }
+                        const now = new Date();
+                        const durationMin = Math.max(0, Math.floor((now - startTime) / (1000 * 60)));
+                        hours = (durationMin / 60).toFixed(1);
+                    } else {
+                        // Parada finalizada - usar duration_minutes
+                        hours = ((item.duration_minutes || 0) / 60).toFixed(1);
+                    }
+                    
+                    const typeLabel = typeLabels[item.type] || item.type || 'Outro';
                     const typeColor = typeColors[item.type] || 'bg-gray-100 text-gray-700';
                     
+                    // Badge de status - considerar vários valores
+                    let statusBadge;
+                    if (isActive) {
+                        statusBadge = '<span class="text-xs px-2 py-1 rounded bg-red-100 text-red-700 font-semibold">🔴 ATIVA</span>';
+                    } else if (item.status === 'inactive' || item.status === 'registered' || item.status === 'finished') {
+                        statusBadge = '<span class="text-xs px-2 py-1 rounded bg-green-100 text-green-700 font-semibold">✅ FINALIZADA</span>';
+                    } else {
+                        statusBadge = `<span class="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700 font-semibold">${item.status || 'N/A'}</span>`;
+                    }
+                    
+                    // Período: se parada ainda está ativa, mostrar apenas data início
+                    const periodText = isActive
+                        ? `${item.start_date || ''} (em andamento)`
+                        : `${item.start_date || ''} → ${item.end_date || ''}`;
+                    
                     return `
-                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        <div class="flex items-center justify-between p-3 ${item.status === 'active' ? 'bg-red-50 border border-red-200' : 'bg-gray-50'} rounded-lg hover:${item.status === 'active' ? 'bg-red-100' : 'bg-gray-100'} transition-colors">
                             <div class="flex-1 flex items-center gap-3">
                                 <span class="font-semibold text-sm text-gray-800">${item.machine_id || '-'}</span>
                                 <span class="text-xs px-2 py-1 rounded ${typeColor}">${typeLabel}</span>
-                                <span class="text-xs text-gray-500">${item.start_date || ''} → ${item.end_date || ''}</span>
+                                ${statusBadge}
+                                <span class="text-xs text-gray-500">${periodText}</span>
                                 <span class="text-xs text-gray-400">${item.reason || ''}</span>
                             </div>
                             <div class="flex items-center gap-2">
                                 <span class="text-sm font-medium text-gray-700">${hours}h</span>
-                                <button class="btn-edit-extended-downtime-analysis bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs font-semibold transition" data-id="${item.id}" data-machine="${item.machine_id}" data-type="${item.type}" data-start-date="${item.start_date}" data-end-date="${item.end_date}" data-reason="${item.reason}" data-start-time="${item.start_time || '00:00'}" data-end-time="${item.end_time || '23:59'}">
+                                <button class="btn-edit-extended-downtime-analysis bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs font-semibold transition" data-id="${item.id}" data-machine="${item.machine_id}" data-type="${item.type}" data-start-date="${item.start_date}" data-end-date="${item.end_date || ''}" data-reason="${item.reason}" data-start-time="${item.start_time || '00:00'}" data-end-time="${item.end_time || '23:59'}">
                                     <i data-lucide="edit-2" class="w-3 h-3"></i>
                                 </button>
                                 <button class="btn-delete-extended-downtime-analysis bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs font-semibold transition" data-id="${item.id}" data-machine="${item.machine_id}">
@@ -7687,13 +7761,24 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     // Gerar timeline de paradas
     async function generateDowntimeTimelineChart(downtimeData) {
         const ctx = document.getElementById('downtime-timeline-chart');
-        if (!ctx) return;
+        if (!ctx) {
+            console.error('[TIMELINE] Canvas não encontrado: downtime-timeline-chart');
+            return;
+        }
 
         destroyChart('downtime-timeline-chart');
 
+        console.log('[TIMELINE] Dados recebidos:', downtimeData.length, 'registros');
+        
         if (downtimeData.length === 0) {
+            console.warn('[TIMELINE] Nenhum dado de parada para mostrar');
             showNoDataMessage('downtime-timeline-chart');
             return;
+        }
+        
+        // Log amostra de dados para debug
+        if (downtimeData.length > 0) {
+            console.log('[TIMELINE] Amostra de dados:', JSON.stringify(downtimeData.slice(0, 3), null, 2));
         }
         
         clearNoDataMessage('downtime-timeline-chart');
@@ -7701,71 +7786,88 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         // Limitar aos últimos 20 eventos para visualização
         const recentDowntimes = downtimeData.slice(-20).reverse();
         
+        console.log('[TIMELINE] Paradas recentes:', recentDowntimes.length);
+        
         const labels = recentDowntimes.map((item, index) => {
-            const date = item.date ? new Date(item.date) : new Date();
-            return `${date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} - ${item.machine || 'Máq'}`;
+            const dateStr = item.date || item.workDay || '';
+            let dateLabel;
+            try {
+                const date = dateStr ? new Date(dateStr) : new Date();
+                dateLabel = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+            } catch (e) {
+                dateLabel = dateStr;
+            }
+            return `${dateLabel} - ${item.machine || 'Máq'}`;
         });
         
-        const data = recentDowntimes.map(item => (item.duration || 0));
+        const data = recentDowntimes.map(item => item.duration || 0);
+        
+        console.log('[TIMELINE] Labels:', labels);
+        console.log('[TIMELINE] Durações:', data);
 
         const isMobile = window.innerWidth < 768;
 
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Duração (min)',
-                    data: data,
-                    backgroundColor: recentDowntimes.map(item => {
-                        const duration = item.duration || 0;
-                        if (duration > 120) return '#EF4444'; // Vermelho para >2h
-                        if (duration > 60) return '#F59E0B'; // Amarelo para >1h
-                        return '#10B981'; // Verde para <1h
-                    }),
-                    borderWidth: 1,
-                    borderColor: '#fff'
-                }]
-            },
-            options: {
-                indexAxis: 'y',
-                responsive: true,
-
-                scales: {
-                    x: {
-                        beginAtZero: true,
-                        ticks: {
-                            font: {
-                                size: isMobile ? 10 : 12
-                            }
-                        }
-                    },
-                    y: {
-                        ticks: {
-                            font: {
-                                size: isMobile ? 8 : 10
-                            }
-                        }
-                    }
+        try {
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Duração (min)',
+                        data: data,
+                        backgroundColor: recentDowntimes.map(item => {
+                            const duration = item.duration || 0;
+                            if (duration > 120) return '#EF4444'; // Vermelho para >2h
+                            if (duration > 60) return '#F59E0B'; // Amarelo para >1h
+                            return '#10B981'; // Verde para <1h
+                        }),
+                        borderWidth: 1,
+                        borderColor: '#fff'
+                    }]
                 },
-                plugins: {
-                    legend: {
-                        display: false
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: {
+                                font: {
+                                    size: isMobile ? 10 : 12
+                                }
+                            }
+                        },
+                        y: {
+                            ticks: {
+                                font: {
+                                    size: isMobile ? 8 : 10
+                                }
+                            }
+                        }
                     },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const item = recentDowntimes[context.dataIndex];
-                                return [
-                                    `Duração: ${context.parsed.x} min`,
-                                    `Motivo: ${item.reason || 'Não informado'}`
-                                ];
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const item = recentDowntimes[context.dataIndex];
+                                    return [
+                                        `Duração: ${context.parsed.x} min`,
+                                        `Motivo: ${item.reason || 'Não informado'}`
+                                    ];
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            });
+            console.log('[TIMELINE] Gráfico criado com sucesso');
+        } catch (error) {
+            console.error('[TIMELINE] Erro ao criar gráfico:', error);
+        }
     }
 
     // Gerar gráfico de borra por MP
@@ -23326,7 +23428,7 @@ function sendDowntimeNotification() {
     // FINALIZAR PARADA - Encerra parada ativa
     // ============================================================
     async function finalizarParada(recordId, machineId) {
-        console.log('[FINALIZAR-PARADA] Encerrando parada:', { recordId, machineId });
+        console.log('[FINALIZAR-PARADA] Solicitação de finalização:', { recordId, machineId });
         
         if (!recordId || !machineId) {
             console.error('[FINALIZAR-PARADA] IDs inválidos');
@@ -23334,7 +23436,7 @@ function sendDowntimeNotification() {
         }
 
         try {
-            // 1. Buscar o registro de parada
+            // 1. Buscar o registro de parada ANTES de confirmar
             const recordSnapshot = await db.collection('extended_downtime_logs').doc(recordId).get();
             if (!recordSnapshot.exists) {
                 showNotification('Registro de parada não encontrado', 'error');
@@ -23343,14 +23445,39 @@ function sendDowntimeNotification() {
 
             const downtimeData = recordSnapshot.data();
             const now = new Date();
+            
+            // Calcular duração prévia para mostrar no alerta
+            const startDatetime = downtimeData.start_datetime?.toDate?.() || new Date(downtimeData.start_date + 'T' + (downtimeData.start_time || '00:00'));
+            const durationMinutes = Math.floor((now - startDatetime) / (1000 * 60));
+            const hours = Math.floor(durationMinutes / 60);
+            const mins = durationMinutes % 60;
+            const durationText = hours > 0 ? `${hours}h ${mins}min` : `${mins}min`;
+            
+            // Tipo/Motivo da parada
+            const reasonText = downtimeData.reason || downtimeData.type || 'Não informado';
+            const startText = `${downtimeData.start_date || ''} às ${downtimeData.start_time || ''}`;
+            
+            // 2. ALERTA DE CONFIRMAÇÃO
+            const confirmMessage = `⚠️ FINALIZAR PARADA LONGA?\n\n` +
+                `🏭 Máquina: ${machineId}\n` +
+                `📋 Motivo: ${reasonText}\n` +
+                `🕐 Início: ${startText}\n` +
+                `⏱️ Duração: ${durationText}\n\n` +
+                `Deseja realmente finalizar esta parada?`;
+            
+            if (!confirm(confirmMessage)) {
+                console.log('[FINALIZAR-PARADA] Usuário cancelou a finalização');
+                showNotification('Finalização cancelada', 'info');
+                return;
+            }
+            
+            // 3. Usuário confirmou - prosseguir com finalização
+            console.log('[FINALIZAR-PARADA] Usuário confirmou - encerrando parada');
+            
             const endDate = now.toISOString().split('T')[0];  // YYYY-MM-DD
             const endTime = now.toTimeString().split(' ')[0].substring(0, 5);  // HH:MM
 
-            // 2. Calcular duração
-            const startDatetime = downtimeData.start_datetime?.toDate?.() || new Date(downtimeData.start_date);
-            const durationMinutes = Math.floor((now - startDatetime) / (1000 * 60));
-
-            // 3. Atualizar registro: marcar como inativo/finalizado
+            // 4. Atualizar registro: marcar como inativo/finalizado
             await db.collection('extended_downtime_logs').doc(recordId).update({
                 end_date: endDate,
                 end_time: endTime,
@@ -23364,10 +23491,10 @@ function sendDowntimeNotification() {
             console.log('[FINALIZAR-PARADA] Registrado como finalizado:', { 
                 recordId, 
                 machineId, 
-                durationMinutes: `${Math.floor(durationMinutes/60)}h ${durationMinutes % 60}m`
+                durationMinutes: `${hours}h ${mins}m`
             });
 
-            // 4. Limpar cache e timers
+            // 5. Limpar cache e timers
             const mid = normalizeMachineId(machineId);
             
             // Limpar status cache
@@ -23381,19 +23508,19 @@ function sendDowntimeNotification() {
                 window.downtimeTimers.delete(mid);
             }
 
-            // 5. Mostrar notificação
+            // 6. Mostrar notificação de sucesso
             showNotification(
-                `✅ Parada finalizada para ${mid} após ${Math.floor(durationMinutes/60)}h ${durationMinutes % 60}m`,
+                `✅ Parada finalizada para ${mid} após ${durationText}`,
                 'success'
             );
 
-            // 6. Re-renderizar painel de máquinas (recarrega todos os dados)
+            // 7. Re-renderizar painel de máquinas (recarrega todos os dados)
             if (typeof populateMachineSelector === 'function') {
                 console.log('[FINALIZAR-PARADA] Recarregando painel de máquinas...');
                 await populateMachineSelector();
             }
 
-            // 7. Recarregar lista de paradas (se tab está aberta)
+            // 8. Recarregar lista de paradas (se tab está aberta)
             if (typeof loadExtendedDowntimeList === 'function') {
                 await loadExtendedDowntimeList();
             }
