@@ -176,6 +176,11 @@
             50% { opacity: 0.6; box-shadow: 0 0 16px var(--status-running); }
         }
 
+        @keyframes pulse-alert {
+            0%, 100% { opacity: 1; box-shadow: 0 0 12px #ff1744; transform: scale(1); }
+            50% { opacity: 0.6; box-shadow: 0 0 24px #ff1744; transform: scale(1.2); }
+        }
+
         .status-label {
             font-size: 11px;
             font-weight: 500;
@@ -626,34 +631,37 @@
         /* ==================== OEE GAUGE - MINDSPHERE STYLE ==================== */
         .oee-gauge-container {
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
             align-items: center;
-            justify-content: center;
+            justify-content: space-around;
             height: 100%;
-            padding: 20px;
+            padding: 8px 12px;
+            gap: 12px;
         }
 
         .gauge-wrapper {
             position: relative;
-            width: 180px;
-            height: 180px;
+            width: 140px;
+            height: 140px;
+            flex-shrink: 0;
         }
 
         .gauge-svg {
             width: 100%;
             height: 100%;
             transform: rotate(-90deg);
+            overflow: visible;
         }
 
         .gauge-bg {
             fill: none;
             stroke: var(--industrial-border);
-            stroke-width: 12;
+            stroke-width: 8;
         }
 
         .gauge-fill {
             fill: none;
-            stroke-width: 12;
+            stroke-width: 8;
             stroke-linecap: round;
             transition: stroke-dashoffset 1s ease;
         }
@@ -671,37 +679,49 @@
         }
 
         .gauge-value {
-            font-size: 42px;
-            font-weight: 300;
+            font-size: 28px;
+            font-weight: 400;
             font-family: 'Roboto Mono', monospace;
             color: var(--accent-primary);
             line-height: 1;
         }
 
         .gauge-label {
-            font-size: 11px;
+            font-size: 9px;
             font-weight: 500;
-            letter-spacing: 2px;
+            letter-spacing: 1px;
             color: var(--text-tertiary);
             text-transform: uppercase;
-            margin-top: 4px;
+            margin-top: 2px;
         }
 
         .oee-breakdown {
             display: flex;
+            flex-direction: column;
             justify-content: center;
-            gap: 24px;
-            margin-top: 20px;
+            gap: 8px;
         }
 
         .oee-factor {
-            text-align: center;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+            border-left: 3px solid var(--industrial-border);
+            min-width: 130px;
         }
+
+        .oee-factor.availability { border-left-color: var(--oee-availability); }
+        .oee-factor.performance { border-left-color: var(--oee-performance); }
+        .oee-factor.quality { border-left-color: var(--oee-quality); }
 
         .oee-factor-value {
             font-size: 18px;
-            font-weight: 500;
+            font-weight: 600;
             font-family: 'Roboto Mono', monospace;
+            min-width: 55px;
         }
 
         .oee-factor.availability .oee-factor-value { color: var(--oee-availability); }
@@ -709,11 +729,10 @@
         .oee-factor.quality .oee-factor-value { color: var(--oee-quality); }
 
         .oee-factor-label {
-            font-size: 9px;
-            color: var(--text-tertiary);
+            font-size: 10px;
+            color: var(--text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            margin-top: 2px;
         }
 
         /* ==================== LOSSES TABLE ==================== */
@@ -1014,6 +1033,10 @@
                 <div class="shift-label">Turno Atual</div>
                 <div class="shift-value" id="currentShift">1º TURNO</div>
             </div>
+            <div class="status-module" id="activeDowntimeAlert" style="display: none; background: rgba(255, 23, 68, 0.15); border-color: rgba(255, 23, 68, 0.5);">
+                <div class="status-indicator" style="background: #ff1744; animation: pulse-alert 1s infinite;"></div>
+                <span class="status-label" style="color: #ff1744;" id="activeDowntimeText">0 Paradas Ativas</span>
+            </div>
             <div class="status-module">
                 <span class="status-label" id="headerMachineCount">-- Máquinas Conectadas</span>
             </div>
@@ -1246,21 +1269,21 @@
                     <div class="gauge-wrapper">
                         <svg class="gauge-svg" viewBox="0 0 200 200">
                             <!-- Background circles -->
-                            <circle class="gauge-bg" cx="100" cy="100" r="85"/>
-                            <circle class="gauge-bg" cx="100" cy="100" r="70"/>
-                            <circle class="gauge-bg" cx="100" cy="100" r="55"/>
+                            <circle class="gauge-bg" cx="100" cy="100" r="90"/>
+                            <circle class="gauge-bg" cx="100" cy="100" r="75"/>
+                            <circle class="gauge-bg" cx="100" cy="100" r="60"/>
                             
-                            <!-- Availability (outer) -->
-                            <circle class="gauge-fill availability" cx="100" cy="100" r="85"
-                                stroke-dasharray="534" stroke-dashoffset="47" id="gaugeAvailability"/>
+                            <!-- Availability (outer) - circumference = 2 * PI * 90 = 565.49 -->
+                            <circle class="gauge-fill availability" cx="100" cy="100" r="90"
+                                stroke-dasharray="565.49" stroke-dashoffset="565.49" id="gaugeAvailability"/>
                             
-                            <!-- Performance (middle) -->
-                            <circle class="gauge-fill performance" cx="100" cy="100" r="70"
-                                stroke-dasharray="440" stroke-dashoffset="23" id="gaugePerformance"/>
+                            <!-- Performance (middle) - circumference = 2 * PI * 75 = 471.24 -->
+                            <circle class="gauge-fill performance" cx="100" cy="100" r="75"
+                                stroke-dasharray="471.24" stroke-dashoffset="471.24" id="gaugePerformance"/>
                             
-                            <!-- Quality (inner) -->
-                            <circle class="gauge-fill quality" cx="100" cy="100" r="55"
-                                stroke-dasharray="346" stroke-dashoffset="3" id="gaugeQuality"/>
+                            <!-- Quality (inner) - circumference = 2 * PI * 60 = 376.99 -->
+                            <circle class="gauge-fill quality" cx="100" cy="100" r="60"
+                                stroke-dasharray="376.99" stroke-dashoffset="376.99" id="gaugeQuality"/>
                         </svg>
                         <div class="gauge-center">
                             <div class="gauge-value" id="gaugeOEE">--</div>
@@ -1270,11 +1293,11 @@
                     <div class="oee-breakdown">
                         <div class="oee-factor availability">
                             <div class="oee-factor-value" id="oeeAvailValue">--%</div>
-                            <div class="oee-factor-label">Disponib.</div>
+                            <div class="oee-factor-label">Disponibilidade</div>
                         </div>
                         <div class="oee-factor performance">
                             <div class="oee-factor-value" id="oeePerformValue">--%</div>
-                            <div class="oee-factor-label">Perform.</div>
+                            <div class="oee-factor-label">Performance</div>
                         </div>
                         <div class="oee-factor quality">
                             <div class="oee-factor-value" id="oeeQualValue">--%</div>
@@ -1502,52 +1525,358 @@
             document.getElementById('currentShift').textContent = shift;
         }
 
+        // ==================== FUNÇÕES DE NORMALIZAÇÃO (IDÊNTICO AO SYNCHRO) ====================
+        
+        // Normalizar ID de máquina (ex: "INJ-01" -> "INJ-01")
+        function normalizeMachineId(machine) {
+            if (!machine) return null;
+            return String(machine).trim().toUpperCase();
+        }
+        
+        // Calcular o dia de trabalho baseado no turno (turno 3 -> dia anterior)
+        function getWorkDay(dateStr, timeHint) {
+            if (!dateStr) return null;
+            const baseDate = new Date(dateStr + 'T12:00:00');
+            if (Number.isNaN(baseDate.getTime())) return dateStr;
+            
+            // Se houver timeHint, verificar se é turno 3 (antes das 7h)
+            if (timeHint) {
+                const [hours] = timeHint.split(':').map(Number);
+                if (!Number.isNaN(hours) && hours < 7) {
+                    // Turno 3 após meia-noite - pertence ao dia anterior
+                    baseDate.setDate(baseDate.getDate() - 1);
+                }
+            }
+            return baseDate.toISOString().split('T')[0];
+        }
+        
+        // Obter workDay a partir de timestamp
+        function getWorkDayFromTimestamp(timestamp) {
+            if (!timestamp) return null;
+            let date;
+            if (timestamp?.toDate) {
+                date = timestamp.toDate();
+            } else if (timestamp instanceof Date) {
+                date = timestamp;
+            } else {
+                date = new Date(timestamp);
+            }
+            if (Number.isNaN(date.getTime())) return null;
+            
+            const hours = date.getHours();
+            // Se antes das 7h, pertence ao dia anterior
+            if (hours < 7) {
+                date.setDate(date.getDate() - 1);
+            }
+            return date.toISOString().split('T')[0];
+        }
+        
+        // Resolver datetime de produção
+        function resolveProductionDateTime(raw) {
+            if (!raw) return null;
+            
+            // Tentar timestamp direto
+            if (raw.timestamp?.toDate) return raw.timestamp.toDate();
+            if (raw.createdAt?.toDate) return raw.createdAt.toDate();
+            
+            // Tentar combinar data + hora
+            const dateStr = raw.data || raw.date;
+            const timeStr = raw.horaInformada || raw.hora || raw.hour || raw.time;
+            
+            if (dateStr && timeStr) {
+                const combined = new Date(`${dateStr}T${timeStr}:00`);
+                if (!Number.isNaN(combined.getTime())) return combined;
+            }
+            
+            return null;
+        }
+        
+        // Normalizar turno
+        function normalizeShift(value) {
+            if (value === undefined || value === null) return null;
+            if (typeof value === 'number' && Number.isFinite(value)) return value;
+            const match = String(value).match(/(\d+)/);
+            return match ? Number(match[1]) : null;
+        }
+        
+        // ==================== getFilteredData - IDÊNTICO AO SYNCHRO ====================
+        async function getFilteredData(collection, startDate, endDate, machine = 'all', shift = 'all') {
+            try {
+                console.log('[Dashboard TV][getFilteredData] called', { collection, startDate, endDate, machine, shift });
+                
+                const collectionConfig = {
+                    production: {
+                        collection: 'production_entries',
+                        dateField: 'data',
+                        mapper: (id, raw) => {
+                            const mappedDate = raw.data || raw.date || '';
+                            const resolvedDateTime = resolveProductionDateTime(raw);
+                            const timeHint = raw.horaInformada || raw.hora || raw.hour || raw.time || null;
+                            const workDay = getWorkDayFromTimestamp(resolvedDateTime) || getWorkDay(mappedDate, timeHint);
+                            const product = raw.product || raw.produto || raw.product_cod || raw.cod_produto || raw.productName || raw.mp || '';
+                            
+                            return {
+                                id,
+                                date: mappedDate,
+                                machine: normalizeMachineId(raw.machine || raw.machineRef || raw.machine_id || null),
+                                quantity: Number(raw.produzido ?? raw.quantity ?? 0) || 0,
+                                shift: normalizeShift(raw.turno ?? raw.shift),
+                                mp: raw.mp || '',
+                                product: product,
+                                workDay: workDay || mappedDate,
+                                raw
+                            };
+                        }
+                    },
+                    losses: {
+                        collection: 'production_entries',
+                        dateField: 'data',
+                        mapper: (id, raw) => {
+                            const dateValue = raw.data || raw.date || '';
+                            const resolvedDateTime = resolveProductionDateTime(raw);
+                            const timeHint = raw.horaInformada || raw.hora || raw.hour || raw.time || null;
+                            const workDay = getWorkDayFromTimestamp(resolvedDateTime) || getWorkDay(dateValue, timeHint);
+                            
+                            // Extrair refugo de múltiplos campos
+                            const rawRefugoKg = Number(raw.refugo_kg ?? raw.refugoKg ?? raw.scrap_kg ?? raw.scrapKg ?? 0) || 0;
+                            const rawRefugoPcs = Number(raw.refugo_qty ?? raw.refugo_qtd ?? raw.scrap_qty ?? raw.scrap_qtd ?? raw.pecasRuins ?? raw.refugo_pcs ?? 0) || 0;
+                            const pieceWeight = Number(raw.piece_weight ?? raw.peso_unitario ?? raw.pesoUnitario ?? raw.peso ?? 0) || 0;
+                            
+                            const resolvedPcs = rawRefugoPcs > 0
+                                ? rawRefugoPcs
+                                : (rawRefugoKg > 0 && pieceWeight > 0 ? Math.round((rawRefugoKg * 1000) / pieceWeight) : 0);
+                            const resolvedKg = rawRefugoKg > 0
+                                ? rawRefugoKg
+                                : (pieceWeight > 0 && resolvedPcs > 0 ? (resolvedPcs * pieceWeight) / 1000 : 0);
+                            
+                            const product = raw.product || raw.produto || raw.product_cod || raw.cod_produto || raw.productName || '';
+                            
+                            return {
+                                id,
+                                date: dateValue,
+                                machine: normalizeMachineId(raw.machine || raw.machineRef || raw.machine_id || null),
+                                quantity: resolvedPcs,
+                                shift: normalizeShift(raw.turno ?? raw.shift),
+                                reason: raw.perdas || raw.reason || '',
+                                mp: raw.mp || '',
+                                product: product,
+                                workDay: workDay || dateValue,
+                                scrapPcs: resolvedPcs,
+                                scrapKg: resolvedKg,
+                                pieceWeight,
+                                raw
+                            };
+                        }
+                    },
+                    downtime: {
+                        collection: 'downtime_entries',
+                        dateField: 'date',
+                        mapper: (id, raw) => {
+                            let duration = Number(raw.duration ?? raw.duration_min ?? raw.duracao_min ?? 0) || 0;
+                            if (!duration && raw.startTime && raw.endTime) {
+                                const s = new Date(`1970-01-01T${raw.startTime}:00`);
+                                const e = new Date(`1970-01-01T${raw.endTime}:00`);
+                                duration = Math.max(0, Math.round((e - s) / 60000));
+                            }
+                            
+                            const timeHint = raw.startTime || raw.endTime || null;
+                            const workDay = getWorkDay(raw.date || '', timeHint);
+                            
+                            // Inferir turno se não informado
+                            let mappedShift = normalizeShift(raw.shift ?? raw.turno);
+                            if (!mappedShift && raw.startTime) {
+                                const [hours] = raw.startTime.split(':').map(Number);
+                                if (!Number.isNaN(hours)) {
+                                    if (hours >= 7 && hours < 15) mappedShift = 1;
+                                    else if (hours >= 15 && hours < 23) mappedShift = 2;
+                                    else mappedShift = 3;
+                                }
+                            }
+                            
+                            return {
+                                id,
+                                date: raw.date || '',
+                                machine: normalizeMachineId(raw.machine || null),
+                                duration,
+                                reason: raw.reason || '',
+                                shift: mappedShift,
+                                startTime: raw.startTime || '',
+                                endTime: raw.endTime || '',
+                                workDay: workDay || raw.date || '',
+                                raw
+                            };
+                        }
+                    },
+                    plan: {
+                        collection: 'planning',
+                        dateField: 'date',
+                        mapper: (id, raw) => ({
+                            id,
+                            date: raw.date || '',
+                            machine: normalizeMachineId(raw.machine || null),
+                            quantity: Number(raw.planned_quantity ?? raw.quantity ?? 0) || 0,
+                            shift: normalizeShift(raw.shift ?? raw.turno),
+                            product: raw.product || '',
+                            mp: raw.mp || '',
+                            workDay: raw.date || '',
+                            raw
+                        })
+                    }
+                };
+                
+                const config = collectionConfig[collection];
+                if (!config) {
+                    console.warn(`[Dashboard TV] Coleção desconhecida: ${collection}`);
+                    return [];
+                }
+                
+                if (!startDate || !endDate) {
+                    console.warn('[Dashboard TV][getFilteredData] datas inválidas', { startDate, endDate });
+                    return [];
+                }
+                
+                // Expandir período para capturar dados do turno 3
+                const startObj = new Date(startDate);
+                startObj.setDate(startObj.getDate() - 1);
+                const queryStartDate = startObj.toISOString().split('T')[0];
+                
+                const endObj = new Date(endDate);
+                endObj.setDate(endObj.getDate() + 1);
+                const queryEndDate = endObj.toISOString().split('T')[0];
+                
+                let query = db.collection(config.collection);
+                query = query.where(config.dateField, '>=', queryStartDate).where(config.dateField, '<=', queryEndDate);
+                
+                let snapshot = await query.get();
+                console.log('[Dashboard TV][getFilteredData] raw snapshot', { collection: config.collection, size: snapshot.size });
+                
+                let data = snapshot.docs.map(doc => config.mapper(doc.id, doc.data()));
+                
+                // Filtrar por workDay
+                data = data.filter(item => {
+                    const workDay = item.workDay || item.date;
+                    if (!workDay) return false;
+                    return workDay >= startDate && workDay <= endDate;
+                });
+                
+                // Filtrar perdas com quantidade > 0 (verificar todos os campos possíveis)
+                if (collection === 'losses') {
+                    data = data.filter(item => {
+                        const hasQty = (item.quantity || 0) > 0;
+                        const hasScrapPcs = (item.scrapPcs || 0) > 0;
+                        const hasScrapKg = (item.scrapKg || 0) > 0;
+                        // Também verificar campos raw diretamente
+                        const hasRawQty = Number(item.raw?.refugo_qty || item.raw?.refugo_pcs || item.raw?.pecasRuins || 0) > 0;
+                        const hasRawKg = Number(item.raw?.refugo_kg || 0) > 0;
+                        return hasQty || hasScrapPcs || hasScrapKg || hasRawQty || hasRawKg;
+                    });
+                    console.log('[Dashboard TV][getFilteredData] Perdas após filtro:', data.length, 
+                                'Amostra:', data.length > 0 ? data[0] : 'nenhum');
+                }
+                
+                // Filtrar por máquina
+                if (machine !== 'all' && machine) {
+                    const target = normalizeMachineId(machine);
+                    data = data.filter(item => normalizeMachineId(item.machine) === target);
+                }
+                
+                // Filtrar por turno
+                if (shift !== 'all' && shift) {
+                    data = data.filter(item => Number(item.shift || 0) === Number(shift));
+                }
+                
+                console.log('[Dashboard TV][getFilteredData] returning', { collection, count: data.length });
+                return data;
+            } catch (error) {
+                console.error('[Dashboard TV] Erro em getFilteredData:', error);
+                return [];
+            }
+        }
+        
         // ==================== REAL-TIME DATA LOADING ====================
         async function loadRealTimeData() {
             try {
                 console.log('[Dashboard TV] Carregando dados reais...');
                 const today = getTodayString();
-                const yesterday = getYesterdayString();
-                console.log('[Dashboard TV] Data de hoje (produção):', today);
-                console.log('[Dashboard TV] Data de ontem:', yesterday);
-
-                // Planejamentos: buscar todos e filtrar ativos no cliente
-                console.log('[Dashboard TV] Buscando planejamentos...');
-                const planningSnapshot = await db.collection('planning').get();
-                console.log('[Dashboard TV] Total de planejamentos no banco:', planningSnapshot.docs.length);
+                console.log('[Dashboard TV] Data de hoje (workDay):', today);
                 
-                cachedPlanning = planningSnapshot.docs
-                    .map(doc => ({ id: doc.id, ...doc.data() }))
-                    .filter(isPlanActive);
-                console.log('[Dashboard TV] Planejamentos ativos após filtro:', cachedPlanning.length);
-
-                // Entradas de produção do dia atual
-                console.log('[Dashboard TV] Buscando produção para data:', today);
-                const prodSnapshot = await db.collection('production_entries')
-                    .where('data', '==', today)
-                    .get();
-                cachedProductions = prodSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                console.log('[Dashboard TV] Produções encontradas:', cachedProductions.length);
-
-                // Paradas do dia
-                console.log('[Dashboard TV] Buscando paradas...', 'yesterday:', yesterday, 'today:', today);
-                const downtimeSnapshot = await db.collection('downtime_entries')
-                    .where('date', 'in', [yesterday, today])
-                    .get();
-                cachedDowntimes = downtimeSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                console.log('[Dashboard TV] Paradas encontradas:', cachedDowntimes.length);
+                // Usar getFilteredData - IDÊNTICO ao Synchro
+                const [productionData, lossesData, downtimeData, planData] = await Promise.all([
+                    getFilteredData('production', today, today, 'all', 'all'),
+                    getFilteredData('losses', today, today, 'all', 'all'),
+                    getFilteredData('downtime', today, today, 'all', 'all'),
+                    getFilteredData('plan', today, today, 'all', 'all')
+                ]);
                 
-                // Debug: mostrar amostra de parada
-                if (cachedDowntimes.length > 0) {
-                    console.log('[Dashboard TV] Amostra parada:', JSON.stringify(cachedDowntimes[0], null, 2));
-                }
+                console.log('[Dashboard TV] Dados carregados via getFilteredData:', {
+                    production: productionData.length,
+                    losses: lossesData.length,
+                    downtime: downtimeData.length,
+                    plan: planData.length
+                });
                 
-                // Debug: mostrar amostra de dados
-                if (cachedPlanning.length > 0) {
-                    console.log('[Dashboard TV] Amostra planejamento:', JSON.stringify(cachedPlanning[0], null, 2));
-                }
+                // Converter para formato do cache (compatível com funções existentes)
+                cachedProductions = productionData.map(p => ({ ...p.raw, id: p.id, _normalized: p }));
+                cachedPlanning = planData.filter(p => isPlanActive(p.raw)).map(p => ({ ...p.raw, id: p.id, _normalized: p }));
+                cachedDowntimes = downtimeData.map(d => ({ ...d.raw, id: d.id, _normalized: d }));
+                
+                // Guardar dados normalizados para cálculos OEE
+                window._tvNormalizedData = {
+                    production: productionData,
+                    losses: lossesData,
+                    downtime: downtimeData,
+                    plan: planData.filter(p => isPlanActive(p.raw))
+                };
+                
+                // Buscar paradas longas ativas (extended_downtime_logs)
+                const extendedSnapshot = await db.collection('extended_downtime_logs').get();
+                const extendedDowntimes = extendedSnapshot.docs
+                    .map(doc => ({ id: doc.id, source: 'extended', ...doc.data() }))
+                    .filter(dt => {
+                        const dtDate = dt.start_date || dt.date || '';
+                        const isActive = dt.status === 'active';
+                        const isToday = dtDate === today;
+                        return isActive || isToday;
+                    })
+                    .map(dt => {
+                        let duration = dt.duration_minutes || dt.duration || 0;
+                        if (dt.status === 'active' && dt.start_datetime) {
+                            const startTime = dt.start_datetime?.toDate?.() || new Date(dt.start_date + 'T' + (dt.start_time || '00:00'));
+                            duration = Math.floor((new Date() - startTime) / (1000 * 60));
+                        }
+                        return {
+                            ...dt,
+                            date: dt.start_date || dt.date,
+                            machine: dt.machine_id || dt.machine,
+                            reason: dt.reason || dt.type || 'Parada Longa',
+                            duration: duration
+                        };
+                    });
+                
+                // Adicionar paradas longas ao cache
+                cachedDowntimes = [...cachedDowntimes, ...extendedDowntimes];
+                console.log('[Dashboard TV] Total de paradas (+ extended):', cachedDowntimes.length);
+                
+                // Debug: amostras
                 if (cachedProductions.length > 0) {
                     console.log('[Dashboard TV] Amostra produção:', JSON.stringify(cachedProductions[0], null, 2));
+                    // Debug detalhado de campos de refugo
+                    const sampleProd = cachedProductions[0];
+                    console.log('[Dashboard TV] Campos de refugo na produção:', {
+                        pecasRuins: sampleProd.pecasRuins,
+                        refugo_pcs: sampleProd.refugo_pcs,
+                        refugo: sampleProd.refugo,
+                        refugo_kg: sampleProd.refugo_kg,
+                        refugo_qty: sampleProd.refugo_qty
+                    });
+                }
+                if (window._tvNormalizedData.losses.length > 0) {
+                    console.log('[Dashboard TV] Amostra perda normalizada:', JSON.stringify(window._tvNormalizedData.losses[0], null, 2));
+                    console.log('[Dashboard TV] Total de perdas normalizadas:', window._tvNormalizedData.losses.length);
+                    console.log('[Dashboard TV] Soma total de refugo (scrapPcs):', 
+                        window._tvNormalizedData.losses.reduce((sum, l) => sum + (l.scrapPcs || 0), 0));
+                } else {
+                    console.warn('[Dashboard TV] NENHUMA PERDA NORMALIZADA ENCONTRADA!');
                 }
 
                 // Atualizar interface
@@ -1558,8 +1887,8 @@
                 updateParetoChart();
                 updateLossesTable();
                 updateTicker();
+                updateActiveDowntimeAlert();
                 
-                // Se não houver dados de planejamento, mostrar mensagem
                 if (cachedPlanning.length === 0) {
                     console.log('[Dashboard TV] Sem planejamentos ativos');
                     showNoDataMessage('Nenhum planejamento ativo no momento');
@@ -1607,6 +1936,32 @@
                     </div>
                 `;
                 if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
+        }
+
+        // Atualizar alerta de paradas ativas no header
+        function updateActiveDowntimeAlert() {
+            const alertEl = document.getElementById('activeDowntimeAlert');
+            const alertText = document.getElementById('activeDowntimeText');
+            
+            if (!alertEl || !alertText) return;
+            
+            // Contar paradas ativas (extended downtimes com status = 'active')
+            const activeDowntimes = cachedDowntimes.filter(dt => 
+                dt.source === 'extended' && dt.status === 'active'
+            );
+            
+            if (activeDowntimes.length > 0) {
+                alertEl.style.display = 'flex';
+                alertText.textContent = activeDowntimes.length === 1 
+                    ? '1 Parada Ativa' 
+                    : `${activeDowntimes.length} Paradas Ativas`;
+                
+                // Listar máquinas paradas
+                const machines = activeDowntimes.map(dt => dt.machine || dt.machine_id).join(', ');
+                alertText.title = `Máquinas: ${machines}`;
+            } else {
+                alertEl.style.display = 'none';
             }
         }
 
@@ -1732,7 +2087,7 @@
         }
 
         // ==================== KPIs UPDATE - DADOS REAIS ====================
-        function updateKPIs() {
+        async function updateKPIs() {
             // ========== CÁLCULOS DE PRODUÇÃO ==========
             let totalProduced = 0;      // Total de peças boas
             let totalRefugo = 0;        // Total de refugo
@@ -1740,49 +2095,90 @@
             let totalDowntimeMinutes = 0; // Tempo total de paradas
             let lastHourProduced = 0;
             
+            // Usar dados normalizados quando disponíveis
+            const normalizedData = window._tvNormalizedData;
+            
             console.log('[Dashboard TV] updateKPIs - cachedProductions:', cachedProductions.length);
             console.log('[Dashboard TV] updateKPIs - cachedPlanning:', cachedPlanning.length);
+            console.log('[Dashboard TV] updateKPIs - normalizedData:', normalizedData ? 'disponível' : 'não disponível');
             
-            // Somar produção do dia
-            cachedProductions.forEach(prod => {
-                const good = getProducedQty(prod);
-                const bad = prod.pecasRuins || prod.refugo_pcs || prod.refugo || prod.scrap || 0;
-                totalProduced += good;
-                totalRefugo += bad;
-
-                // Produção da última hora
-                const now = new Date();
-                const hourStr = prod.hora || prod.hour || prod.horaInformada;
-                if (hourStr && hourStr.length >= 2) {
-                    const h = parseInt(hourStr.slice(0, 2));
-                    if (!Number.isNaN(h)) {
-                        const currentHour = now.getHours();
-                        if (h === currentHour || h === (currentHour - 1)) {
-                            lastHourProduced += good;
+            // Somar produção do dia (usando dados normalizados)
+            if (normalizedData?.production) {
+                normalizedData.production.forEach(item => {
+                    totalProduced += item.quantity || 0;
+                    
+                    // Produção da última hora
+                    const now = new Date();
+                    const hourStr = item.raw?.hora || item.raw?.hour || item.raw?.horaInformada;
+                    if (hourStr && hourStr.length >= 2) {
+                        const h = parseInt(hourStr.slice(0, 2));
+                        if (!Number.isNaN(h)) {
+                            const currentHour = now.getHours();
+                            if (h === currentHour || h === (currentHour - 1)) {
+                                lastHourProduced += item.quantity || 0;
+                            }
                         }
                     }
-                }
-            });
+                });
+            } else {
+                // Fallback para cachedProductions
+                cachedProductions.forEach(prod => {
+                    const good = getProducedQty(prod);
+                    totalProduced += good;
+
+                    const now = new Date();
+                    const hourStr = prod.hora || prod.hour || prod.horaInformada;
+                    if (hourStr && hourStr.length >= 2) {
+                        const h = parseInt(hourStr.slice(0, 2));
+                        if (!Number.isNaN(h)) {
+                            const currentHour = now.getHours();
+                            if (h === currentHour || h === (currentHour - 1)) {
+                                lastHourProduced += good;
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Somar refugo (usando dados normalizados de losses - IDÊNTICO ao Synchro)
+            if (normalizedData?.losses) {
+                totalRefugo = normalizedData.losses.reduce((sum, item) => sum + (item.scrapPcs || item.quantity || 0), 0);
+                console.log('[Dashboard TV] Refugo normalizado:', totalRefugo, 'pçs');
+            } else {
+                cachedProductions.forEach(prod => {
+                    const bad = prod.pecasRuins || prod.refugo_pcs || prod.refugo || prod.scrap || 0;
+                    totalRefugo += bad;
+                });
+            }
             
             // Somar metas do planejamento ativo
-            cachedPlanning.forEach(plan => {
-                totalTarget += getPlanTarget(plan);
-            });
+            if (normalizedData?.plan) {
+                normalizedData.plan.forEach(item => {
+                    totalTarget += item.quantity || 0;
+                });
+            } else {
+                cachedPlanning.forEach(plan => {
+                    totalTarget += getPlanTarget(plan);
+                });
+            }
             
-            console.log('[Dashboard TV] KPIs calculados - Produção:', totalProduced, 'Meta:', totalTarget);
+            console.log('[Dashboard TV] KPIs calculados - Produção:', totalProduced, 'Refugo:', totalRefugo, 'Meta:', totalTarget);
             
-            // Somar tempo de paradas do dia
+            // Somar tempo de paradas do dia (usando dados normalizados)
             const today = getTodayString();
-            cachedDowntimes.filter(dt => (dt.date || dt.data) === today).forEach(dt => {
-                // Campo 'duration' é em minutos no Firebase (não 'duration_minutes')
-                let minutes = dt.duration || dt.duration_minutes || 0;
-                if (!minutes && dt.startTime && dt.endTime) {
-                    const s = new Date(`1970-01-01T${dt.startTime}:00`);
-                    const e = new Date(`1970-01-01T${dt.endTime}:00`);
-                    minutes = Math.max(0, Math.round((e - s) / 60000));
-                }
-                totalDowntimeMinutes += minutes;
-            });
+            if (normalizedData?.downtime) {
+                totalDowntimeMinutes = normalizedData.downtime.reduce((sum, item) => sum + (item.duration || 0), 0);
+            } else {
+                cachedDowntimes.filter(dt => (dt.date || dt.data) === today).forEach(dt => {
+                    let minutes = dt.duration || dt.duration_minutes || 0;
+                    if (!minutes && dt.startTime && dt.endTime) {
+                        const s = new Date(`1970-01-01T${dt.startTime}:00`);
+                        const e = new Date(`1970-01-01T${dt.endTime}:00`);
+                        minutes = Math.max(0, Math.round((e - s) / 60000));
+                    }
+                    totalDowntimeMinutes += minutes;
+                });
+            }
             
             console.log('[Dashboard TV] Paradas do dia:', today, 'Total minutos:', totalDowntimeMinutes);
             
@@ -1929,40 +2325,231 @@
                 lastEntryEl.textContent = lastTime;
             }
             
-            // ========== CÁLCULO DO OEE REAL ==========
-            // Disponibilidade: tempo produzindo / tempo total programado
-            // Considerando 8h por turno = 480min
-            const now = new Date();
-            const currentHour = now.getHours();
-            let minutesSinceShiftStart = 0;
-            
-            // Calcular minutos desde início do turno atual
-            if (currentHour >= 7 && currentHour < 15) {
-                minutesSinceShiftStart = (currentHour - 7) * 60 + now.getMinutes();
-            } else if (currentHour >= 15 && currentHour < 23) {
-                minutesSinceShiftStart = (currentHour - 15) * 60 + now.getMinutes();
-            } else {
-                minutesSinceShiftStart = currentHour < 7 ? (currentHour + 1) * 60 + now.getMinutes() : (currentHour - 23) * 60 + now.getMinutes();
-            }
-            
-            // Tempo programado hoje (baseado na hora atual)
-            const scheduledMinutes = Math.max(minutesSinceShiftStart, 60); // mínimo 60min para evitar divisão problemática
-            const availableMinutes = Math.max(scheduledMinutes - totalDowntimeMinutes, 0);
-            
-            // Disponibilidade (%)
-            const availability = scheduledMinutes > 0 ? (availableMinutes / scheduledMinutes) * 100 : 100;
-            
-            // Performance: produção real / produção esperada no tempo disponível  
-            // Se temos meta e produção, calculamos a performance baseada na conclusão
-            const performance = completionPercent > 0 ? Math.min(completionPercent, 100) : (totalProduced > 0 ? 85 : 0);
-            
-            // Qualidade já foi calculada acima (qualityPercent)
-            updateOEERing(availability, performance, qualityPercent);
+            // ========== CÁLCULO DO OEE - MESMA LÓGICA DO SISTEMA PRINCIPAL ==========
+            // Usar a mesma fórmula do script.js: calculateShiftOEE
+            await calculateAndUpdateOEE(today);
             
             // Recriar ícones Lucide
             if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
             }
+        }
+
+        // ========== FUNÇÃO DE CÁLCULO OEE - REPLICANDO aggregateOeeMetrics DO SYNCHRO ==========
+        async function calculateAndUpdateOEE(dateStr) {
+            try {
+                console.log('[Dashboard TV OEE] Calculando para data:', dateStr);
+                
+                // Usar dados normalizados (idêntico ao Synchro)
+                const normalizedData = window._tvNormalizedData;
+                if (!normalizedData) {
+                    console.warn('[Dashboard TV OEE] Dados normalizados não disponíveis');
+                    updateOEERing(0, 0, 100);
+                    return;
+                }
+                
+                const { production: productionData, losses: lossesData, downtime: downtimeData, plan: planData } = normalizedData;
+                
+                console.log('[Dashboard TV OEE] Dados normalizados:', {
+                    production: productionData.length,
+                    losses: lossesData.length,
+                    downtime: downtimeData.length,
+                    plan: planData.length
+                });
+                
+                // aggregateOeeMetrics - IDÊNTICA à função do script.js
+                const toShiftNumber = (value) => {
+                    if (value === null || value === undefined) return null;
+                    const num = Number(value);
+                    return Number.isFinite(num) && num > 0 ? num : null;
+                };
+                
+                const determineShiftFromTime = (timeStr) => {
+                    if (!timeStr || typeof timeStr !== 'string') return null;
+                    const [hoursStr] = timeStr.split(':');
+                    const hours = Number(hoursStr);
+                    if (!Number.isFinite(hours)) return null;
+                    if (hours >= 7 && hours < 15) return 1;
+                    if (hours >= 15 && hours < 23) return 2;
+                    return 3;
+                };
+                
+                const inferShift = (item) => {
+                    // Tentar de múltiplas fontes
+                    const candidates = [item.shift, item?.raw?.shift, item?.raw?.turno];
+                    for (const value of candidates) {
+                        const shiftNum = toShiftNumber(value);
+                        if (shiftNum) return shiftNum;
+                    }
+                    
+                    // Tentar pelo horário
+                    const timeCandidates = [item.startTime, item.endTime, item?.raw?.hora, item?.raw?.horaInformada];
+                    for (const time of timeCandidates) {
+                        const shiftNum = determineShiftFromTime(time);
+                        if (shiftNum) return shiftNum;
+                    }
+                    
+                    // Padrão: turno 1
+                    return 1;
+                };
+                
+                const inferMachine = (item) => item.machine || item?.raw?.machine || item?.raw?.machineRef || item?.raw?.machine_id || null;
+                
+                const groupKey = (machine, shift, workDay) => `${machine || 'unknown'}_${shift ?? 'none'}_${workDay || 'nodate'}`;
+                const grouped = {};
+                
+                const getOrCreateGroup = (item) => {
+                    const machine = inferMachine(item);
+                    const shiftNum = inferShift(item);
+                    const workDay = item.workDay || item.date || 'nodate';
+                    
+                    if (!machine) return null;
+                    
+                    const key = groupKey(machine, shiftNum, workDay);
+                    if (!grouped[key]) {
+                        grouped[key] = {
+                            machine,
+                            shift: shiftNum,
+                            workDay,
+                            production: 0,
+                            scrapPcs: 0,
+                            scrapKg: 0,
+                            downtimeMin: 0
+                        };
+                    }
+                    return grouped[key];
+                };
+                
+                // Agrupar produção
+                productionData.forEach(item => {
+                    const group = getOrCreateGroup(item);
+                    if (group) group.production += item.quantity || 0;
+                });
+                
+                // Agrupar perdas
+                lossesData.forEach(item => {
+                    const group = getOrCreateGroup(item);
+                    if (group) {
+                        group.scrapPcs += Number(item.scrapPcs ?? item.quantity ?? 0) || 0;
+                        group.scrapKg += Number(item.scrapKg ?? 0) || 0;
+                    }
+                });
+                
+                // Agrupar paradas
+                downtimeData.forEach(item => {
+                    const group = getOrCreateGroup(item);
+                    if (group) group.downtimeMin += item.duration || 0;
+                });
+                
+                console.log('[Dashboard TV OEE] Grupos criados:', Object.keys(grouped).length);
+                
+                // Calcular métricas por grupo
+                const groupsWithMetrics = [];
+                const clamp01 = (value) => Math.max(0, Math.min(1, value));
+                
+                Object.values(grouped).forEach(group => {
+                    // Buscar plano para essa máquina
+                    const planCandidates = planData.filter(p => p && p.machine === group.machine);
+                    
+                    let cicloReal = 30;
+                    let cavAtivas = 2;
+                    let pieceWeight = 0.1;
+                    
+                    if (planCandidates.length > 0) {
+                        const plan = planCandidates.find(p => Number(p.shift || 0) === group.shift) || planCandidates[0];
+                        if (plan?.raw) {
+                            const shiftKey = `t${group.shift}`;
+                            cicloReal = plan.raw[`real_cycle_${shiftKey}`] || plan.raw.budgeted_cycle || 30;
+                            cavAtivas = plan.raw[`active_cavities_${shiftKey}`] || plan.raw.mold_cavities || 2;
+                            pieceWeight = plan.raw.piece_weight || 0.1;
+                        }
+                    }
+                    
+                    // Resolver refugo em peças
+                    let refugoPcs = Math.round(Math.max(0, group.scrapPcs || 0));
+                    if (!refugoPcs && group.scrapKg > 0 && pieceWeight > 0) {
+                        refugoPcs = Math.round((group.scrapKg * 1000) / pieceWeight);
+                    }
+                    
+                    const metrics = calculateShiftOEE(
+                        group.production,
+                        group.downtimeMin,
+                        refugoPcs,
+                        cicloReal,
+                        cavAtivas
+                    );
+                    
+                    console.log('[Dashboard TV OEE] Grupo:', group.machine, 'T' + group.shift, 
+                                'Prod:', group.production, 'Refugo:', refugoPcs, 'Paradas:', group.downtimeMin + 'min',
+                                'Ciclo:', cicloReal, 'Cav:', cavAtivas,
+                                '-> Disp:', (metrics.disponibilidade * 100).toFixed(1) + '%',
+                                'Perf:', (metrics.performance * 100).toFixed(1) + '%',
+                                'Qual:', (metrics.qualidade * 100).toFixed(1) + '%');
+                    
+                    groupsWithMetrics.push({
+                        machine: group.machine,
+                        shift: group.shift,
+                        workDay: group.workDay,
+                        disponibilidade: clamp01(metrics.disponibilidade),
+                        performance: clamp01(metrics.performance),
+                        qualidade: clamp01(metrics.qualidade),
+                        oee: clamp01(metrics.oee)
+                    });
+                });
+                
+                // Calcular média dos grupos (igual aggregateOeeMetrics)
+                const averageMetric = (items, selector) => {
+                    if (!items.length) return 0;
+                    return items.reduce((sum, item) => sum + selector(item), 0) / items.length;
+                };
+                
+                let availability = 0, performanceVal = 0, quality = 0;
+                
+                if (groupsWithMetrics.length > 0) {
+                    availability = averageMetric(groupsWithMetrics, item => item.disponibilidade) * 100;
+                    performanceVal = averageMetric(groupsWithMetrics, item => item.performance) * 100;
+                    quality = averageMetric(groupsWithMetrics, item => item.qualidade) * 100;
+                } else {
+                    availability = 100;
+                    performanceVal = 0;
+                    quality = 100;
+                }
+                
+                console.log('[Dashboard TV OEE] RESULTADO FINAL - Disponibilidade:', availability.toFixed(1) + '%', 
+                            'Performance:', performanceVal.toFixed(1) + '%', 
+                            'Qualidade:', quality.toFixed(1) + '%',
+                            'OEE:', ((availability * performanceVal * quality) / 10000).toFixed(1) + '%');
+                
+                updateOEERing(availability, performanceVal, quality);
+                
+            } catch (error) {
+                console.error('[Dashboard TV] Erro ao calcular OEE:', error);
+                updateOEERing(0, 0, 100);
+            }
+        }
+        
+        // Função calculateShiftOEE - CÓPIA EXATA do script.js linha 22173
+        function calculateShiftOEE(produzido, tempoParadaMin, refugoPcs, cicloReal, cavAtivas) {
+            const tempoTurnoMin = 480; // 8 horas por turno
+            
+            const tempoProgramado = tempoTurnoMin;
+            const tempoProduzindo = Math.max(0, tempoProgramado - Math.max(0, tempoParadaMin));
+            const disponibilidade = tempoProgramado > 0 ? (tempoProduzindo / tempoProgramado) : 0;
+
+            const producaoTeorica = cicloReal > 0 && cavAtivas > 0 ? (tempoProduzindo * 60 / cicloReal) * cavAtivas : 0;
+            const performance = producaoTeorica > 0 ? Math.min(1, produzido / producaoTeorica) : (produzido > 0 ? 1 : 0);
+            
+            const totalProduzido = Math.max(0, produzido) + Math.max(0, refugoPcs);
+            const qualidade = totalProduzido > 0 ? (Math.max(0, produzido) / totalProduzido) : (produzido > 0 ? 1 : 0);
+            
+            const oee = disponibilidade * performance * qualidade;
+
+            return {
+                disponibilidade: isNaN(disponibilidade) || !isFinite(disponibilidade) ? 0 : Math.max(0, Math.min(1, disponibilidade)),
+                performance: isNaN(performance) || !isFinite(performance) ? 0 : Math.max(0, Math.min(1, performance)),
+                qualidade: isNaN(qualidade) || !isFinite(qualidade) ? 0 : Math.max(0, Math.min(1, qualidade)),
+                oee: isNaN(oee) || !isFinite(oee) ? 0 : Math.max(0, Math.min(1, oee))
+            };
         }
 
         function formatNumber(num) {
@@ -1994,28 +2581,28 @@
             if (qualEl) qualEl.textContent = safeQual.toFixed(1) + '%';
             
             // Atualizar arcos do gauge SVG - raios conforme definido no HTML
-            // Availability (outer) - radius 85, circunferência = 2 * PI * 85 = 534.07
+            // Availability (outer) - radius 90, circunferência = 2 * PI * 90 = 565.49
             const availCircle = document.getElementById('gaugeAvailability');
             if (availCircle) {
-                const circumference = 2 * Math.PI * 85;
+                const circumference = 2 * Math.PI * 90;
                 const offset = circumference * (1 - safeAvail / 100);
                 availCircle.setAttribute('stroke-dasharray', circumference.toFixed(2));
                 availCircle.setAttribute('stroke-dashoffset', offset.toFixed(2));
             }
             
-            // Performance (middle) - radius 70, circunferência = 2 * PI * 70 = 439.82
+            // Performance (middle) - radius 75, circunferência = 2 * PI * 75 = 471.24
             const perfCircle = document.getElementById('gaugePerformance');
             if (perfCircle) {
-                const circumference = 2 * Math.PI * 70;
+                const circumference = 2 * Math.PI * 75;
                 const offset = circumference * (1 - safePerf / 100);
                 perfCircle.setAttribute('stroke-dasharray', circumference.toFixed(2));
                 perfCircle.setAttribute('stroke-dashoffset', offset.toFixed(2));
             }
             
-            // Quality (inner) - radius 55, circunferência = 2 * PI * 55 = 345.58
+            // Quality (inner) - radius 60, circunferência = 2 * PI * 60 = 376.99
             const qualCircle = document.getElementById('gaugeQuality');
             if (qualCircle) {
-                const circumference = 2 * Math.PI * 55;
+                const circumference = 2 * Math.PI * 60;
                 const offset = circumference * (1 - safeQual / 100);
                 qualCircle.setAttribute('stroke-dasharray', circumference.toFixed(2));
                 qualCircle.setAttribute('stroke-dashoffset', offset.toFixed(2));
@@ -2031,24 +2618,52 @@
                 T3: { production: 0, target: 0, downtime: 0 }
             };
             
-            // Contar produção por turno
-            cachedProductions.forEach(prod => {
-                // Converter turno para string de forma segura (pode vir como número)
-                const turnoRaw = prod.turno;
-                let turno = '';
-                if (typeof turnoRaw === 'string') {
-                    turno = turnoRaw.toUpperCase();
-                } else if (typeof turnoRaw === 'number') {
-                    turno = 'T' + turnoRaw;
-                } else if (turnoRaw) {
-                    turno = String(turnoRaw).toUpperCase();
-                }
-                
-                const qty = getProducedQty(prod);
-                if (shifts[turno]) {
-                    shifts[turno].production += qty;
-                }
-            });
+            // Usar dados normalizados que já têm workDay correto
+            const normalizedData = window._tvNormalizedData;
+            const today = getTodayString();
+            const currentHour = new Date().getHours();
+            
+            // Determinar quais turnos já ocorreram/estão em andamento HOJE
+            // T1: 07:00-15:00, T2: 15:00-23:00, T3: 23:00-07:00
+            const isT1Active = currentHour >= 7;  // T1 já começou às 7h
+            const isT2Active = currentHour >= 15; // T2 já começou às 15h
+            const isT3Active = currentHour >= 23 || currentHour < 7; // T3 começa às 23h ou está em andamento de madrugada
+            
+            console.log('[Dashboard TV] Turnos ativos - T1:', isT1Active, 'T2:', isT2Active, 'T3:', isT3Active, 'Hora atual:', currentHour);
+            
+            // Contar produção por turno usando dados normalizados
+            if (normalizedData?.production) {
+                normalizedData.production.forEach(item => {
+                    // Só contar produções do workDay de hoje
+                    if (item.workDay !== today) return;
+                    
+                    const turnoNum = item.shift || 1;
+                    const turnoKey = 'T' + turnoNum;
+                    const qty = item.quantity || 0;
+                    
+                    if (shifts[turnoKey]) {
+                        shifts[turnoKey].production += qty;
+                    }
+                });
+            } else {
+                // Fallback: usar cachedProductions
+                cachedProductions.forEach(prod => {
+                    const turnoRaw = prod.turno || prod.shift;
+                    let turno = '';
+                    if (typeof turnoRaw === 'string') {
+                        turno = turnoRaw.toUpperCase();
+                    } else if (typeof turnoRaw === 'number') {
+                        turno = 'T' + turnoRaw;
+                    } else if (turnoRaw) {
+                        turno = String(turnoRaw).toUpperCase();
+                    }
+                    
+                    const qty = getProducedQty(prod);
+                    if (shifts[turno]) {
+                        shifts[turno].production += qty;
+                    }
+                });
+            }
             
             // Calcular meta por turno (dividir meta total por 3)
             const totalTarget = cachedPlanning.reduce((sum, p) => sum + getPlanTarget(p), 0);
@@ -2057,58 +2672,103 @@
             shifts.T2.target = targetPerShift;
             shifts.T3.target = targetPerShift;
             
-            // Contar paradas por turno
-            const today = getTodayString();
-            cachedDowntimes.filter(dt => (dt.date || dt.data) === today).forEach(dt => {
-                // Converter turno para string de forma segura
-                const turnoRaw = dt.turno || dt.shift;
-                let turno = '';
-                if (typeof turnoRaw === 'string') {
-                    turno = turnoRaw.toUpperCase();
-                } else if (typeof turnoRaw === 'number') {
-                    turno = 'T' + turnoRaw;
-                } else if (turnoRaw) {
-                    turno = String(turnoRaw).toUpperCase();
-                }
-                
-                let minutes = dt.duration || dt.duration_minutes || 0;
-                if (!minutes && dt.startTime && dt.endTime) {
-                    const s = new Date(`1970-01-01T${dt.startTime}:00`);
-                    const e = new Date(`1970-01-01T${dt.endTime}:00`);
-                    minutes = Math.max(0, Math.round((e - s) / 60000));
-                }
-                if (shifts[turno]) {
-                    shifts[turno].downtime += minutes;
-                }
-            });
+            // Contar paradas por turno usando dados normalizados
+            if (normalizedData?.downtime) {
+                normalizedData.downtime.forEach(item => {
+                    // Só contar paradas do workDay de hoje
+                    if (item.workDay !== today) return;
+                    
+                    const turnoNum = item.shift || 1;
+                    const turnoKey = 'T' + turnoNum;
+                    const minutes = item.duration || 0;
+                    
+                    if (shifts[turnoKey]) {
+                        shifts[turnoKey].downtime += minutes;
+                    }
+                });
+            } else {
+                // Fallback: usar cachedDowntimes
+                cachedDowntimes.filter(dt => (dt.date || dt.data) === today).forEach(dt => {
+                    const turnoRaw = dt.turno || dt.shift;
+                    let turno = '';
+                    if (typeof turnoRaw === 'string') {
+                        turno = turnoRaw.toUpperCase();
+                    } else if (typeof turnoRaw === 'number') {
+                        turno = 'T' + turnoRaw;
+                    } else if (turnoRaw) {
+                        turno = String(turnoRaw).toUpperCase();
+                    }
+                    
+                    let minutes = dt.duration || dt.duration_minutes || 0;
+                    if (!minutes && dt.startTime && dt.endTime) {
+                        const s = new Date(`1970-01-01T${dt.startTime}:00`);
+                        const e = new Date(`1970-01-01T${dt.endTime}:00`);
+                        minutes = Math.max(0, Math.round((e - s) / 60000));
+                    }
+                    if (shifts[turno]) {
+                        shifts[turno].downtime += minutes;
+                    }
+                });
+            }
+            
+            // Zerar turnos que ainda não começaram (para não mostrar dados incorretos)
+            if (!isT1Active) {
+                shifts.T1 = { production: 0, target: 0, downtime: 0 };
+            }
+            if (!isT2Active) {
+                shifts.T2 = { production: 0, target: 0, downtime: 0 };
+            }
+            if (!isT3Active) {
+                shifts.T3 = { production: 0, target: 0, downtime: 0 };
+            }
+            
+            console.log('[Dashboard TV] Dados por turno após filtro:', shifts);
             
             // Atualizar elementos do DOM
             const formatQty = (n) => n >= 1000 ? (n/1000).toFixed(1) + 'K' : n.toLocaleString('pt-BR');
             const calcEfficiency = (prod, target) => target > 0 ? Math.min((prod / target) * 100, 150).toFixed(0) : 0;
             
-            // T1
+            // T1 - sempre ativo após 7h
             const t1Prod = document.getElementById('t1Production');
             const t1Eff = document.getElementById('t1Efficiency');
             const t1Down = document.getElementById('t1Downtime');
-            if (t1Prod) t1Prod.textContent = formatQty(shifts.T1.production);
-            if (t1Eff) t1Eff.textContent = calcEfficiency(shifts.T1.production, shifts.T1.target) + '%';
-            if (t1Down) t1Down.textContent = shifts.T1.downtime + 'min';
+            if (isT1Active) {
+                if (t1Prod) t1Prod.textContent = formatQty(shifts.T1.production);
+                if (t1Eff) t1Eff.textContent = calcEfficiency(shifts.T1.production, shifts.T1.target) + '%';
+                if (t1Down) t1Down.textContent = shifts.T1.downtime + 'min';
+            } else {
+                if (t1Prod) t1Prod.textContent = '--';
+                if (t1Eff) t1Eff.textContent = '--';
+                if (t1Down) t1Down.textContent = '--';
+            }
             
-            // T2
+            // T2 - ativo após 15h
             const t2Prod = document.getElementById('t2Production');
             const t2Eff = document.getElementById('t2Efficiency');
             const t2Down = document.getElementById('t2Downtime');
-            if (t2Prod) t2Prod.textContent = formatQty(shifts.T2.production);
-            if (t2Eff) t2Eff.textContent = calcEfficiency(shifts.T2.production, shifts.T2.target) + '%';
-            if (t2Down) t2Down.textContent = shifts.T2.downtime + 'min';
+            if (isT2Active) {
+                if (t2Prod) t2Prod.textContent = formatQty(shifts.T2.production);
+                if (t2Eff) t2Eff.textContent = calcEfficiency(shifts.T2.production, shifts.T2.target) + '%';
+                if (t2Down) t2Down.textContent = shifts.T2.downtime + 'min';
+            } else {
+                if (t2Prod) t2Prod.textContent = '--';
+                if (t2Eff) t2Eff.textContent = '--';
+                if (t2Down) t2Down.textContent = '--';
+            }
             
-            // T3
+            // T3 - ativo após 23h ou antes das 7h (madrugada)
             const t3Prod = document.getElementById('t3Production');
             const t3Eff = document.getElementById('t3Efficiency');
             const t3Down = document.getElementById('t3Downtime');
-            if (t3Prod) t3Prod.textContent = formatQty(shifts.T3.production);
-            if (t3Eff) t3Eff.textContent = calcEfficiency(shifts.T3.production, shifts.T3.target) + '%';
-            if (t3Down) t3Down.textContent = shifts.T3.downtime + 'min';
+            if (isT3Active) {
+                if (t3Prod) t3Prod.textContent = formatQty(shifts.T3.production);
+                if (t3Eff) t3Eff.textContent = calcEfficiency(shifts.T3.production, shifts.T3.target) + '%';
+                if (t3Down) t3Down.textContent = shifts.T3.downtime + 'min';
+            } else {
+                if (t3Prod) t3Prod.textContent = '--';
+                if (t3Eff) t3Eff.textContent = '--';
+                if (t3Down) t3Down.textContent = 'Não iniciado';
+            }
             
             // Totais
             const totalProd = shifts.T1.production + shifts.T2.production + shifts.T3.production;
@@ -2343,9 +3003,28 @@
             const ticker = document.querySelector('.ticker-track');
             if (!ticker) return;
             
+            // Usar dados normalizados quando disponíveis
+            const normalizedData = window._tvNormalizedData;
+            
             // Calcular estatísticas de produção
-            const totalProduced = cachedProductions.reduce((sum, p) => sum + getProducedQty(p), 0);
-            const totalRefugo = cachedProductions.reduce((sum, p) => sum + (p.pecasRuins || p.refugo_pcs || p.refugo || 0), 0);
+            let totalProduced = 0;
+            let totalRefugo = 0;
+            
+            if (normalizedData?.production) {
+                totalProduced = normalizedData.production.reduce((sum, p) => sum + (p.quantity || 0), 0);
+            } else {
+                totalProduced = cachedProductions.reduce((sum, p) => sum + getProducedQty(p), 0);
+            }
+            
+            // Refugo vem da coleção losses (dados normalizados) - IGUAL AO SYNCHRO
+            if (normalizedData?.losses) {
+                totalRefugo = normalizedData.losses.reduce((sum, p) => sum + (p.scrapPcs || p.quantity || 0), 0);
+                console.log('[Dashboard TV Ticker] Refugo dos dados normalizados:', totalRefugo);
+            } else {
+                // Fallback: tentar dos cachedProductions
+                totalRefugo = cachedProductions.reduce((sum, p) => sum + (p.pecasRuins || p.refugo_pcs || p.refugo || 0), 0);
+            }
+            
             const totalTarget = cachedPlanning.reduce((sum, p) => sum + getPlanTarget(p), 0);
             const completion = totalTarget > 0 ? ((totalProduced / totalTarget) * 100).toFixed(1) : 0;
             
