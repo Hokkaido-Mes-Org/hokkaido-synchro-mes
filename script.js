@@ -722,7 +722,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let selectedMachineData = null;
     let hourlyChartInstance = null;
     let opChartInstance = null;
-    // Evitar concorrência/reentrância na atualização dos gráficos de Lançamento
+    // Evitar concorrência/reentrncia na atualização dos gráficos de Lançamento
     let isRefreshingLaunchCharts = false;
     let analysisHourlyChartInstance = null;
     let machineProductionTimelineInstance = null;
@@ -1283,7 +1283,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const qualityQualObsSave = document.getElementById('quality-qual-obs-save');
     const qualityQualObsList = document.getElementById('quality-qual-obs-list');
 
-    // Elementos de dados dinâmicos da qualidade
+    // Elementos de dados dinmicos da qualidade
     const qualityCavitiesDisplay = document.getElementById('quality-cavities-display');
     const qualityCavitiesInput = document.getElementById('quality-cavities-input');
     const qualityBagNumberDisplay = document.getElementById('quality-bag-number-display');
@@ -2344,11 +2344,11 @@ document.addEventListener('DOMContentLoaded', function() {
     function formatShiftLabel(shiftKey) {
         switch (shiftKey) {
             case 'T1':
-                return '1ú Turno';
+                return '1º Turno';
             case 'T2':
-                return '2ú Turno';
+                return '2º Turno';
             case 'T3':
-                return '3ú Turno';
+                return '3º Turno';
             default:
                 return 'Turno atual';
         }
@@ -5208,19 +5208,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
     // Função para carregar análise comparativa
     async function loadComparativeAnalysis() {
-        console.log('[TRACE][loadComparativeAnalysis] Carregando view comparativa');
-        // A view comparativa é carregada sob demanda quando o usuário clica em "Gerar Comparação"
-        // Não precisa carregar dados automaticamente
-        
-        // Limpar gráfico anterior se existir
-        const ctx = document.getElementById('comparison-chart');
-        if (ctx) {
-            clearNoDataMessage('comparison-chart');
-            destroyChart('comparison-chart');
-        }
-        
-        // Mostrar mensagem inicial
-        showNoDataMessage('comparison-chart', 'Selecione os filtros e clique em "Gerar Comparação"');
+        console.log('[TRACE][loadComparativeAnalysis] View comparativa não implementada no HTML');
+        // A view comparativa ainda não foi implementada no HTML
+        // TODO: Adicionar canvas comparison-chart e interface no index.html para habilitar esta funcionalidade
     }
 
     // Função para carregar análise preditiva
@@ -5419,8 +5409,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             { name: 'Losses Trend', canvasId: 'losses-trend-chart', view: 'losses' },
             { name: 'Downtime Reasons', canvasId: 'downtime-reasons-chart', view: 'downtime' },
             { name: 'Downtime by Machine', canvasId: 'downtime-by-machine-chart', view: 'downtime' },
-            { name: 'Downtime Timeline', canvasId: 'downtime-timeline-chart', view: 'downtime' },
-            { name: 'Comparison', canvasId: 'comparison-chart', view: 'comparative' }
+            { name: 'Downtime Timeline', canvasId: 'downtime-timeline-chart', view: 'downtime' }
+            // Nota: comparison-chart removido pois a view comparative não foi implementada no HTML
         ];
         
         for (const test of chartTests) {
@@ -5870,13 +5860,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     /**
      * Definição dos turnos (configurável)
      * Turno 1: 07:00 - 14:59
-     * Turno 2: 15:00 - 22:59
-     * Turno 3: 23:00 - 06:59 (cruza meia-noite)
+     * Turno 2: 15:00 - 23:19
+     * Turno 3: 23:20 - 06:59 (cruza meia-noite)
      */
     const SHIFT_DEFINITIONS = [
         { shift: 1, startHour: 7, startMin: 0, endHour: 14, endMin: 59 },
-        { shift: 2, startHour: 15, startMin: 0, endHour: 22, endMin: 59 },
-        { shift: 3, startHour: 23, startMin: 0, endHour: 6, endMin: 59, crossesMidnight: true }
+        { shift: 2, startHour: 15, startMin: 0, endHour: 23, endMin: 19 },
+        { shift: 3, startHour: 23, startMin: 20, endHour: 6, endMin: 59, crossesMidnight: true }
     ];
 
     /**
@@ -5891,9 +5881,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         // Turno 1: 07:00 - 14:59 (420 - 899 minutos)
         if (totalMinutes >= 420 && totalMinutes < 900) return 1;
-        // Turno 2: 15:00 - 22:59 (900 - 1379 minutos)
-        if (totalMinutes >= 900 && totalMinutes < 1380) return 2;
-        // Turno 3: 23:00 - 06:59 (1380 - 1439 ou 0 - 419 minutos)
+        // Turno 2: 15:00 - 23:19 (900 - 1399 minutos)
+        if (totalMinutes >= 900 && totalMinutes < 1400) return 2;
+        // Turno 3: 23:20 - 06:59 (1400 - 1439 ou 0 - 419 minutos)
         return 3;
     }
 
@@ -5905,7 +5895,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         switch (shift) {
             case 1: d.setHours(7, 0, 0, 0); break;
             case 2: d.setHours(15, 0, 0, 0); break;
-            case 3: d.setHours(23, 0, 0, 0); break;
+            case 3: d.setHours(23, 20, 0, 0); break;
             default: d.setHours(7, 0, 0, 0);
         }
         return d;
@@ -6063,10 +6053,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             : (startMin !== null ? startMin : endMin);
         if (refMin === null) return null;
 
-        // Turno 1: 07:00–14:59 | Turno 2: 15:00–22:59 | Turno 3: 23:00–06:59
+        // Turno 1: 07:00–14:59 | Turno 2: 15:00–23:19 | Turno 3: 23:20–06:59
         if (refMin >= (7 * 60) && refMin < (15 * 60)) return 1;
-        if (refMin >= (15 * 60) && refMin < (23 * 60)) return 2;
-        return 3; // 23:00–23:59 ou 00:00–06:59
+        if (refMin >= (15 * 60) && refMin < (23 * 60 + 20)) return 2;
+        return 3; // 23:20–23:59 ou 00:00–06:59
     }
 
     function calculateHoursInPeriod(startDate, endDate) {
@@ -6864,8 +6854,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         clearNoDataMessage('shift-production-chart');
 
-        const shiftData = [0, 0, 0]; // 1ú, 2ú, 3ú turno
-        const shiftLabels = ['1ú Turno', '2ú Turno', '3ú Turno'];
+        const shiftData = [0, 0, 0]; // 1º, 2º, 3º Turno
+        const shiftLabels = ['1º Turno', '2º Turno', '3º Turno'];
 
         productionData.forEach(item => {
             if (item.shift) {
@@ -8449,9 +8439,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             }
 
             const shiftLabels = [
-                { key: 1, label: '1ú Turno' },
-                { key: 2, label: '2ú Turno' },
-                { key: 3, label: '3ú Turno' }
+                { key: 1, label: '1º Turno' },
+                { key: 2, label: '2º Turno' },
+                { key: 3, label: '3º Turno' }
             ];
 
             const machineMap = new Map();
@@ -8562,7 +8552,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
     // Funções de comparação faltantes
     async function compareByShifts(metric, startDate, endDate) {
-        const shifts = ['1ú Turno', '2ú Turno', '3ú Turno'];
+        const shifts = ['1º Turno', '2º Turno', '3º Turno'];
         const results = [];
 
         for (let i = 1; i <= 3; i++) {
@@ -9783,7 +9773,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (versionEl) versionEl.textContent = 'v8.0 - Modo Teste';
         if (datetimeEl) datetimeEl.textContent = timeStr;
         if (userEl) userEl.textContent = userName;
-        if (shiftEl) shiftEl.textContent = `${shift}ú Turno`;
+        if (shiftEl) shiftEl.textContent = `${shift}º Turno`;
     }
 
     function setupTestConsole() {
@@ -10793,7 +10783,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (value === undefined || value === null) return null;
         const numeric = Number(value);
         if (Number.isFinite(numeric) && numeric >= 1 && numeric <= 3) {
-            return `${numeric}ú Turno`;
+            return `${numeric}º Turno`;
         }
         if (typeof value === 'string' && value.trim()) return value.trim();
         return null;
@@ -11057,7 +11047,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     function formatLogFields(fields) {
         if (!fields || typeof fields !== 'object') return '-';
         return Object.entries(fields)
-            .map(([field, value]) => `${field}: ${value === null || value === undefined ? 'âˆ…' : escapeHtml(String(value))}`)
+            .map(([field, value]) => `${field}: ${value === null || value === undefined ? 'ˆ…' : escapeHtml(String(value))}`)
             .join(' – ');
     }
 
@@ -11580,19 +11570,19 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const shifts = [
             {
                 id: 1,
-                title: '1ú TURNO Â· 07h às 14h',
+                title: '1º Turno · 07h às 14h',
                 theme: 'blue',
                 data: collectQualityShiftData(1, shiftHours[1])
             },
             {
                 id: 2,
-                title: '2ú TURNO Â· 15h às 22h',
+                title: '2º Turno · 15h às 22h',
                 theme: 'green',
                 data: collectQualityShiftData(2, shiftHours[2])
             },
             {
                 id: 3,
-                title: '3ú TURNO Â· 23h às 06h',
+                title: '3º Turno · 23h às 06h',
                 theme: 'amber',
                 data: collectQualityShiftData(3, shiftHours[3])
             }
@@ -12193,7 +12183,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm flex items-start gap-3">
                     <div class="rounded-full bg-emerald-50 p-2 text-emerald-600"><i data-lucide="calendar" class="w-5 h-5"></i></div>
                     <div class="space-y-1">
-                        <p class="text-xs uppercase font-semibold text-gray-500">Data Â· Turno sugerido</p>
+                        <p class="text-xs uppercase font-semibold text-gray-500">Data · Turno sugerido</p>
                         <p class="text-sm font-semibold text-gray-800">${date.split('-').reverse().join('/')}</p>
                         <p class="text-xs text-gray-500">Turno destaque: ${metrics.shiftSuggestion}ú</p>
                     </div>
@@ -12255,7 +12245,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 const data = metrics.shifts[shift] || { produced: 0, pesoBruto: 0, refugoQty: 0, refugoKg: 0 };
                 return `
                     <tr>
-                        <td class="px-4 py-3 text-sm font-semibold text-gray-700">${shift}ú Turno</td>
+                        <td class="px-4 py-3 text-sm font-semibold text-gray-700">${shift}º Turno</td>
                         <td class="px-4 py-3 text-right text-sm text-gray-700">${formatLocaleNumber(data.produced)}</td>
                         <td class="px-4 py-3 text-right text-sm text-gray-700">${formatLocaleNumber(data.refugoQty)}</td>
                         <td class="px-4 py-3 text-right text-sm text-gray-700">${formatLocaleNumber(data.refugoKg, 2)}</td>
@@ -12294,7 +12284,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         if (qualityHourlyTotal) {
             qualityHourlyTotal.textContent = metrics.hourly.entries > 0
-                ? `${metrics.hourly.entries} registro(s) Â· ${formatLocaleNumber(metrics.hourly.totalKg, 2)} kg`
+                ? `${metrics.hourly.entries} registro(s) · ${formatLocaleNumber(metrics.hourly.totalKg, 2)} kg`
                 : '';
         }
 
@@ -12304,7 +12294,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 if (qualityDowntimeEmpty) qualityDowntimeEmpty.classList.remove('hidden');
             } else {
                 const reasonChips = Object.entries(metrics.downtime.reasons || {}).map(([reason, minutes]) => {
-                    return `<span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700">${escapeHtml(reason)} Â· ${formatMinutesToHuman(minutes)}</span>`;
+                    return `<span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700">${escapeHtml(reason)} · ${formatMinutesToHuman(minutes)}</span>`;
                 }).join('');
 
                 const cards = downtimeEntries
@@ -12317,7 +12307,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                                 <div class="flex items-start justify-between gap-3">
                                     <div>
                                         <p class="text-sm font-semibold text-rose-800">${escapeHtml(entry.reason || 'Sem motivo')}</p>
-                                        <p class="text-xs text-gray-500">${escapeHtml(entry.startTime || '--:--')} ➜ ${escapeHtml(entry.endTime || '--:--')} Â· ${duration}</p>
+                                        <p class="text-xs text-gray-500">${escapeHtml(entry.startTime || '--:--')} ➜ ${escapeHtml(entry.endTime || '--:--')} · ${duration}</p>
                                         ${obs}
                                     </div>
                                 </div>
@@ -12348,7 +12338,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
 
         if (qualityChecklistStatus) {
-            qualityChecklistStatus.textContent = `Plano vinculado: ${escapeHtml(plan.machine || '---')} Â· ${escapeHtml(plan.product || '---')}`;
+            qualityChecklistStatus.textContent = `Plano vinculado: ${escapeHtml(plan.machine || '---')} · ${escapeHtml(plan.product || '---')}`;
         }
 
         // Renderizar tabelas de controle de processos
@@ -12492,10 +12482,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             console.log(`  Hora ${hh}h: ${totalCycles} ciclos reais, ${totalQuantity} peças produzidas`);
 
             // Determinar turno baseado nos horários corretos:
-            // 1ú Turno: 7h - 14h
-            // 2ú Turno: 15h - 22h
-            // 3ú Turno: 23h - 6h
-            let shift = 3; // Default para 3ú turno
+            // 1º Turno: 7h - 14h
+            // 2º Turno: 15h - 22h
+            // 3º Turno: 23h - 6h
+            let shift = 3; // Default para 3º Turno
             if (hh >= 7 && hh <= 14) {
                 shift = 1;
             } else if (hh >= 15 && hh <= 22) {
@@ -12625,7 +12615,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
             const checkChips = [
                 { label: 'Setup', ok: record.checks?.setup },
-                { label: 'Parâmetros', ok: record.checks?.parameters },
+                { label: 'Parmetros', ok: record.checks?.parameters },
                 { label: 'Poka-yokes', ok: record.checks?.pokaYoke },
                 { label: 'Organização', ok: record.checks?.clean }
             ].map(item => {
@@ -12643,7 +12633,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                         <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-2">
                             <div class="flex-1">
                                 <p class="text-sm font-semibold text-gray-800">${escapeHtml(statusLabel)}</p>
-                                <p class="text-xs text-gray-500">${createdDateLabel} Â· ${createdTimeLabel} Â· Turno ${record.turno || '-'} Â· ${escapeHtml(record.createdByName || 'Responsável não identificado')}</p>
+                                <p class="text-xs text-gray-500">${createdDateLabel} · ${createdTimeLabel} · Turno ${record.turno || '-'} · ${escapeHtml(record.createdByName || 'Responsável não identificado')}</p>
                             </div>
                             <button class="quality-delete-history-btn inline-flex items-center justify-center gap-1 rounded-lg bg-red-100 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-200 transition" data-record-id="${record.id}" title="Excluir este lançamento">
                                 <i data-lucide="trash-2" class="w-3 h-3"></i>
@@ -15007,9 +14997,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                         </div>
                     </div>
                     <div class="grid grid-cols-3 gap-2 mt-4">
-                        <button data-id="${idsCsv}" data-turno="T1" class="setup-btn ${btnClasses[0]} text-white font-bold py-2 px-3 rounded-lg text-sm">1ú Turno</button>
-                        <button data-id="${idsCsv}" data-turno="T2" class="setup-btn ${btnClasses[1]} text-white font-bold py-2 px-3 rounded-lg text-sm">2ú Turno</button>
-                        <button data-id="${idsCsv}" data-turno="T3" class="setup-btn ${btnClasses[2]} text-white font-bold py-2 px-3 rounded-lg text-sm">3ú Turno</button>
+                        <button data-id="${idsCsv}" data-turno="T1" class="setup-btn ${btnClasses[0]} text-white font-bold py-2 px-3 rounded-lg text-sm">1º Turno</button>
+                        <button data-id="${idsCsv}" data-turno="T2" class="setup-btn ${btnClasses[1]} text-white font-bold py-2 px-3 rounded-lg text-sm">2º Turno</button>
+                        <button data-id="${idsCsv}" data-turno="T3" class="setup-btn ${btnClasses[2]} text-white font-bold py-2 px-3 rounded-lg text-sm">3º Turno</button>
                     </div>
                 </div>
             `;
@@ -16900,7 +16890,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         startDowntimeTimer();
         
         // Notificação com informações contextuais
-        const shiftLabel = currentShift === 1 ? '1ú Turno' : currentShift === 2 ? '2ú Turno' : '3ú Turno';
+        const shiftLabel = currentShift === 1 ? '1º Turno' : currentShift === 2 ? '2º Turno' : '3º Turno';
         showNotification(`Máquina parada às ${formatTimeHM(now)} (${shiftLabel}). Clique em START quando retomar.`, 'warning');
     }
     
@@ -19492,15 +19482,19 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 await db.collection('downtime_entries').add(downtimeData);
             }
 
+            // Calcular duração total para o log
+            const totalDuration = segments.reduce((sum, seg) => sum + (seg.duration || 0), 0);
+
             // Registrar no histórico do sistema
             if (typeof logSystemAction === 'function') {
                 logSystemAction('parada', `Parada manual registrada: ${reason}`, {
                     maquina: selectedMachineData?.machine,
                     motivo: reason,
-                    inicio: startTimeStr,
-                    fim: endTimeStr,
-                    duracao: duration,
-                    data: dateStr
+                    inicio: startTime,
+                    fim: endTime,
+                    duracao: totalDuration,
+                    dataInicio: dateStartStr,
+                    dataFim: finalDateEnd
                 });
             }
 
@@ -19907,11 +19901,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const hour = reference.getHours();
         
         if (hour >= 7 && hour < 15) {
-            return 1; // 1ú Turno
+            return 1; // 1º Turno
         } else if (hour >= 15 && hour < 23) {
-            return 2; // 2ú Turno
+            return 2; // 2º Turno
         } else {
-            return 3; // 3ú Turno
+            return 3; // 3º Turno
         }
     }
 
@@ -19921,7 +19915,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const shiftStartMap = {
             1: '07:00',
             2: '15:00',
-            3: '23:00'
+            3: '23:20'
         };
         const startTime = shiftStartMap[shift] || '07:00';
         const startDate = combineDateAndTime(productionDay, startTime);
@@ -23444,8 +23438,8 @@ function sendDowntimeNotification() {
     // Armazenar timers de paradas
     const downtimeTimers = new Map();
     
-    // downtimeStatusCache é inicializado em renderMachineCards() 
-    // Aqui apenas garantimos que existe
+    // Cache de status de paradas (inicializado em renderMachineCards)
+    let downtimeStatusCache = {};
 
     // ============================================================
     // FINALIZAR PARADA - Encerra parada ativa
@@ -23620,6 +23614,12 @@ function sendDowntimeNotification() {
     // Iniciar cronômetro para uma máquina parada
     function startDowntimeTimer(machineId, cardElement) {
         try {
+            // Verificar se cardElement é válido
+            if (!cardElement || typeof cardElement.querySelector !== 'function') {
+                console.warn('[DOWNTIME-TIMER] cardElement inválido para máquina:', machineId);
+                return;
+            }
+            
             // Limpar timer anterior se existir
             if (downtimeTimers.has(machineId)) {
                 clearInterval(downtimeTimers.get(machineId));
@@ -23627,7 +23627,7 @@ function sendDowntimeNotification() {
             
             // Atualizar a cada segundo
             const interval = setInterval(() => {
-                const timerElement = cardElement.querySelector(`[data-timer-machine="${machineId}"]`);
+                const timerElement = cardElement?.querySelector(`[data-timer-machine="${machineId}"]`);
                 if (timerElement && window.db) {
                     // Buscar parada atual
                     const statusMap = downtimeStatusCache || {};
@@ -24609,7 +24609,7 @@ async function saveNewProduct() {
     }
     
     try {
-        showNewProductFeedback('âó Verificando código do produto...', 'info');
+        showNewProductFeedback('ó Verificando código do produto...', 'info');
         
         // Verificar se o código já existe no Firestore
         const existingSnapshot = await db.collection('products')
@@ -24621,7 +24621,7 @@ async function saveNewProduct() {
             return;
         }
         
-        showNewProductFeedback('âó Salvando produto...', 'info');
+        showNewProductFeedback('ó Salvando produto...', 'info');
         
         // Criar objeto do produto
         const newProduct = {
@@ -25201,53 +25201,10 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ====================================
-// EXPORTAR FUNÇÕES PARA DEBUG/TESTE
+// DEBUG/TESTE - Disponível via console
 // ====================================
-if (typeof window !== 'undefined') {
-    window._debugSync = {
-        machineCardData: () => machineCardData,
-        selectedMachineData: () => selectedMachineData,
-        getPlanPieceWeightInfo,
-        getActivePieceWeightGrams,
-        getCatalogPieceWeight,
-        calculateQuantityFromGrams,
-        kgToGrams,
-        gramsToKg,
-        parseWeightInputToGrams,
-        getTareWeightForMachine,
-        testH31: function() {
-            const h31 = machineCardData['H31'];
-            console.log('\n========== H31 DEBUG REPORT ==========');
-            console.log('Machine Card Data:', h31);
-            if (h31) {
-                console.log('\n--- Piece Weight Info ---');
-                const info = getPlanPieceWeightInfo(h31);
-                console.log('getPlanPieceWeightInfo:', info);
-                
-                console.log('\n--- Active Piece Weight Grams ---');
-                const activeWeight = getActivePieceWeightGrams(h31);
-                console.log('getActivePieceWeightGrams:', activeWeight, 'g');
-                
-                console.log('\n--- Catalog Piece Weight ---');
-                const catalogWeight = getCatalogPieceWeight(h31);
-                console.log('getCatalogPieceWeight:', catalogWeight, 'g');
-                
-                console.log('\n--- Test Conversion (1kg) ---');
-                if (activeWeight > 0) {
-                    const testGrams = kgToGrams(1);
-                    const conversion = calculateQuantityFromGrams(testGrams, activeWeight);
-                    console.log('1kg =', testGrams, 'g | Piece weight:', activeWeight, 'g | Result:', conversion);
-                } else {
-                    console.log('⚠️ Sem peso de peça definido, conversão não será possível');
-                }
-            } else {
-                console.log('⚠️ Máquina H31 não encontrada em machineCardData');
-            }
-            console.log('======================================\n');
-        }
-    };
-    console.log('✅ Debug functions available at window._debugSync');
-}
+// As funções de debug estão expostas dentro do DOMContentLoaded principal
+// Use window._syncDebug para acessar funções de diagnóstico
 
 document.addEventListener('DOMContentLoaded', () => {
     const refreshBtn = document.getElementById('traceability-refresh-btn');

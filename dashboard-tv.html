@@ -235,6 +235,38 @@
             letter-spacing: 1px;
         }
 
+        /* ==================== BOTÃO TELA CHEIA ==================== */
+        .fullscreen-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 6px;
+            color: var(--accent-primary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .fullscreen-btn:hover {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: rgba(59, 130, 246, 0.5);
+            transform: scale(1.05);
+        }
+
+        .fullscreen-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Estado fullscreen ativo */
+        .fullscreen-btn.active {
+            background: rgba(59, 130, 246, 0.3);
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+        }
+
         .live-badge {
             display: flex;
             align-items: center;
@@ -799,7 +831,7 @@
             border-radius: 4px;
             display: flex;
             align-items: center;
-            height: 40px;
+            height: 60px;
             overflow: hidden;
         }
 
@@ -819,7 +851,7 @@
         }
 
         .footer-label span {
-            font-size: 10px;
+            font-size: 12px;
             font-weight: 700;
             letter-spacing: 1.5px;
             text-transform: uppercase;
@@ -839,7 +871,7 @@
         .ticker-item {
             white-space: nowrap;
             padding: 0 40px;
-            font-size: 14px;
+            font-size: 16px;
             color: var(--text-secondary);
             font-weight: 600;
         }
@@ -1741,6 +1773,11 @@
                 <div class="time-value" id="currentTime">00:00:00</div>
                 <div class="date-value" id="currentDate">Carregando...</div>
             </div>
+            <button id="fullscreenBtn" class="fullscreen-btn" title="Tela Cheia (F11)">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+                </svg>
+            </button>
         </div>
     </header>
 
@@ -1883,7 +1920,7 @@
                     <div class="shift-kpi-card">
                         <div class="shift-kpi-header">
                             <span class="shift-badge t2">T2</span>
-                            <span class="shift-time">15:00 - 23:00</span>
+                            <span class="shift-time">15:00 - 23:20</span>
                         </div>
                         <div class="shift-kpi-body">
                             <div class="shift-metric">
@@ -1904,7 +1941,7 @@
                     <div class="shift-kpi-card">
                         <div class="shift-kpi-header">
                             <span class="shift-badge t3">T3</span>
-                            <span class="shift-time">23:00 - 07:00</span>
+                            <span class="shift-time">23:20 - 07:00</span>
                         </div>
                         <div class="shift-kpi-body">
                             <div class="shift-metric">
@@ -2055,16 +2092,8 @@
             </div>
             <div class="footer-ticker">
                 <div class="ticker-track">
-                    <span class="ticker-item"><strong>PRODUÇÃO:</strong> Meta diária em <span class="highlight-good">84,9%</span> de conclusão (127,4K / 150K peças)</span>
-                    <span class="ticker-item"><strong>QUALIDADE:</strong> <span class="highlight-good">Zero defeitos críticos</span> nas últimas 4 horas</span>
-                    <span class="ticker-item"><strong>MANUTENÇÃO:</strong> Manutenção preventiva agendada para <span class="highlight-warning">INJ-05 às 14:00h</span></span>
-                    <span class="ticker-item"><strong>ALERTA:</strong> <span class="highlight-critical">INJ-03</span> parada - Troca de molde em andamento</span>
-                    <span class="ticker-item"><strong>DESTAQUE:</strong> INJ-02 com maior OEE do turno: <span class="highlight-good">94,2%</span></span>
-                    <span class="ticker-item"><strong>PRODUÇÃO:</strong> Meta diária em <span class="highlight-good">84,9%</span> de conclusão (127,4K / 150K peças)</span>
-                    <span class="ticker-item"><strong>QUALIDADE:</strong> <span class="highlight-good">Zero defeitos críticos</span> nas últimas 4 horas</span>
-                    <span class="ticker-item"><strong>MANUTENÇÃO:</strong> Manutenção preventiva agendada para <span class="highlight-warning">INJ-05 às 14:00h</span></span>
-                    <span class="ticker-item"><strong>ALERTA:</strong> <span class="highlight-critical">INJ-03</span> parada - Troca de molde em andamento</span>
-                    <span class="ticker-item"><strong>DESTAQUE:</strong> INJ-02 com maior OEE do turno: <span class="highlight-good">94,2%</span></span>
+                    <!-- Dados carregados dinamicamente pela função updateTicker() -->
+                    <span class="ticker-item"><strong>SISTEMA:</strong> <span class="highlight-warning">Carregando dados do Firebase...</span></span>
                 </div>
             </div>
             <div class="footer-timestamp">
@@ -2097,6 +2126,53 @@
         // ==================== INITIALIZATION ====================
         document.addEventListener('DOMContentLoaded', async function() {
             console.log('[Dashboard TV] Iniciando...');
+            
+            // ==================== CONTROLE DE TELA CHEIA ====================
+            const fullscreenBtn = document.getElementById('fullscreenBtn');
+            if (fullscreenBtn) {
+                fullscreenBtn.addEventListener('click', toggleFullscreen);
+                
+                // Detectar mudança de fullscreen
+                document.addEventListener('fullscreenchange', () => {
+                    if (document.fullscreenElement) {
+                        fullscreenBtn.classList.add('active');
+                        console.log('[Dashboard TV] Entrando em tela cheia');
+                    } else {
+                        fullscreenBtn.classList.remove('active');
+                        console.log('[Dashboard TV] Saindo de tela cheia');
+                    }
+                });
+            }
+            
+            // Atalho de teclado: F11 para tela cheia
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'F11') {
+                    e.preventDefault();
+                    toggleFullscreen();
+                }
+            });
+            
+            function toggleFullscreen() {
+                if (!document.fullscreenElement) {
+                    // Entrar em fullscreen
+                    document.documentElement.requestFullscreen().catch(err => {
+                        console.error(`[Dashboard TV] Erro ao ativar fullscreen: ${err.message}`);
+                        // Fallback para navegadores que suportam webkit
+                        if (document.documentElement.webkitRequestFullscreen) {
+                            document.documentElement.webkitRequestFullscreen();
+                        } else if (document.documentElement.mozRequestFullScreen) {
+                            document.documentElement.mozRequestFullScreen();
+                        } else if (document.documentElement.msRequestFullscreen) {
+                            document.documentElement.msRequestFullscreen();
+                        }
+                    });
+                } else {
+                    // Sair de fullscreen
+                    document.exitFullscreen().catch(err => {
+                        console.error(`[Dashboard TV] Erro ao sair de fullscreen: ${err.message}`);
+                    });
+                }
+            }
             
             // Criar ícones Lucide com verificação
             if (typeof lucide !== 'undefined' && lucide.createIcons) {
@@ -2223,9 +2299,10 @@
             // Shift
             const hour = now.getHours();
             let shift = '1º TURNO';
+            const minute = now.getMinutes();
             if (hour >= 7 && hour < 15) shift = '1º TURNO (07:00-15:00)';
-            else if (hour >= 15 && hour < 23) shift = '2º TURNO (15:00-23:00)';
-            else shift = '3º TURNO (23:00-07:00)';
+            else if (hour >= 15 && (hour < 23 || (hour === 23 && minute < 20))) shift = '2º TURNO (15:00-23:20)';
+            else shift = '3º TURNO (23:20-07:00)';
             document.getElementById('currentShift').textContent = shift;
         }
 
@@ -3324,22 +3401,43 @@
             
             // Usar dados normalizados que já têm workDay correto
             const normalizedData = window._tvNormalizedData;
-            const today = getTodayString();
-            const currentHour = new Date().getHours();
             
-            // Determinar quais turnos já ocorreram/estão em andamento HOJE
-            // T1: 07:00-15:00, T2: 15:00-23:00, T3: 23:00-07:00
-            const isT1Active = currentHour >= 7;  // T1 já começou às 7h
-            const isT2Active = currentHour >= 15; // T2 já começou às 15h
-            const isT3Active = currentHour >= 23 || currentHour < 7; // T3 começa às 23h ou está em andamento de madrugada
+            // IMPORTANTE: Usar o dia de produção (workDay) que NÃO reseta à meia-noite
+            // O workDay só muda às 07:00, então T1, T2 e T3 permanecem do mesmo dia até o fim do T3
+            const workDay = getTodayString(); // Esta função já retorna o dia anterior se hora < 7
             
-            console.log('[Dashboard TV] Turnos ativos - T1:', isT1Active, 'T2:', isT2Active, 'T3:', isT3Active, 'Hora atual:', currentHour);
+            const now = new Date();
+            const currentHour = now.getHours();
+            const currentMinute = now.getMinutes();
+            
+            // Calcular minutos desde o início do dia de trabalho (07:00)
+            // Se estamos entre 00:00-06:59, o dia de trabalho começou ontem às 07:00
+            // Se estamos entre 07:00-23:59, o dia de trabalho começou hoje às 07:00
+            let minutesSinceWorkDayStart;
+            if (currentHour < 7) {
+                // Madrugada: já passaram (24 - 7 + currentHour) * 60 + currentMinute minutos
+                minutesSinceWorkDayStart = (17 + currentHour) * 60 + currentMinute; // 17 = 24 - 7
+            } else {
+                // Dia normal: passaram (currentHour - 7) * 60 + currentMinute minutos
+                minutesSinceWorkDayStart = (currentHour - 7) * 60 + currentMinute;
+            }
+            
+            // Determinar quais turnos já ocorreram/estão em andamento no DIA DE TRABALHO atual
+            // T1: 07:00-15:00 (minutos 0-479 do workday)
+            // T2: 15:00-23:20 (minutos 480-979 do workday)
+            // T3: 23:20-07:00 (minutos 980-1439 do workday)
+            const isT1Active = minutesSinceWorkDayStart >= 0;    // T1 sempre ativo após 07:00
+            const isT2Active = minutesSinceWorkDayStart >= 480;  // T2 ativo após 15:00 (8h * 60min)
+            const isT3Active = minutesSinceWorkDayStart >= 980;  // T3 ativo após 23:20 (16h20 * 60min = 980min)
+            
+            console.log('[Dashboard TV] WorkDay:', workDay, '| Minutos desde início:', minutesSinceWorkDayStart);
+            console.log('[Dashboard TV] Turnos ativos - T1:', isT1Active, 'T2:', isT2Active, 'T3:', isT3Active, '| Hora atual:', currentHour + ':' + currentMinute);
             
             // Contar produção por turno usando dados normalizados
             if (normalizedData?.production) {
                 normalizedData.production.forEach(item => {
-                    // Só contar produções do workDay de hoje
-                    if (item.workDay !== today) return;
+                    // Só contar produções do workDay atual (dia de produção)
+                    if (item.workDay !== workDay) return;
                     
                     const turnoNum = item.shift || 1;
                     const turnoKey = 'T' + turnoNum;
@@ -3379,8 +3477,8 @@
             // Contar paradas por turno usando dados normalizados
             if (normalizedData?.downtime) {
                 normalizedData.downtime.forEach(item => {
-                    // Só contar paradas do workDay de hoje
-                    if (item.workDay !== today) return;
+                    // Só contar paradas do workDay atual (dia de produção)
+                    if (item.workDay !== workDay) return;
                     
                     const turnoNum = item.shift || 1;
                     const turnoKey = 'T' + turnoNum;
@@ -3392,7 +3490,7 @@
                 });
             } else {
                 // Fallback: usar cachedDowntimes
-                cachedDowntimes.filter(dt => (dt.date || dt.data) === today).forEach(dt => {
+                cachedDowntimes.filter(dt => (dt.date || dt.data) === workDay).forEach(dt => {
                     const turnoRaw = dt.turno || dt.shift;
                     let turno = '';
                     if (typeof turnoRaw === 'string') {
@@ -3707,6 +3805,9 @@
             const ticker = document.querySelector('.ticker-track');
             if (!ticker) return;
             
+            console.log('[Dashboard TV Ticker] Atualizando ticker com dados reais...');
+            console.log('[Dashboard TV Ticker] Planning:', cachedPlanning.length, '| Productions:', cachedProductions.length, '| Downtimes:', cachedDowntimes.length);
+            
             // Usar dados normalizados quando disponíveis
             const normalizedData = window._tvNormalizedData;
             
@@ -3746,40 +3847,75 @@
                 totalDowntimeMinutes += minutes;
             });
             
-            // Encontrar melhor máquina
-            const machineOEE = {};
+            // Encontrar melhor máquina (baseado em performance)
+            const machinePerf = {};
             cachedProductions.forEach(prod => {
                 const plan = cachedPlanning.find(p => p.id === prod.planId);
                 if (plan) {
                     const machineId = plan.machine || plan.machineId || plan.maquina;
-                    if (!machineOEE[machineId]) machineOEE[machineId] = { produced: 0, target: getPlanTarget(plan) };
-                    machineOEE[machineId].produced += getProducedQty(prod);
+                    if (!machinePerf[machineId]) machinePerf[machineId] = { produced: 0, target: getPlanTarget(plan) };
+                    machinePerf[machineId].produced += getProducedQty(prod);
                 }
             });
             
-            let bestMachine = 'N/A';
-            let bestOEE = 0;
-            Object.entries(machineOEE).forEach(([id, data]) => {
-                const oee = data.target > 0 ? (data.produced / data.target) * 100 : 0;
-                if (oee > bestOEE) {
-                    bestOEE = oee;
+            let bestMachine = null;
+            let bestPerf = 0;
+            Object.entries(machinePerf).forEach(([id, data]) => {
+                const perf = data.target > 0 ? (data.produced / data.target) * 100 : 0;
+                if (perf > bestPerf) {
+                    bestPerf = perf;
                     bestMachine = id;
                 }
             });
+            
+            // Encontrar máquinas paradas AGORA
+            const activeMachines = cachedMachines.filter(m => m.status === 'running' || m.status === 'producao');
+            const stoppedMachines = cachedMachines.filter(m => m.status === 'parada' || m.status === 'stopped' || m.status === 'setup');
             
             // Classes de destaque
             const completionClass = completion >= 80 ? 'highlight-good' : (completion >= 50 ? 'highlight-warning' : 'highlight-critical');
             const qualityClass = totalRefugo === 0 ? 'highlight-good' : (totalRefugo < 100 ? 'highlight-warning' : 'highlight-critical');
             const downtimeClass = totalDowntimeMinutes <= 30 ? 'highlight-good' : (totalDowntimeMinutes <= 90 ? 'highlight-warning' : 'highlight-critical');
             
-            // Atualizar ticker com dados reais
-            ticker.innerHTML = `
-                <span class="ticker-item"><strong>PRODUÇÃO:</strong> Meta diária em <span class="${completionClass}">${completion}%</span> de conclusão (${formatNumber(totalProduced)} / ${formatNumber(totalTarget)} pçs)</span>
-                <span class="ticker-item"><strong>QUALIDADE:</strong> <span class="${qualityClass}">${totalRefugo === 0 ? 'Zero refugo hoje' : formatNumber(totalRefugo) + ' pçs refugo'}</span></span>
-                <span class="ticker-item"><strong>PARADAS:</strong> <span class="${downtimeClass}">${totalDowntimeMinutes}min</span> em ${todayDowntimes.length} eventos hoje</span>
-                <span class="ticker-item"><strong>DESTAQUE:</strong> ${bestMachine !== 'N/A' ? bestMachine + ' com ' : 'Aguardando dados - '}${bestOEE > 0 ? '<span class="highlight-good">' + bestOEE.toFixed(1) + '%</span> OEE' : ''}</span>
-                <span class="ticker-item"><strong>ORDENS:</strong> ${cachedPlanning.length} ordens ativas | ${cachedProductions.length} lançamentos hoje</span>
-            `;
+            // Construir itens do ticker
+            const tickerItems = [];
+            
+            // Item 1: Produção
+            tickerItems.push(`<span class="ticker-item"><strong>📊 PRODUÇÃO:</strong> Meta diária em <span class="${completionClass}">${completion}%</span> de conclusão (${formatNumber(totalProduced)} / ${formatNumber(totalTarget)} pçs)</span>`);
+            
+            // Item 2: Qualidade
+            tickerItems.push(`<span class="ticker-item"><strong>✅ QUALIDADE:</strong> <span class="${qualityClass}">${totalRefugo === 0 ? 'Zero refugo hoje' : formatNumber(totalRefugo) + ' pçs refugo'}</span></span>`);
+            
+            // Item 3: Paradas
+            tickerItems.push(`<span class="ticker-item"><strong>⏱️ PARADAS:</strong> <span class="${downtimeClass}">${totalDowntimeMinutes}min</span> em ${todayDowntimes.length} evento(s) hoje</span>`);
+            
+            // Item 4: Status das máquinas
+            if (cachedMachines.length > 0) {
+                const runningCount = activeMachines.length;
+                const stoppedCount = stoppedMachines.length;
+                const statusClass = stoppedCount === 0 ? 'highlight-good' : (stoppedCount <= 2 ? 'highlight-warning' : 'highlight-critical');
+                tickerItems.push(`<span class="ticker-item"><strong>🏭 MÁQUINAS:</strong> <span class="${statusClass}">${runningCount} produzindo | ${stoppedCount} parada(s)</span></span>`);
+            }
+            
+            // Item 5: Destaque (melhor máquina)
+            if (bestMachine && bestPerf > 0) {
+                tickerItems.push(`<span class="ticker-item"><strong>⭐ DESTAQUE:</strong> ${bestMachine} com <span class="highlight-good">${bestPerf.toFixed(1)}%</span> da meta</span>`);
+            }
+            
+            // Item 6: Ordens
+            tickerItems.push(`<span class="ticker-item"><strong>📋 ORDENS:</strong> ${cachedPlanning.length} ordens ativas | ${cachedProductions.length} lançamentos hoje</span>`);
+            
+            // Item 7: Alerta de máquinas paradas (se houver)
+            if (stoppedMachines.length > 0) {
+                const stoppedNames = stoppedMachines.slice(0, 3).map(m => m.name || m.id).join(', ');
+                tickerItems.push(`<span class="ticker-item"><strong>🔴 ATENÇÃO:</strong> <span class="highlight-critical">${stoppedNames}</span> ${stoppedMachines.length > 3 ? '(+' + (stoppedMachines.length - 3) + ')' : ''} parada(s)</span>`);
+            }
+            
+            // Atualizar ticker - duplicar itens para animação contínua
+            const allItems = [...tickerItems, ...tickerItems];
+            ticker.innerHTML = allItems.join('');
+            
+            console.log('[Dashboard TV Ticker] Ticker atualizado com', tickerItems.length, 'itens');
         }
 
         // ==================== HELPERS ====================
