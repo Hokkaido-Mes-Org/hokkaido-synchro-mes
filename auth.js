@@ -230,16 +230,36 @@ class AuthSystem {
         // Controlar visibilidade do link externo do Dashboard TV (id nav-dashboard-tv)
         try {
             const tvLink = document.getElementById('nav-dashboard-tv');
-            const isLeandro = this.currentUser?.name === 'Leandro Camargo' || this.currentUser?.email === 'leandro@hokkaido.com.br' || this.currentUser?.email === 'leandro.camargo@hokkaido.com';
+            // Lista de usuários autorizados a ver o Dashboard TV
+            const allowedDashboardUsers = [
+                'Leandro Camargo',
+                'Tiago Oliveira',
+                'Michelle Benjamin'
+            ];
+            const allowedDashboardEmails = [
+                'leandro@hokkaido.com.br',
+                'leandro.camargo@hokkaido.com',
+                'tiago.oliveira@hokkaido.com',
+                'tiago.oliveira@synchro.com',
+                'michelle.benjamin@hokkaido.com',
+                'michelle.benjamin@synchro.com'
+            ];
+            
+            const canAccessDashboardTV = 
+                allowedDashboardUsers.includes(this.currentUser?.name) ||
+                allowedDashboardEmails.includes(this.currentUser?.email?.toLowerCase());
+            
             if (tvLink) {
-                if (isLeandro) {
+                if (canAccessDashboardTV) {
                     tvLink.style.display = '';
                     tvLink.classList.remove('hidden');
                     tvLink.style.visibility = 'visible';
+                    console.log('✅ Dashboard TV visível para:', this.currentUser?.name);
                 } else {
                     tvLink.style.display = 'none';
                     tvLink.classList.add('hidden');
                     tvLink.style.visibility = 'hidden';
+                    console.log('🔒 Dashboard TV oculto para:', this.currentUser?.name);
                 }
             }
         } catch (e) {
