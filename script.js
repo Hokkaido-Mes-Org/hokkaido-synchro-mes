@@ -14731,10 +14731,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         listenerManager.unsubscribe('downtime');
         listenerManager.unsubscribe('activeDowntimes');
 
-        // NOVO: Buscar todos os planejamentos e filtrar os ATIVOS no cliente
-        // Os planejamentos permanecem visíveis até serem explicitamente finalizados
-        // A produção é resetada diariamente porque production_entries continua filtrado por data
-        const planningQuery = db.collection('planning');
+        // Filtrar planejamentos pela data selecionada (dia de trabalho inicia às 7h)
+        // Busca planejamentos onde a data do planejamento é igual à data selecionada
+        const planningQuery = db.collection('planning').where('date', '==', date);
         listenerManager.subscribe('planning', planningQuery,
             (snapshot) => {
                 // Filtrar apenas planejamentos ativos (não concluídos/finalizados/cancelados)
