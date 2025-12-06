@@ -20987,6 +20987,14 @@ function sendDowntimeNotification() {
                     }, 2000);
                     // Simular clique no card
                     machineCard.click();
+                    
+                    // NOVO: Scroll automático para painel de lançamento após seleção
+                    setTimeout(() => {
+                        const productionPanel = document.getElementById('production-control-panel');
+                        if (productionPanel && !productionPanel.classList.contains('hidden')) {
+                            productionPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                    }, 500);
                 }
             });
         });
@@ -21762,6 +21770,22 @@ function sendDowntimeNotification() {
         
         // Mostrar painel
         productionControlPanel.classList.remove('hidden');
+        
+        // NOVO: Scroll automático para o painel de lançamento de produção
+        setTimeout(() => {
+            const scrollTarget = document.getElementById('production-control-panel');
+            if (scrollTarget) {
+                // Adicionar destaque visual
+                scrollTarget.classList.add('production-panel-highlight');
+                
+                scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                
+                // Remover classe de destaque após animação
+                setTimeout(() => {
+                    scrollTarget.classList.remove('production-panel-highlight');
+                }, 2000);
+            }
+        }, 100);
         
         // NOVO: Verificar e alertar sobre paradas longas
         const downtime = await getActiveMachineDowntime(machine);
