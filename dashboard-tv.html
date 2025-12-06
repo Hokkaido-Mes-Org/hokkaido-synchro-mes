@@ -1455,8 +1455,22 @@
 
         function checkAccess() {
             const overlay = document.getElementById('accessDenied');
-            const allowedEmails = ['leandro.camargo@hokkaido.com', 'leandro.camargo@synchro.com'];
-            const allowedNames = ['leandro camargo', 'leandro c.'];
+            const allowedEmails = [
+                'leandro.camargo@hokkaido.com', 
+                'leandro.camargo@synchro.com',
+                'tiago.oliveira@hokkaido.com',
+                'tiago.oliveira@synchro.com',
+                'michelle.benjamin@hokkaido.com',
+                'michelle.benjamin@synchro.com'
+            ];
+            const allowedNames = [
+                'leandro camargo', 
+                'leandro c.',
+                'tiago oliveira',
+                'tiago o.',
+                'michelle benjamin',
+                'michelle b.'
+            ];
 
             let userEmail = null;
             let userName = null;
