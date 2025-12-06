@@ -994,6 +994,8 @@
         }
 
         /* ==================== RESPONSIVE ADJUSTMENTS ==================== */
+        
+        /* Tablets Landscape e Desktops pequenos */
         @media (max-width: 1600px) {
             .kpi-strip {
                 grid-template-columns: repeat(3, 1fr);
@@ -1006,6 +1008,692 @@
         @media (max-width: 1400px) {
             .dashboard-container {
                 grid-template-columns: 1fr 1fr 280px;
+            }
+        }
+        
+        /* Tablets Portrait */
+        @media (max-width: 1024px) {
+            html, body {
+                overflow: auto;
+            }
+            
+            .industrial-header {
+                grid-template-columns: 1fr;
+                height: auto;
+                padding: 12px 16px;
+                gap: 12px;
+            }
+            
+            .brand-section {
+                justify-content: center;
+            }
+            
+            .system-status {
+                flex-wrap: wrap;
+                gap: 8px;
+                justify-content: center;
+            }
+            
+            .status-module {
+                padding: 6px 12px;
+            }
+            
+            .datetime-section {
+                justify-content: center;
+                gap: 16px;
+            }
+            
+            .time-value {
+                font-size: 22px;
+            }
+            
+            .dashboard-container {
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: auto auto auto auto auto;
+                height: auto;
+                min-height: calc(100vh - 120px);
+                padding: 12px;
+                gap: 10px;
+            }
+            
+            .kpi-strip {
+                grid-column: 1 / -1;
+                grid-template-columns: repeat(3, 1fr);
+            }
+            
+            .kpi-value {
+                font-size: 24px;
+            }
+            
+            .kpi-module {
+                padding: 12px 14px;
+            }
+            
+            .machines-panel {
+                grid-column: 1 / -1;
+                grid-row: auto;
+            }
+            
+            .machines-grid {
+                max-height: 300px;
+            }
+            
+            .data-panel {
+                grid-column: span 1;
+            }
+            
+            .shift-kpis-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .oee-gauge-container {
+                flex-direction: column;
+                gap: 16px;
+            }
+            
+            .gauge-wrapper {
+                width: 120px;
+                height: 120px;
+            }
+            
+            .oee-breakdown {
+                flex-direction: row;
+                gap: 12px;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            
+            .oee-factor {
+                min-width: auto;
+                padding: 6px 10px;
+            }
+            
+            .industrial-footer {
+                flex-direction: column;
+                height: auto;
+                padding: 8px;
+            }
+            
+            .footer-label {
+                width: 100%;
+                justify-content: center;
+                padding: 8px;
+            }
+            
+            .footer-ticker {
+                padding: 8px 12px;
+            }
+            
+            .ticker-item {
+                font-size: 12px;
+                padding: 0 20px;
+            }
+        }
+        
+        /* Smartphones Landscape */
+        @media (max-width: 768px) {
+            .industrial-header {
+                padding: 10px 12px;
+            }
+            
+            .brand-logo img {
+                height: 32px;
+            }
+            
+            .brand-name {
+                font-size: 14px;
+            }
+            
+            .brand-type {
+                font-size: 8px;
+            }
+            
+            .status-module {
+                padding: 4px 8px;
+            }
+            
+            .status-label {
+                font-size: 9px;
+            }
+            
+            .shift-module {
+                padding: 4px 12px;
+            }
+            
+            .shift-value {
+                font-size: 12px;
+            }
+            
+            .time-value {
+                font-size: 18px;
+            }
+            
+            .date-value {
+                font-size: 9px;
+            }
+            
+            .live-badge {
+                padding: 4px 8px;
+            }
+            
+            .live-text {
+                font-size: 8px;
+            }
+            
+            .dashboard-container {
+                grid-template-columns: 1fr;
+                padding: 8px;
+                gap: 8px;
+            }
+            
+            .kpi-strip {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .kpi-value {
+                font-size: 22px;
+            }
+            
+            .kpi-title {
+                font-size: 9px;
+            }
+            
+            .kpi-module {
+                padding: 10px 12px;
+            }
+            
+            .kpi-target {
+                font-size: 9px;
+            }
+            
+            .machines-grid {
+                max-height: 250px;
+            }
+            
+            .machine-row {
+                grid-template-columns: 60px 1fr 60px 50px;
+                padding: 8px 10px;
+                gap: 8px;
+            }
+            
+            .machine-name {
+                font-size: 12px;
+            }
+            
+            .machine-type {
+                font-size: 8px;
+            }
+            
+            .machine-product {
+                font-size: 10px;
+            }
+            
+            .machine-oee-value {
+                font-size: 14px;
+            }
+            
+            .status-badge {
+                font-size: 7px;
+                padding: 3px 6px;
+            }
+            
+            .panel-header {
+                padding: 10px 12px;
+            }
+            
+            .panel-title {
+                font-size: 10px;
+            }
+            
+            .panel-body {
+                padding: 12px;
+            }
+            
+            .shift-kpis-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+            }
+            
+            .shift-kpi-card {
+                padding: 10px;
+            }
+            
+            .shift-badge {
+                font-size: 9px;
+                padding: 3px 8px;
+            }
+            
+            .shift-time {
+                font-size: 8px;
+            }
+            
+            .shift-metric .metric-value {
+                font-size: 14px;
+            }
+            
+            .shift-metric .metric-label {
+                font-size: 8px;
+            }
+            
+            .gauge-wrapper {
+                width: 100px;
+                height: 100px;
+            }
+            
+            .gauge-value {
+                font-size: 22px;
+            }
+            
+            .gauge-label {
+                font-size: 8px;
+            }
+            
+            .oee-factor {
+                padding: 6px 8px;
+            }
+            
+            .oee-factor-value {
+                font-size: 14px;
+                min-width: 45px;
+            }
+            
+            .oee-factor-label {
+                font-size: 8px;
+            }
+            
+            .loss-row {
+                grid-template-columns: 20px 1fr 50px 40px;
+                padding: 8px 10px;
+                gap: 8px;
+            }
+            
+            .loss-rank {
+                font-size: 10px;
+            }
+            
+            .loss-reason {
+                font-size: 10px;
+            }
+            
+            .loss-machine {
+                font-size: 8px;
+            }
+            
+            .loss-time {
+                font-size: 12px;
+            }
+            
+            .loss-percent {
+                font-size: 9px;
+            }
+            
+            .ticker-item {
+                font-size: 11px;
+                padding: 0 16px;
+            }
+            
+            .footer-timestamp {
+                font-size: 9px;
+                padding: 0 10px;
+            }
+        }
+        
+        /* Smartphones Portrait */
+        @media (max-width: 480px) {
+            .industrial-header {
+                padding: 8px 10px;
+            }
+            
+            .brand-section {
+                gap: 8px;
+            }
+            
+            .brand-logo img {
+                height: 28px;
+            }
+            
+            .brand-name {
+                font-size: 12px;
+                letter-spacing: 1px;
+            }
+            
+            .system-status {
+                gap: 6px;
+            }
+            
+            .status-module {
+                padding: 3px 6px;
+            }
+            
+            .status-label {
+                font-size: 8px;
+                letter-spacing: 0.5px;
+            }
+            
+            .status-indicator {
+                width: 6px;
+                height: 6px;
+            }
+            
+            .shift-module {
+                padding: 3px 8px;
+            }
+            
+            .shift-label {
+                font-size: 8px;
+            }
+            
+            .shift-value {
+                font-size: 10px;
+            }
+            
+            .datetime-section {
+                gap: 10px;
+            }
+            
+            .time-value {
+                font-size: 16px;
+            }
+            
+            .date-value {
+                font-size: 8px;
+            }
+            
+            .live-badge {
+                padding: 3px 6px;
+            }
+            
+            .live-dot {
+                width: 5px;
+                height: 5px;
+            }
+            
+            .live-text {
+                font-size: 7px;
+            }
+            
+            .dashboard-container {
+                padding: 6px;
+                gap: 6px;
+            }
+            
+            .kpi-strip {
+                grid-template-columns: 1fr 1fr;
+                gap: 6px;
+            }
+            
+            .kpi-module {
+                padding: 8px 10px;
+            }
+            
+            .kpi-title {
+                font-size: 8px;
+                letter-spacing: 1px;
+            }
+            
+            .kpi-value {
+                font-size: 20px;
+            }
+            
+            .kpi-unit {
+                font-size: 12px;
+            }
+            
+            .kpi-target {
+                font-size: 8px;
+            }
+            
+            .kpi-trend {
+                font-size: 8px;
+                padding: 1px 4px;
+            }
+            
+            .machines-grid {
+                max-height: 200px;
+            }
+            
+            .machine-row {
+                grid-template-columns: 50px 1fr 50px;
+                padding: 6px 8px;
+                gap: 6px;
+            }
+            
+            .machine-status {
+                display: none;
+            }
+            
+            .machine-name {
+                font-size: 11px;
+            }
+            
+            .machine-type {
+                font-size: 7px;
+            }
+            
+            .machine-product {
+                font-size: 9px;
+            }
+            
+            .machine-order {
+                font-size: 8px;
+            }
+            
+            .machine-oee-value {
+                font-size: 13px;
+            }
+            
+            .machine-oee-label {
+                font-size: 7px;
+            }
+            
+            .panel-header {
+                padding: 8px 10px;
+            }
+            
+            .panel-title {
+                font-size: 9px;
+                gap: 6px;
+            }
+            
+            .panel-tag {
+                font-size: 8px;
+                padding: 2px 6px;
+            }
+            
+            .panel-body {
+                padding: 10px;
+            }
+            
+            .shift-kpis-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 6px;
+            }
+            
+            .shift-kpi-card {
+                padding: 8px;
+            }
+            
+            .shift-kpi-header {
+                margin-bottom: 8px;
+                padding-bottom: 6px;
+            }
+            
+            .shift-badge {
+                font-size: 8px;
+                padding: 2px 6px;
+            }
+            
+            .shift-time {
+                font-size: 7px;
+            }
+            
+            .shift-metric {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 2px;
+            }
+            
+            .shift-metric .metric-value {
+                font-size: 13px;
+            }
+            
+            .shift-metric .metric-label {
+                font-size: 7px;
+            }
+            
+            .oee-gauge-container {
+                padding: 8px;
+            }
+            
+            .gauge-wrapper {
+                width: 90px;
+                height: 90px;
+            }
+            
+            .gauge-value {
+                font-size: 18px;
+            }
+            
+            .gauge-label {
+                font-size: 7px;
+            }
+            
+            .gauge-bg, .gauge-fill {
+                stroke-width: 6;
+            }
+            
+            .oee-breakdown {
+                gap: 8px;
+            }
+            
+            .oee-factor {
+                padding: 5px 7px;
+                gap: 6px;
+            }
+            
+            .oee-factor-value {
+                font-size: 12px;
+                min-width: 40px;
+            }
+            
+            .oee-factor-label {
+                font-size: 7px;
+            }
+            
+            .loss-row {
+                grid-template-columns: 18px 1fr 45px 35px;
+                padding: 6px 8px;
+                gap: 6px;
+                margin-bottom: 4px;
+            }
+            
+            .loss-rank {
+                font-size: 9px;
+            }
+            
+            .loss-reason {
+                font-size: 9px;
+            }
+            
+            .loss-machine {
+                font-size: 7px;
+            }
+            
+            .loss-time {
+                font-size: 10px;
+            }
+            
+            .loss-percent {
+                font-size: 8px;
+            }
+            
+            .industrial-footer {
+                gap: 0;
+            }
+            
+            .footer-label {
+                padding: 6px;
+            }
+            
+            .footer-label span {
+                font-size: 8px;
+            }
+            
+            .footer-label i {
+                width: 12px;
+                height: 12px;
+            }
+            
+            .footer-ticker {
+                padding: 6px 8px;
+            }
+            
+            .ticker-track {
+                animation-duration: 30s;
+            }
+            
+            .ticker-item {
+                font-size: 10px;
+                padding: 0 12px;
+            }
+            
+            .footer-timestamp {
+                font-size: 8px;
+                padding: 6px 8px;
+            }
+            
+            /* Access block mobile */
+            .access-block h2 {
+                font-size: 16px;
+                padding: 0 20px;
+            }
+            
+            .access-block p {
+                font-size: 12px;
+            }
+            
+            .access-block .badge {
+                font-size: 10px;
+                padding: 4px 10px;
+            }
+        }
+        
+        /* Smartphones muito pequenos */
+        @media (max-width: 360px) {
+            .brand-name {
+                display: none;
+            }
+            
+            .brand-type {
+                display: none;
+            }
+            
+            .kpi-strip {
+                grid-template-columns: 1fr;
+            }
+            
+            .kpi-module {
+                display: grid;
+                grid-template-columns: 1fr auto;
+                align-items: center;
+                gap: 8px;
+            }
+            
+            .kpi-header {
+                margin-bottom: 0;
+            }
+            
+            .kpi-value-container {
+                justify-self: end;
+            }
+            
+            .kpi-target {
+                grid-column: 1 / -1;
+                margin-top: 4px;
+            }
+            
+            .shift-kpis-grid {
+                grid-template-columns: 1fr;
             }
         }
     </style>
