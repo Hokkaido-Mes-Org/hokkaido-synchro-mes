@@ -262,7 +262,7 @@ const productDatabase = [
     { "cod": 4091, "client": "APTAR", "name": "CLIP-Q--PP-NATU-XX04", "cavities": 8, "cycle": 17, "weight": 0.65, "pieces_per_hour_goal": 1694, "mp": "" },
     { "cod": 4127, "client": "APTAR", "name": "FIXAÇÃO-GS-24/410--2N-THREAD-PP-WHIT--20 - (LISO COM DEGRAU) -29025477", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 4128, "client": "APTAR", "name": "FIXAÇÃO-GS-24/410--2N-THREA-PP-RED--485 - (LISO COM DEGRAU) - 31192751", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
-    { "cod": 4134, "client": "APTAR", "name": "FIXAÇÃO-GS-24/410--2N-THREA-PP-BLAC--MA - (LISO COM DEGRAU) - 29026043", "cavities": 16, "cycle": 18, "weight": 1.25, "pieces_per_hour_goal": 4800, "mp": "" },
+    { "cod": 4134, "client": "APTAR", "name": "FIXAÇÃO-GS-24/410--2N-THREA-PP-BLAC--MA - (LISO COM DEGRAU) - 29026043", "cavities": 16, "cycle": 18, "weight": 2.30, "pieces_per_hour_goal": 4800, "mp": "" },
     { "cod": 4141, "client": "APTAR", "name": "FIXAÇÃO-GS-24/410--2N-THREA-PP-VIOL---- - (LISO COM DEGRAU) - 31242869", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 4143, "client": "APTAR", "name": "ATUADOR-SENTIDOS-PP--5,75-WINE---LOT-ES4 - 29029209", "cavities": 22, "cycle": 25.5, "weight": 2.15, "pieces_per_hour_goal": 3106, "mp": "" },
     { "cod": 4160, "client": "APTAR", "name": "ATUADOR-SENTIDOS-PP--5,75-NATU---LOT-XX0 - 31149108", "cavities": 22, "cycle": 25.5, "weight": 2.15, "pieces_per_hour_goal": 3106, "mp": "" },
