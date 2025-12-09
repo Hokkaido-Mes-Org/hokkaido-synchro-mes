@@ -4923,6 +4923,40 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         console.log('[TRACE][loadDowntimeAnalysis] dataset received', { downtimeCount: downtimeData.length });
         
+        // ========== DEBUG DETALHADO ==========
+        console.group('🔍 DEBUG: Análise de Paradas');
+        console.log('📊 RESUMO GERAL:');
+        console.log(`  Total de registros: ${downtimeData.length}`);
+        console.log(`  Período: ${startDate} a ${endDate}`);
+        console.log(`  Máquina: ${machine}`);
+        console.log(`  Turno: ${shift}`);
+        
+        // Agrupar por máquina
+        const byMachine = {};
+        downtimeData.forEach(item => {
+            const mach = item.machine || 'SEM MÁQUINA';
+            if (!byMachine[mach]) byMachine[mach] = [];
+            byMachine[mach].push(item);
+        });
+        
+        console.log('📈 DISTRIBUIÇÃO POR MÁQUINA:');
+        Object.entries(byMachine).forEach(([mach, items]) => {
+            const totalMin = items.reduce((sum, i) => sum + (i.duration || 0), 0);
+            console.log(`  ${mach}: ${items.length} ocorrências | ${(totalMin / 60).toFixed(1)}h`);
+        });
+        
+        // Primeiros 10 registros detalhados
+        console.log('📋 PRIMEIROS 10 REGISTROS:');
+        downtimeData.slice(0, 10).forEach((item, idx) => {
+            console.log(`  [${idx+1}] ${item.machine} | ${item.date} | ${item.startTime}-${item.endTime} | Duração: ${item.duration}min (${(item.duration/60).toFixed(2)}h) | Motivo: ${item.reason}`);
+        });
+        
+        if (downtimeData.length > 10) {
+            console.log(`  ... e mais ${downtimeData.length - 10} registros`);
+        }
+        console.groupEnd();
+        // ===================================
+        
         const totalDowntime = downtimeData.reduce((sum, item) => sum + (item.duration || 0), 0);
         const downtimeCount = downtimeData.length;
         const avgDowntime = downtimeCount > 0 ? (totalDowntime / downtimeCount) : 0;
@@ -4942,8 +4976,317 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         await generateDowntimeByMachineChart(downtimeData);
         await generateDowntimeTimelineChart(downtimeData);
 
-        // Carregar paradas longas programadas
-        await loadExtendedDowntimeAnalysis(startDate, endDate, machine);
+        // Carregar análise consolidada de paradas longas
+        const { extended, normal, consolidated } = await analyzeExtendedDowntime(startDate, endDate, machine);
+    }
+
+    /**
+     * ========================================
+     * ANÁLISE CONSOLIDADA DE PARADAS LONGAS
+     * ========================================
+     * Carrega, processa e exibe paradas longas separadamente
+     * e depois consolida com paradas normais
+     */
+    async function analyzeExtendedDowntime(startDate, endDate, machine = 'all') {
+        console.group('📊 ANÁLISE DE PARADAS LONGAS');
+        console.log('Período:', { startDate, endDate, machine });
+        
+        try {
+            // 1. Buscar todos os registros de paradas longas
+            const allSnap = await db.collection('extended_downtime_logs').get();
+            let extendedData = [];
+            
+            allSnap.forEach(doc => {
+                const d = doc.data();
+                const recordDate = d.start_date || d.date || '';
+                const machineId = d.machine_id || d.machine || '';
+                
+                // Filtrar por período
+                const isInPeriod = recordDate >= startDate && recordDate <= endDate;
+                const isActive = d.status === 'active';
+                
+                if (!isInPeriod && !isActive) return;
+                
+                // Filtrar por máquina se especificado
+                if (machine !== 'all' && normalizeMachineId(machineId) !== normalizeMachineId(machine)) {
+                    return;
+                }
+                
+                // Calcular duração
+                let hours = 0;
+                if (d.status === 'active' && d.start_datetime) {
+                    const startTime = d.start_datetime?.toDate?.() || new Date(d.start_date);
+                    const now = new Date();
+                    hours = (now - startTime) / (1000 * 60 * 60);
+                } else {
+                    hours = (d.duration_minutes || 0) / 60;
+                }
+                
+                extendedData.push({
+                    id: doc.id,
+                    machine: machineId,
+                    date: recordDate,
+                    type: d.type || 'other',
+                    reason: d.reason || d.type || 'Parada Longa',
+                    duration: hours * 60, // Converter para minutos para compatibilidade
+                    durationHours: hours,
+                    status: d.status,
+                    startDate: d.start_date,
+                    startTime: d.start_time,
+                    endDate: d.end_date,
+                    endTime: d.end_time,
+                    raw: d
+                });
+            });
+            
+            console.log('✅ Paradas longas encontradas:', extendedData.length);
+            
+            // 2. Buscar paradas normais
+            const normalDowntimeData = await getFilteredData('downtime', startDate, endDate, machine);
+            console.log('✅ Paradas normais encontradas:', normalDowntimeData.length);
+            
+            // 3. Consolidar dados
+            const consolidatedData = [...normalDowntimeData, ...extendedData];
+            
+            // 4. Gerar gráficos separados
+            await generateExtendedDowntimeChart(extendedData);
+            await generateNormalDowntimeChart(normalDowntimeData);
+            
+            // 5. Gerar gráficos consolidados
+            await generateConsolidatedDowntimeChart(consolidatedData);
+            await generateDowntimeComparison(normalDowntimeData, extendedData);
+            
+            // 6. Atualizar resumo
+            updateExtendedDowntimeSummary(normalDowntimeData, extendedData, consolidatedData);
+            
+            console.groupEnd();
+            return {
+                extended: extendedData,
+                normal: normalDowntimeData,
+                consolidated: consolidatedData
+            };
+            
+        } catch (error) {
+            console.error('❌ Erro ao analisar paradas longas:', error);
+            console.groupEnd();
+            return { extended: [], normal: [], consolidated: [] };
+        }
+    }
+
+    /**
+     * Gera gráfico de paradas longas (separado)
+     */
+    async function generateExtendedDowntimeChart(extendedData) {
+        const ctx = document.getElementById('extended-downtime-chart');
+        if (!ctx || extendedData.length === 0) return;
+        
+        destroyChart('extended-downtime-chart');
+        
+        // Agrupar por tipo
+        const typeData = {};
+        extendedData.forEach(item => {
+            const type = item.type === 'weekend' ? 'Fim de Semana' :
+                        item.type === 'maintenance' ? 'Manutenção' :
+                        item.type === 'holiday' ? 'Feriado' : 'Outro';
+            typeData[type] = (typeData[type] || 0) + item.durationHours;
+        });
+        
+        const labels = Object.keys(typeData);
+        const data = Object.values(typeData);
+        const totalHours = data.reduce((sum, v) => sum + v, 0);
+        
+        renderModernDonutChart({
+            canvasId: 'extended-downtime-chart',
+            labels,
+            data,
+            colors: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A'],
+            datasetLabel: 'Paradas Longas (h)',
+            tooltipFormatter: (context) => {
+                const value = Number(context.parsed || 0);
+                const pct = totalHours > 0 ? ((value / totalHours) * 100).toFixed(1) : '0.0';
+                return `${context.label}: ${value.toFixed(1)}h (${pct}%)`;
+            }
+        });
+    }
+
+    /**
+     * Gera gráfico de paradas normais (separado)
+     */
+    async function generateNormalDowntimeChart(normalData) {
+        const ctx = document.getElementById('normal-downtime-chart');
+        if (!ctx || normalData.length === 0) return;
+        
+        destroyChart('normal-downtime-chart');
+        
+        // Agrupar por motivo
+        const reasonData = {};
+        normalData.forEach(item => {
+            const reason = item.reason || 'Sem motivo';
+            reasonData[reason] = (reasonData[reason] || 0) + (item.duration || 0);
+        });
+        
+        const labels = Object.keys(reasonData);
+        const data = Object.values(reasonData).map(d => (d / 60).toFixed(2));
+        const totalHours = data.reduce((sum, v) => sum + parseFloat(v), 0);
+        
+        renderModernDonutChart({
+            canvasId: 'normal-downtime-chart',
+            labels,
+            data,
+            colors: ['#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6'],
+            datasetLabel: 'Paradas Normais (h)',
+            tooltipFormatter: (context) => {
+                const value = Number(context.parsed || 0);
+                const pct = totalHours > 0 ? ((value / totalHours) * 100).toFixed(1) : '0.0';
+                return `${context.label}: ${value.toFixed(1)}h (${pct}%)`;
+            }
+        });
+    }
+
+    /**
+     * Gera gráfico consolidado de paradas (normais + longas)
+     */
+    async function generateConsolidatedDowntimeChart(consolidatedData) {
+        const ctx = document.getElementById('consolidated-downtime-chart');
+        if (!ctx || consolidatedData.length === 0) return;
+        
+        destroyChart('consolidated-downtime-chart');
+        
+        // Agrupar por máquina
+        const machineData = {};
+        consolidatedData.forEach(item => {
+            const machine = item.machine || 'Sem máquina';
+            const hours = item.durationHours || (item.duration / 60);
+            machineData[machine] = (machineData[machine] || 0) + hours;
+        });
+        
+        const labels = Object.keys(machineData);
+        const data = Object.values(machineData);
+        
+        const isMobile = window.innerWidth < 768;
+        
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Tempo Total de Parada (h)',
+                    data,
+                    backgroundColor: [
+                        '#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6',
+                        '#EC4899', '#14B8A6', '#F97316', '#06B6D4', '#84CC16'
+                    ],
+                    borderRadius: 8,
+                    borderSkipped: false
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: value => value + 'h'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Gera gráfico comparativo (Normais vs Longas)
+     */
+    async function generateDowntimeComparison(normalData, extendedData) {
+        const ctx = document.getElementById('downtime-comparison-chart');
+        if (!ctx) return;
+        
+        destroyChart('downtime-comparison-chart');
+        
+        // Agrupar por máquina
+        const machineNormal = {};
+        const machineExtended = {};
+        
+        normalData.forEach(item => {
+            const machine = item.machine || 'Sem máquina';
+            machineNormal[machine] = (machineNormal[machine] || 0) + (item.duration / 60);
+        });
+        
+        extendedData.forEach(item => {
+            const machine = item.machine || 'Sem máquina';
+            machineExtended[machine] = (machineExtended[machine] || 0) + item.durationHours;
+        });
+        
+        // Combinar labels
+        const allMachines = new Set([...Object.keys(machineNormal), ...Object.keys(machineExtended)]);
+        const labels = Array.from(allMachines).sort();
+        
+        const normalValues = labels.map(m => machineNormal[m] || 0);
+        const extendedValues = labels.map(m => machineExtended[m] || 0);
+        
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: 'Paradas Normais (h)',
+                        data: normalValues,
+                        backgroundColor: '#EF4444',
+                        borderRadius: 4
+                    },
+                    {
+                        label: 'Paradas Longas (h)',
+                        data: extendedValues,
+                        backgroundColor: '#3B82F6',
+                        borderRadius: 4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: { stacked: false },
+                    y: { stacked: false, beginAtZero: true }
+                },
+                plugins: {
+                    legend: { position: 'top' }
+                }
+            }
+        });
+    }
+
+    /**
+     * Atualiza resumo consolidado de paradas
+     */
+    function updateExtendedDowntimeSummary(normalData, extendedData, consolidatedData) {
+        const totalNormalHours = normalData.reduce((sum, item) => sum + (item.duration / 60), 0);
+        const totalExtendedHours = extendedData.reduce((sum, item) => sum + item.durationHours, 0);
+        const totalHours = totalNormalHours + totalExtendedHours;
+        const totalCount = normalData.length + extendedData.length;
+        
+        // Atualizar KPIs
+        const kpiTotal = document.getElementById('kpi-total-downtime');
+        const kpiNormal = document.getElementById('kpi-normal-downtime');
+        const kpiExtended = document.getElementById('kpi-extended-downtime');
+        const kpiCount = document.getElementById('kpi-downtime-count');
+        const kpiAvg = document.getElementById('kpi-avg-downtime');
+        
+        if (kpiTotal) kpiTotal.textContent = `${totalHours.toFixed(1)}h`;
+        if (kpiNormal) kpiNormal.textContent = `${totalNormalHours.toFixed(1)}h (${normalData.length})`;
+        if (kpiExtended) kpiExtended.textContent = `${totalExtendedHours.toFixed(1)}h (${extendedData.length})`;
+        if (kpiCount) kpiCount.textContent = totalCount.toString();
+        if (kpiAvg) kpiAvg.textContent = totalCount > 0 ? `${(totalHours / totalCount).toFixed(1)}h` : '0h';
+        
+        console.log('📊 RESUMO CONSOLIDADO:', {
+            'Total Horas': totalHours.toFixed(1),
+            'Paradas Normais': `${totalNormalHours.toFixed(1)}h (${normalData.length})`,
+            'Paradas Longas': `${totalExtendedHours.toFixed(1)}h (${extendedData.length})`,
+            'Total Ocorrências': totalCount
+        });
     }
 
     // Função para carregar paradas longas na análise
@@ -5790,6 +6133,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const startWorkDay = startDate || null;
             const endWorkDay = endDate || null;
 
+            // DEBUG: Log antes dos filtros
+            if (collection === 'downtime') {
+                console.group(`🔍 DEBUG getFilteredData - downtime (antes dos filtros)`);
+                console.log(`Total após map: ${data.length}`);
+                console.log(`Amostra de 3:`, data.slice(0, 3));
+                console.groupEnd();
+            }
+
             data = data.filter(item => {
                 const workDay = item.workDay || item.date;
                 if (!workDay) return false;
@@ -5797,6 +6148,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 const meetsEnd = !endWorkDay || workDay <= endWorkDay;
                 return meetsStart && meetsEnd;
             });
+
+            // DEBUG: Log após filtro de data
+            if (collection === 'downtime') {
+                console.group(`🔍 DEBUG getFilteredData - downtime (após filtro de data)`);
+                console.log(`Total após filtro de data: ${data.length}`);
+                console.log(`Período: ${startWorkDay} a ${endWorkDay}`);
+                console.groupEnd();
+            }
 
             if (collection === 'losses') {
                 data = data.filter(item => {
@@ -5808,7 +6167,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
             if (machine !== 'all') {
                 const target = normalizeMachineId(machine);
+                const beforeMachineFilter = data.length;
                 data = data.filter(item => normalizeMachineId(item.machine) === target);
+                
+                if (collection === 'downtime') {
+                    console.group(`🔍 DEBUG getFilteredData - downtime (após filtro de máquina)`);
+                    console.log(`Machine filter: '${machine}' (normalizado: '${target}')`);
+                    console.log(`Antes: ${beforeMachineFilter} | Depois: ${data.length}`);
+                    if (data.length > 0) {
+                        console.log('Amostra:', data.slice(0, 3));
+                    }
+                    console.groupEnd();
+                }
             }
 
             if (shift !== 'all') {
@@ -20957,9 +21327,9 @@ function sendDowntimeNotification() {
             const machineNumber = mid.replace(/[^\d]/g, '') || mid.slice(-2);
             
             return `
-                <div class="machine-status-cell ${statusClass} w-8 h-8 flex items-center justify-center 
+                <div class="machine-status-cell ${statusClass} h-8 flex items-center justify-center 
                             text-xs font-bold rounded border cursor-pointer transition-all duration-200
-                            hover:scale-110 hover:shadow-lg hover:z-10"
+                            hover:scale-105 hover:shadow-lg hover:z-10"
                      data-machine="${mid}"
                      title="${statusTitle}">
                     ${machineNumber}
