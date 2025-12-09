@@ -165,6 +165,14 @@ class AuthSystem {
                 return false;
             }
         }
+
+        // ⚙️ ACESSO EXCLUSIVO: Aba Admin Dados apenas para Leandro e Michelle
+        if (tabName === 'admin-dados') {
+            const allowedAdminDados = ['Leandro Camargo', 'Michelle Benjamin'];
+            if (!allowedAdminDados.includes(this.currentUser.name)) {
+                return false;
+            }
+        }
         
         const tabPermissions = {
             planejamento: ['planejamento', 'lancamento'], // Operadores também acessam
@@ -177,7 +185,8 @@ class AuthSystem {
             ajustes: ['planejamento', 'lancamento', 'analise'], // Gestores + Leandro
             'paradas-longas': ['lancamento', 'planejamento', 'analise'],
             'acompanhamento': ['lancamento', 'analise'],
-            'historico-sistema': ['analise', 'planejamento'] // Gestores e admins
+            'historico-sistema': ['analise', 'planejamento'], // Gestores e admins
+            'admin-dados': ['planejamento', 'analise'] // Gestores e admins (verificado acima)
         };
         
         const requiredPermissions = tabPermissions[tabName];

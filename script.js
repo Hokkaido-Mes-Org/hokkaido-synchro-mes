@@ -4024,7 +4024,12 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         // Calcular KPIs básicos
         const totalProduction = productionData.reduce((sum, item) => sum + item.quantity, 0);
     const totalLosses = lossesData.reduce((sum, item) => sum + (Number(item.scrapPcs ?? item.quantity ?? 0) || 0), 0);
-        const totalDowntime = downtimeData.reduce((sum, item) => sum + (item.duration || 0), 0);
+        const MAX_DOWNTIME_MINUTES = 24 * 60; // 24h
+        const totalDowntime = downtimeData.reduce((sum, item) => {
+            const rawDuration = Number(item.duration) || 0;
+            const cappedDuration = Math.min(rawDuration, MAX_DOWNTIME_MINUTES);
+            return sum + cappedDuration;
+        }, 0);
         
         // Calcular OEE real usando disponibilidade  x  performance  x  qualidade
         const { overallOee, filteredOee } = calculateOverviewOEE(
@@ -4919,43 +4924,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const { startDate, endDate, machine, shift } = currentAnalysisFilters;
         console.log('[TRACE][loadDowntimeAnalysis] fetching data', { startDate, endDate, machine, shift });
         
-        const downtimeData = await getFilteredData('downtime', startDate, endDate, machine, shift);
+        const downtimeSegments = await getFilteredData('downtime', startDate, endDate, machine, shift);
+        const downtimeData = consolidateDowntimeEvents(downtimeSegments);
 
-        console.log('[TRACE][loadDowntimeAnalysis] dataset received', { downtimeCount: downtimeData.length });
-        
-        // ========== DEBUG DETALHADO ==========
-        console.group('🔍 DEBUG: Análise de Paradas');
-        console.log('📊 RESUMO GERAL:');
-        console.log(`  Total de registros: ${downtimeData.length}`);
-        console.log(`  Período: ${startDate} a ${endDate}`);
-        console.log(`  Máquina: ${machine}`);
-        console.log(`  Turno: ${shift}`);
-        
-        // Agrupar por máquina
-        const byMachine = {};
-        downtimeData.forEach(item => {
-            const mach = item.machine || 'SEM MÁQUINA';
-            if (!byMachine[mach]) byMachine[mach] = [];
-            byMachine[mach].push(item);
+        console.log('[TRACE][loadDowntimeAnalysis] dataset received', {
+            segments: downtimeSegments.length,
+            events: downtimeData.length
         });
-        
-        console.log('📈 DISTRIBUIÇÃO POR MÁQUINA:');
-        Object.entries(byMachine).forEach(([mach, items]) => {
-            const totalMin = items.reduce((sum, i) => sum + (i.duration || 0), 0);
-            console.log(`  ${mach}: ${items.length} ocorrências | ${(totalMin / 60).toFixed(1)}h`);
-        });
-        
-        // Primeiros 10 registros detalhados
-        console.log('📋 PRIMEIROS 10 REGISTROS:');
-        downtimeData.slice(0, 10).forEach((item, idx) => {
-            console.log(`  [${idx+1}] ${item.machine} | ${item.date} | ${item.startTime}-${item.endTime} | Duração: ${item.duration}min (${(item.duration/60).toFixed(2)}h) | Motivo: ${item.reason}`);
-        });
-        
-        if (downtimeData.length > 10) {
-            console.log(`  ... e mais ${downtimeData.length - 10} registros`);
-        }
-        console.groupEnd();
-        // ===================================
         
         const totalDowntime = downtimeData.reduce((sum, item) => sum + (item.duration || 0), 0);
         const downtimeCount = downtimeData.length;
@@ -4976,317 +4951,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         await generateDowntimeByMachineChart(downtimeData);
         await generateDowntimeTimelineChart(downtimeData);
 
-        // Carregar análise consolidada de paradas longas
-        const { extended, normal, consolidated } = await analyzeExtendedDowntime(startDate, endDate, machine);
-    }
-
-    /**
-     * ========================================
-     * ANÁLISE CONSOLIDADA DE PARADAS LONGAS
-     * ========================================
-     * Carrega, processa e exibe paradas longas separadamente
-     * e depois consolida com paradas normais
-     */
-    async function analyzeExtendedDowntime(startDate, endDate, machine = 'all') {
-        console.group('📊 ANÁLISE DE PARADAS LONGAS');
-        console.log('Período:', { startDate, endDate, machine });
-        
-        try {
-            // 1. Buscar todos os registros de paradas longas
-            const allSnap = await db.collection('extended_downtime_logs').get();
-            let extendedData = [];
-            
-            allSnap.forEach(doc => {
-                const d = doc.data();
-                const recordDate = d.start_date || d.date || '';
-                const machineId = d.machine_id || d.machine || '';
-                
-                // Filtrar por período
-                const isInPeriod = recordDate >= startDate && recordDate <= endDate;
-                const isActive = d.status === 'active';
-                
-                if (!isInPeriod && !isActive) return;
-                
-                // Filtrar por máquina se especificado
-                if (machine !== 'all' && normalizeMachineId(machineId) !== normalizeMachineId(machine)) {
-                    return;
-                }
-                
-                // Calcular duração
-                let hours = 0;
-                if (d.status === 'active' && d.start_datetime) {
-                    const startTime = d.start_datetime?.toDate?.() || new Date(d.start_date);
-                    const now = new Date();
-                    hours = (now - startTime) / (1000 * 60 * 60);
-                } else {
-                    hours = (d.duration_minutes || 0) / 60;
-                }
-                
-                extendedData.push({
-                    id: doc.id,
-                    machine: machineId,
-                    date: recordDate,
-                    type: d.type || 'other',
-                    reason: d.reason || d.type || 'Parada Longa',
-                    duration: hours * 60, // Converter para minutos para compatibilidade
-                    durationHours: hours,
-                    status: d.status,
-                    startDate: d.start_date,
-                    startTime: d.start_time,
-                    endDate: d.end_date,
-                    endTime: d.end_time,
-                    raw: d
-                });
-            });
-            
-            console.log('✅ Paradas longas encontradas:', extendedData.length);
-            
-            // 2. Buscar paradas normais
-            const normalDowntimeData = await getFilteredData('downtime', startDate, endDate, machine);
-            console.log('✅ Paradas normais encontradas:', normalDowntimeData.length);
-            
-            // 3. Consolidar dados
-            const consolidatedData = [...normalDowntimeData, ...extendedData];
-            
-            // 4. Gerar gráficos separados
-            await generateExtendedDowntimeChart(extendedData);
-            await generateNormalDowntimeChart(normalDowntimeData);
-            
-            // 5. Gerar gráficos consolidados
-            await generateConsolidatedDowntimeChart(consolidatedData);
-            await generateDowntimeComparison(normalDowntimeData, extendedData);
-            
-            // 6. Atualizar resumo
-            updateExtendedDowntimeSummary(normalDowntimeData, extendedData, consolidatedData);
-            
-            console.groupEnd();
-            return {
-                extended: extendedData,
-                normal: normalDowntimeData,
-                consolidated: consolidatedData
-            };
-            
-        } catch (error) {
-            console.error('❌ Erro ao analisar paradas longas:', error);
-            console.groupEnd();
-            return { extended: [], normal: [], consolidated: [] };
-        }
-    }
-
-    /**
-     * Gera gráfico de paradas longas (separado)
-     */
-    async function generateExtendedDowntimeChart(extendedData) {
-        const ctx = document.getElementById('extended-downtime-chart');
-        if (!ctx || extendedData.length === 0) return;
-        
-        destroyChart('extended-downtime-chart');
-        
-        // Agrupar por tipo
-        const typeData = {};
-        extendedData.forEach(item => {
-            const type = item.type === 'weekend' ? 'Fim de Semana' :
-                        item.type === 'maintenance' ? 'Manutenção' :
-                        item.type === 'holiday' ? 'Feriado' : 'Outro';
-            typeData[type] = (typeData[type] || 0) + item.durationHours;
-        });
-        
-        const labels = Object.keys(typeData);
-        const data = Object.values(typeData);
-        const totalHours = data.reduce((sum, v) => sum + v, 0);
-        
-        renderModernDonutChart({
-            canvasId: 'extended-downtime-chart',
-            labels,
-            data,
-            colors: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A'],
-            datasetLabel: 'Paradas Longas (h)',
-            tooltipFormatter: (context) => {
-                const value = Number(context.parsed || 0);
-                const pct = totalHours > 0 ? ((value / totalHours) * 100).toFixed(1) : '0.0';
-                return `${context.label}: ${value.toFixed(1)}h (${pct}%)`;
-            }
-        });
-    }
-
-    /**
-     * Gera gráfico de paradas normais (separado)
-     */
-    async function generateNormalDowntimeChart(normalData) {
-        const ctx = document.getElementById('normal-downtime-chart');
-        if (!ctx || normalData.length === 0) return;
-        
-        destroyChart('normal-downtime-chart');
-        
-        // Agrupar por motivo
-        const reasonData = {};
-        normalData.forEach(item => {
-            const reason = item.reason || 'Sem motivo';
-            reasonData[reason] = (reasonData[reason] || 0) + (item.duration || 0);
-        });
-        
-        const labels = Object.keys(reasonData);
-        const data = Object.values(reasonData).map(d => (d / 60).toFixed(2));
-        const totalHours = data.reduce((sum, v) => sum + parseFloat(v), 0);
-        
-        renderModernDonutChart({
-            canvasId: 'normal-downtime-chart',
-            labels,
-            data,
-            colors: ['#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6'],
-            datasetLabel: 'Paradas Normais (h)',
-            tooltipFormatter: (context) => {
-                const value = Number(context.parsed || 0);
-                const pct = totalHours > 0 ? ((value / totalHours) * 100).toFixed(1) : '0.0';
-                return `${context.label}: ${value.toFixed(1)}h (${pct}%)`;
-            }
-        });
-    }
-
-    /**
-     * Gera gráfico consolidado de paradas (normais + longas)
-     */
-    async function generateConsolidatedDowntimeChart(consolidatedData) {
-        const ctx = document.getElementById('consolidated-downtime-chart');
-        if (!ctx || consolidatedData.length === 0) return;
-        
-        destroyChart('consolidated-downtime-chart');
-        
-        // Agrupar por máquina
-        const machineData = {};
-        consolidatedData.forEach(item => {
-            const machine = item.machine || 'Sem máquina';
-            const hours = item.durationHours || (item.duration / 60);
-            machineData[machine] = (machineData[machine] || 0) + hours;
-        });
-        
-        const labels = Object.keys(machineData);
-        const data = Object.values(machineData);
-        
-        const isMobile = window.innerWidth < 768;
-        
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels,
-                datasets: [{
-                    label: 'Tempo Total de Parada (h)',
-                    data,
-                    backgroundColor: [
-                        '#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6',
-                        '#EC4899', '#14B8A6', '#F97316', '#06B6D4', '#84CC16'
-                    ],
-                    borderRadius: 8,
-                    borderSkipped: false
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { display: false }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            callback: value => value + 'h'
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    /**
-     * Gera gráfico comparativo (Normais vs Longas)
-     */
-    async function generateDowntimeComparison(normalData, extendedData) {
-        const ctx = document.getElementById('downtime-comparison-chart');
-        if (!ctx) return;
-        
-        destroyChart('downtime-comparison-chart');
-        
-        // Agrupar por máquina
-        const machineNormal = {};
-        const machineExtended = {};
-        
-        normalData.forEach(item => {
-            const machine = item.machine || 'Sem máquina';
-            machineNormal[machine] = (machineNormal[machine] || 0) + (item.duration / 60);
-        });
-        
-        extendedData.forEach(item => {
-            const machine = item.machine || 'Sem máquina';
-            machineExtended[machine] = (machineExtended[machine] || 0) + item.durationHours;
-        });
-        
-        // Combinar labels
-        const allMachines = new Set([...Object.keys(machineNormal), ...Object.keys(machineExtended)]);
-        const labels = Array.from(allMachines).sort();
-        
-        const normalValues = labels.map(m => machineNormal[m] || 0);
-        const extendedValues = labels.map(m => machineExtended[m] || 0);
-        
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels,
-                datasets: [
-                    {
-                        label: 'Paradas Normais (h)',
-                        data: normalValues,
-                        backgroundColor: '#EF4444',
-                        borderRadius: 4
-                    },
-                    {
-                        label: 'Paradas Longas (h)',
-                        data: extendedValues,
-                        backgroundColor: '#3B82F6',
-                        borderRadius: 4
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    x: { stacked: false },
-                    y: { stacked: false, beginAtZero: true }
-                },
-                plugins: {
-                    legend: { position: 'top' }
-                }
-            }
-        });
-    }
-
-    /**
-     * Atualiza resumo consolidado de paradas
-     */
-    function updateExtendedDowntimeSummary(normalData, extendedData, consolidatedData) {
-        const totalNormalHours = normalData.reduce((sum, item) => sum + (item.duration / 60), 0);
-        const totalExtendedHours = extendedData.reduce((sum, item) => sum + item.durationHours, 0);
-        const totalHours = totalNormalHours + totalExtendedHours;
-        const totalCount = normalData.length + extendedData.length;
-        
-        // Atualizar KPIs
-        const kpiTotal = document.getElementById('kpi-total-downtime');
-        const kpiNormal = document.getElementById('kpi-normal-downtime');
-        const kpiExtended = document.getElementById('kpi-extended-downtime');
-        const kpiCount = document.getElementById('kpi-downtime-count');
-        const kpiAvg = document.getElementById('kpi-avg-downtime');
-        
-        if (kpiTotal) kpiTotal.textContent = `${totalHours.toFixed(1)}h`;
-        if (kpiNormal) kpiNormal.textContent = `${totalNormalHours.toFixed(1)}h (${normalData.length})`;
-        if (kpiExtended) kpiExtended.textContent = `${totalExtendedHours.toFixed(1)}h (${extendedData.length})`;
-        if (kpiCount) kpiCount.textContent = totalCount.toString();
-        if (kpiAvg) kpiAvg.textContent = totalCount > 0 ? `${(totalHours / totalCount).toFixed(1)}h` : '0h';
-        
-        console.log('📊 RESUMO CONSOLIDADO:', {
-            'Total Horas': totalHours.toFixed(1),
-            'Paradas Normais': `${totalNormalHours.toFixed(1)}h (${normalData.length})`,
-            'Paradas Longas': `${totalExtendedHours.toFixed(1)}h (${extendedData.length})`,
-            'Total Ocorrências': totalCount
-        });
+        // Carregar paradas longas programadas
+        await loadExtendedDowntimeAnalysis(startDate, endDate, machine);
     }
 
     // Função para carregar paradas longas na análise
@@ -6133,14 +5799,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const startWorkDay = startDate || null;
             const endWorkDay = endDate || null;
 
-            // DEBUG: Log antes dos filtros
-            if (collection === 'downtime') {
-                console.group(`🔍 DEBUG getFilteredData - downtime (antes dos filtros)`);
-                console.log(`Total após map: ${data.length}`);
-                console.log(`Amostra de 3:`, data.slice(0, 3));
-                console.groupEnd();
-            }
-
             data = data.filter(item => {
                 const workDay = item.workDay || item.date;
                 if (!workDay) return false;
@@ -6148,14 +5806,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 const meetsEnd = !endWorkDay || workDay <= endWorkDay;
                 return meetsStart && meetsEnd;
             });
-
-            // DEBUG: Log após filtro de data
-            if (collection === 'downtime') {
-                console.group(`🔍 DEBUG getFilteredData - downtime (após filtro de data)`);
-                console.log(`Total após filtro de data: ${data.length}`);
-                console.log(`Período: ${startWorkDay} a ${endWorkDay}`);
-                console.groupEnd();
-            }
 
             if (collection === 'losses') {
                 data = data.filter(item => {
@@ -6167,18 +5817,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
             if (machine !== 'all') {
                 const target = normalizeMachineId(machine);
-                const beforeMachineFilter = data.length;
                 data = data.filter(item => normalizeMachineId(item.machine) === target);
-                
-                if (collection === 'downtime') {
-                    console.group(`🔍 DEBUG getFilteredData - downtime (após filtro de máquina)`);
-                    console.log(`Machine filter: '${machine}' (normalizado: '${target}')`);
-                    console.log(`Antes: ${beforeMachineFilter} | Depois: ${data.length}`);
-                    if (data.length > 0) {
-                        console.log('Amostra:', data.slice(0, 3));
-                    }
-                    console.groupEnd();
-                }
             }
 
             if (shift !== 'all') {
@@ -6278,7 +5917,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const d = new Date(date);
         switch (shift) {
             case 1: d.setHours(14, 59, 59, 999); break;
-            case 2: d.setHours(22, 59, 59, 999); break;
+            case 2: d.setHours(23, 19, 59, 999); break;
             case 3: 
                 // Turno 3 vai até 06:59 do dia seguinte
                 d.setDate(d.getDate() + 1);
@@ -6344,6 +5983,17 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             
             // Calcular duração em minutos
             const durationMs = segmentEnd.getTime() - cursor.getTime();
+
+            if (durationMs <= 0) {
+                console.warn('[DOWNTIME] Segmento inválido detectado. Forçando avanço mínimo.', {
+                    cursor: cursor.toISOString(),
+                    shift: currentShift,
+                    shiftEnd: shiftEndTime.toISOString()
+                });
+                cursor = new Date(cursor.getTime() + 60000);
+                continue;
+            }
+
             const durationMin = Math.max(1, Math.round(durationMs / 60000));
             
             // Determinar a data de trabalho (workday) do segmento
@@ -6373,6 +6023,201 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         console.log('[DOWNTIME] Segmentos gerados:', segments.length, segments);
         return segments;
+    }
+
+    /**
+     * Consolida segmentos de parada em eventos únicos.
+     * Segmentos com o mesmo originalStartTimestamp são agrupados.
+     * Segmentos sem metadados são agrupados por proximidade (mesma máquina, mesmo motivo, horários consecutivos).
+     */
+    function consolidateDowntimeEvents(segments = []) {
+        if (!Array.isArray(segments) || segments.length === 0) {
+            return [];
+        }
+
+        const MAX_DURATION_MIN = 24 * 60; // 24h máximo por evento
+        const eventsMap = new Map();
+        
+        // Primeiro passo: ordenar segmentos por máquina, data e hora de início
+        const sortedSegments = [...segments].sort((a, b) => {
+            const machineA = a.machine || '';
+            const machineB = b.machine || '';
+            if (machineA !== machineB) return machineA.localeCompare(machineB);
+            
+            const dateA = a.date || a.workDay || '';
+            const dateB = b.date || b.workDay || '';
+            if (dateA !== dateB) return dateA.localeCompare(dateB);
+            
+            const timeA = a.startTime || '00:00';
+            const timeB = b.startTime || '00:00';
+            return timeA.localeCompare(timeB);
+        });
+
+        sortedSegments.forEach((segment, index) => {
+            if (!segment) return;
+
+            const raw = segment.raw || {};
+            const baseStart = raw.originalStartTimestamp || null;
+            const baseEnd = raw.originalEndTimestamp || null;
+            const machineId = segment.machine || 'unknown-machine';
+            const reason = (segment.reason || raw.reason || '').trim().toLowerCase();
+            
+            let key;
+            let isGrouped = false;
+            
+            // Estratégia 1: Se tem originalStartTimestamp, agrupa pelo evento pai
+            if (baseStart) {
+                key = `parent|${machineId}|${baseStart}|${baseEnd || ''}`;
+                isGrouped = true;
+            }
+            // Estratégia 2: Se tem totalSegments/segmentIndex, faz parte de um evento segmentado
+            else if (raw.totalSegments && raw.totalSegments > 1) {
+                // Usar originalStartTimestamp do parent ou criar chave baseada em metadados
+                const parentStart = raw.originalStartTimestamp || raw.startTimestamp || `${segment.date}T${segment.startTime || '00:00'}`;
+                key = `segmented|${machineId}|${parentStart}`;
+                isGrouped = true;
+            }
+            // Estratégia 3: Agrupar por proximidade temporal (mesmo motivo, mesmo dia, horários próximos)
+            else {
+                // Verificar se este segmento pode ser agrupado com algum evento existente
+                const segmentDate = segment.date || segment.workDay || '';
+                const segmentStartTime = segment.startTime || '';
+                const segmentEndTime = segment.endTime || '';
+                
+                // Procurar evento existente que possa agrupar este segmento
+                let matchingKey = null;
+                for (const [existingKey, existingEvent] of eventsMap.entries()) {
+                    if (!existingKey.startsWith('proximity|')) continue;
+                    if (existingEvent.machine !== machineId) continue;
+                    if (existingEvent.reason.toLowerCase() !== reason) continue;
+                    
+                    // Verificar se é do mesmo dia
+                    const eventDate = existingEvent.workDay || existingEvent.date || '';
+                    if (eventDate !== segmentDate) continue;
+                    
+                    // Verificar proximidade temporal (se o fim do evento existente está próximo do início deste)
+                    const lastSegment = existingEvent.segments[existingEvent.segments.length - 1];
+                    const lastEndTime = lastSegment?.endTime || '';
+                    
+                    if (lastEndTime && segmentStartTime) {
+                        // Se o início deste segmento é igual ou próximo ao fim do último
+                        if (segmentStartTime <= lastEndTime || isTimeClose(lastEndTime, segmentStartTime, 5)) {
+                            matchingKey = existingKey;
+                            break;
+                        }
+                    }
+                }
+                
+                if (matchingKey) {
+                    key = matchingKey;
+                    isGrouped = true;
+                } else {
+                    // Criar novo grupo de proximidade
+                    key = `proximity|${machineId}|${segmentDate}|${segmentStartTime}|${reason.substring(0, 20)}`;
+                    isGrouped = false;
+                }
+            }
+
+            let event = eventsMap.get(key);
+            if (!event) {
+                const startDateTime = baseStart ? new Date(baseStart) : combineDateAndTime(segment.date, segment.startTime);
+                const endDateTime = baseEnd ? new Date(baseEnd) : combineDateAndTime(segment.date, segment.endTime);
+
+                event = {
+                    id: key,
+                    machine: machineId,
+                    reason: segment.reason || raw.reason || 'Não informado',
+                    duration: 0,
+                    startDateTime: startDateTime,
+                    endDateTime: endDateTime,
+                    workDay: segment.workDay || segment.date || '',
+                    segments: [],
+                    metadata: raw,
+                    isGrouped: isGrouped,
+                    date: segment.date || ''
+                };
+                eventsMap.set(key, event);
+            }
+
+            // Calcular duração do segmento
+            const segmentDuration = Math.min(Number(segment.duration) || 0, MAX_DURATION_MIN);
+            
+            // Verificar se este segmento é duplicata (mesmo horário já adicionado)
+            const isDuplicate = event.segments.some(s => 
+                s.date === segment.date && 
+                s.startTime === segment.startTime && 
+                s.endTime === segment.endTime
+            );
+            
+            if (!isDuplicate) {
+                event.duration += segmentDuration;
+                event.segments.push(segment);
+
+                const segStart = combineDateAndTime(segment.date, segment.startTime);
+                const segEnd = combineDateAndTime(segment.date, segment.endTime);
+
+                if (segStart && (!event.startDateTime || segStart < event.startDateTime)) {
+                    event.startDateTime = segStart;
+                }
+                if (segEnd && (!event.endDateTime || segEnd > event.endDateTime)) {
+                    event.endDateTime = segEnd;
+                }
+
+                if (segment.workDay && (!event.workDay || segment.workDay < event.workDay)) {
+                    event.workDay = segment.workDay;
+                }
+            }
+        });
+
+        return Array.from(eventsMap.values()).map(event => {
+            // Aplicar cap final de duração para segurança
+            const cappedDuration = Math.min(event.duration, MAX_DURATION_MIN);
+            
+            const startDate = event.startDateTime ? formatDateYMD(event.startDateTime) : (event.segments[0]?.date || '');
+            const endDate = event.endDateTime ? formatDateYMD(event.endDateTime) : (event.segments[event.segments.length - 1]?.date || '');
+            const startTime = event.startDateTime ? formatTimeHM(event.startDateTime) : (event.segments[0]?.startTime || '');
+            const endTime = event.endDateTime ? formatTimeHM(event.endDateTime) : (event.segments[event.segments.length - 1]?.endTime || '');
+
+            return {
+                id: event.id,
+                machine: event.machine,
+                reason: event.reason,
+                duration: cappedDuration,
+                date: startDate,
+                workDay: event.workDay || startDate,
+                startTime,
+                endTime,
+                startDateTime: event.startDateTime,
+                endDateTime: event.endDateTime,
+                shift: event.segments[0]?.shift || inferShiftFromSegment(event.workDay || startDate, startTime, endTime),
+                segments: event.segments,
+                segmentCount: event.segments.length,
+                raw: event.metadata
+            };
+        });
+    }
+    
+    /**
+     * Verifica se dois horários estão próximos (dentro de N minutos)
+     */
+    function isTimeClose(time1, time2, toleranceMinutes = 5) {
+        if (!time1 || !time2) return false;
+        
+        const toMinutes = (t) => {
+            const parts = t.split(':');
+            if (parts.length < 2) return null;
+            const h = parseInt(parts[0], 10);
+            const m = parseInt(parts[1], 10);
+            if (isNaN(h) || isNaN(m)) return null;
+            return h * 60 + m;
+        };
+        
+        const min1 = toMinutes(time1);
+        const min2 = toMinutes(time2);
+        
+        if (min1 === null || min2 === null) return false;
+        
+        return Math.abs(min2 - min1) <= toleranceMinutes;
     }
 
     /**
@@ -10089,6 +9934,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         if (page === 'historico-sistema') {
             setupHistoricoSistema();
+        }
+
+        if (page === 'admin-dados') {
+            setupAdminDadosPage();
         }
 
         if (page === 'qualidade') {
@@ -17795,6 +17644,492 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
     }
 
+    // ==================== ADMINISTRAÇÃO DE DADOS ====================
+    let adminDadosSetupDone = false;
+    let adminCurrentOrderDoc = null;
+    
+    function setupAdminDadosPage() {
+        // Verificar permissão - apenas gestores e admins
+        if (!isUserGestorOrAdmin()) {
+            showPermissionDeniedNotification('acessar a administração de dados');
+            navigateTo('lancamento');
+            return;
+        }
+        
+        if (adminDadosSetupDone) {
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            return;
+        }
+        adminDadosSetupDone = true;
+        
+        console.log('[ADMIN-DADOS] Inicializando página de administração...');
+        
+        // Setup das abas internas
+        document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const tab = e.currentTarget.dataset.adminTab;
+                switchAdminTab(tab);
+            });
+        });
+        
+        // Aba Paradas - botões
+        const btnAnalyze = document.getElementById('admin-btn-analyze');
+        const btnFix = document.getElementById('admin-btn-fix');
+        const btnClearLog = document.getElementById('admin-btn-clear-log');
+        
+        if (btnAnalyze) btnAnalyze.addEventListener('click', adminAnalyzeDowntimeProblems);
+        if (btnFix) btnFix.addEventListener('click', adminFixDowntimeRecords);
+        if (btnClearLog) btnClearLog.addEventListener('click', () => {
+            const logContainer = document.getElementById('admin-log-container');
+            if (logContainer) logContainer.innerHTML = '';
+        });
+        
+        // Aba Ordens - botões
+        const btnBuscarOrdem = document.getElementById('admin-btn-buscar-ordem');
+        const btnAjustarOrdem = document.getElementById('admin-btn-ajustar-ordem');
+        
+        if (btnBuscarOrdem) btnBuscarOrdem.addEventListener('click', adminBuscarOrdem);
+        if (btnAjustarOrdem) btnAjustarOrdem.addEventListener('click', adminAjustarQuantidadeOrdem);
+        
+        // Aba Produção - setup
+        const dataProducao = document.getElementById('admin-producao-data');
+        if (dataProducao) dataProducao.value = getProductionDateString();
+        
+        // Popular select de máquinas
+        const selectMaquina = document.getElementById('admin-producao-maquina');
+        if (selectMaquina && window.databaseModule?.machineDatabase) {
+            let options = '<option value="">Todas</option>';
+            window.databaseModule.machineDatabase.forEach(m => {
+                const id = normalizeMachineId(m.id);
+                options += `<option value="${id}">${id}</option>`;
+            });
+            selectMaquina.innerHTML = options;
+        }
+        
+        const btnBuscarProducao = document.getElementById('admin-btn-buscar-producao');
+        if (btnBuscarProducao) btnBuscarProducao.addEventListener('click', adminBuscarProducao);
+        
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+    
+    function switchAdminTab(tabName) {
+        // Atualizar botões
+        document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+            if (btn.dataset.adminTab === tabName) {
+                btn.className = 'admin-tab-btn active px-4 py-2 text-sm font-semibold rounded-t-lg transition bg-blue-500 text-white';
+            } else {
+                btn.className = 'admin-tab-btn px-4 py-2 text-sm font-semibold rounded-t-lg transition bg-gray-100 text-gray-600 hover:bg-gray-200';
+            }
+        });
+        
+        // Mostrar/ocultar conteúdo
+        document.querySelectorAll('.admin-tab-content').forEach(content => {
+            content.classList.add('hidden');
+        });
+        const activeContent = document.getElementById(`admin-tab-${tabName}`);
+        if (activeContent) activeContent.classList.remove('hidden');
+    }
+    
+    function adminLog(message, type = 'info') {
+        const container = document.getElementById('admin-log-container');
+        if (!container) return;
+        
+        const colors = {
+            info: 'text-blue-400',
+            warn: 'text-yellow-400',
+            error: 'text-red-400',
+            success: 'text-green-400'
+        };
+        
+        const entry = document.createElement('div');
+        entry.className = `${colors[type] || colors.info} py-0.5`;
+        entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        container.appendChild(entry);
+        container.scrollTop = container.scrollHeight;
+    }
+    
+    async function adminAnalyzeDowntimeProblems() {
+        adminLog('Iniciando análise de registros de paradas...', 'info');
+        
+        const stats = { total: 0, problems: 0, fixed: 0, deleted: 0 };
+        
+        try {
+            const snapshot = await db.collection('downtime_entries').limit(1000).get();
+            stats.total = snapshot.size;
+            
+            adminLog(`Total de registros: ${stats.total}`, 'info');
+            
+            let problemCount = 0;
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                const problems = [];
+                
+                // Verificar problemas comuns
+                if (!data.end_timestamp && !data.endTimestamp && data.status !== 'active') {
+                    problems.push('Sem timestamp de fim (não ativo)');
+                }
+                if (!data.start_timestamp && !data.startTimestamp && !data.originalStartTimestamp) {
+                    problems.push('Sem timestamp de início');
+                }
+                if (!data.machine_id && !data.machine) {
+                    problems.push('Sem ID de máquina');
+                }
+                if (data.duration_minutes > 1440) {
+                    problems.push(`Duração muito alta: ${data.duration_minutes}min`);
+                }
+                
+                if (problems.length > 0) {
+                    problemCount++;
+                    adminLog(`⚠️ ${doc.id}: ${problems.join(', ')}`, 'warn');
+                }
+            });
+            
+            stats.problems = problemCount;
+            
+            // Atualizar estatísticas na UI
+            document.getElementById('admin-stat-total').textContent = stats.total;
+            document.getElementById('admin-stat-problems').textContent = stats.problems;
+            document.getElementById('admin-stat-fixed').textContent = stats.fixed;
+            document.getElementById('admin-stat-deleted').textContent = stats.deleted;
+            
+            adminLog(`✅ Análise completa: ${stats.problems} registros com problemas de ${stats.total}`, 'success');
+            
+            // Habilitar botão de correção se houver problemas
+            const btnFix = document.getElementById('admin-btn-fix');
+            if (btnFix) btnFix.disabled = stats.problems === 0;
+            
+        } catch (error) {
+            adminLog(`❌ Erro na análise: ${error.message}`, 'error');
+        }
+    }
+    
+    async function adminFixDowntimeRecords() {
+        const isDryRun = document.getElementById('admin-chk-dry-run')?.checked ?? true;
+        const deleteInvalid = document.getElementById('admin-chk-delete-invalid')?.checked ?? false;
+        
+        adminLog(`🔧 Iniciando correção (Simulação: ${isDryRun ? 'SIM' : 'NÃO'})...`, 'info');
+        
+        const stats = { fixed: 0, deleted: 0 };
+        
+        try {
+            const snapshot = await db.collection('downtime_entries').limit(500).get();
+            const batch = db.batch();
+            let batchCount = 0;
+            
+            for (const doc of snapshot.docs) {
+                const data = doc.data();
+                const updates = {};
+                let shouldDelete = false;
+                
+                // Tentar corrigir timestamp de início
+                if (!data.start_timestamp && !data.startTimestamp) {
+                    if (data.originalStartTimestamp) {
+                        updates.start_timestamp = data.originalStartTimestamp;
+                        adminLog(`Corrigindo início de ${doc.id} usando originalStartTimestamp`, 'info');
+                    } else if (data.date && data.start_time) {
+                        try {
+                            const startDate = new Date(`${data.date}T${data.start_time}:00`);
+                            if (!isNaN(startDate.getTime())) {
+                                updates.start_timestamp = firebase.firestore.Timestamp.fromDate(startDate);
+                                adminLog(`Corrigindo início de ${doc.id} usando date+start_time`, 'info');
+                            }
+                        } catch (e) {}
+                    } else {
+                        adminLog(`⚠️ ${doc.id}: Não foi possível recuperar timestamp de início`, 'warn');
+                        if (deleteInvalid) shouldDelete = true;
+                    }
+                }
+                
+                // Tentar corrigir timestamp de fim
+                if (!data.end_timestamp && !data.endTimestamp && data.status !== 'active') {
+                    if (data.originalEndTimestamp) {
+                        updates.end_timestamp = data.originalEndTimestamp;
+                        adminLog(`Corrigindo fim de ${doc.id} usando originalEndTimestamp`, 'info');
+                    } else if (data.date && data.end_time) {
+                        try {
+                            const endDate = new Date(`${data.date}T${data.end_time}:00`);
+                            if (!isNaN(endDate.getTime())) {
+                                updates.end_timestamp = firebase.firestore.Timestamp.fromDate(endDate);
+                                adminLog(`Corrigindo fim de ${doc.id} usando date+end_time`, 'info');
+                            }
+                        } catch (e) {}
+                    }
+                }
+                
+                // Aplicar correções ou deletar
+                if (!isDryRun) {
+                    if (shouldDelete) {
+                        batch.delete(doc.ref);
+                        stats.deleted++;
+                        batchCount++;
+                    } else if (Object.keys(updates).length > 0) {
+                        batch.update(doc.ref, updates);
+                        stats.fixed++;
+                        batchCount++;
+                    }
+                } else {
+                    if (shouldDelete) {
+                        adminLog(`[SIMULAÇÃO] Deletaria: ${doc.id}`, 'warn');
+                        stats.deleted++;
+                    } else if (Object.keys(updates).length > 0) {
+                        adminLog(`[SIMULAÇÃO] Corrigiria: ${doc.id} - ${JSON.stringify(updates)}`, 'info');
+                        stats.fixed++;
+                    }
+                }
+                
+                // Commit batch a cada 400 operações
+                if (batchCount >= 400) {
+                    if (!isDryRun) await batch.commit();
+                    batchCount = 0;
+                }
+            }
+            
+            // Commit final
+            if (!isDryRun && batchCount > 0) {
+                await batch.commit();
+            }
+            
+            // Atualizar UI
+            document.getElementById('admin-stat-fixed').textContent = stats.fixed;
+            document.getElementById('admin-stat-deleted').textContent = stats.deleted;
+            
+            adminLog(`✅ Correção ${isDryRun ? '(simulação)' : ''} completa: ${stats.fixed} corrigidos, ${stats.deleted} excluídos`, 'success');
+            
+        } catch (error) {
+            adminLog(`❌ Erro na correção: ${error.message}`, 'error');
+        }
+    }
+    
+    // ===== Funções de Ajuste de Ordens =====
+    async function adminBuscarOrdem() {
+        const numeroOP = document.getElementById('admin-ordem-numero')?.value?.trim();
+        const detalhesDiv = document.getElementById('admin-ordem-detalhes');
+        const btnAjustar = document.getElementById('admin-btn-ajustar-ordem');
+        const logDiv = document.getElementById('admin-ordem-log');
+        
+        if (!numeroOP) {
+            alert('Digite o número da OP');
+            return;
+        }
+        
+        try {
+            adminCurrentOrderDoc = null;
+            if (detalhesDiv) detalhesDiv.classList.add('hidden');
+            if (btnAjustar) btnAjustar.disabled = true;
+            
+            // Buscar ordem
+            const snapshot = await db.collection('production_orders')
+                .where('order_number', '==', numeroOP)
+                .limit(1)
+                .get();
+            
+            if (snapshot.empty) {
+                // Tentar busca numérica
+                const numerico = parseInt(numeroOP);
+                if (!isNaN(numerico)) {
+                    const snapshot2 = await db.collection('production_orders')
+                        .where('order_number', '==', numerico)
+                        .limit(1)
+                        .get();
+                    
+                    if (!snapshot2.empty) {
+                        adminCurrentOrderDoc = snapshot2.docs[0];
+                    }
+                }
+            } else {
+                adminCurrentOrderDoc = snapshot.docs[0];
+            }
+            
+            if (!adminCurrentOrderDoc) {
+                alert(`Ordem ${numeroOP} não encontrada`);
+                return;
+            }
+            
+            const data = adminCurrentOrderDoc.data();
+            
+            // Preencher detalhes
+            document.getElementById('admin-ordem-info-op').textContent = data.order_number || '-';
+            document.getElementById('admin-ordem-info-produto').textContent = data.product_name || data.product_code || '-';
+            document.getElementById('admin-ordem-info-maquina').textContent = data.machine_id || '-';
+            document.getElementById('admin-ordem-info-status').textContent = data.status || '-';
+            document.getElementById('admin-ordem-info-planejada').textContent = data.planned_quantity || '-';
+            document.getElementById('admin-ordem-info-executada').textContent = data.executed_quantity || 0;
+            
+            const progresso = data.planned_quantity > 0 
+                ? ((data.executed_quantity || 0) / data.planned_quantity * 100).toFixed(1) + '%'
+                : '-';
+            document.getElementById('admin-ordem-info-progresso').textContent = progresso;
+            
+            if (detalhesDiv) detalhesDiv.classList.remove('hidden');
+            if (btnAjustar) btnAjustar.disabled = false;
+            
+            // Log
+            if (logDiv) {
+                const entry = document.createElement('div');
+                entry.className = 'text-blue-400 py-0.5';
+                entry.textContent = `[${new Date().toLocaleTimeString()}] OP ${numeroOP} encontrada - Executada atual: ${data.executed_quantity || 0}`;
+                logDiv.appendChild(entry);
+            }
+            
+        } catch (error) {
+            console.error('[ADMIN] Erro ao buscar ordem:', error);
+            alert('Erro ao buscar ordem: ' + error.message);
+        }
+    }
+    
+    async function adminAjustarQuantidadeOrdem() {
+        if (!adminCurrentOrderDoc) {
+            alert('Nenhuma ordem selecionada');
+            return;
+        }
+        
+        const novaQuantidade = parseInt(document.getElementById('admin-ordem-quantidade')?.value);
+        const logDiv = document.getElementById('admin-ordem-log');
+        
+        if (isNaN(novaQuantidade) || novaQuantidade < 0) {
+            alert('Digite uma quantidade válida');
+            return;
+        }
+        
+        const data = adminCurrentOrderDoc.data();
+        const quantidadeAnterior = data.executed_quantity || 0;
+        
+        if (!confirm(`Confirma alteração da quantidade executada?\n\nOP: ${data.order_number}\nAnterior: ${quantidadeAnterior}\nNova: ${novaQuantidade}`)) {
+            return;
+        }
+        
+        try {
+            await db.collection('production_orders').doc(adminCurrentOrderDoc.id).update({
+                executed_quantity: novaQuantidade,
+                last_manual_adjustment: firebase.firestore.FieldValue.serverTimestamp(),
+                adjusted_by: getActiveUser()?.name || 'Admin'
+            });
+            
+            // Registrar log do sistema
+            await registrarLogSistema(
+                `AJUSTE MANUAL: OP ${data.order_number} - Quantidade: ${quantidadeAnterior} → ${novaQuantidade}`,
+                'admin_adjustment',
+                {
+                    order_number: data.order_number,
+                    machine_id: data.machine_id,
+                    previous_quantity: quantidadeAnterior,
+                    new_quantity: novaQuantidade
+                }
+            );
+            
+            // Atualizar UI
+            document.getElementById('admin-ordem-info-executada').textContent = novaQuantidade;
+            
+            const progresso = data.planned_quantity > 0 
+                ? (novaQuantidade / data.planned_quantity * 100).toFixed(1) + '%'
+                : '-';
+            document.getElementById('admin-ordem-info-progresso').textContent = progresso;
+            
+            // Log visual
+            if (logDiv) {
+                const entry = document.createElement('div');
+                entry.className = 'text-green-400 py-0.5';
+                entry.textContent = `[${new Date().toLocaleTimeString()}] ✅ OP ${data.order_number} atualizada: ${quantidadeAnterior} → ${novaQuantidade}`;
+                logDiv.appendChild(entry);
+            }
+            
+            alert('Quantidade atualizada com sucesso!');
+            
+        } catch (error) {
+            console.error('[ADMIN] Erro ao ajustar ordem:', error);
+            alert('Erro ao ajustar: ' + error.message);
+            
+            if (logDiv) {
+                const entry = document.createElement('div');
+                entry.className = 'text-red-400 py-0.5';
+                entry.textContent = `[${new Date().toLocaleTimeString()}] ❌ Erro: ${error.message}`;
+                logDiv.appendChild(entry);
+            }
+        }
+    }
+    
+    // ===== Funções de Produção =====
+    async function adminBuscarProducao() {
+        const data = document.getElementById('admin-producao-data')?.value;
+        const maquina = document.getElementById('admin-producao-maquina')?.value;
+        const listaDiv = document.getElementById('admin-producao-lista');
+        
+        if (!data) {
+            alert('Selecione uma data');
+            return;
+        }
+        
+        try {
+            listaDiv.innerHTML = '<div class="text-center py-4 text-gray-500"><i class="animate-spin">⏳</i> Carregando...</div>';
+            
+            let query = db.collection('production_entries').where('date', '==', data);
+            if (maquina) {
+                query = query.where('machine_id', '==', maquina);
+            }
+            
+            const snapshot = await query.orderBy('timestamp', 'desc').limit(100).get();
+            
+            if (snapshot.empty) {
+                listaDiv.innerHTML = '<div class="text-center py-8 text-gray-400">Nenhum registro encontrado para esta data/máquina.</div>';
+                return;
+            }
+            
+            let html = '';
+            snapshot.forEach(doc => {
+                const d = doc.data();
+                const hora = d.timestamp?.toDate ? d.timestamp.toDate().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '-';
+                
+                html += `
+                    <div class="flex items-center justify-between bg-gray-50 rounded-lg p-3 border border-gray-200">
+                        <div class="flex items-center gap-4">
+                            <span class="font-semibold text-gray-800">${d.machine_id || '-'}</span>
+                            <span class="text-sm text-gray-600">${d.product_name || d.product_code || '-'}</span>
+                            <span class="text-sm font-medium text-blue-600">Qtd: ${d.quantity || 0}</span>
+                            <span class="text-xs text-gray-400">${hora}</span>
+                            <span class="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600">T${d.shift || '-'}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button class="admin-btn-edit-producao text-blue-500 hover:text-blue-700 px-2 py-1" data-id="${doc.id}">
+                                <i data-lucide="edit-2" class="w-4 h-4"></i>
+                            </button>
+                            <button class="admin-btn-delete-producao text-red-500 hover:text-red-700 px-2 py-1" data-id="${doc.id}" data-machine="${d.machine_id}" data-qty="${d.quantity}">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            listaDiv.innerHTML = html;
+            lucide.createIcons();
+            
+            // Attach delete handlers
+            listaDiv.querySelectorAll('.admin-btn-delete-producao').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const docId = btn.dataset.id;
+                    const machine = btn.dataset.machine;
+                    const qty = btn.dataset.qty;
+                    
+                    if (!confirm(`Excluir registro de produção?\n\nMáquina: ${machine}\nQuantidade: ${qty}`)) return;
+                    
+                    try {
+                        await db.collection('production_entries').doc(docId).delete();
+                        btn.closest('div.flex').remove();
+                        alert('Registro excluído com sucesso');
+                    } catch (err) {
+                        alert('Erro ao excluir: ' + err.message);
+                    }
+                });
+            });
+            
+        } catch (error) {
+            console.error('[ADMIN] Erro ao buscar produção:', error);
+            listaDiv.innerHTML = `<div class="text-center py-4 text-red-500">Erro: ${error.message}</div>`;
+        }
+    }
+
+    // ==================== FIM ADMINISTRAÇÃO DE DADOS ====================
+
     let historicoCurrentPage = 0;
     let historicoPageSize = 50;
     let historicoLastDoc = null;
@@ -18369,6 +18704,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         e.preventDefault();
 
         const machineSelect = document.getElementById('extended-downtime-machine');
+        const categorySelect = document.getElementById('extended-downtime-category');
         const reasonSelect = document.getElementById('extended-downtime-reason');
         const startDateInput = document.getElementById('extended-downtime-start-date');
         const startTimeInput = document.getElementById('extended-downtime-custom-time');
@@ -18377,16 +18713,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         // SINGLE MACHINE (not array)
         const selectedMachine = machineSelect?.value?.trim() || '';
+        const category = categorySelect?.value?.trim() || '';
         const reason = reasonSelect?.value?.trim() || '';
         const selectedDate = startDateInput?.value || '';
         const selectedTime = startTimeInput?.value || '';
 
-        console.log('[PARADAS-LONGAS] Registrando parada ATIVA:', { machine: selectedMachine, reason, date: selectedDate, time: selectedTime });
+        console.log('[PARADAS-LONGAS] Registrando parada ATIVA:', { machine: selectedMachine, category, reason, date: selectedDate, time: selectedTime });
 
         // Validação
-        if (!selectedMachine || !reason) {
+        if (!selectedMachine || !category || !reason) {
             const missing = [];
             if (!selectedMachine) missing.push('máquina');
+            if (!category) missing.push('categoria');
             if (!reason) missing.push('motivo');
             
             statusDiv.textContent = `❌ Preencha: ${missing.join(', ')}`;
@@ -18418,6 +18756,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             // Criar um ÚNICO documento para esta parada
             const downtimeData = {
                 machine_id: normalizedMachineId,
+                category: category,  // Nova campo de categoria
                 type: reason,  // Usar reason como tipo (vem da lista de motivos)
                 reason: reason,  // Manter também como reason para compatibilidade
                 
@@ -18435,22 +18774,47 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 status: 'active',
                 
                 // Auditoria
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 createdBy: userName,
                 shift: getCurrentShift(startDateTime),
                 date: selectedDate
             };
 
-            // Adicionar à Firestore
-            const docRef = await db.collection('extended_downtime_logs').add(downtimeData);
+            // Verificar se é edição ou criação
+            const editingId = submitBtn.dataset.editingId;
+            let docRef;
             
-            console.log('[PARADAS-LONGAS] Parada registrada com sucesso:', {
-                recordId: docRef.id,
-                machine: normalizedMachineId,
-                startTime: `${selectedDate} ${selectedTime}`
-            });
+            if (editingId) {
+                // ATUALIZAÇÃO de registro existente
+                downtimeData.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+                downtimeData.updatedBy = userName;
+                await db.collection('extended_downtime_logs').doc(editingId).update(downtimeData);
+                docRef = { id: editingId };
+                
+                console.log('[PARADAS-LONGAS] Parada atualizada com sucesso:', {
+                    recordId: editingId,
+                    machine: normalizedMachineId,
+                    startTime: `${selectedDate} ${selectedTime}`
+                });
+                
+                statusDiv.textContent = `✅ Parada atualizada para ${normalizedMachineId}`;
+                
+                // Limpar modo de edição
+                delete submitBtn.dataset.editingId;
+                submitBtn.innerHTML = '<i data-lucide="pause-circle" class="w-5 h-5"></i><span>🚨 REGISTRAR PARADA</span>';
+            } else {
+                // CRIAÇÃO de novo registro
+                downtimeData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                docRef = await db.collection('extended_downtime_logs').add(downtimeData);
+                
+                console.log('[PARADAS-LONGAS] Parada registrada com sucesso:', {
+                    recordId: docRef.id,
+                    machine: normalizedMachineId,
+                    startTime: `${selectedDate} ${selectedTime}`
+                });
 
-            statusDiv.textContent = `✅ Parada iniciada para ${normalizedMachineId} em ${selectedDate} às ${selectedTime}`;
+                statusDiv.textContent = `✅ Parada iniciada para ${normalizedMachineId} em ${selectedDate} às ${selectedTime}`;
+            }
+            
             statusDiv.className = 'text-sm font-semibold h-5 text-center text-green-600';
 
             // Limpar formulário
@@ -18547,24 +18911,43 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 const endDate = record.end_date || '-';
                 const machine = record.machine_id || '-';
                 const type = record.type || 'other';
+                const category = record.category || '';
                 const reason = record.reason || '-';
                 const durationDays = Math.floor((record.duration_minutes || 0) / (24 * 60));
                 const durationHours = Math.floor(((record.duration_minutes || 0) % (24 * 60)) / 60);
                 const durationText = durationDays > 0 ? `${durationDays}d ${durationHours}h` : `${durationHours}h`;
                 const typeLabel = typeLabels[type] || type;
                 const typeColor = typeColors[type] || 'bg-gray-100 text-gray-700';
+                
+                // Cores das categorias
+                const categoryColors = {
+                    'FERRAMENTARIA': 'bg-indigo-100 text-indigo-700',
+                    'PROCESSO': 'bg-cyan-100 text-cyan-700',
+                    'COMPRAS': 'bg-green-100 text-green-700',
+                    'PREPARAÇÃO': 'bg-yellow-100 text-yellow-700',
+                    'QUALIDADE': 'bg-pink-100 text-pink-700',
+                    'MANUTENÇÃO': 'bg-blue-100 text-blue-700',
+                    'PRODUÇÃO': 'bg-orange-100 text-orange-700',
+                    'SETUP': 'bg-purple-100 text-purple-700',
+                    'ADMINISTRATIVO': 'bg-slate-100 text-slate-700',
+                    'PCP': 'bg-teal-100 text-teal-700',
+                    'COMERCIAL': 'bg-amber-100 text-amber-700'
+                };
+                const categoryColor = categoryColors[category] || 'bg-gray-100 text-gray-600';
+                const categoryBadge = category ? `<span class="text-xs px-2 py-0.5 rounded font-medium ${categoryColor}">${category}</span>` : '';
 
                 const html = `
                     <div class="bg-white border border-gray-200 rounded-lg px-3 py-2 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                         <div class="flex-1 flex flex-wrap items-center gap-3 text-sm">
                             <span class="font-semibold text-gray-800">${machine}</span>
+                            ${categoryBadge}
                             <span class="text-xs px-2 py-0.5 rounded ${typeColor}">${typeLabel}</span>
                             <span class="text-xs text-gray-500">${startDate} → ${endDate}</span>
                             <span class="text-xs text-gray-500">${durationText}</span>
                             <span class="text-xs text-gray-400 truncate max-w-[220px]">${reason}</span>
                         </div>
                         <div class="flex items-center gap-2 text-xs">
-                            <button class="btn-edit-extended-downtime bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded font-semibold transition flex items-center gap-1" data-id="${record.id}" data-machine="${machine}" data-type="${type}" data-start-date="${startDate}" data-end-date="${endDate}" data-reason="${reason}" data-start-time="${record.start_time || '00:00'}" data-end-time="${record.end_time || '23:59'}">
+                            <button class="btn-edit-extended-downtime bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded font-semibold transition flex items-center gap-1" data-id="${record.id}" data-machine="${machine}" data-type="${type}" data-category="${category}" data-start-date="${startDate}" data-end-date="${endDate}" data-reason="${reason}" data-start-time="${record.start_time || '00:00'}" data-end-time="${record.end_time || '23:59'}">
                                 <i data-lucide="edit-2" class="w-4 h-4"></i>
                                 <span>Editar</span>
                             </button>
@@ -18614,22 +18997,22 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const recordId = btn.dataset.id;
         const machine = btn.dataset.machine;
         const type = btn.dataset.type;
+        const category = btn.dataset.category || '';
         const startDate = btn.dataset.startDate;
         const endDate = btn.dataset.endDate;
         const reason = btn.dataset.reason;
         const startTime = btn.dataset.startTime;
         const endTime = btn.dataset.endTime;
 
-        console.log('[EXTENDED-DOWNTIME] Editando registro:', recordId);
+        console.log('[EXTENDED-DOWNTIME] Editando registro:', recordId, { category });
 
         // Preencher form com dados existentes
         document.getElementById('extended-downtime-machine').value = machine;
-        document.getElementById('extended-downtime-type').value = type;
-        document.getElementById('extended-downtime-date-start').value = startDate;
-        document.getElementById('extended-downtime-date-end').value = endDate;
-        document.getElementById('extended-downtime-time-start').value = startTime;
-        document.getElementById('extended-downtime-time-end').value = endTime;
+        const categorySelect = document.getElementById('extended-downtime-category');
+        if (categorySelect) categorySelect.value = category;
         document.getElementById('extended-downtime-reason').value = reason;
+        document.getElementById('extended-downtime-start-date').value = startDate;
+        document.getElementById('extended-downtime-custom-time').value = startTime;
 
         // Mudar texto do botão para "Atualizar"
         const submitBtn = document.getElementById('extended-downtime-submit');
@@ -21327,9 +21710,9 @@ function sendDowntimeNotification() {
             const machineNumber = mid.replace(/[^\d]/g, '') || mid.slice(-2);
             
             return `
-                <div class="machine-status-cell ${statusClass} h-8 flex items-center justify-center 
+                <div class="machine-status-cell ${statusClass} w-8 h-8 flex items-center justify-center 
                             text-xs font-bold rounded border cursor-pointer transition-all duration-200
-                            hover:scale-105 hover:shadow-lg hover:z-10"
+                            hover:scale-110 hover:shadow-lg hover:z-10"
                      data-machine="${mid}"
                      title="${statusTitle}">
                     ${machineNumber}

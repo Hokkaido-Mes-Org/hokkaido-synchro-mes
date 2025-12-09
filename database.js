@@ -418,7 +418,6 @@ const productDatabase = [
     { "cod": 4156, "client": "PARKER", "name": "TAMPA PLASTICA COM FURO", "cavities": 4, "cycle": 21, "weight": 0.45, "pieces_per_hour_goal": 686, "mp": "" },
     { "cod": 4157, "client": "PARKER", "name": "TAMPA PLASTICA 4 CAVIDADES", "cavities": 4, "cycle": 50, "weight": 0.75, "pieces_per_hour_goal": 288, "mp": "" },
     { "cod": 4158, "client": "PARKER", "name": "TAMPA PLASTICA 5831", "cavities": 4, "cycle": 35, "weight": 0.55, "pieces_per_hour_goal": 411, "mp": "" },
-    { "cod": 4808, "client": "", "name": "SUPORTE DO COPO 4 CAVIDADES - 283600249", "cavities": 4, "cycle": 50, "weight": 55, "pieces_per_hour_goal": 288, "mp": "" },
     { "cod": 4935, "client": "PARKER", "name": "TAMPA SUPERIOR PRETA", "cavities": 4, "cycle": 34.38, "weight": 0.85, "pieces_per_hour_goal": 419, "mp": "" },
     { "cod": 4936, "client": "PARKER", "name": "TAMPA INFERIOR PRETA", "cavities": 4, "cycle": 34.38, "weight": 0.85, "pieces_per_hour_goal": 419, "mp": "" },
     { "cod": 4996, "client": "PARKER", "name": "TAMPA PLASTICA 5923 - PRO85071129", "cavities": 4, "cycle": 40, "weight": 0.65, "pieces_per_hour_goal": 360, "mp": "" },
@@ -712,7 +711,7 @@ const groupedLossReasons = {
     "PROCESSO": [
         "BOLHA", "CHUPAGEM", "CONTAMINAÇÃO", "DEGRADAÇÃO", "EMPENAMENTO", "FALHA",
         "FIAPO", "FORA DE COR", "INÍCIO/REÍNICIO", "JUNÇÃO", "MANCHAS",
-        "MEDIDA FORA DO ESPECIFICADO", "MOÍDO", "PEÇAS PERDIDAS", "QUEIMA", "REBARBA"
+        "MEDIDA FORA DO ESPECIFICADO", "MOÍDO", "PEÇAS PERDIDAS", "QUEIMA", "REBARBA", "TROCA DE COR"
     ],
     "FERRAMENTARIA": [
         "DEFORMAÇÃO", "GALHO PRESO", "MARCA D'ÁGUA", "MARCA EXTRATOR", "RISCOS", "SUJIDADE"

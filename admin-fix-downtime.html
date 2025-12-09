@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Correção de Paradas - Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <style>
+        .log-entry { font-family: monospace; font-size: 12px; padding: 2px 8px; border-bottom: 1px solid #333; }
+        .log-info { color: #60a5fa; }
+        .log-warn { color: #fbbf24; }
+        .log-error { color: #f87171; }
+        .log-success { color: #34d399; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen p-8">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold mb-2">🔧 Correção de Registros de Paradas</h1>
+        <p class="text-gray-400 mb-6">Esta ferramenta analisa e corrige registros incompletos na coleção <code>downtime_entries</code>.</p>
+
+        <!-- Configuração Firebase -->
+        <div class="bg-gray-800 rounded-lg p-4 mb-6">
+            <h2 class="text-lg font-semibold mb-3">⚙️ Configuração Firebase</h2>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">API Key</label>
+                    <input type="text" id="apiKey" class="w-full bg-gray-700 rounded px-3 py-2 text-sm" placeholder="AIza...">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Project ID</label>
+                    <input type="text" id="projectId" class="w-full bg-gray-700 rounded px-3 py-2 text-sm" placeholder="seu-projeto">
+                </div>
+            </div>
+            <button id="btnConnect" class="mt-4 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded font-semibold transition">
+                Conectar ao Firebase
+            </button>
+            <span id="connectionStatus" class="ml-4 text-sm text-gray-400"></span>
+        </div>
+
+        <!-- Controles -->
+        <div class="bg-gray-800 rounded-lg p-4 mb-6">
+            <h2 class="text-lg font-semibold mb-3">🎯 Ações</h2>
+            <div class="flex flex-wrap gap-3">
+                <button id="btnAnalyze" class="bg-yellow-600 hover:bg-yellow-700 px-4 py-2 rounded font-semibold transition disabled:opacity-50" disabled>
+                    📊 Analisar Problemas
+                </button>
+                <button id="btnFix" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded font-semibold transition disabled:opacity-50" disabled>
+                    🔧 Corrigir Registros
+                </button>
+                <button id="btnClearLog" class="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded font-semibold transition">
+                    🗑️ Limpar Log
+                </button>
+            </div>
+            <div class="mt-4 flex items-center gap-4">
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" id="chkDryRun" checked class="rounded">
+                    <span>Modo simulação (não altera dados)</span>
+                </label>
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" id="chkDeleteInvalid">
+                    <span class="text-red-400">Excluir registros irrecuperáveis</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Estatísticas -->
+        <div class="grid grid-cols-4 gap-4 mb-6">
+            <div class="bg-gray-800 rounded-lg p-4 text-center">
+                <div id="statTotal" class="text-2xl font-bold text-blue-400">-</div>
+                <div class="text-sm text-gray-400">Total analisados</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4 text-center">
+                <div id="statProblems" class="text-2xl font-bold text-yellow-400">-</div>
+                <div class="text-sm text-gray-400">Com problemas</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4 text-center">
+                <div id="statFixed" class="text-2xl font-bold text-green-400">-</div>
+                <div class="text-sm text-gray-400">Corrigidos</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4 text-center">
+                <div id="statDeleted" class="text-2xl font-bold text-red-400">-</div>
+                <div class="text-sm text-gray-400">Excluídos</div>
+            </div>
+        </div>
+
+        <!-- Log -->
+        <div class="bg-gray-800 rounded-lg overflow-hidden">
+            <div class="bg-gray-700 px-4 py-2 font-semibold">📋 Log de Execução</div>
+            <div id="logContainer" class="h-96 overflow-y-auto bg-black"></div>
+        </div>
+    </div>
+
+    <script>
+        // Estado global
+        let db = null;
+        let isConnected = false;
+        const stats = { total: 0, problems: 0, fixed: 0, deleted: 0 };
+
+        // Elementos
+        const elements = {
+            apiKey: document.getElementById('apiKey'),
+            projectId: document.getElementById('projectId'),
+            btnConnect: document.getElementById('btnConnect'),
+            btnAnalyze: document.getElementById('btnAnalyze'),
+            btnFix: document.getElementById('btnFix'),
+            btnClearLog: document.getElementById('btnClearLog'),
+            connectionStatus: document.getElementById('connectionStatus'),
+            logContainer: document.getElementById('logContainer'),
+            chkDryRun: document.getElementById('chkDryRun'),
+            chkDeleteInvalid: document.getElementById('chkDeleteInvalid'),
+            statTotal: document.getElementById('statTotal'),
+            statProblems: document.getElementById('statProblems'),
+            statFixed: document.getElementById('statFixed'),
+            statDeleted: document.getElementById('statDeleted')
+        };
+
+        // Funções de utilidade
+        function log(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            elements.logContainer.appendChild(entry);
+            elements.logContainer.scrollTop = elements.logContainer.scrollHeight;
+        }
+
+        function updateStats() {
+            elements.statTotal.textContent = stats.total;
+            elements.statProblems.textContent = stats.problems;
+            elements.statFixed.textContent = stats.fixed;
+            elements.statDeleted.textContent = stats.deleted;
+        }
+
+        function pad2(n) { return String(n).padStart(2, '0'); }
+        
+        function formatTimeHM(date) {
+            if (!(date instanceof Date) || isNaN(date.getTime())) return '';
+            return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+        }
+
+        function toDate(value) {
+            if (!value) return null;
+            if (value instanceof Date) return new Date(value.getTime());
+            if (typeof value === 'string') {
+                const parsed = new Date(value);
+                return isNaN(parsed.getTime()) ? null : parsed;
+            }
+            if (typeof value.toDate === 'function') return value.toDate();
+            if (typeof value.seconds === 'number') {
+                return new Date(value.seconds * 1000 + Math.floor((value.nanoseconds || 0) / 1e6));
+            }
+            return null;
+        }
+
+        function combineDateAndTime(dateStr, timeStr) {
+            if (!dateStr || !timeStr) return null;
+            const normalized = timeStr.length === 5 ? `${timeStr}:00` : timeStr;
+            const date = new Date(`${dateStr}T${normalized}`);
+            return isNaN(date.getTime()) ? null : date;
+        }
+
+        function analyzeRecord(data) {
+            const issues = [];
+            const duration = Number(data.duration) || 0;
+            const endTime = (data.endTime || '').trim();
+            const startTime = (data.startTime || '').trim();
+            const date = data.date || '';
+
+            // Verificar problemas
+            if (!date) issues.push('sem data');
+            if (!startTime) issues.push('sem startTime');
+            if (!endTime) issues.push('sem endTime');
+            if (duration <= 0) issues.push('duration <= 0');
+            if (duration > 1440) issues.push(`duration excessivo (${duration}min)`);
+            
+            // Verificar se é segmento de parada segmentada sem metadados de pai
+            const hasParentMeta = data.originalStartTimestamp || data.totalSegments;
+            const hasSegmentIndex = data.segmentIndex !== undefined;
+            if (hasSegmentIndex && !hasParentMeta) {
+                issues.push('segmento órfão (sem metadados de pai)');
+            }
+
+            // Tentar resolver
+            const resolution = { canFix: false, updates: {}, shouldDelete: false };
+            
+            const startDateTime = toDate(data.originalStartTimestamp) || combineDateAndTime(date, startTime);
+            let endDateTime = toDate(data.originalEndTimestamp) || combineDateAndTime(date, endTime);
+
+            if (startDateTime && !endDateTime && duration > 0 && duration <= 1440) {
+                // Pode reconstruir endTime a partir de duration
+                endDateTime = new Date(startDateTime.getTime() + duration * 60000);
+                resolution.updates.endTime = formatTimeHM(endDateTime);
+                resolution.canFix = true;
+            }
+
+            if (startDateTime && endDateTime && (duration <= 0 || duration > 1440)) {
+                // Pode recalcular duration
+                const diff = Math.round((endDateTime - startDateTime) / 60000);
+                if (diff > 0 && diff <= 1440) {
+                    resolution.updates.duration = diff;
+                    resolution.canFix = true;
+                } else if (diff > 1440) {
+                    // Limitar a 1440
+                    resolution.updates.duration = 1440;
+                    resolution.canFix = true;
+                } else if (diff <= 0) {
+                    // Duração negativa ou zero - marcar para exclusão
+                    resolution.shouldDelete = true;
+                    issues.push('duração calculada <= 0');
+                }
+            }
+
+            // Se tem totalParentDuration e totalSegments, pode estimar
+            const totalParent = Number(data.totalParentDuration) || 0;
+            const totalSegments = Number(data.totalSegments) || 0;
+            if (!resolution.canFix && totalParent > 0 && totalSegments > 0) {
+                const estimated = Math.min(Math.ceil(totalParent / totalSegments), 1440);
+                if (duration <= 0 || duration > 1440) {
+                    resolution.updates.duration = estimated;
+                    resolution.canFix = true;
+                }
+            }
+            
+            // Se não tem como corrigir e tem problemas graves, marcar para exclusão
+            if (!resolution.canFix && issues.length > 2) {
+                resolution.shouldDelete = true;
+            }
+
+            return { issues, resolution, startDateTime, endDateTime };
+        }
+
+        // Conectar ao Firebase
+        elements.btnConnect.addEventListener('click', async () => {
+            const apiKey = elements.apiKey.value.trim();
+            const projectId = elements.projectId.value.trim();
+
+            if (!apiKey || !projectId) {
+                log('Preencha API Key e Project ID', 'error');
+                return;
+            }
+
+            try {
+                elements.btnConnect.disabled = true;
+                elements.connectionStatus.textContent = 'Conectando...';
+
+                const config = {
+                    apiKey: apiKey,
+                    projectId: projectId,
+                    authDomain: `${projectId}.firebaseapp.com`
+                };
+
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(config);
+                }
+                db = firebase.firestore();
+
+                // Testar conexão
+                const testSnap = await db.collection('downtime_entries').limit(1).get();
+                
+                isConnected = true;
+                elements.connectionStatus.textContent = '✅ Conectado';
+                elements.connectionStatus.className = 'ml-4 text-sm text-green-400';
+                elements.btnAnalyze.disabled = false;
+                elements.btnFix.disabled = false;
+                log(`Conectado ao projeto: ${projectId}`, 'success');
+                log(`Coleção downtime_entries acessível (${testSnap.size} doc(s) no teste)`, 'info');
+
+            } catch (error) {
+                log(`Erro ao conectar: ${error.message}`, 'error');
+                elements.connectionStatus.textContent = '❌ Falha';
+                elements.connectionStatus.className = 'ml-4 text-sm text-red-400';
+            } finally {
+                elements.btnConnect.disabled = false;
+            }
+        });
+
+        // Analisar problemas
+        elements.btnAnalyze.addEventListener('click', async () => {
+            if (!db) return;
+
+            stats.total = 0;
+            stats.problems = 0;
+            stats.fixed = 0;
+            stats.deleted = 0;
+            updateStats();
+
+            log('Iniciando análise...', 'info');
+            elements.btnAnalyze.disabled = true;
+
+            try {
+                const snapshot = await db.collection('downtime_entries').get();
+                log(`Total de documentos: ${snapshot.size}`, 'info');
+
+                const problemDocs = [];
+
+                snapshot.forEach(doc => {
+                    stats.total++;
+                    const data = doc.data();
+                    const analysis = analyzeRecord(data);
+
+                    if (analysis.issues.length > 0) {
+                        stats.problems++;
+                        problemDocs.push({ id: doc.id, data, analysis });
+                    }
+                });
+
+                updateStats();
+                log(`Análise concluída: ${stats.problems} registros com problemas`, stats.problems > 0 ? 'warn' : 'success');
+
+                // Mostrar detalhes dos problemas
+                problemDocs.slice(0, 20).forEach(({ id, data, analysis }) => {
+                    const canFix = analysis.resolution.canFix ? '✅ corrigível' : '❌ irrecuperável';
+                    log(`  ${id}: ${analysis.issues.join(', ')} - ${canFix}`, analysis.resolution.canFix ? 'warn' : 'error');
+                });
+
+                if (problemDocs.length > 20) {
+                    log(`  ... e mais ${problemDocs.length - 20} registros`, 'warn');
+                }
+
+            } catch (error) {
+                log(`Erro na análise: ${error.message}`, 'error');
+            } finally {
+                elements.btnAnalyze.disabled = false;
+            }
+        });
+
+        // Corrigir registros
+        elements.btnFix.addEventListener('click', async () => {
+            if (!db) return;
+
+            const dryRun = elements.chkDryRun.checked;
+            const deleteInvalid = elements.chkDeleteInvalid.checked;
+
+            stats.fixed = 0;
+            stats.deleted = 0;
+            updateStats();
+
+            log(dryRun ? '🔍 MODO SIMULAÇÃO - nenhuma alteração será feita' : '⚠️ MODO REAL - alterando dados!', dryRun ? 'info' : 'warn');
+            elements.btnFix.disabled = true;
+
+            try {
+                const snapshot = await db.collection('downtime_entries').get();
+                let processed = 0;
+
+                for (const doc of snapshot.docs) {
+                    const data = doc.data();
+                    const analysis = analyzeRecord(data);
+
+                    if (analysis.issues.length === 0) continue;
+
+                    processed++;
+
+                    if (analysis.resolution.canFix) {
+                        const updates = {
+                            ...analysis.resolution.updates,
+                            lastAutoFixAt: new Date().toISOString(),
+                            lastAutoFixMeta: {
+                                source: 'admin-fix-downtime.html',
+                                issues: analysis.issues,
+                                dryRun: dryRun
+                            }
+                        };
+
+                        if (!dryRun) {
+                            await doc.ref.update(updates);
+                        }
+                        stats.fixed++;
+                        log(`${dryRun ? '[SIM]' : '[FIX]'} ${doc.id}: ${JSON.stringify(updates)}`, 'success');
+
+                    } else if (deleteInvalid) {
+                        if (!dryRun) {
+                            await doc.ref.delete();
+                        }
+                        stats.deleted++;
+                        log(`${dryRun ? '[SIM]' : '[DEL]'} ${doc.id}: excluído (irrecuperável)`, 'error');
+
+                    } else {
+                        log(`[SKIP] ${doc.id}: irrecuperável, não excluído`, 'warn');
+                    }
+
+                    updateStats();
+
+                    // Pequena pausa para não sobrecarregar
+                    if (processed % 50 === 0) {
+                        await new Promise(r => setTimeout(r, 100));
+                    }
+                }
+
+                log(`Processamento concluído: ${stats.fixed} corrigidos, ${stats.deleted} excluídos`, 'success');
+
+            } catch (error) {
+                log(`Erro ao corrigir: ${error.message}`, 'error');
+            } finally {
+                elements.btnFix.disabled = false;
+            }
+        });
+
+        // Limpar log
+        elements.btnClearLog.addEventListener('click', () => {
+            elements.logContainer.innerHTML = '';
+        });
+
+        // Carregar config salva
+        const savedConfig = localStorage.getItem('firebaseAdminConfig');
+        if (savedConfig) {
+            try {
+                const config = JSON.parse(savedConfig);
+                elements.apiKey.value = config.apiKey || '';
+                elements.projectId.value = config.projectId || '';
+            } catch (e) {}
+        }
+
+        // Salvar config ao digitar
+        ['apiKey', 'projectId'].forEach(id => {
+            document.getElementById(id).addEventListener('input', () => {
+                localStorage.setItem('firebaseAdminConfig', JSON.stringify({
+                    apiKey: elements.apiKey.value,
+                    projectId: elements.projectId.value
+                }));
+            });
+        });
+
+        log('Ferramenta carregada. Configure o Firebase e clique em Conectar.', 'info');
+    </script>
+</body>
+</html>

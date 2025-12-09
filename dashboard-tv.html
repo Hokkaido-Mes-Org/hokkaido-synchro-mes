@@ -823,187 +823,6 @@
             text-align: right;
         }
 
-        /* ==================== MACHINE STATUS BAR ==================== */
-        .machine-status-strip {
-            grid-column: 1 / -1;
-            background: var(--industrial-panel);
-            border: 1px solid var(--industrial-border);
-            border-radius: 6px;
-            padding: 10px 16px;
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            overflow: hidden;
-        }
-
-        .machine-status-strip .strip-label {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-shrink: 0;
-            padding-right: 16px;
-            border-right: 1px solid var(--industrial-border);
-        }
-
-        .machine-status-strip .strip-label i {
-            width: 16px;
-            height: 16px;
-            color: var(--accent-primary);
-        }
-
-        .machine-status-strip .strip-label span {
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-            color: var(--text-secondary);
-        }
-
-        .machine-status-strip .status-cells {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            flex: 1;
-        }
-
-        .machine-status-strip .machine-cell {
-            width: 36px;
-            height: 36px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 11px;
-            font-weight: 700;
-            border-radius: 6px;
-            border: 2px solid transparent;
-            cursor: default;
-            transition: all 0.2s ease;
-        }
-
-        .machine-status-strip .machine-cell.running {
-            background: linear-gradient(135deg, #10b981, #059669);
-            color: white;
-            border-color: #047857;
-            box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
-        }
-
-        .machine-status-strip .machine-cell.stopped {
-            background: linear-gradient(135deg, #ef4444, #dc2626);
-            color: white;
-            border-color: #b91c1c;
-            box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
-            animation: pulse-stopped 2s infinite;
-        }
-
-        .machine-status-strip .machine-cell.ferramentaria {
-            background: linear-gradient(135deg, #f97316, #ea580c);
-            color: white;
-            border-color: #c2410c;
-            box-shadow: 0 0 8px rgba(249, 115, 22, 0.4);
-            animation: pulse-stopped 2s infinite;
-        }
-
-        .machine-status-strip .machine-cell.manutencao {
-            background: linear-gradient(135deg, #eab308, #ca8a04);
-            color: white;
-            border-color: #a16207;
-            box-shadow: 0 0 8px rgba(234, 179, 8, 0.4);
-            animation: pulse-stopped 2s infinite;
-        }
-
-        .machine-status-strip .machine-cell.processo {
-            background: linear-gradient(135deg, #3b82f6, #2563eb);
-            color: white;
-            border-color: #1d4ed8;
-            box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
-            animation: pulse-stopped 2s infinite;
-        }
-
-        .machine-status-strip .machine-cell.pcp {
-            background: linear-gradient(135deg, #92400e, #78350f);
-            color: white;
-            border-color: #451a03;
-            box-shadow: 0 0 8px rgba(146, 64, 14, 0.4);
-            animation: pulse-stopped 2s infinite;
-        }
-
-        .machine-status-strip .machine-cell.idle {
-            background: var(--industrial-dark);
-            color: var(--text-tertiary);
-            border-color: var(--industrial-border);
-        }
-
-        .machine-status-strip .machine-cell.setup {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-            color: white;
-            border-color: #b45309;
-            box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
-        }
-
-        @keyframes pulse-stopped {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
-
-        .machine-status-strip .legend {
-            display: flex;
-            gap: 12px;
-            flex-shrink: 0;
-            padding-left: 16px;
-            border-left: 1px solid var(--industrial-border);
-        }
-
-        .machine-status-strip .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 10px;
-            color: var(--text-tertiary);
-        }
-
-        .machine-status-strip .legend-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 3px;
-        }
-
-        .machine-status-strip .legend-dot.running { background: #10b981; }
-        .machine-status-strip .legend-dot.stopped { background: #ef4444; }
-        .machine-status-strip .legend-dot.ferramentaria { background: #f97316; }
-        .machine-status-strip .legend-dot.manutencao { background: #eab308; }
-        .machine-status-strip .legend-dot.processo { background: #3b82f6; }
-        .machine-status-strip .legend-dot.pcp { background: #92400e; }
-        .machine-status-strip .legend-dot.idle { background: #475569; }
-        .machine-status-strip .legend-dot.setup { background: #f59e0b; }
-
-        .machine-status-strip .stats-summary {
-            display: flex;
-            gap: 16px;
-            flex-shrink: 0;
-            padding-left: 16px;
-            border-left: 1px solid var(--industrial-border);
-        }
-
-        .machine-status-strip .stat-item {
-            text-align: center;
-        }
-
-        .machine-status-strip .stat-value {
-            font-size: 18px;
-            font-weight: 700;
-        }
-
-        .machine-status-strip .stat-value.running { color: #10b981; }
-        .machine-status-strip .stat-value.stopped { color: #ef4444; }
-        .machine-status-strip .stat-value.idle { color: #64748b; }
-
-        .machine-status-strip .stat-label {
-            font-size: 9px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: var(--text-tertiary);
-        }
-
         /* ==================== FOOTER TICKER ==================== */
         .industrial-footer {
             grid-column: 1 / -1;
@@ -1964,62 +1783,6 @@
 
     <!-- ==================== MAIN DASHBOARD ==================== -->
     <main class="dashboard-container">
-        
-        <!-- MACHINE STATUS STRIP - BARRA DE STATUS DAS MÁQUINAS -->
-        <div class="machine-status-strip">
-            <div class="strip-label">
-                <i data-lucide="factory"></i>
-                <span>Status Máquinas</span>
-            </div>
-            <div class="status-cells" id="tvMachineStatusCells">
-                <!-- Células das máquinas serão populadas via JS -->
-            </div>
-            <div class="stats-summary">
-                <div class="stat-item">
-                    <div class="stat-value running" id="tvMachinesRunning">0</div>
-                    <div class="stat-label">Produzindo</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value stopped" id="tvMachinesStopped">0</div>
-                    <div class="stat-label">Paradas</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value idle" id="tvMachinesIdle">0</div>
-                    <div class="stat-label">Sem OP</div>
-                </div>
-            </div>
-            <div class="legend">
-                <div class="legend-item">
-                    <div class="legend-dot running"></div>
-                    <span>Produzindo</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-dot stopped"></div>
-                    <span>Parada</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-dot ferramentaria"></div>
-                    <span>Ferrament.</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-dot manutencao"></div>
-                    <span>Manutenção</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-dot processo"></div>
-                    <span>Processo</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-dot pcp"></div>
-                    <span>PCP</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-dot idle"></div>
-                    <span>Sem OP</span>
-                </div>
-            </div>
-        </div>
-
         <!-- KPI STRIP - DADOS REAIS DO DIA -->
         <div class="kpi-strip">
             <!-- 1. PEÇAS PRODUZIDAS HOJE -->
@@ -2900,7 +2663,6 @@
                 // Atualizar interface
                 console.log('[Dashboard TV] Atualizando interface...');
                 updateMachinesGrid();
-                updateTVMachineStatusBar();
                 updateKPIs();
                 updateShiftKPIs();
                 updateParetoChart();
@@ -3103,133 +2865,6 @@
             
             if (headerStatus) headerStatus.textContent = `${machineCount} Máquinas Conectadas`;
             if (machinesTag) machinesTag.textContent = `${machineCount} Máquinas`;
-        }
-
-        // ==================== TV MACHINE STATUS BAR ====================
-        function updateTVMachineStatusBar() {
-            const container = document.getElementById('tvMachineStatusCells');
-            if (!container) {
-                console.log('[Dashboard TV] Status bar container não encontrado');
-                return;
-            }
-            
-            // Definição das máquinas (similar ao script.js)
-            const machineDatabase = {
-                1: { name: 'INJ001', type: 'Injetora' },
-                2: { name: 'INJ002', type: 'Injetora' },
-                3: { name: 'INJ003', type: 'Injetora' },
-                4: { name: 'INJ004', type: 'Injetora' },
-                5: { name: 'INJ005', type: 'Injetora' },
-                6: { name: 'INJ006', type: 'Injetora' },
-                7: { name: 'INJ007', type: 'Injetora' },
-                8: { name: 'INJ008', type: 'Injetora' },
-                9: { name: 'INJ009', type: 'Injetora' },
-                10: { name: 'INJ010', type: 'Injetora' },
-                11: { name: 'INJ011', type: 'Injetora' },
-                12: { name: 'INJ012', type: 'Injetora' },
-                13: { name: 'INJ013', type: 'Injetora' },
-                14: { name: 'INJ014', type: 'Injetora' },
-                15: { name: 'INJ015', type: 'Injetora' },
-                16: { name: 'INJ016', type: 'Injetora' },
-                17: { name: 'INJ017', type: 'Injetora' },
-                18: { name: 'INJ018', type: 'Injetora' },
-                19: { name: 'INJ019', type: 'Injetora' },
-                20: { name: 'INJ020', type: 'Injetora' }
-            };
-            
-            // Coletar máquinas com plano ativo
-            const machinesWithPlan = new Set();
-            cachedPlanning.forEach(plan => {
-                const machineId = plan.machine || plan.machineId || plan.maquina;
-                if (machineId) {
-                    // Extrair número da máquina
-                    const numMatch = String(machineId).match(/\d+/);
-                    if (numMatch) {
-                        machinesWithPlan.add(parseInt(numMatch[0]));
-                    }
-                }
-            });
-            
-            // Coletar máquinas com parada ativa E o motivo
-            const machinesWithDowntime = new Map(); // machineNum -> reason
-            cachedDowntimes.forEach(dt => {
-                // Verificar se a parada está ativa (sem fim ou endTime no futuro)
-                const isActive = !dt.endTime && !dt.end && !dt.fim && dt.status !== 'closed' && dt.status !== 'fechada';
-                if (isActive) {
-                    const machineId = dt.machine || dt.machineId || dt.maquina;
-                    if (machineId) {
-                        const numMatch = String(machineId).match(/\d+/);
-                        if (numMatch) {
-                            const reason = (dt.reason || dt.tipo || dt.motivo || '').toLowerCase();
-                            machinesWithDowntime.set(parseInt(numMatch[0]), reason);
-                        }
-                    }
-                }
-            });
-            
-            // Contadores
-            let runningCount = 0;
-            let stoppedCount = 0;
-            let idleCount = 0;
-            
-            // Gerar células para cada máquina
-            const cells = [];
-            const machineIds = Object.keys(machineDatabase).map(Number).sort((a, b) => a - b);
-            
-            machineIds.forEach(machineNum => {
-                const hasPlan = machinesWithPlan.has(machineNum);
-                const downtimeReason = machinesWithDowntime.get(machineNum);
-                const hasDowntime = downtimeReason !== undefined;
-                
-                let statusClass = 'idle';
-                let statusTitle = 'Sem OP ativa';
-                
-                if (hasDowntime) {
-                    // Determinar cor baseada no motivo
-                    if (downtimeReason.includes('ferrament')) {
-                        statusClass = 'ferramentaria';
-                        statusTitle = 'Ferramentaria';
-                    } else if (downtimeReason.includes('manuten') || downtimeReason.includes('manutenção')) {
-                        statusClass = 'manutencao';
-                        statusTitle = 'Manutenção';
-                    } else if (downtimeReason.includes('processo')) {
-                        statusClass = 'processo';
-                        statusTitle = 'Processo';
-                    } else if (downtimeReason.includes('pcp')) {
-                        statusClass = 'pcp';
-                        statusTitle = 'PCP';
-                    } else {
-                        statusClass = 'stopped';
-                        statusTitle = 'Máquina parada';
-                    }
-                    stoppedCount++;
-                } else if (hasPlan) {
-                    statusClass = 'running';
-                    statusTitle = 'Produzindo';
-                    runningCount++;
-                } else {
-                    idleCount++;
-                }
-                
-                cells.push(`
-                    <div class="machine-cell ${statusClass}" title="${statusTitle} - Máquina ${machineNum}">
-                        ${machineNum}
-                    </div>
-                `);
-            });
-            
-            container.innerHTML = cells.join('');
-            
-            // Atualizar contadores no resumo
-            const runningEl = document.getElementById('tvMachinesRunning');
-            const stoppedEl = document.getElementById('tvMachinesStopped');
-            const idleEl = document.getElementById('tvMachinesIdle');
-            
-            if (runningEl) runningEl.textContent = runningCount;
-            if (stoppedEl) stoppedEl.textContent = stoppedCount;
-            if (idleEl) idleEl.textContent = idleCount;
-            
-            console.log(`[Dashboard TV] Status Bar: ${runningCount} produzindo, ${stoppedCount} paradas, ${idleCount} sem OP`);
         }
 
         // ==================== KPIs UPDATE - DADOS REAIS ====================
@@ -4144,17 +3779,13 @@
             const sorted = Object.entries(lossData).sort((a, b) => b[1].time - a[1].time);
             const total = sorted.reduce((sum, s) => sum + s[1].time, 0);
             
-            const losses = sorted.slice(0, 5).map((s, i) => {
-                const minutes = s[1].time;
-                const hours = (minutes / 60).toFixed(1);
-                return {
-                    rank: i + 1,
-                    reason: s[0],
-                    machine: s[1].machine,
-                    time: hours,
-                    percent: total > 0 ? Math.round((minutes / total) * 100) : 0
-                };
-            });
+            const losses = sorted.slice(0, 5).map((s, i) => ({
+                rank: i + 1,
+                reason: s[0],
+                machine: s[1].machine,
+                time: s[1].time,
+                percent: total > 0 ? Math.round((s[1].time / total) * 100) : 0
+            }));
             
             table.innerHTML = losses.map(l => `
                 <div class="loss-row">
@@ -4163,7 +3794,7 @@
                         <span class="loss-reason">${l.reason}</span>
                         <span class="loss-machine">${l.machine}</span>
                     </div>
-                    <span class="loss-time">${l.time}h</span>
+                    <span class="loss-time">${l.time}min</span>
                     <span class="loss-percent">${l.percent}%</span>
                 </div>
             `).join('');
