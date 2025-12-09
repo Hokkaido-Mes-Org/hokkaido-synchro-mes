@@ -55,7 +55,6 @@ const productDatabase = [
     { "cod": 126, "client": "SILGAN", "name": "ATUADOR MD STD OURO CB112 PE 01PD06003 - 1.01.01.005.034", "cavities": 30, "cycle": 30.4, "weight": 1.92, "pieces_per_hour_goal": 3553, "mp": "" },
     { "cod": 128, "client": "SILGAN", "name": "ATUADOR MD STD ROXO CB139 PE 01PD06003 - 1.01.01.005.206", "cavities": 30, "cycle": 30.4, "weight": 1.92, "pieces_per_hour_goal": 3553, "mp": "" },
     { "cod": 129, "client": "SILGAN", "name": "ATUADOR MD STD VERDE CB06 PE 01PD06003 - 1.01.01.005.144", "cavities": 30, "cycle": 30.4, "weight": 1.92, "pieces_per_hour_goal": 3553, "mp": "" },
-    { "cod": 129, "client": "SILGAN", "name": "ATUADOR MD150 STD BEGE CB286 01PD06003", "cavities": 30, "cycle": 30.4, "weight": 1.92, "pieces_per_hour_goal": 3553, "mp": "" },
     { "cod": 135, "client": "SILGAN", "name": "ROSCA MKIV MD 18 415 LISA OURO CB49 PP  02PD06007 - 5181021", "cavities": 44, "cycle": 40, "weight": 2.35, "pieces_per_hour_goal": 3960, "mp": "" },
     { "cod": 139, "client": "SILGAN", "name": "ROSCA MKIV MD 20 410 ESTRIADA AMAR CB63 PP 05PD06007 - 1.01.01.005.123", "cavities": 44, "cycle": 40, "weight": 2.35, "pieces_per_hour_goal": 3960, "mp": "" },
     { "cod": 140, "client": "SILGAN", "name": "ROSCA MKIV MD 20 410 ESTRIADA BRANCO 767 PP 05PD06007 -1.01.01.005.267", "cavities": 44, "cycle": 40, "weight": 2.35, "pieces_per_hour_goal": 3960, "mp": "" },
@@ -419,7 +418,6 @@ const productDatabase = [
     { "cod": 4156, "client": "PARKER", "name": "TAMPA PLASTICA COM FURO", "cavities": 4, "cycle": 21, "weight": 0.45, "pieces_per_hour_goal": 686, "mp": "" },
     { "cod": 4157, "client": "PARKER", "name": "TAMPA PLASTICA 4 CAVIDADES", "cavities": 4, "cycle": 50, "weight": 0.75, "pieces_per_hour_goal": 288, "mp": "" },
     { "cod": 4158, "client": "PARKER", "name": "TAMPA PLASTICA 5831", "cavities": 4, "cycle": 35, "weight": 0.55, "pieces_per_hour_goal": 411, "mp": "" },
-    { "cod": 4808, "client": "", "name": "SUPORTE DO COPO 4 CAVIDADES - 283600249", "cavities": 4, "cycle": 50, "weight": 55, "pieces_per_hour_goal": 288, "mp": "" },
     { "cod": 4935, "client": "PARKER", "name": "TAMPA SUPERIOR PRETA", "cavities": 4, "cycle": 34.38, "weight": 0.85, "pieces_per_hour_goal": 419, "mp": "" },
     { "cod": 4936, "client": "PARKER", "name": "TAMPA INFERIOR PRETA", "cavities": 4, "cycle": 34.38, "weight": 0.85, "pieces_per_hour_goal": 419, "mp": "" },
     { "cod": 4996, "client": "PARKER", "name": "TAMPA PLASTICA 5923 - PRO85071129", "cavities": 4, "cycle": 40, "weight": 0.65, "pieces_per_hour_goal": 360, "mp": "" },
@@ -575,7 +573,7 @@ const productDatabase = [
     { "cod": 4003, "client": "DIVERSOS", "name": "PAINEL SWITCHES LIGHT - S1700150", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 4082, "client": "DIVERSOS", "name": "TAMPA PAINEL ATEGO - S1700127", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 4270, "client": "DIVERSOS", "name": "FIXACÃO-GS-28/410CUST---THREAD-HDPE-WINE - 31226472", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
-    { "cod": 4666, "client": "DIVERSOS", "name": "ATUADOR MD150 STD BEGE CB286 01PD06003 - 1.01.03.005.862", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
+    { "cod": 4666, "client": "SILGAN", "name": "ATUADOR MD150 STD BEGE CB286 01PD06003 - 1.01.03.005.862", "cavities": 30, "cycle": 30.4, "weight": 1.92, "pieces_per_hour_goal": 3556, "mp": "" },
     { "cod": 4899, "client": "DIVERSOS", "name": "CAIXA DE CONTROLE DO GERADOR DE CLORO RESIDENCIAL G5 - 40070236", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 4900, "client": "DIVERSOS", "name": "TAMPA CAIXA DE CONTROLE DO GERADOR DE CLORO RESIDENCIAL G5 - 40070237", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 4901, "client": "DIVERSOS", "name": "SUPORTE PARA PAREDE DO GERADOR DE CLORO EASYCLOR HOME G5 - 40070243", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
@@ -644,6 +642,7 @@ const productDatabase = [
     { "cod": 5802, "client": "SUNVISOR", "name": "BASE TRIANGULAR - KG 3 REC", "cavities": 1, "cycle": 60, "weight": 1.25, "pieces_per_hour_goal": 60, "mp": "" },
     { "cod": 5803, "client": "SUNVISOR", "name": "FIXADOR FUNDO FECHADO 6M SEM FURO - KG 4A REC", "cavities": 1, "cycle": 60, "weight": 1.25, "pieces_per_hour_goal": 60, "mp": "" },
     { "cod": 5805, "client": "SUNVISOR", "name": "CORREDICA FUNDO VAZADO 6M SEM FURO - KG 4B REC", "cavities": 1, "cycle": 60, "weight": 1.25, "pieces_per_hour_goal": 60, "mp": "" },
+    { "cod": 6289, "client": "APTAR", "name": "ATUADOR-POEMA-PP--5,85-PINK---LOT----GS -31328163", "cavities": 22, "cycle": 25.5, "weight": 2.15, "pieces_per_hour_goal": 3106, "mp": "" },
 ];
 
 
@@ -713,7 +712,7 @@ const groupedLossReasons = {
     "PROCESSO": [
         "BOLHA", "CHUPAGEM", "CONTAMINAÇÃO", "DEGRADAÇÃO", "EMPENAMENTO", "FALHA",
         "FIAPO", "FORA DE COR", "INÍCIO/REÍNICIO", "JUNÇÃO", "MANCHAS",
-        "MEDIDA FORA DO ESPECIFICADO", "MOÍDO", "PEÇAS PERDIDAS", "QUEIMA", "REBARBA"
+        "MEDIDA FORA DO ESPECIFICADO", "MOÍDO", "PEÇAS PERDIDAS", "QUEIMA", "REBARBA", "TROCA DE COR"
     ],
     "FERRAMENTARIA": [
         "DEFORMAÇÃO", "GALHO PRESO", "MARCA D'ÁGUA", "MARCA EXTRATOR", "RISCOS", "SUJIDADE"
