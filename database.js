@@ -55,6 +55,7 @@ const productDatabase = [
     { "cod": 126, "client": "SILGAN", "name": "ATUADOR MD STD OURO CB112 PE 01PD06003 - 1.01.01.005.034", "cavities": 30, "cycle": 30.4, "weight": 1.92, "pieces_per_hour_goal": 3553, "mp": "" },
     { "cod": 128, "client": "SILGAN", "name": "ATUADOR MD STD ROXO CB139 PE 01PD06003 - 1.01.01.005.206", "cavities": 30, "cycle": 30.4, "weight": 1.92, "pieces_per_hour_goal": 3553, "mp": "" },
     { "cod": 129, "client": "SILGAN", "name": "ATUADOR MD STD VERDE CB06 PE 01PD06003 - 1.01.01.005.144", "cavities": 30, "cycle": 30.4, "weight": 1.92, "pieces_per_hour_goal": 3553, "mp": "" },
+    { "cod": 129, "client": "SILGAN", "name": "ATUADOR MD150 STD BEGE CB286 01PD06003", "cavities": 30, "cycle": 30.4, "weight": 1.92, "pieces_per_hour_goal": 3553, "mp": "" },
     { "cod": 135, "client": "SILGAN", "name": "ROSCA MKIV MD 18 415 LISA OURO CB49 PP  02PD06007 - 5181021", "cavities": 44, "cycle": 40, "weight": 2.35, "pieces_per_hour_goal": 3960, "mp": "" },
     { "cod": 139, "client": "SILGAN", "name": "ROSCA MKIV MD 20 410 ESTRIADA AMAR CB63 PP 05PD06007 - 1.01.01.005.123", "cavities": 44, "cycle": 40, "weight": 2.35, "pieces_per_hour_goal": 3960, "mp": "" },
     { "cod": 140, "client": "SILGAN", "name": "ROSCA MKIV MD 20 410 ESTRIADA BRANCO 767 PP 05PD06007 -1.01.01.005.267", "cavities": 44, "cycle": 40, "weight": 2.35, "pieces_per_hour_goal": 3960, "mp": "" },
