@@ -643,6 +643,7 @@ const productDatabase = [
     { "cod": 5803, "client": "SUNVISOR", "name": "FIXADOR FUNDO FECHADO 6M SEM FURO - KG 4A REC", "cavities": 1, "cycle": 60, "weight": 1.25, "pieces_per_hour_goal": 60, "mp": "" },
     { "cod": 5805, "client": "SUNVISOR", "name": "CORREDICA FUNDO VAZADO 6M SEM FURO - KG 4B REC", "cavities": 1, "cycle": 60, "weight": 1.25, "pieces_per_hour_goal": 60, "mp": "" },
     { "cod": 6289, "client": "APTAR", "name": "ATUADOR-POEMA-PP--5,85-PINK---LOT----GS -31328163", "cavities": 22, "cycle": 25.5, "weight": 2.15, "pieces_per_hour_goal": 3106, "mp": "" },
+    { "cod": 4808, "client": "PARKER", "name": "SUPORTE DO COPO 4 CAVIDADES - 283600249", "cavities": 4, "cycle": 50, "weight": 54.85, "pieces_per_hour_goal": 432, "mp": "" },
 ];
 
 
