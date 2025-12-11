@@ -573,7 +573,7 @@ const productDatabase = [
     { "cod": 4003, "client": "DIVERSOS", "name": "PAINEL SWITCHES LIGHT - S1700150", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 4082, "client": "DIVERSOS", "name": "TAMPA PAINEL ATEGO - S1700127", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 4270, "client": "DIVERSOS", "name": "FIXACÃO-GS-28/410CUST---THREAD-HDPE-WINE - 31226472", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
-    { "cod": 4666, "client": "SILGAN", "name": "ATUADOR MD150 STD BEGE CB286 01PD06003 - 1.01.03.005.862", "cavities": 30, "cycle": 30.4, "weight": 1.92, "pieces_per_hour_goal": 3556, "mp": "" },
+    { "cod": 4666, "client": "DIVERSOS", "name": "ATUADOR MD150 STD BEGE CB286 01PD06003 - 1.01.03.005.862", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 4899, "client": "DIVERSOS", "name": "CAIXA DE CONTROLE DO GERADOR DE CLORO RESIDENCIAL G5 - 40070236", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 4900, "client": "DIVERSOS", "name": "TAMPA CAIXA DE CONTROLE DO GERADOR DE CLORO RESIDENCIAL G5 - 40070237", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 4901, "client": "DIVERSOS", "name": "SUPORTE PARA PAREDE DO GERADOR DE CLORO EASYCLOR HOME G5 - 40070243", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
@@ -642,8 +642,6 @@ const productDatabase = [
     { "cod": 5802, "client": "SUNVISOR", "name": "BASE TRIANGULAR - KG 3 REC", "cavities": 1, "cycle": 60, "weight": 1.25, "pieces_per_hour_goal": 60, "mp": "" },
     { "cod": 5803, "client": "SUNVISOR", "name": "FIXADOR FUNDO FECHADO 6M SEM FURO - KG 4A REC", "cavities": 1, "cycle": 60, "weight": 1.25, "pieces_per_hour_goal": 60, "mp": "" },
     { "cod": 5805, "client": "SUNVISOR", "name": "CORREDICA FUNDO VAZADO 6M SEM FURO - KG 4B REC", "cavities": 1, "cycle": 60, "weight": 1.25, "pieces_per_hour_goal": 60, "mp": "" },
-    { "cod": 6289, "client": "APTAR", "name": "ATUADOR-POEMA-PP--5,85-PINK---LOT----GS -31328163", "cavities": 22, "cycle": 25.5, "weight": 2.15, "pieces_per_hour_goal": 3106, "mp": "" },
-    { "cod": 4808, "client": "PARKER", "name": "SUPORTE DO COPO 4 CAVIDADES - 283600249", "cavities": 4, "cycle": 50, "weight": 54.85, "pieces_per_hour_goal": 432, "mp": "" },
 ];
 
 
