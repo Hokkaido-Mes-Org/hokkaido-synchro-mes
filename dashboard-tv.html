@@ -300,8 +300,8 @@
         /* ==================== MAIN DASHBOARD GRID ==================== */
         .dashboard-container {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr 320px;
-            grid-template-rows: auto 1fr 1fr auto;
+            grid-template-columns: 1fr 1fr 380px;
+            grid-template-rows: auto 1fr auto auto;
             gap: 12px;
             padding: 12px 24px;
             height: calc(100vh - 64px);
@@ -315,7 +315,7 @@
         .kpi-strip {
             grid-column: 1 / -1;
             display: grid;
-            grid-template-columns: repeat(6, 1fr);
+            grid-template-columns: repeat(2, 1fr);
             gap: 12px;
         }
 
@@ -495,7 +495,7 @@
 
         /* ==================== MACHINE GRID - PREDIX STYLE ==================== */
         .machines-panel {
-            grid-row: span 2;
+            /* Agora não precisa span 2 rows */
         }
 
         .machines-grid {
@@ -660,21 +660,26 @@
             border: 1px solid rgba(124, 77, 255, 0.3);
         }
 
-        /* ==================== OEE GAUGE - MINDSPHERE STYLE ==================== */
+        /* ==================== OEE GAUGE - MINDSPHERE STYLE - DESTACADO ==================== */
+        .oee-panel-highlight {
+            border: 2px solid var(--accent-primary) !important;
+            box-shadow: 0 0 30px rgba(0, 180, 216, 0.3), inset 0 0 20px rgba(0, 180, 216, 0.05) !important;
+        }
+
         .oee-gauge-container {
             display: flex;
             flex-direction: row;
             align-items: center;
             justify-content: space-around;
             height: 100%;
-            padding: 8px 12px;
-            gap: 12px;
+            padding: 16px 20px;
+            gap: 20px;
         }
 
         .gauge-wrapper {
             position: relative;
-            width: 140px;
-            height: 140px;
+            width: 180px;
+            height: 180px;
             flex-shrink: 0;
         }
 
@@ -711,11 +716,12 @@
         }
 
         .gauge-value {
-            font-size: 28px;
-            font-weight: 400;
+            font-size: 36px;
+            font-weight: 700;
             font-family: 'Roboto Mono', monospace;
             color: var(--accent-primary);
             line-height: 1;
+            text-shadow: 0 0 20px rgba(0, 180, 216, 0.5);
         }
 
         .gauge-label {
@@ -737,12 +743,12 @@
         .oee-factor {
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 8px 12px;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 4px;
-            border-left: 3px solid var(--industrial-border);
-            min-width: 130px;
+            gap: 12px;
+            padding: 12px 16px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 6px;
+            border-left: 4px solid var(--industrial-border);
+            min-width: 160px;
         }
 
         .oee-factor.availability { border-left-color: var(--oee-availability); }
@@ -750,10 +756,10 @@
         .oee-factor.quality { border-left-color: var(--oee-quality); }
 
         .oee-factor-value {
-            font-size: 18px;
-            font-weight: 600;
+            font-size: 22px;
+            font-weight: 700;
             font-family: 'Roboto Mono', monospace;
-            min-width: 55px;
+            min-width: 65px;
         }
 
         .oee-factor.availability .oee-factor-value { color: var(--oee-availability); }
@@ -767,36 +773,40 @@
             letter-spacing: 0.5px;
         }
 
-        /* ==================== LOSSES TABLE ==================== */
-        .losses-table {
+        /* ==================== STOPPED MACHINES LIST ==================== */
+        .stopped-machines-list {
             width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
 
-        .loss-row {
+        .stopped-machine-row {
             display: grid;
-            grid-template-columns: 24px 1fr 60px 50px;
+            grid-template-columns: 80px 1fr auto;
             align-items: center;
             gap: 12px;
-            padding: 10px 12px;
-            background: var(--industrial-panel);
-            border-radius: 4px;
-            margin-bottom: 6px;
-            border-left: 3px solid var(--status-critical);
+            padding: 12px 14px;
+            background: rgba(255, 23, 68, 0.08);
+            border-radius: 6px;
+            border-left: 4px solid var(--status-critical);
+            animation: stopped-pulse 2s infinite;
         }
 
-        .loss-rank {
-            font-size: 12px;
+        @keyframes stopped-pulse {
+            0%, 100% { background: rgba(255, 23, 68, 0.08); }
+            50% { background: rgba(255, 23, 68, 0.15); }
+        }
+
+        .stopped-machine-id {
+            font-size: 16px;
             font-weight: 700;
             font-family: 'Roboto Mono', monospace;
-            color: var(--text-tertiary);
+            color: var(--status-critical);
         }
 
-        .loss-info {
-            overflow: hidden;
-        }
-
-        .loss-reason {
-            font-size: 12px;
+        .stopped-machine-reason {
+            font-size: 13px;
             font-weight: 500;
             color: var(--text-primary);
             white-space: nowrap;
@@ -804,41 +814,52 @@
             text-overflow: ellipsis;
         }
 
-        .loss-machine {
-            font-size: 10px;
-            color: var(--text-tertiary);
-        }
-
-        .loss-time {
-            font-size: 14px;
-            font-weight: 700;
+        .stopped-machine-time {
+            font-size: 12px;
+            font-weight: 600;
             font-family: 'Roboto Mono', monospace;
-            color: var(--status-critical);
+            color: var(--status-warning);
             text-align: right;
+            white-space: nowrap;
         }
 
-        .loss-percent {
-            font-size: 11px;
-            color: var(--text-tertiary);
-            text-align: right;
+        .no-stopped-machines {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 30px;
+            color: var(--status-running);
+            text-align: center;
         }
 
-        /* ==================== FOOTER TICKER ==================== */
+        .no-stopped-machines i {
+            width: 40px;
+            height: 40px;
+            margin-bottom: 10px;
+        }
+
+        .no-stopped-machines p {
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        /* ==================== FOOTER - STATUS MÁQUINAS GRID ==================== */
         .industrial-footer {
             grid-column: 1 / -1;
             background: var(--industrial-panel);
             border: 1px solid var(--industrial-border);
             border-radius: 4px;
             display: flex;
-            align-items: center;
-            height: 60px;
-            overflow: hidden;
+            flex-direction: column;
+            min-height: 130px;
+            max-height: 180px;
+            overflow-y: auto;
         }
 
         .footer-label {
             background: var(--gradient-accent);
-            padding: 0 16px;
-            height: 100%;
+            padding: 8px 16px;
             display: flex;
             align-items: center;
             gap: 8px;
@@ -857,30 +878,99 @@
             text-transform: uppercase;
         }
 
-        .footer-ticker {
+        .machine-status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+            gap: 8px;
+            padding: 12px 16px;
             flex: 1;
-            overflow: hidden;
-            padding: 0 20px;
+            overflow-y: auto;
         }
 
-        .ticker-track {
+        .machine-status-card {
             display: flex;
-            animation: ticker-scroll 40s linear infinite;
-        }
-
-        .ticker-item {
-            white-space: nowrap;
-            padding: 0 40px;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-width: 70px;
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-family: 'Roboto Mono', monospace;
+            font-weight: 700;
             font-size: 16px;
-            color: var(--text-secondary);
-            font-weight: 600;
+            text-transform: uppercase;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
         }
 
-        .ticker-item strong {
-            color: var(--accent-primary);
-            font-weight: 600;
+        .machine-status-card:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
 
+        .machine-status-card .machine-number {
+            font-size: 18px;
+            font-weight: 900;
+        }
+
+        .machine-status-card .machine-label {
+            font-size: 8px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            margin-top: 2px;
+            opacity: 0.9;
+        }
+
+        /* Status colors */
+        .machine-status-card.produzindo {
+            background: rgba(0, 230, 118, 0.2);
+            border-color: var(--status-running);
+            color: var(--status-running);
+        }
+
+        .machine-status-card.manutencao {
+            background: rgba(255, 171, 0, 0.2);
+            border-color: var(--status-warning);
+            color: var(--status-warning);
+        }
+
+        .machine-status-card.ferramentaria {
+            background: rgba(255, 171, 0, 0.2);
+            border-color: var(--status-warning);
+            color: var(--status-warning);
+        }
+
+        .machine-status-card.comercial-pcp {
+            background: rgba(30, 30, 30, 0.8);
+            border-color: #333;
+            color: #999;
+        }
+
+        .machine-status-card.setup {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: #3B82F6;
+            color: #3B82F6;
+        }
+
+        .machine-status-card.parada {
+            background: rgba(255, 23, 68, 0.2);
+            border-color: var(--status-critical);
+            color: var(--status-critical);
+            animation: card-pulse 2s infinite;
+        }
+
+        .machine-status-card.outros {
+            background: rgba(120, 144, 156, 0.2);
+            border-color: var(--status-idle);
+            color: var(--status-idle);
+        }
+
+        @keyframes card-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* Ticker legacy styles (kept for compatibility) */
         .ticker-item .highlight-good {
             color: var(--status-running);
         }
@@ -1030,16 +1120,27 @@
         /* Tablets Landscape e Desktops pequenos */
         @media (max-width: 1600px) {
             .kpi-strip {
-                grid-template-columns: repeat(3, 1fr);
+                grid-template-columns: repeat(2, 1fr);
             }
             .kpi-value {
                 font-size: 28px;
+            }
+            .gauge-wrapper {
+                width: 150px;
+                height: 150px;
             }
         }
 
         @media (max-width: 1400px) {
             .dashboard-container {
-                grid-template-columns: 1fr 1fr 280px;
+                grid-template-columns: 1fr 1fr 320px;
+            }
+            .machine-status-grid {
+                gap: 6px;
+            }
+            .machine-status-card {
+                min-width: 60px;
+                padding: 8px 10px;
             }
         }
         
@@ -1090,7 +1191,7 @@
             
             .kpi-strip {
                 grid-column: 1 / -1;
-                grid-template-columns: repeat(3, 1fr);
+                grid-template-columns: repeat(2, 1fr);
             }
             
             .kpi-value {
@@ -1124,8 +1225,28 @@
             }
             
             .gauge-wrapper {
-                width: 120px;
-                height: 120px;
+                width: 140px;
+                height: 140px;
+            }
+            
+            .machine-status-grid {
+                gap: 6px;
+                justify-content: center;
+            }
+            
+            .machine-status-card {
+                min-width: 55px;
+                padding: 8px 10px;
+                font-size: 14px;
+            }
+            
+            .machine-status-card .machine-number {
+                font-size: 15px;
+            }
+            
+            .stopped-machines-list {
+                max-height: 200px;
+                overflow-y: auto;
             }
             
             .oee-breakdown {
@@ -1333,35 +1454,44 @@
                 font-size: 8px;
             }
             
-            .loss-row {
-                grid-template-columns: 20px 1fr 50px 40px;
+            /* Machine Status Grid - 768px */
+            .machine-status-grid {
+                grid-template-columns: repeat(4, 1fr);
+                gap: 6px;
+                padding: 10px;
+            }
+            
+            .machine-status-card {
+                padding: 8px;
+            }
+            
+            .machine-status-card .machine-name {
+                font-size: 10px;
+            }
+            
+            .machine-status-card .machine-status-label {
+                font-size: 7px;
+            }
+            
+            /* Stopped Machines List - 768px */
+            .stopped-machines-list {
+                max-height: 200px;
+            }
+            
+            .stopped-machine-item {
                 padding: 8px 10px;
-                gap: 8px;
             }
             
-            .loss-rank {
-                font-size: 10px;
+            .stopped-machine-item .machine-name {
+                font-size: 11px;
             }
             
-            .loss-reason {
-                font-size: 10px;
-            }
-            
-            .loss-machine {
-                font-size: 8px;
-            }
-            
-            .loss-time {
-                font-size: 12px;
-            }
-            
-            .loss-percent {
+            .stopped-machine-item .stop-reason {
                 font-size: 9px;
             }
             
-            .ticker-item {
-                font-size: 11px;
-                padding: 0 16px;
+            .stopped-machine-item .stop-duration {
+                font-size: 10px;
             }
             
             .footer-timestamp {
@@ -1612,61 +1742,48 @@
                 font-size: 7px;
             }
             
-            .loss-row {
-                grid-template-columns: 18px 1fr 45px 35px;
+            /* Machine Status Grid - 480px */
+            .machine-status-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 4px;
+                padding: 8px;
+            }
+            
+            .machine-status-card {
+                padding: 6px;
+            }
+            
+            .machine-status-card .machine-name {
+                font-size: 9px;
+            }
+            
+            .machine-status-card .machine-status-label {
+                font-size: 6px;
+            }
+            
+            /* Stopped Machines List - 480px */
+            .stopped-machines-list {
+                max-height: 160px;
+            }
+            
+            .stopped-machine-item {
                 padding: 6px 8px;
-                gap: 6px;
-                margin-bottom: 4px;
             }
             
-            .loss-rank {
-                font-size: 9px;
-            }
-            
-            .loss-reason {
-                font-size: 9px;
-            }
-            
-            .loss-machine {
-                font-size: 7px;
-            }
-            
-            .loss-time {
+            .stopped-machine-item .machine-name {
                 font-size: 10px;
             }
             
-            .loss-percent {
+            .stopped-machine-item .stop-reason {
                 font-size: 8px;
+            }
+            
+            .stopped-machine-item .stop-duration {
+                font-size: 9px;
             }
             
             .industrial-footer {
                 gap: 0;
-            }
-            
-            .footer-label {
-                padding: 6px;
-            }
-            
-            .footer-label span {
-                font-size: 8px;
-            }
-            
-            .footer-label i {
-                width: 12px;
-                height: 12px;
-            }
-            
-            .footer-ticker {
-                padding: 6px 8px;
-            }
-            
-            .ticker-track {
-                animation-duration: 30s;
-            }
-            
-            .ticker-item {
-                font-size: 10px;
-                padding: 0 12px;
             }
             
             .footer-timestamp {
@@ -1727,6 +1844,46 @@
             .shift-kpis-grid {
                 grid-template-columns: 1fr;
             }
+            
+            /* Machine Status Grid - 360px */
+            .machine-status-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 3px;
+                padding: 6px;
+            }
+            
+            .machine-status-card {
+                padding: 5px;
+            }
+            
+            .machine-status-card .machine-name {
+                font-size: 8px;
+            }
+            
+            .machine-status-card .machine-status-label {
+                font-size: 6px;
+            }
+            
+            /* Stopped Machines List - 360px */
+            .stopped-machines-list {
+                max-height: 140px;
+            }
+            
+            .stopped-machine-item {
+                padding: 5px 6px;
+            }
+            
+            .stopped-machine-item .machine-name {
+                font-size: 9px;
+            }
+            
+            .stopped-machine-item .stop-reason {
+                font-size: 7px;
+            }
+            
+            .stopped-machine-item .stop-duration {
+                font-size: 8px;
+            }
         }
     </style>
 </head>
@@ -1783,10 +1940,10 @@
 
     <!-- ==================== MAIN DASHBOARD ==================== -->
     <main class="dashboard-container">
-        <!-- KPI STRIP - DADOS REAIS DO DIA -->
+        <!-- KPI STRIP - PRODUÇÃO DO DIA -->
         <div class="kpi-strip">
             <!-- 1. PEÇAS PRODUZIDAS HOJE -->
-            <div class="kpi-module production">
+            <div class="kpi-module production" style="grid-column: span 1;">
                 <div class="kpi-header">
                     <span class="kpi-title">Produção Hoje</span>
                     <span class="kpi-trend" id="kpiProductionTrend">
@@ -1801,10 +1958,10 @@
                 <div class="kpi-target">Meta: <span id="kpiProductionTarget">0 pçs</span></div>
             </div>
 
-            <!-- 2. % CONCLUSÃO DO DIA -->
-            <div class="kpi-module oee">
+            <!-- 2. PROGRESSO DA META -->
+            <div class="kpi-module oee" style="grid-column: span 1;">
                 <div class="kpi-header">
-                    <span class="kpi-title">Conclusão Dia</span>
+                    <span class="kpi-title">Progresso Meta</span>
                     <span class="kpi-trend" id="kpiCompletionTrend">
                         <i data-lucide="minus" style="width:12px;height:12px"></i>
                         --
@@ -1815,70 +1972,6 @@
                     <span class="kpi-unit">%</span>
                 </div>
                 <div class="kpi-target">Realizado / Planejado</div>
-            </div>
-
-            <!-- 3. ORDENS ATIVAS -->
-            <div class="kpi-module availability">
-                <div class="kpi-header">
-                    <span class="kpi-title">Ordens Ativas</span>
-                    <span class="kpi-trend neutral" id="kpiOrdersTrend">
-                        <i data-lucide="activity" style="width:12px;height:12px"></i>
-                        Hoje
-                    </span>
-                </div>
-                <div class="kpi-value-container">
-                    <span class="kpi-value" id="kpiOrders">0</span>
-                    <span class="kpi-unit">OPs</span>
-                </div>
-                <div class="kpi-target">Máquinas: <span id="kpiMachinesActive">0</span></div>
-            </div>
-
-            <!-- 4. REFUGO / QUALIDADE -->
-            <div class="kpi-module quality">
-                <div class="kpi-header">
-                    <span class="kpi-title">Taxa Qualidade</span>
-                    <span class="kpi-trend" id="kpiQualityTrend">
-                        <i data-lucide="minus" style="width:12px;height:12px"></i>
-                        --
-                    </span>
-                </div>
-                <div class="kpi-value-container">
-                    <span class="kpi-value" id="kpiQuality">100</span>
-                    <span class="kpi-unit">%</span>
-                </div>
-                <div class="kpi-target">Refugo: <span id="kpiRefugo">0 pçs</span></div>
-            </div>
-
-            <!-- 5. TEMPO PARADO HOJE -->
-            <div class="kpi-module downtime">
-                <div class="kpi-header">
-                    <span class="kpi-title">Paradas Hoje</span>
-                    <span class="kpi-trend" id="kpiDowntimeTrend">
-                        <i data-lucide="minus" style="width:12px;height:12px"></i>
-                        --
-                    </span>
-                </div>
-                <div class="kpi-value-container">
-                    <span class="kpi-value" id="kpiDowntime">0</span>
-                    <span class="kpi-unit">min</span>
-                </div>
-                <div class="kpi-target">Eventos: <span id="kpiDowntimeEvents">0</span></div>
-            </div>
-
-            <!-- 6. LANÇAMENTOS HOJE -->
-            <div class="kpi-module performance">
-                <div class="kpi-header">
-                    <span class="kpi-title">Lançamentos</span>
-                    <span class="kpi-trend neutral" id="kpiEntriesTrend">
-                        <i data-lucide="clipboard-list" style="width:12px;height:12px"></i>
-                        Hoje
-                    </span>
-                </div>
-                <div class="kpi-value-container">
-                    <span class="kpi-value" id="kpiEntries">0</span>
-                    <span class="kpi-unit">reg</span>
-                </div>
-                <div class="kpi-target">Última: <span id="kpiLastEntry">--:--</span></div>
             </div>
         </div>
 
@@ -1983,12 +2076,12 @@
             </div>
         </div>
 
-        <!-- OEE GAUGE -->
-        <div class="data-panel">
-            <div class="panel-header">
-                <div class="panel-title">
-                    <i data-lucide="gauge" style="width:14px;height:14px"></i>
-                    Composição do OEE
+        <!-- OEE GAUGE - COM DESTAQUE -->
+        <div class="data-panel oee-panel-highlight" style="grid-row: span 2;">
+            <div class="panel-header" style="background: rgba(0, 180, 216, 0.1);">
+                <div class="panel-title" style="color: var(--accent-primary);">
+                    <i data-lucide="gauge" style="width:16px;height:16px"></i>
+                    COMPOSIÇÃO DO OEE
                 </div>
             </div>
             <div class="panel-body">
@@ -2053,51 +2146,32 @@
             </div>
         </div>
 
-        <!-- PARETO CHART -->
-        <div class="data-panel" style="grid-column: span 2;">
-            <div class="panel-header">
-                <div class="panel-title">
-                    <i data-lucide="bar-chart-2" style="width:14px;height:14px"></i>
-                    Análise Pareto de Paradas
+        <!-- MÁQUINAS PARADAS - COM DESTAQUE -->
+        <div class="data-panel" style="grid-column: span 3; border: 2px solid var(--status-critical); box-shadow: 0 0 20px rgba(255, 23, 68, 0.2);">
+            <div class="panel-header" style="background: rgba(255, 23, 68, 0.1);">
+                <div class="panel-title" style="color: var(--status-critical);">
+                    <i data-lucide="alert-octagon" style="width:16px;height:16px"></i>
+                    MÁQUINAS PARADAS AGORA
                 </div>
                 <div class="panel-actions">
-                    <span class="panel-tag live">Hoje</span>
-                </div>
-            </div>
-            <div class="panel-body">
-                <canvas id="paretoChart"></canvas>
-            </div>
-        </div>
-
-        <!-- TOP LOSSES -->
-        <div class="data-panel">
-            <div class="panel-header">
-                <div class="panel-title">
-                    <i data-lucide="alert-triangle" style="width:14px;height:14px"></i>
-                    Principais Paradas
+                    <span class="panel-tag" id="stoppedMachinesTag" style="background: rgba(255, 23, 68, 0.2); color: var(--status-critical); border: 1px solid rgba(255, 23, 68, 0.4);">0 Paradas</span>
                 </div>
             </div>
             <div class="panel-body" style="padding: 12px;">
-                <div class="losses-table" id="lossesTable">
+                <div class="stopped-machines-list" id="stoppedMachinesList">
                     <!-- Populated by JS -->
                 </div>
             </div>
         </div>
 
-        <!-- FOOTER TICKER -->
+        <!-- FOOTER - STATUS GRID DE TODAS AS MÁQUINAS -->
         <footer class="industrial-footer">
             <div class="footer-label">
-                <i data-lucide="radio"></i>
-                <span>Avisos</span>
+                <i data-lucide="cpu"></i>
+                <span>Status Máquinas</span>
             </div>
-            <div class="footer-ticker">
-                <div class="ticker-track">
-                    <!-- Dados carregados dinamicamente pela função updateTicker() -->
-                    <span class="ticker-item"><strong>SISTEMA:</strong> <span class="highlight-warning">Carregando dados do Firebase...</span></span>
-                </div>
-            </div>
-            <div class="footer-timestamp">
-                Última Atualização: <span id="lastUpdate">--:--:--</span>
+            <div class="machine-status-grid" id="machineStatusGrid">
+                <!-- Populated by JS - Cards com número da máquina e cor do status -->
             </div>
         </footer>
     </main>
@@ -2665,9 +2739,8 @@
                 updateMachinesGrid();
                 updateKPIs();
                 updateShiftKPIs();
-                updateParetoChart();
-                updateLossesTable();
-                updateTicker();
+                updateStoppedMachinesList();
+                updateMachineStatusGrid();
                 updateActiveDowntimeAlert();
                 
                 if (cachedPlanning.length === 0) {
@@ -3733,6 +3806,173 @@
                     }
                 }
             };
+        }
+
+        // ==================== STOPPED MACHINES LIST ====================
+        function updateStoppedMachinesList() {
+            const listEl = document.getElementById('stoppedMachinesList');
+            const tagEl = document.getElementById('stoppedMachinesTag');
+            if (!listEl) return;
+            
+            // Buscar máquinas paradas do cache
+            const stoppedMachines = cachedMachines.filter(m => {
+                const status = (m.status || '').toLowerCase();
+                return status === 'parada' || status === 'stopped' || status === 'setup' || 
+                       status === 'manutencao' || status === 'manutenção' || status === 'maintenance' ||
+                       status === 'ferramentaria' || status === 'tooling';
+            });
+            
+            if (tagEl) {
+                tagEl.textContent = stoppedMachines.length + ' Parada' + (stoppedMachines.length !== 1 ? 's' : '');
+            }
+            
+            if (stoppedMachines.length === 0) {
+                listEl.innerHTML = `
+                    <div class="no-stopped-machines">
+                        <i data-lucide="check-circle-2"></i>
+                        <p>Todas as máquinas em operação!</p>
+                    </div>
+                `;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+                return;
+            }
+            
+            // Renderizar lista de máquinas paradas
+            listEl.innerHTML = stoppedMachines.map(machine => {
+                const machineId = machine.name || machine.id || 'N/A';
+                const reason = machine.reason || machine.motivo || machine.downtime_reason || 'Motivo não informado';
+                const startTime = machine.downtime_start || machine.startTime || '';
+                
+                // Calcular tempo parada
+                let duration = '';
+                if (startTime) {
+                    const start = new Date(startTime);
+                    const now = new Date();
+                    const diffMin = Math.round((now - start) / 60000);
+                    if (diffMin >= 60) {
+                        const hours = Math.floor(diffMin / 60);
+                        const mins = diffMin % 60;
+                        duration = `${hours}h${mins > 0 ? mins + 'm' : ''}`;
+                    } else {
+                        duration = `${diffMin}min`;
+                    }
+                }
+                
+                return `
+                    <div class="stopped-machine-row">
+                        <span class="stopped-machine-id">${machineId}</span>
+                        <span class="stopped-machine-reason">${reason}</span>
+                        <span class="stopped-machine-time">${duration || '--'}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ==================== MACHINE STATUS GRID ====================
+        function updateMachineStatusGrid() {
+            const gridEl = document.getElementById('machineStatusGrid');
+            if (!gridEl) return;
+            
+            // Definir todas as máquinas do sistema
+            const allMachineIds = ['H01', 'H02', 'H04', 'H05', 'H06', 'H07', 'H08', 'H10', 'H11', 'H12', 
+                                   'H14', 'H17', 'H18', 'H19', 'H20', 'H21', 'H22', 'H23', 'H24', 'H26', 
+                                   'H27', 'H28', 'H29', 'H30', 'H31', 'H32', 'H33', 'H34', 'H35', 'H37', 
+                                   'H39', 'H40', 'H41'];
+            
+            // Criar mapa de paradas ativas para cada máquina
+            const machineDowntimeMap = new Map();
+            cachedDowntimes.forEach(dt => {
+                const machineId = (dt.machine || dt.maquina || dt.machine_id || '').toUpperCase();
+                if (machineId) {
+                    if (!machineDowntimeMap.has(machineId)) {
+                        machineDowntimeMap.set(machineId, []);
+                    }
+                    machineDowntimeMap.get(machineId).push(dt);
+                }
+            });
+            
+            // Criar mapa de máquinas em produção (planejamento ativo)
+            const machineProductionMap = new Map();
+            cachedPlanning.forEach(plan => {
+                const machineId = (plan.machine || plan.machineId || plan.maquina || '').toUpperCase();
+                if (machineId) {
+                    machineProductionMap.set(machineId, plan);
+                }
+            });
+            
+            // Função para determinar a classe CSS baseada no status da máquina
+            function getStatusClass(machineId) {
+                // Se tem parada ativa, verificar tipo
+                const downtimes = machineDowntimeMap.get(machineId);
+                if (downtimes && downtimes.length > 0) {
+                    const lastDowntime = downtimes[downtimes.length - 1];
+                    const reason = (lastDowntime.reason || lastDowntime.motivo || lastDowntime.downtime_reason || '').toLowerCase();
+                    
+                    if (reason.includes('manutenção') || reason.includes('manutencao') || reason.includes('maintenance')) {
+                        return 'manutencao';
+                    }
+                    if (reason.includes('ferramentaria') || reason.includes('tooling') || reason.includes('molde')) {
+                        return 'ferramentaria';
+                    }
+                    if (reason.includes('comercial') || reason.includes('pcp') || reason.includes('estratégia') || 
+                        reason.includes('estrategia') || reason.includes('sem op') || reason.includes('sem pedido')) {
+                        return 'comercial-pcp';
+                    }
+                    if (reason.includes('setup') || reason.includes('troca') || reason.includes('preparação') || 
+                        reason.includes('preparacao')) {
+                        return 'setup';
+                    }
+                    
+                    return 'parada';
+                }
+                
+                // Se não tem parada mas tem planejamento, está produzindo
+                if (machineProductionMap.has(machineId)) {
+                    return 'produzindo';
+                }
+                
+                // Default
+                return 'outros';
+            }
+            
+            // Função para obter label do status
+            function getStatusLabel(statusClass) {
+                const labels = {
+                    'produzindo': 'OK',
+                    'manutencao': 'MNT',
+                    'ferramentaria': 'FER',
+                    'comercial-pcp': 'PCP',
+                    'setup': 'SET',
+                    'parada': 'PAR',
+                    'outros': '---'
+                };
+                return labels[statusClass] || '---';
+            }
+            
+            // Renderizar grid
+            gridEl.innerHTML = allMachineIds.map(machineId => {
+                const statusClass = getStatusClass(machineId);
+                const statusLabel = getStatusLabel(statusClass);
+                
+                // Buscar motivo da parada se houver
+                let title = 'Máquina sem status';
+                const downtimes = machineDowntimeMap.get(machineId);
+                if (downtimes && downtimes.length > 0) {
+                    const lastDowntime = downtimes[downtimes.length - 1];
+                    title = lastDowntime.reason || lastDowntime.motivo || 'Parada ativa';
+                } else if (machineProductionMap.has(machineId)) {
+                    title = 'Em produção';
+                }
+                
+                return `
+                    <div class="machine-status-card ${statusClass}" title="${title}">
+                        <span class="machine-number">${machineId}</span>
+                        <span class="machine-label">${statusLabel}</span>
+                    </div>
+                `;
+            }).join('');
+            
+            console.log('[Dashboard TV] Machine Status Grid renderizado com', allMachineIds.length, 'máquinas');
         }
 
         // ==================== LOSSES TABLE - REAL DATA ====================

@@ -201,7 +201,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
-// This file contains the full and correct JavaScript code for the Hokkaido Synchro MES application.
+// This file contains the full and correct JavaScript code for the Hokkaido Mes application.
 // All functionalities, including the new database with product codes, are implemented here.
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -4018,18 +4018,17 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
 
     const productionData = filterByShift(productionAll);
     const lossesData = filterByShift(lossesAll);
-    const downtimeData = filterByShift(downtimeAll);
+    const downtimeFiltered = filterByShift(downtimeAll);
     const planFiltered = filterByShift(planData);
+
+        // CORREÇÃO: Usar consolidateDowntimeEvents para consistência com aba Paradas
+        const downtimeConsolidated = consolidateDowntimeEvents(downtimeFiltered);
 
         // Calcular KPIs básicos
         const totalProduction = productionData.reduce((sum, item) => sum + item.quantity, 0);
     const totalLosses = lossesData.reduce((sum, item) => sum + (Number(item.scrapPcs ?? item.quantity ?? 0) || 0), 0);
-        const MAX_DOWNTIME_MINUTES = 24 * 60; // 24h
-        const totalDowntime = downtimeData.reduce((sum, item) => {
-            const rawDuration = Number(item.duration) || 0;
-            const cappedDuration = Math.min(rawDuration, MAX_DOWNTIME_MINUTES);
-            return sum + cappedDuration;
-        }, 0);
+        // Calcular tempo de paradas usando dados consolidados (igual à aba Paradas)
+        const totalDowntime = downtimeConsolidated.reduce((sum, item) => sum + (item.duration || 0), 0);
         
         // Calcular OEE real usando disponibilidade  x  performance  x  qualidade
         const { overallOee, filteredOee } = calculateOverviewOEE(
@@ -4354,20 +4353,10 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
             shiftFilter
         );
 
-        // Padrão A: OEE = Disponibilidade  x  Performance  x  Qualidade (produto das médias dos componentes)
-        const safeMul = (...vals) => vals.reduce((acc, v) => acc * (Number.isFinite(v) ? v : 0), 1);
-
-        const overallOee = safeMul(
-            overall?.disponibilidade || 0,
-            overall?.performance || 0,
-            overall?.qualidade || 0
-        );
-
-        const filteredOee = safeMul(
-            filtered?.disponibilidade || 0,
-            filtered?.performance || 0,
-            filtered?.qualidade || 0
-        );
+        // CORREÇÃO: Calcular OEE como produto dos componentes médios (D × P × Q)
+        // Este é o método padrão da indústria para OEE agregado
+        const overallOee = (overall?.disponibilidade || 0) * (overall?.performance || 0) * (overall?.qualidade || 0);
+        const filteredOee = (filtered?.disponibilidade || 0) * (filtered?.performance || 0) * (filtered?.qualidade || 0);
 
         return { overallOee, filteredOee };
     }
@@ -4413,10 +4402,28 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         };
 
         // Atualizar interface - KPIs
-        const totalProducedKpi = document.getElementById('total-produced-kpi');
-        const totalProducedSubtext = document.getElementById('total-produced-subtext');
-        if (totalProducedKpi) {
-            // Formatar número grande (ex: 1.2M, 500K)
+        // PLANEJADO
+        const plannedProductionKpi = document.getElementById('planned-production-kpi');
+        const plannedProductionSubtext = document.getElementById('planned-production-subtext');
+        if (plannedProductionKpi) {
+            let formattedPlan;
+            if (totalPlan >= 1000000) {
+                formattedPlan = (totalPlan / 1000000).toFixed(1) + 'M';
+            } else if (totalPlan >= 1000) {
+                formattedPlan = (totalPlan / 1000).toFixed(1) + 'K';
+            } else {
+                formattedPlan = totalPlan.toLocaleString('pt-BR');
+            }
+            plannedProductionKpi.textContent = formattedPlan;
+        }
+        if (plannedProductionSubtext) {
+            plannedProductionSubtext.textContent = `${totalPlan.toLocaleString('pt-BR')} peças planejadas`;
+        }
+
+        // REALIZADO
+        const actualProductionKpi = document.getElementById('actual-production-kpi');
+        const actualProductionSubtext = document.getElementById('actual-production-subtext');
+        if (actualProductionKpi) {
             let formattedTotal;
             if (totalProduction >= 1000000) {
                 formattedTotal = (totalProduction / 1000000).toFixed(1) + 'M';
@@ -4425,14 +4432,19 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
             } else {
                 formattedTotal = totalProduction.toLocaleString('pt-BR');
             }
-            totalProducedKpi.textContent = formattedTotal;
+            actualProductionKpi.textContent = formattedTotal;
         }
-        if (totalProducedSubtext) {
-            totalProducedSubtext.textContent = `${totalProduction.toLocaleString('pt-BR')} peças`;
+        if (actualProductionSubtext) {
+            actualProductionSubtext.textContent = `${totalProduction.toLocaleString('pt-BR')} peças produzidas`;
         }
         
-        document.getElementById('production-target-vs-actual').textContent = `${targetVsActual.toFixed(1)}%`;
-        document.getElementById('top-machine').textContent = topMachine;
+        // META x REALIZADO
+        const targetVsActualEl = document.getElementById('production-target-vs-actual');
+        if (targetVsActualEl) {
+            targetVsActualEl.textContent = `${targetVsActual.toFixed(1)}%`;
+        }
+        
+        // TAXA DE PRODUÇÃO
         updateProductionRateDisplay();
 
         // ========== PREENCHER TOP 5 MÁQUINAS (aba Produção) ==========
@@ -4503,6 +4515,205 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
             canvas: analysisMachineProductionTimelineChart,
             targetCanvasId: 'analysis-machine-production-timeline'
         });
+        
+        // Gerar gráfico de Ciclo/Cavidades
+        await generateCycleCavityChart(planData);
+    }
+    
+    /**
+     * Gera gráfico de Ciclo/Cavidades comparando planejado vs real por turno
+     */
+    async function generateCycleCavityChart(planData) {
+        const canvas = document.getElementById('cycle-cavity-chart');
+        if (!canvas) {
+            console.warn('[CYCLE-CAVITY] Canvas não encontrado');
+            return;
+        }
+        
+        // Destruir gráfico existente
+        const existingChart = Chart.getChart(canvas);
+        if (existingChart) {
+            existingChart.destroy();
+        }
+        
+        // Processar dados por turno
+        const turnosData = {
+            t1: { cicloReal: 0, cicloOrçado: 0, cavLancada: 0, cavOrcada: 0, count: 0 },
+            t2: { cicloReal: 0, cicloOrçado: 0, cavLancada: 0, cavOrcada: 0, count: 0 },
+            t3: { cicloReal: 0, cicloOrçado: 0, cavLancada: 0, cavOrcada: 0, count: 0 }
+        };
+        
+        planData.forEach(plan => {
+            const raw = plan.raw || plan;
+            const budgetedCycle = Number(raw.budgeted_cycle) || 0;
+            const cavOrcada = Number(raw.mold_cavities || raw.cavities) || 0;
+            
+            // T1
+            if (raw.real_cycle_t1 || budgetedCycle) {
+                turnosData.t1.cicloReal += Number(raw.real_cycle_t1) || budgetedCycle;
+                turnosData.t1.cicloOrçado += budgetedCycle;
+                turnosData.t1.cavLancada += Number(raw.active_cavities_t1 || raw.active_cavities_T1 || raw.activeCavitiesT1) || 0;
+                turnosData.t1.cavOrcada += cavOrcada;
+                turnosData.t1.count++;
+            }
+            
+            // T2
+            if (raw.real_cycle_t2 || budgetedCycle) {
+                turnosData.t2.cicloReal += Number(raw.real_cycle_t2) || budgetedCycle;
+                turnosData.t2.cicloOrçado += budgetedCycle;
+                turnosData.t2.cavLancada += Number(raw.active_cavities_t2 || raw.active_cavities_T2 || raw.activeCavitiesT2) || 0;
+                turnosData.t2.cavOrcada += cavOrcada;
+                turnosData.t2.count++;
+            }
+            
+            // T3
+            if (raw.real_cycle_t3 || budgetedCycle) {
+                turnosData.t3.cicloReal += Number(raw.real_cycle_t3) || budgetedCycle;
+                turnosData.t3.cicloOrçado += budgetedCycle;
+                turnosData.t3.cavLancada += Number(raw.active_cavities_t3 || raw.active_cavities_T3 || raw.activeCavitiesT3) || 0;
+                turnosData.t3.cavOrcada += cavOrcada;
+                turnosData.t3.count++;
+            }
+        });
+        
+        // Calcular médias
+        const labels = ['1º Turno', '2º Turno', '3º Turno'];
+        const cicloOrcado = [
+            turnosData.t1.count ? (turnosData.t1.cicloOrçado / turnosData.t1.count).toFixed(1) : 0,
+            turnosData.t2.count ? (turnosData.t2.cicloOrçado / turnosData.t2.count).toFixed(1) : 0,
+            turnosData.t3.count ? (turnosData.t3.cicloOrçado / turnosData.t3.count).toFixed(1) : 0
+        ];
+        const cicloReal = [
+            turnosData.t1.count ? (turnosData.t1.cicloReal / turnosData.t1.count).toFixed(1) : 0,
+            turnosData.t2.count ? (turnosData.t2.cicloReal / turnosData.t2.count).toFixed(1) : 0,
+            turnosData.t3.count ? (turnosData.t3.cicloReal / turnosData.t3.count).toFixed(1) : 0
+        ];
+        const cavOrcada = [
+            turnosData.t1.count ? Math.round(turnosData.t1.cavOrcada / turnosData.t1.count) : 0,
+            turnosData.t2.count ? Math.round(turnosData.t2.cavOrcada / turnosData.t2.count) : 0,
+            turnosData.t3.count ? Math.round(turnosData.t3.cavOrcada / turnosData.t3.count) : 0
+        ];
+        const cavLancada = [
+            turnosData.t1.count ? Math.round(turnosData.t1.cavLancada / turnosData.t1.count) : 0,
+            turnosData.t2.count ? Math.round(turnosData.t2.cavLancada / turnosData.t2.count) : 0,
+            turnosData.t3.count ? Math.round(turnosData.t3.cavLancada / turnosData.t3.count) : 0
+        ];
+        
+        const ctx = canvas.getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Ciclo Orçado (s)',
+                        data: cicloOrcado,
+                        backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        borderWidth: 1,
+                        borderRadius: 4,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Ciclo Real (s)',
+                        data: cicloReal,
+                        backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                        borderColor: 'rgba(16, 185, 129, 1)',
+                        borderWidth: 1,
+                        borderRadius: 4,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Cavidade Orçada',
+                        data: cavOrcada,
+                        backgroundColor: 'rgba(249, 115, 22, 0.7)',
+                        borderColor: 'rgba(249, 115, 22, 1)',
+                        borderWidth: 1,
+                        borderRadius: 4,
+                        yAxisID: 'y1'
+                    },
+                    {
+                        label: 'Cavidade Lançada',
+                        data: cavLancada,
+                        backgroundColor: 'rgba(139, 92, 246, 0.7)',
+                        borderColor: 'rgba(139, 92, 246, 1)',
+                        borderWidth: 1,
+                        borderRadius: 4,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 15,
+                            font: { size: 11 }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(17, 24, 39, 0.9)',
+                        padding: 12,
+                        cornerRadius: 8,
+                        titleFont: { size: 13, weight: 'bold' },
+                        bodyFont: { size: 12 },
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.dataset.label || '';
+                                const value = context.parsed.y;
+                                if (label.includes('Ciclo')) {
+                                    return `${label}: ${value}s`;
+                                }
+                                return `${label}: ${value}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { font: { size: 11, weight: '500' } }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: 'Ciclo (segundos)',
+                            font: { size: 11 }
+                        },
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                        ticks: { font: { size: 10 } }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: 'Cavidades',
+                            font: { size: 11 }
+                        },
+                        grid: { drawOnChartArea: false },
+                        ticks: { 
+                            font: { size: 10 },
+                            stepSize: 1
+                        }
+                    }
+                }
+            }
+        });
+        
+        console.log('[CYCLE-CAVITY] Gráfico gerado com sucesso');
     }
 
     function updateProductionRateToggle() {
@@ -4664,7 +4875,9 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         console.log('Amostra Production:', productionData.slice(0, 3));
         console.log('Amostra Plan:', planData.slice(0, 3));
 
-        const result = aggregateOeeMetrics(productionData, lossesData, downtimeData, planData, shift);
+        // Normalizar shift para evitar problemas com undefined
+        const normalizedShift = shift === undefined || shift === null || shift === '' ? 'all' : shift;
+        const result = aggregateOeeMetrics(productionData, lossesData, downtimeData, planData, normalizedShift);
         console.log('Resultado Agregação:', result);
 
         alert(`Debug concluído! Verifique o console para detalhes.
@@ -5710,17 +5923,25 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 plan: {
                     collection: 'planning',
                     dateField: 'date',
-                    mapper: (id, raw) => ({
-                        id,
-                        date: raw.date || '',
-                        machine: normalizeMachineId(raw.machine || null),
-                        quantity: Number(raw.planned_quantity ?? raw.quantity ?? 0) || 0,
-                        shift: normalizeShift(raw.shift ?? raw.turno),
-                        product: raw.product || '',
-                        mp: raw.mp || '',
-                        workDay: raw.date || '',
-                        raw
-                    })
+                    mapper: (id, raw) => {
+                        const dateValue = raw.date || '';
+                        const primaryTimestamp = raw.createdAt || raw.updatedAt || raw.timestamp;
+                        // Calcular workDay usando timestamp (quando foi criado)
+                        // Se não tiver timestamp, assumir que a data salva JÁ é uma data de trabalho
+                        const workDay = getWorkDayFromTimestamp(primaryTimestamp) || dateValue;
+                        
+                        return {
+                            id,
+                            date: dateValue,
+                            machine: normalizeMachineId(raw.machine || null),
+                            quantity: Number(raw.planned_quantity ?? raw.quantity ?? 0) || 0,
+                            shift: normalizeShift(raw.shift ?? raw.turno),
+                            product: raw.product || '',
+                            mp: raw.mp || '',
+                            workDay: workDay || dateValue,
+                            raw
+                        };
+                    }
                 },
                 rework: {
                     collection: 'rework_entries',
@@ -6425,20 +6646,29 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     }
 
     function setAnalysisDefaultDates() {
-    const today = getProductionDateString();
+        const workdayDate = getProductionDateString();
+        const { startDate: calendarStart, endDate: calendarEnd } = getCalendarDateRangeForWorkday(workdayDate);
+        
         const startDateInput = document.getElementById('analysis-start-date');
         const endDateInput = document.getElementById('analysis-end-date');
         
-        if (startDateInput) startDateInput.value = today;
-        if (endDateInput) endDateInput.value = today;
+        if (startDateInput) startDateInput.value = calendarStart || workdayDate;
+        if (endDateInput) endDateInput.value = calendarEnd || workdayDate;
         
-        // Configurar filtros padrão
+        // Configurar filtros padrão - usar o range de calendário que cobre o dia de trabalho
         currentAnalysisFilters = {
-            startDate: today,
-            endDate: today,
+            startDate: calendarStart || workdayDate,
+            endDate: calendarEnd || workdayDate,
             machine: 'all',
             shift: 'all'
         };
+        
+        console.log('[ANALYSIS] Default dates set:', {
+            workdayDate,
+            calendarStart,
+            calendarEnd,
+            filters: currentAnalysisFilters
+        });
     }
 
     // Helper: atualiza a aba de análise se ela estiver ativa
@@ -8276,7 +8506,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     // Função para calcular OEE detalhado
     async function calculateDetailedOEE(startDate, endDate, machine, shift) {
         try {
-            console.log('[TRACE][calculateDetailedOEE] Buscando dados para:', { startDate, endDate, machine, shift });
+            // Normalizar shift: se não está definido ou é null, usar 'all'
+            const normalizedShift = shift === undefined || shift === null || shift === '' ? 'all' : shift;
+            
+            console.log('[TRACE][calculateDetailedOEE] Buscando dados para:', { startDate, endDate, machine, shift: normalizedShift });
             
             const [productionData, lossesData, downtimeData, planData] = await Promise.all([
                 getFilteredData('production', startDate, endDate, machine, 'all'),
@@ -8302,7 +8535,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 lossesData,
                 downtimeData,
                 planData,
-                shift
+                normalizedShift  // <-- usar normalizedShift em vez de shift
             );
 
             console.log('[TRACE][calculateDetailedOEE] Resultado da agregação:', {
@@ -8320,11 +8553,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 console.log('[TRACE][calculateDetailedOEE] Amostra plan:', planData.slice(0, 3));
             }
 
+            // CORREÇÃO: Calcular OEE como produto dos componentes (D × P × Q)
+            // em vez de usar a média dos OEEs individuais
+            const availability = filtered.disponibilidade * 100;
+            const performance = filtered.performance * 100;
+            const quality = filtered.qualidade * 100;
+            const oeeCalculated = (availability * performance * quality) / 10000;
+
             return {
-                availability: (filtered.disponibilidade * 100),
-                performance: (filtered.performance * 100),
-                quality: (filtered.qualidade * 100),
-                oee: (filtered.oee * 100)
+                availability: availability,
+                performance: performance,
+                quality: quality,
+                oee: oeeCalculated  // OEE = D × P × Q (correto!)
             };
         } catch (error) {
             console.error('Erro ao calcular OEE detalhado:', error);
@@ -8844,11 +9084,39 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     init();
 
     function getProductionDateString(date = new Date()) {
-        const localDate = new Date(date);
-        if (localDate.getHours() < 7) {
-            localDate.setDate(localDate.getDate() - 1);
+        const dateObj = date instanceof Date ? date : new Date(date);
+        const hour = dateObj.getHours();
+        
+        // Se for antes das 7h, pertence ao dia de trabalho anterior
+        if (hour < 7) {
+            const prevDay = new Date(dateObj);
+            prevDay.setDate(prevDay.getDate() - 1);
+            return new Date(prevDay.getTime() - (prevDay.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
         }
-        return new Date(localDate.getTime() - (localDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+        
+        return new Date(dateObj.getTime() - (dateObj.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+    }
+    
+    /**
+     * Retorna o range de datas de calendário que cobrem um dia de trabalho específico
+     * Um dia de trabalho começa às 7h e termina às 6h59 do dia seguinte
+     * Exemplo: workday "2025-01-06" = calendário 2025-01-06 (7h) até 2025-01-07 (6h59)
+     */
+    function getCalendarDateRangeForWorkday(workdayDate) {
+        if (!workdayDate || typeof workdayDate !== 'string') return { startDate: null, endDate: null };
+        
+        const [year, month, day] = workdayDate.split('-').map(Number);
+        if ([year, month, day].some(n => Number.isNaN(n))) {
+            return { startDate: null, endDate: null };
+        }
+        
+        // Um workday começa no calendário de `workdayDate` e termina no calendário do dia seguinte
+        const nextDay = new Date(year, month - 1, day + 1);
+        
+        return {
+            startDate: workdayDate,  // 2025-01-06 representa 7h até 6h59
+            endDate: nextDay.toISOString().split('T')[0]  // Próximo dia até 6h59
+        };
     }
 
     function setTodayDate() {
@@ -16975,13 +17243,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
         
         if (machineStatus === 'running') {
-            console.log('[TRACE][toggleDowntime] Status running -> iniciando parada');
-            // Parar máquina - registrar início da parada
-            startMachineDowntime();
-        } else {
-            console.log('[TRACE][toggleDowntime] Status stopped -> abrindo modal de motivo');
-            // Retomar máquina - solicitar motivo e finalizar parada
+            console.log('[TRACE][toggleDowntime] Status running -> abrindo modal para selecionar motivo da parada');
+            // Parar máquina - solicitar motivo ANTES de iniciar a parada
             openDowntimeReasonModal();
+        } else {
+            console.log('[TRACE][toggleDowntime] Status stopped -> finalizando parada');
+            // Retomar máquina - finalizar parada (motivo já foi informado no início)
+            finalizeMachineDowntime();
         }
     }
     
@@ -17036,11 +17304,19 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     
     /**
      * Inicia uma parada de máquina com persistência robusta
+     * @param {string} reason - Motivo da parada (informado no modal)
+     * @param {string} observations - Observações adicionais
      */
-    async function startMachineDowntime() {
+    async function startMachineDowntime(reason, observations = '') {
         if (!selectedMachineData) {
             console.error('[DOWNTIME] Tentativa de iniciar parada sem máquina selecionada');
             showNotification('Selecione uma máquina primeiro.', 'error');
+            return;
+        }
+
+        if (!reason) {
+            console.error('[DOWNTIME] Tentativa de iniciar parada sem motivo');
+            showNotification('Informe o motivo da parada.', 'error');
             return;
         }
 
@@ -17048,13 +17324,16 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const currentShift = getShiftForDateTime(now);
         const workday = getWorkdayForDateTime(now);
         
-        // Estrutura de dados robusta para a parada
+        // Estrutura de dados robusta para a parada (inclui motivo desde o início)
         currentDowntimeStart = {
             machine: selectedMachineData.machine,
             date: workday,
             startTime: formatTimeHM(now),
             startTimestamp: now,
             startShift: currentShift,
+            // Motivo e observações (informados no início)
+            reason: reason,
+            observations: observations,
             // Dados adicionais para rastreabilidade
             product: selectedMachineData.product || null,
             productCod: selectedMachineData.product_cod || null,
@@ -17077,6 +17356,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 startTimestampLocal: now.toISOString(),
                 startShift: currentShift,
                 
+                // Motivo e observações (informados no início)
+                reason: reason,
+                observations: observations,
+                
                 // Contexto de produção
                 product: selectedMachineData.product || null,
                 productCod: selectedMachineData.product_cod || null,
@@ -17090,7 +17373,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 
                 // Versão do sistema para compatibilidade futura
-                systemVersion: '2.0'
+                systemVersion: '2.1'
             };
             
             // Usar merge para não perder dados em caso de erro parcial
@@ -17110,23 +17393,209 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         // Notificação com informações contextuais
         const shiftLabel = currentShift === 1 ? '1º Turno' : currentShift === 2 ? '2º Turno' : '3º Turno';
-        showNotification(`Máquina parada às ${formatTimeHM(now)} (${shiftLabel}). Clique em START quando retomar.`, 'warning');
+        showNotification(`Máquina parada às ${formatTimeHM(now)} (${shiftLabel}) - Motivo: ${reason}. Clique em START quando retomar.`, 'warning');
     }
     
-    // Função para abrir modal solicitando motivo da parada ao retomar
+    // Função para abrir modal solicitando motivo da parada ao INICIAR (nova dinâmica)
     function openDowntimeReasonModal() {
-        console.log('[TRACE][openDowntimeReasonModal] called, currentDowntimeStart:', currentDowntimeStart);
+        console.log('[TRACE][openDowntimeReasonModal] called - Solicitando motivo para INICIAR parada');
         
-        if (!currentDowntimeStart) {
-            console.warn('[WARN][openDowntimeReasonModal] Nenhuma parada ativa para finalizar.');
-            machineStatus = 'running';
-            updateMachineStatus();
-            resumeProductionTimer();
-            return;
-        }
+        // Limpar formulário
+        const reasonSelect = document.getElementById('quick-downtime-reason');
+        const obsField = document.getElementById('quick-downtime-obs');
+        if (reasonSelect) reasonSelect.value = '';
+        if (obsField) obsField.value = '';
+        
+        // Atualizar título e botão do modal para refletir a nova dinâmica
+        const modalTitle = document.getElementById('downtime-modal-title');
+        const actionBtn = document.getElementById('downtime-action-btn');
+        if (modalTitle) modalTitle.textContent = 'Iniciar Parada - Informe o Motivo';
+        if (actionBtn) actionBtn.textContent = 'Iniciar Parada';
         
         console.log('[TRACE][openDowntimeReasonModal] abrindo modal quick-downtime-modal');
         openModal('quick-downtime-modal');
+    }
+    
+    /**
+     * Finaliza uma parada de máquina (quando usuário clica START para retomar)
+     * O motivo já foi informado no início da parada
+     */
+    async function finalizeMachineDowntime() {
+        console.log('[DOWNTIME][FINALIZE] Finalizando parada', {
+            selectedMachineData,
+            currentDowntimeStart,
+            machineStatus
+        });
+
+        if (!currentDowntimeStart) {
+            console.warn('[DOWNTIME][FINALIZE] Nenhuma parada ativa encontrada');
+            // Garante que o status da máquina volte para running e a UI seja atualizada
+            machineStatus = 'running';
+            updateMachineStatus();
+            resumeProductionTimer();
+            stopDowntimeTimer();
+            await loadTodayStats();
+            await loadRecentEntries(false);
+            await refreshAnalysisIfActive();
+            return;
+        }
+        
+        let erroFinal = null;
+        let savedSegments = 0;
+        
+        try {
+            const now = new Date();
+            const endShift = getShiftForDateTime(now);
+            const endWorkday = getWorkdayForDateTime(now);
+            
+            // Reconstruir data de início a partir dos dados salvos
+            let startDateTime;
+            if (currentDowntimeStart.startTimestamp instanceof Date) {
+                startDateTime = currentDowntimeStart.startTimestamp;
+            } else if (currentDowntimeStart.startTimestampLocal) {
+                startDateTime = new Date(currentDowntimeStart.startTimestampLocal);
+            } else {
+                // Fallback: reconstruir a partir de date + startTime
+                startDateTime = parseDateTime(currentDowntimeStart.date, currentDowntimeStart.startTime);
+            }
+            
+            if (!startDateTime || isNaN(startDateTime.getTime())) {
+                console.error('[DOWNTIME][FINALIZE] Data de início inválida:', currentDowntimeStart);
+                alert('Erro: Data de início da parada inválida. Registre manualmente.');
+                return;
+            }
+            
+            const startDateStr = formatDateYMD(startDateTime);
+            const startTimeStr = formatTimeHM(startDateTime);
+            const endDateStr = formatDateYMD(now);
+            const endTimeStr = formatTimeHM(now);
+            
+            // Calcular duração total para log
+            const totalDurationMs = now.getTime() - startDateTime.getTime();
+            const totalDurationMin = Math.round(totalDurationMs / 60000);
+            const totalDurationHours = (totalDurationMs / 3600000).toFixed(2);
+            
+            console.log('[DOWNTIME][FINALIZE] Calculando segmentos:', {
+                startDate: startDateStr,
+                startTime: startTimeStr,
+                endDate: endDateStr,
+                endTime: endTimeStr,
+                totalDurationMin,
+                totalDurationHours: `${totalDurationHours}h`
+            });
+            
+            // Segmentar a parada por turno
+            const segments = splitDowntimeIntoShiftSegments(startDateStr, startTimeStr, endDateStr, endTimeStr);
+            
+            if (!segments.length) {
+                console.error('[DOWNTIME][FINALIZE] Nenhum segmento gerado');
+                alert('Intervalo de parada inválido. Verifique os horários ou registre manualmente.');
+                return;
+            }
+            
+            console.log('[DOWNTIME][FINALIZE] Segmentos a salvar:', segments.length, segments);
+            
+            const currentUser = getActiveUser();
+            const batch = db.batch();
+            
+            // Usar o motivo que foi informado no início da parada
+            const reason = currentDowntimeStart.reason || 'NÃO INFORMADO';
+            const obs = currentDowntimeStart.observations || '';
+            
+            for (const seg of segments) {
+                const downtimeData = {
+                    // Identificação
+                    machine: currentDowntimeStart.machine,
+                    
+                    // Período
+                    date: seg.date,
+                    startTime: seg.startTime,
+                    endTime: seg.endTime,
+                    duration: seg.duration,
+                    shift: seg.shift,
+                    
+                    // Motivo e observações (informados no início da parada)
+                    reason: reason,
+                    observations: obs,
+                    
+                    // Contexto de produção (se disponível)
+                    product: currentDowntimeStart.product || null,
+                    productCod: currentDowntimeStart.productCod || null,
+                    orderId: currentDowntimeStart.orderId || null,
+                    orderNumber: currentDowntimeStart.orderNumber || null,
+                    
+                    // Metadados de registro
+                    registradoPor: currentUser?.username || null,
+                    registradoPorNome: getCurrentUserName(),
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    
+                    // Metadados adicionais para auditoria
+                    originalStartTimestamp: startDateTime.toISOString(),
+                    originalEndTimestamp: now.toISOString(),
+                    totalParentDuration: totalDurationMin,
+                    segmentIndex: segments.indexOf(seg),
+                    totalSegments: segments.length,
+                    systemVersion: '2.0'
+                };
+                
+                const docRef = db.collection('downtime_entries').doc();
+                batch.set(docRef, downtimeData);
+                savedSegments++;
+                
+                console.log(`[DOWNTIME][FINALIZE] Segmento ${savedSegments}/${segments.length} preparado:`, {
+                    date: seg.date,
+                    shift: seg.shift,
+                    duration: seg.duration,
+                    startTime: seg.startTime,
+                    endTime: seg.endTime
+                });
+            }
+            
+            // Executar batch de salvamento
+            await batch.commit();
+            console.log(`[DOWNTIME][FINALIZE] ${savedSegments} segmentos salvos com sucesso`);
+            
+        } catch (error) {
+            erroFinal = error;
+            console.error('[DOWNTIME][FINALIZE] Erro ao registrar parada:', error);
+            alert('Erro ao registrar parada. Tente novamente.');
+        } finally {
+            // Remover parada ativa dessa máquina (evita restauração automática na troca de máquina/reload)
+            const machineToClean = currentDowntimeStart?.machine;
+            const reasonForLog = currentDowntimeStart?.reason;
+            const durationForLog = downtimeElapsedSeconds ? Math.round(downtimeElapsedSeconds / 60) + ' min' : '-';
+            
+            try {
+                if (machineToClean) {
+                    await db.collection('active_downtimes').doc(machineToClean).delete();
+                    console.log('[DOWNTIME][FINALIZE] active_downtime removed for machine', machineToClean);
+                }
+            } catch (err) {
+                console.warn('[DOWNTIME][FINALIZE] failed to delete active_downtime doc', err);
+            }
+            
+            // Resetar status e timers (sempre)
+            currentDowntimeStart = null;
+            machineStatus = 'running';
+            updateMachineStatus();
+            stopDowntimeTimer();
+            resumeProductionTimer();
+            await loadTodayStats();
+            await loadRecentEntries(false);
+            await refreshAnalysisIfActive();
+            
+            if (!erroFinal) {
+                showNotification('Parada finalizada e registrada com sucesso!', 'success');
+                console.log('[DOWNTIME][FINALIZE] success path completed');
+                
+                // Registrar log de parada
+                registrarLogSistema('REGISTRO DE PARADA', 'parada', {
+                    machine: machineToClean || selectedMachineData?.machine,
+                    motivo: reasonForLog || '-',
+                    duracao: durationForLog
+                });
+            }
+        }
     }
 
     // ======== PARADAS LONGAS (Fim de Semana, Manutenção, etc.) ========
@@ -17297,7 +17766,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             <tr>
                 <td colspan="10" class="px-4 py-10 text-center text-gray-400">
                     <i data-lucide="loader-2" class="w-10 h-10 mx-auto mb-3 animate-spin opacity-50"></i>
-                    <p>Carregando dados do SYNCHRO...</p>
+                    <p>Carregando dados do Hokkaido Mes...</p>
                 </td>
             </tr>
         `;
@@ -17307,7 +17776,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             // Buscar todos os 3 turnos
             const turnosParaBuscar = [1, 2, 3];
             
-            // Estrutura: { maquina: { t1: synchro, t2: synchro, t3: synchro } }
+            // Estrutura: { maquina: { t1: hokkaido, t2: hokkaido, t3: hokkaido } }
             const producaoPorMaquina = new Map();
 
             for (const t of turnosParaBuscar) {
@@ -17387,7 +17856,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 console.warn('[ACOMPANHAMENTO] Não foi possível carregar dados salvos:', e);
             }
 
-            maquinasOrdenadas.forEach(([maquina, synchros]) => {
+            maquinasOrdenadas.forEach(([maquina, hokkaidos]) => {
                 const salvoT1 = dadosSalvos[`${maquina}_T1`] || {};
                 const salvoT2 = dadosSalvos[`${maquina}_T2`] || {};
                 const salvoT3 = dadosSalvos[`${maquina}_T3`] || {};
@@ -17403,7 +17872,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                                data-maquina="${maquina}" data-turno="1" placeholder="0" value="${salvoT1.cedoc || ''}">
                     </td>
                     <td class="px-1 py-2 text-center bg-blue-50/30">
-                        <span class="text-xs font-semibold acompanhamento-synchro" data-turno="1">${Math.round(synchros.t1)}</span>
+                        <span class="text-xs font-semibold acompanhamento-hokkaido" data-turno="1">${Math.round(hokkaidos.t1)}</span>
                     </td>
                     <td class="px-1 py-2 text-center border-r border-gray-200 bg-blue-50/30">
                         <span class="acompanhamento-diferenca text-xs font-bold" data-maquina="${maquina}" data-turno="1">0</span>
@@ -17415,7 +17884,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                                data-maquina="${maquina}" data-turno="2" placeholder="0" value="${salvoT2.cedoc || ''}">
                     </td>
                     <td class="px-1 py-2 text-center bg-purple-50/30">
-                        <span class="text-xs font-semibold acompanhamento-synchro" data-turno="2">${Math.round(synchros.t2)}</span>
+                        <span class="text-xs font-semibold acompanhamento-hokkaido" data-turno="2">${Math.round(hokkaidos.t2)}</span>
                     </td>
                     <td class="px-1 py-2 text-center border-r border-gray-200 bg-purple-50/30">
                         <span class="acompanhamento-diferenca text-xs font-bold" data-maquina="${maquina}" data-turno="2">0</span>
@@ -17427,7 +17896,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                                data-maquina="${maquina}" data-turno="3" placeholder="0" value="${salvoT3.cedoc || ''}">
                     </td>
                     <td class="px-1 py-2 text-center bg-orange-50/30">
-                        <span class="text-xs font-semibold acompanhamento-synchro" data-turno="3">${Math.round(synchros.t3)}</span>
+                        <span class="text-xs font-semibold acompanhamento-hokkaido" data-turno="3">${Math.round(hokkaidos.t3)}</span>
                     </td>
                     <td class="px-1 py-2 text-center bg-orange-50/30">
                         <span class="acompanhamento-diferenca text-xs font-bold" data-maquina="${maquina}" data-turno="3">0</span>
@@ -17471,14 +17940,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 const turno = cedocInput.dataset.turno;
                 const maquina = cedocInput.dataset.maquina;
                 
-                // Encontrar o synchro e diferença correspondentes na mesma linha
-                const synchroSpan = row.querySelector(`.acompanhamento-synchro[data-turno="${turno}"]`);
+                // Encontrar o hokkaido e diferença correspondentes na mesma linha
+                const hokaidoSpan = row.querySelector(`.acompanhamento-hokkaido[data-turno="${turno}"]`);
                 const diferencaCell = row.querySelector(`.acompanhamento-diferenca[data-turno="${turno}"]`);
 
-                if (cedocInput && synchroSpan && diferencaCell) {
+                if (cedocInput && hokaidoSpan && diferencaCell) {
                     const cedoc = parseFloat(cedocInput.value) || 0;
-                    const synchro = parseFloat(synchroSpan.textContent) || 0;
-                    const diferenca = cedoc - synchro;
+                    const hokkaido = parseFloat(hokaidoSpan.textContent) || 0;
+                    const diferenca = cedoc - hokkaido;
 
                     diferencaCell.textContent = Math.round(diferenca);
 
@@ -19801,8 +20270,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     }
     
     /**
-     * Handler robusto para finalização de parada (quando usuário clica START)
-     * Segmenta paradas longas por turno e salva cada segmento individualmente
+     * Handler para INICIAR uma parada (nova dinâmica - motivo informado no início)
+     * Coleta o motivo do modal e inicia a parada
      */
     async function handleDowntimeSubmit(e) {
         e.preventDefault();
@@ -19811,16 +20280,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (!validateOrderActivated()) {
             return;
         }
-
         
         // Verificar permissão
         if (!window.authSystem.checkPermissionForAction('add_downtime')) {
             return;
         }
         
-        console.log('[DOWNTIME][SUBMIT] Iniciando finalização de parada', {
+        console.log('[DOWNTIME][SUBMIT] Coletando motivo para INICIAR parada', {
             selectedMachineData,
-            currentDowntimeStart,
             machineStatus
         });
 
@@ -19834,170 +20301,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
 
-        if (!currentDowntimeStart) {
-            console.warn('[DOWNTIME][SUBMIT] Nenhuma parada ativa encontrada');
-            alert('Nenhuma parada ativa para finalizar.');
-            closeModal('quick-downtime-modal');
-            // Garante que o status da máquina volte para running e a UI seja atualizada
-            machineStatus = 'running';
-            updateMachineStatus();
-            resumeProductionTimer();
-            stopDowntimeTimer();
-            await loadTodayStats();
-            await loadRecentEntries(false);
-            await refreshAnalysisIfActive();
-            return;
-        }
+        // Fechar o modal antes de iniciar a parada
+        closeModal('quick-downtime-modal');
         
-        let erroFinal = null;
-        let savedSegments = 0;
+        // Iniciar a parada com o motivo informado
+        await startMachineDowntime(reason, obs);
         
-        try {
-            const now = new Date();
-            const endShift = getShiftForDateTime(now);
-            const endWorkday = getWorkdayForDateTime(now);
-            
-            // Reconstruir data de início a partir dos dados salvos
-            let startDateTime;
-            if (currentDowntimeStart.startTimestamp instanceof Date) {
-                startDateTime = currentDowntimeStart.startTimestamp;
-            } else if (currentDowntimeStart.startTimestampLocal) {
-                startDateTime = new Date(currentDowntimeStart.startTimestampLocal);
-            } else {
-                // Fallback: reconstruir a partir de date + startTime
-                startDateTime = parseDateTime(currentDowntimeStart.date, currentDowntimeStart.startTime);
-            }
-            
-            if (!startDateTime || isNaN(startDateTime.getTime())) {
-                console.error('[DOWNTIME][SUBMIT] Data de início inválida:', currentDowntimeStart);
-                alert('Erro: Data de início da parada inválida. Registre manualmente.');
-                return;
-            }
-            
-            const startDateStr = formatDateYMD(startDateTime);
-            const startTimeStr = formatTimeHM(startDateTime);
-            const endDateStr = formatDateYMD(now);
-            const endTimeStr = formatTimeHM(now);
-            
-            // Calcular duração total para log
-            const totalDurationMs = now.getTime() - startDateTime.getTime();
-            const totalDurationMin = Math.round(totalDurationMs / 60000);
-            const totalDurationHours = (totalDurationMs / 3600000).toFixed(2);
-            
-            console.log('[DOWNTIME][SUBMIT] Calculando segmentos:', {
-                startDate: startDateStr,
-                startTime: startTimeStr,
-                endDate: endDateStr,
-                endTime: endTimeStr,
-                totalDurationMin,
-                totalDurationHours: `${totalDurationHours}h`
-            });
-            
-            // Segmentar a parada por turno
-            const segments = splitDowntimeIntoShiftSegments(startDateStr, startTimeStr, endDateStr, endTimeStr);
-            
-            if (!segments.length) {
-                console.error('[DOWNTIME][SUBMIT] Nenhum segmento gerado');
-                alert('Intervalo de parada inválido. Verifique os horários ou registre manualmente.');
-                return;
-            }
-            
-            console.log('[DOWNTIME][SUBMIT] Segmentos a salvar:', segments.length, segments);
-            
-            const currentUser = getActiveUser();
-            const batch = db.batch();
-            
-            for (const seg of segments) {
-                const downtimeData = {
-                    // Identificação
-                    machine: currentDowntimeStart.machine,
-                    
-                    // Período
-                    date: seg.date,
-                    startTime: seg.startTime,
-                    endTime: seg.endTime,
-                    duration: seg.duration,
-                    shift: seg.shift,
-                    
-                    // Motivo e observações
-                    reason: reason,
-                    observations: obs,
-                    
-                    // Contexto de produção (se disponível)
-                    product: currentDowntimeStart.product || null,
-                    productCod: currentDowntimeStart.productCod || null,
-                    orderId: currentDowntimeStart.orderId || null,
-                    orderNumber: currentDowntimeStart.orderNumber || null,
-                    
-                    // Metadados de registro
-                    registradoPor: currentUser?.username || null,
-                    registradoPorNome: getCurrentUserName(),
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    
-                    // Metadados adicionais para auditoria
-                    originalStartTimestamp: startDateTime.toISOString(),
-                    originalEndTimestamp: now.toISOString(),
-                    totalParentDuration: totalDurationMin,
-                    segmentIndex: segments.indexOf(seg),
-                    totalSegments: segments.length,
-                    systemVersion: '2.0'
-                };
-                
-                const docRef = db.collection('downtime_entries').doc();
-                batch.set(docRef, downtimeData);
-                savedSegments++;
-                
-                console.log(`[DOWNTIME][SUBMIT] Segmento ${savedSegments}/${segments.length} preparado:`, {
-                    date: seg.date,
-                    shift: seg.shift,
-                    duration: seg.duration,
-                    startTime: seg.startTime,
-                    endTime: seg.endTime
-                });
-            }
-            
-            // Executar batch de salvamento
-            await batch.commit();
-            console.log(`[DOWNTIME][SUBMIT] ${savedSegments} segmentos salvos com sucesso`);
-            
-        } catch (error) {
-            erroFinal = error;
-            console.error('[DOWNTIME][SUBMIT] Erro ao registrar parada:', error);
-            alert('Erro ao registrar parada. Tente novamente.');
-        } finally {
-            // Remover parada ativa dessa máquina (evita restauração automática na troca de máquina/reload)
-            try {
-                if (currentDowntimeStart?.machine) {
-                    await db.collection('active_downtimes').doc(currentDowntimeStart.machine).delete();
-                    console.log('[TRACE][handleDowntimeSubmit] active_downtime removed for machine', currentDowntimeStart.machine);
-                }
-            } catch (err) {
-                console.warn('[WARN][handleDowntimeSubmit] failed to delete active_downtime doc', err);
-            }
-            // Resetar status e timers (sempre)
-            currentDowntimeStart = null;
-            machineStatus = 'running';
-            updateMachineStatus();
-            stopDowntimeTimer();
-            resumeProductionTimer();
-            closeModal('quick-downtime-modal');
-            await loadTodayStats();
-            await loadRecentEntries(false);
-            await refreshAnalysisIfActive();
-            if (!erroFinal) {
-                showNotification('Parada finalizada e registrada com sucesso!', 'success');
-                console.log('[TRACE][handleDowntimeSubmit] success path completed');
-                
-                // Registrar log de parada
-                registrarLogSistema('REGISTRO DE PARADA', 'parada', {
-                    machine: currentDowntimeStart?.machine || selectedMachineData?.machine,
-                    motivo: document.getElementById('downtime-reason')?.value || '-',
-                    duracao: downtimeElapsedSeconds ? Math.round(downtimeElapsedSeconds / 60) + ' min' : '-'
-                });
-            } else {
-                showNotification('Parada finalizada localmente, mas houve erro ao registrar no banco.', 'warning');
-            }
-        }
+        console.log('[DOWNTIME][SUBMIT] Parada iniciada com motivo:', reason);
     }
 
     async function handleManualBorraSubmit(e) {

@@ -391,7 +391,7 @@
                 
                 <!-- Elementos   direita -->
                 <div class="flex items-center justify-end gap-2 sm:gap-3 ml-auto">
-                    <img src="https://i.postimg.cc/h47TKP4d/logosynchro.png" alt="Logo Hokkaido Synchro" class="hidden sm:block h-8 md:h-10 object-contain drop-shadow-sm">
+                    <!-- Logo Hokkaido Mes -->
                     <div id="header-user-card" class="flex flex-row items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 shadow-sm">
                         <div class="flex items-center gap-2">
                             <div id="header-user-avatar" class="flex h-8 w-8 items-center justify-center rounded-full bg-primary-blue/10 text-primary-blue text-xs font-semibold uppercase">LC</div>
@@ -1011,7 +1011,7 @@
                                 </div>
                                 <div>
                                     <h2 class="text-xl font-semibold text-gray-800">Acompanhamento de Turno</h2>
-                                    <p class="text-sm text-gray-500">Validação CEDOC vs SYNCHRO</p>
+                                    <p class="text-sm text-gray-500">Validação CEDOC vs Hokkaido Mes</p>
                                 </div>
                             </div>
                             <div id="acompanhamento-status" class="text-xs font-semibold text-blue-600 bg-blue-100 px-3 py-1.5 rounded-full">
@@ -1058,13 +1058,13 @@
                                     </tr>
                                     <tr class="bg-gray-100 text-gray-700">
                                         <th class="px-2 py-2 text-center text-xs font-semibold">CEDOC</th>
-                                        <th class="px-2 py-2 text-center text-xs font-semibold">SYNCHRO</th>
+                                        <th class="px-2 py-2 text-center text-xs font-semibold">Hokkaido Mes</th>
                                         <th class="px-2 py-2 text-center text-xs font-semibold border-r border-gray-300">Dif.</th>
                                         <th class="px-2 py-2 text-center text-xs font-semibold">CEDOC</th>
-                                        <th class="px-2 py-2 text-center text-xs font-semibold">SYNCHRO</th>
+                                        <th class="px-2 py-2 text-center text-xs font-semibold">Hokkaido Mes</th>
                                         <th class="px-2 py-2 text-center text-xs font-semibold border-r border-gray-300">Dif.</th>
                                         <th class="px-2 py-2 text-center text-xs font-semibold">CEDOC</th>
-                                        <th class="px-2 py-2 text-center text-xs font-semibold">SYNCHRO</th>
+                                        <th class="px-2 py-2 text-center text-xs font-semibold">Hokkaido Mes</th>
                                         <th class="px-2 py-2 text-center text-xs font-semibold">Dif.</th>
                                     </tr>
                                 </thead>
@@ -2106,54 +2106,52 @@
 
                                 <!-- KPIs Principais - Layout Aprimorado -->
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                                    <!-- Total Produzido -->
+                                    <!-- PLANEJADO -->
                                     <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl shadow-sm border border-blue-200 p-5 hover:shadow-md transition">
                                         <div class="flex items-center justify-between mb-3">
-                                            <p class="text-sm font-medium text-blue-700">Total Produzido</p>
+                                            <p class="text-sm font-medium text-blue-700">PLANEJADO</p>
                                             <div class="p-2 bg-blue-200 rounded-lg">
-                                                <i data-lucide="package" class="w-4 h-4 text-blue-600"></i>
+                                                <i data-lucide="calendar-check" class="w-4 h-4 text-blue-600"></i>
                                             </div>
                                         </div>
-                                        <p id="total-produced-kpi" class="text-3xl font-bold text-blue-600 mb-1">---</p>
-                                        <p id="total-produced-subtext" class="text-xs text-blue-600 opacity-70">peças</p>
+                                        <p id="planned-production-kpi" class="text-3xl font-bold text-blue-600 mb-1">---</p>
+                                        <p id="planned-production-subtext" class="text-xs text-blue-600 opacity-70">peças planejadas</p>
                                     </div>
 
-                                    <!-- Meta vs Realizado -->
+                                    <!-- REALIZADO -->
                                     <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-2xl shadow-sm border border-green-200 p-5 hover:shadow-md transition">
                                         <div class="flex items-center justify-between mb-3">
-                                            <p class="text-sm font-medium text-green-700">Meta vs Realizado</p>
+                                            <p class="text-sm font-medium text-green-700">REALIZADO</p>
                                             <div class="p-2 bg-green-200 rounded-lg">
-                                                <i data-lucide="target" class="w-4 h-4 text-green-600"></i>
+                                                <i data-lucide="check-circle" class="w-4 h-4 text-green-600"></i>
                                             </div>
                                         </div>
-                                        <p id="production-target-vs-actual" class="text-3xl font-bold text-green-600 mb-1">---%</p>
-                                        <p id="target-vs-actual-subtext" class="text-xs text-green-600 opacity-70">eficiência da meta</p>
+                                        <p id="actual-production-kpi" class="text-3xl font-bold text-green-600 mb-1">---</p>
+                                        <p id="actual-production-subtext" class="text-xs text-green-600 opacity-70">peças produzidas</p>
                                     </div>
 
-                                    <!-- Taxa de Produção -->
+                                    <!-- META x REALIZADO -->
+                                    <div class="bg-gradient-to-br from-amber-50 to-amber-100 rounded-2xl shadow-sm border border-amber-200 p-5 hover:shadow-md transition">
+                                        <div class="flex items-center justify-between mb-3">
+                                            <p class="text-sm font-medium text-amber-700">META x REALIZADO</p>
+                                            <div class="p-2 bg-amber-200 rounded-lg">
+                                                <i data-lucide="target" class="w-4 h-4 text-amber-600"></i>
+                                            </div>
+                                        </div>
+                                        <p id="production-target-vs-actual" class="text-3xl font-bold text-amber-600 mb-1">---%</p>
+                                        <p id="target-vs-actual-subtext" class="text-xs text-amber-600 opacity-70">eficiência da meta</p>
+                                    </div>
+
+                                    <!-- TAXA DE PRODUÇÃO -->
                                     <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl shadow-sm border border-purple-200 p-5 hover:shadow-md transition">
                                         <div class="flex items-center justify-between mb-3">
-                                            <div>
-                                                <p class="text-sm font-medium text-purple-700">Taxa de Produção</p>
-                                            </div>
+                                            <p class="text-sm font-medium text-purple-700">TAXA DE PRODUÇÃO</p>
                                             <div class="p-2 bg-purple-200 rounded-lg">
                                                 <i data-lucide="zap" class="w-4 h-4 text-purple-600"></i>
                                             </div>
                                         </div>
                                         <p id="production-rate-value" class="text-3xl font-bold text-purple-600 mb-1">--- pcs/h</p>
                                         <p id="production-rate-subtext" class="text-xs text-purple-600 opacity-70">velocidade média</p>
-                                    </div>
-
-                                    <!-- Máquina Top -->
-                                    <div class="bg-gradient-to-br from-amber-50 to-amber-100 rounded-2xl shadow-sm border border-amber-200 p-5 hover:shadow-md transition">
-                                        <div class="flex items-center justify-between mb-3">
-                                            <p class="text-sm font-medium text-amber-700">Top Performance</p>
-                                            <div class="p-2 bg-amber-200 rounded-lg">
-                                                <i data-lucide="crown" class="w-4 h-4 text-amber-600"></i>
-                                            </div>
-                                        </div>
-                                        <p id="top-machine" class="text-3xl font-bold text-amber-600 mb-1">---</p>
-                                        <p id="top-machine-subtext" class="text-xs text-amber-600 opacity-70">máquina</p>
                                     </div>
                                 </div>
 
@@ -2205,6 +2203,22 @@
                                     </div>
                                     <div class="chart-container" style="height: 380px;">
                                         <canvas id="analysis-machine-production-timeline" class="w-full h-full"></canvas>
+                                    </div>
+                                </div>
+
+                                <!-- Gráfico Ciclo/Cavidades -->
+                                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition mb-6">
+                                    <div class="flex items-center gap-3 mb-4">
+                                        <div class="p-2 bg-cyan-100 rounded-lg">
+                                            <i data-lucide="settings-2" class="w-4 h-4 text-cyan-600"></i>
+                                        </div>
+                                        <div>
+                                            <h3 class="font-semibold text-gray-800">Ciclo / Cavidades</h3>
+                                            <p class="text-xs text-gray-500">Comparativo planejado vs real por turno</p>
+                                        </div>
+                                    </div>
+                                    <div class="chart-container" style="height: 300px;">
+                                        <canvas id="cycle-cavity-chart" class="w-full h-full"></canvas>
                                     </div>
                                 </div>
 
@@ -3559,7 +3573,7 @@
                     <div class="p-2 bg-gradient-to-br from-red-100 to-red-200 rounded-xl">
                         <i data-lucide="pause-circle" class="w-5 h-5 text-red-600"></i>
                     </div>
-                    <h3 class="text-lg font-semibold text-gray-800" id="downtime-modal-title">Informar Motivo da Parada</h3>
+                    <h3 class="text-lg font-semibold text-gray-800" id="downtime-modal-title">Iniciar Parada - Informe o Motivo</h3>
                 </div>
                 <button id="quick-downtime-close" class="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
                     <i data-lucide="x" class="w-5 h-5 text-gray-500"></i>
@@ -3576,7 +3590,7 @@
                 <div class="bg-gradient-to-br from-yellow-50 to-amber-50 border border-yellow-200 rounded-xl p-3 mb-4">
                     <p class="text-sm text-yellow-800">
                         <i data-lucide="info" class="w-4 h-4 inline mr-1"></i>
-                        Selecione o motivo da parada que acabou de finalizar.
+                        Selecione o motivo da parada que está iniciando.
                     </p>
                 </div>
                 <div>
@@ -3636,7 +3650,7 @@
                         Cancelar
                     </button>
                     <button type="submit" class="flex-1 py-2.5 px-4 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all" id="downtime-action-btn">
-                        Registrar e Retomar
+                        Iniciar Parada
                     </button>
                 </div>
             </form>
