@@ -3958,7 +3958,9 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         // 3. Recarregar dados atuais da máquina selecionada do machineCardData
         if (selectedMachineData && selectedMachineData.machine) {
             const machineName = selectedMachineData.machine;
-            const updatedMachineData = machineCardData[machineName];
+            const machineDataArray = machineCardData[machineName];
+            // machineCardData agora é array - pegar primeiro plano para compatibilidade
+            const updatedMachineData = Array.isArray(machineDataArray) ? machineDataArray[0] : machineDataArray;
             if (updatedMachineData) {
                 selectedMachineData = updatedMachineData;
                 console.log('[EDIT-ORDER-HANDLER] selectedMachineData atualizado:', { 
@@ -5175,16 +5177,116 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const { startDate, endDate, machine, shift } = currentAnalysisFilters;
         console.log('[TRACE][loadDowntimeAnalysis] fetching data', { startDate, endDate, machine, shift });
         
+        // Carregar paradas normais (do turno)
         const downtimeSegments = await getFilteredData('downtime', startDate, endDate, machine, shift);
         const downtimeData = consolidateDowntimeEvents(downtimeSegments);
 
-        console.log('[TRACE][loadDowntimeAnalysis] dataset received', {
+        console.log('[TRACE][loadDowntimeAnalysis] normal downtime received', {
             segments: downtimeSegments.length,
             events: downtimeData.length
         });
         
-        const totalDowntime = downtimeData.reduce((sum, item) => sum + (item.duration || 0), 0);
-        const downtimeCount = downtimeData.length;
+        // ✅ NOVO: Carregar paradas longas (extended_downtime_logs) para incluir nos gráficos
+        let extendedDowntimeData = [];
+        try {
+            const extendedSnap = await db.collection('extended_downtime_logs').get();
+            
+            // Definir limites do período filtrado
+            const filterStart = new Date(`${startDate}T00:00:00`);
+            const filterEnd = new Date(`${endDate}T23:59:59`);
+            const now = new Date();
+            
+            extendedSnap.forEach(doc => {
+                const d = doc.data();
+                const machineId = d.machine_id || d.machine || '';
+                
+                // Filtrar por máquina se selecionada
+                if (machine && machine !== 'all' && machine !== '' && machineId !== machine) return;
+                
+                // Determinar início e fim reais da parada
+                let paradaStart;
+                if (d.start_datetime?.toDate) {
+                    paradaStart = d.start_datetime.toDate();
+                } else if (d.start_date && d.start_time) {
+                    paradaStart = new Date(`${d.start_date}T${d.start_time}`);
+                } else if (d.start_date) {
+                    paradaStart = new Date(`${d.start_date}T00:00:00`);
+                } else {
+                    return; // Sem data de início, ignorar
+                }
+                
+                let paradaEnd;
+                const isActive = d.status === 'active';
+                if (isActive) {
+                    paradaEnd = now; // Parada ainda ativa - fim é agora
+                } else if (d.end_datetime?.toDate) {
+                    paradaEnd = d.end_datetime.toDate();
+                } else if (d.end_date && d.end_time) {
+                    paradaEnd = new Date(`${d.end_date}T${d.end_time}`);
+                } else if (d.end_date) {
+                    paradaEnd = new Date(`${d.end_date}T23:59:59`);
+                } else {
+                    paradaEnd = now; // Sem fim definido, assumir agora
+                }
+                
+                // Verificar se a parada tem intersecção com o período filtrado
+                if (paradaEnd < filterStart || paradaStart > filterEnd) {
+                    return; // Parada completamente fora do período
+                }
+                
+                // ✅ CALCULAR APENAS O TEMPO DENTRO DO PERÍODO FILTRADO
+                const effectiveStart = paradaStart < filterStart ? filterStart : paradaStart;
+                const effectiveEnd = paradaEnd > filterEnd ? filterEnd : paradaEnd;
+                
+                // Duração em minutos apenas do período filtrado
+                const durationMinutes = Math.max(0, Math.floor((effectiveEnd - effectiveStart) / (1000 * 60)));
+                
+                if (durationMinutes <= 0) return; // Sem tempo no período
+                
+                // Mapear tipo para motivo legível
+                const typeLabels = {
+                    weekend: 'Fim de Semana',
+                    maintenance: 'Manutenção Preventiva',
+                    preventive: 'Manutenção Preventiva',
+                    maintenance_planned: 'Manutenção Programada',
+                    holiday: 'Feriado',
+                    setup: 'Setup/Troca',
+                    other: 'Outros (Parada Longa)'
+                };
+                
+                extendedDowntimeData.push({
+                    id: doc.id,
+                    machine: machineId,
+                    reason: d.reason || typeLabels[d.type] || d.type || 'Parada Longa',
+                    duration: durationMinutes,
+                    type: d.type,
+                    isExtended: true, // Flag para identificar paradas longas
+                    // Info adicional para debug
+                    _totalDuration: d.duration_minutes || Math.floor((paradaEnd - paradaStart) / (1000 * 60)),
+                    _filteredDuration: durationMinutes
+                });
+                
+                console.log(`[EXTENDED-DOWNTIME] ${machineId}: Total ${Math.floor((paradaEnd - paradaStart) / (1000 * 60))}min, No período: ${durationMinutes}min`);
+            });
+            
+            console.log('[TRACE][loadDowntimeAnalysis] extended downtime received', {
+                count: extendedDowntimeData.length
+            });
+        } catch (err) {
+            console.warn('[loadDowntimeAnalysis] Erro ao carregar paradas longas:', err);
+        }
+        
+        // ✅ Combinar paradas normais + paradas longas para os gráficos
+        const allDowntimeData = [...downtimeData, ...extendedDowntimeData];
+        
+        console.log('[TRACE][loadDowntimeAnalysis] combined downtime data', {
+            normal: downtimeData.length,
+            extended: extendedDowntimeData.length,
+            total: allDowntimeData.length
+        });
+        
+        const totalDowntime = allDowntimeData.reduce((sum, item) => sum + (item.duration || 0), 0);
+        const downtimeCount = allDowntimeData.length;
         const avgDowntime = downtimeCount > 0 ? (totalDowntime / downtimeCount) : 0;
         
         // Calcular MTBF (Mean Time Between Failures)
@@ -5197,12 +5299,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         document.getElementById('avg-downtime').textContent = `${avgDowntime.toFixed(0)}min`;
         document.getElementById('mtbf-value').textContent = `${mtbf.toFixed(1)}h`;
 
-        // Gerar gráficos
-        await generateDowntimeReasonsChart(downtimeData);
-        await generateDowntimeByMachineChart(downtimeData);
-        await generateDowntimeTimelineChart(downtimeData);
+        // ✅ Gerar gráficos com dados combinados (normais + longas)
+        await generateDowntimeReasonsChart(allDowntimeData);
+        await generateDowntimeByMachineChart(allDowntimeData);
+        await generateDowntimeTimelineChart(downtimeData); // Timeline mantém só normais para não distorcer
 
-        // Carregar paradas longas programadas
+        // Carregar lista detalhada de paradas longas programadas
         await loadExtendedDowntimeAnalysis(startDate, endDate, machine);
     }
 
@@ -5351,35 +5453,84 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     // Badge de status - considerar vários valores
                     let statusBadge;
                     if (isActive) {
-                        statusBadge = '<span class="text-xs px-2 py-1 rounded bg-red-100 text-red-700 font-semibold">🔴 ATIVA</span>';
+                        statusBadge = '<span class="text-xs px-2 py-1 rounded bg-red-100 text-red-700 font-semibold animate-pulse">🔴 ATIVA</span>';
                     } else if (item.status === 'inactive' || item.status === 'registered' || item.status === 'finished') {
                         statusBadge = '<span class="text-xs px-2 py-1 rounded bg-green-100 text-green-700 font-semibold">✅ FINALIZADA</span>';
                     } else {
                         statusBadge = `<span class="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700 font-semibold">${item.status || 'N/A'}</span>`;
                     }
                     
-                    // Período: se parada ainda está ativa, mostrar apenas data início
-                    const periodText = isActive
-                        ? `${item.start_date || ''} (em andamento)`
-                        : `${item.start_date || ''} → ${item.end_date || ''}`;
+                    // Período detalhado com horários
+                    const startTimeStr = item.start_time || '00:00';
+                    const endTimeStr = item.end_time || '23:59';
+                    let periodText;
+                    if (isActive) {
+                        periodText = `Início: ${item.start_date || ''} às ${startTimeStr} (em andamento)`;
+                    } else {
+                        periodText = `${item.start_date || ''} ${startTimeStr} → ${item.end_date || ''} ${endTimeStr}`;
+                    }
+                    
+                    // Informações adicionais
+                    const registeredBy = item.registered_by || item.registeredBy || item.created_by || '-';
+                    const finishedBy = item.finished_by || item.finishedBy || '-';
+                    const createdAt = item.createdAt?.toDate?.() 
+                        ? item.createdAt.toDate().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                        : '-';
+                    const finishedAt = item.finishedAt?.toDate?.()
+                        ? item.finishedAt.toDate().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                        : (isActive ? '-' : (item.end_date || '-'));
                     
                     return `
-                        <div class="flex items-center justify-between p-3 ${item.status === 'active' ? 'bg-red-50 border border-red-200' : 'bg-gray-50'} rounded-lg hover:${item.status === 'active' ? 'bg-red-100' : 'bg-gray-100'} transition-colors">
-                            <div class="flex-1 flex items-center gap-3">
-                                <span class="font-semibold text-sm text-gray-800">${item.machine_id || '-'}</span>
-                                <span class="text-xs px-2 py-1 rounded ${typeColor}">${typeLabel}</span>
-                                ${statusBadge}
-                                <span class="text-xs text-gray-500">${periodText}</span>
-                                <span class="text-xs text-gray-400">${item.reason || ''}</span>
+                        <div class="p-4 ${isActive ? 'bg-red-50 border-2 border-red-300' : 'bg-gray-50 border border-gray-200'} rounded-xl hover:shadow-md transition-all">
+                            <!-- Header com máquina e status -->
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 bg-gradient-to-br ${isActive ? 'from-red-500 to-red-600' : 'from-gray-500 to-gray-600'} rounded-lg flex items-center justify-center text-white font-bold text-sm">
+                                        ${(item.machine_id || '-').slice(-2)}
+                                    </div>
+                                    <div>
+                                        <span class="font-bold text-base text-gray-800">${item.machine_id || '-'}</span>
+                                        <div class="flex items-center gap-2 mt-0.5">
+                                            <span class="text-xs px-2 py-0.5 rounded ${typeColor}">${typeLabel}</span>
+                                            ${statusBadge}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xl font-bold ${isActive ? 'text-red-600' : 'text-gray-700'}">${hours}h</span>
+                                    <button class="btn-edit-extended-downtime-analysis bg-blue-500 hover:bg-blue-600 text-white px-2.5 py-1.5 rounded-lg text-xs font-semibold transition shadow-sm" data-id="${item.id}" data-machine="${item.machine_id}" data-type="${item.type}" data-start-date="${item.start_date}" data-end-date="${item.end_date || ''}" data-reason="${item.reason}" data-start-time="${startTimeStr}" data-end-time="${endTimeStr}">
+                                        <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                    <button class="btn-delete-extended-downtime-analysis bg-red-500 hover:bg-red-600 text-white px-2.5 py-1.5 rounded-lg text-xs font-semibold transition shadow-sm" data-id="${item.id}" data-machine="${item.machine_id}">
+                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                </div>
                             </div>
-                            <div class="flex items-center gap-2">
-                                <span class="text-sm font-medium text-gray-700">${hours}h</span>
-                                <button class="btn-edit-extended-downtime-analysis bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs font-semibold transition" data-id="${item.id}" data-machine="${item.machine_id}" data-type="${item.type}" data-start-date="${item.start_date}" data-end-date="${item.end_date || ''}" data-reason="${item.reason}" data-start-time="${item.start_time || '00:00'}" data-end-time="${item.end_time || '23:59'}">
-                                    <i data-lucide="edit-2" class="w-3 h-3"></i>
-                                </button>
-                                <button class="btn-delete-extended-downtime-analysis bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs font-semibold transition" data-id="${item.id}" data-machine="${item.machine_id}">
-                                    <i data-lucide="trash-2" class="w-3 h-3"></i>
-                                </button>
+                            
+                            <!-- Motivo -->
+                            <div class="mb-3 p-2 bg-white rounded-lg border ${isActive ? 'border-red-200' : 'border-gray-200'}">
+                                <p class="text-xs text-gray-500 mb-1 font-medium">MOTIVO:</p>
+                                <p class="text-sm text-gray-800">${item.reason || 'Não informado'}</p>
+                            </div>
+                            
+                            <!-- Grid de informações detalhadas -->
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                                <div class="bg-white p-2 rounded-lg border ${isActive ? 'border-red-100' : 'border-gray-100'}">
+                                    <span class="text-gray-500 block">Período</span>
+                                    <span class="font-semibold text-gray-700">${periodText}</span>
+                                </div>
+                                <div class="bg-white p-2 rounded-lg border ${isActive ? 'border-red-100' : 'border-gray-100'}">
+                                    <span class="text-gray-500 block">Registrado por</span>
+                                    <span class="font-semibold text-gray-700">${registeredBy}</span>
+                                </div>
+                                <div class="bg-white p-2 rounded-lg border ${isActive ? 'border-red-100' : 'border-gray-100'}">
+                                    <span class="text-gray-500 block">Registro em</span>
+                                    <span class="font-semibold text-gray-700">${createdAt}</span>
+                                </div>
+                                <div class="bg-white p-2 rounded-lg border ${isActive ? 'border-red-100' : 'border-gray-100'}">
+                                    <span class="text-gray-500 block">${isActive ? 'Status' : 'Finalizado por'}</span>
+                                    <span class="font-semibold ${isActive ? 'text-red-600' : 'text-gray-700'}">${isActive ? 'Em andamento' : finishedBy}</span>
+                                </div>
                             </div>
                         </div>
                     `;
@@ -14396,7 +14547,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
             if (selectedMachineData && selectedMachineData.machine) {
                 const machine = selectedMachineData.machine;
-                const updatedMachineData = machineCardData[machine] || machineSelector?.machineData?.[machine];
+                // machineCardData agora é array - pegar primeiro plano para compatibilidade
+                const machineDataArray = machineCardData[machine];
+                const updatedMachineData = Array.isArray(machineDataArray) ? machineDataArray[0] : (machineDataArray || machineSelector?.machineData?.[machine]);
                 if (updatedMachineData) {
                     selectedMachineData = updatedMachineData;
                     updateMachineInfo();
@@ -15027,6 +15180,45 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     docData.order_part_code = String(linkedPartCode);
                 }
             }
+            
+            // ✅ POKA-YOKE: Verificar se já existe planejamento com mesma OP na mesma máquina e data
+            if (docData.order_number) {
+                const duplicateCheck = await db.collection('planning')
+                    .where('date', '==', docData.date)
+                    .where('machine', '==', docData.machine)
+                    .where('order_number', '==', docData.order_number)
+                    .get();
+                
+                if (!duplicateCheck.empty) {
+                    const existingPlan = duplicateCheck.docs[0].data();
+                    alert(`⚠️ DUPLICATA DETECTADA!\n\nJá existe um planejamento para a OP ${docData.order_number} na máquina ${docData.machine} nesta data.\n\nProduto existente: ${existingPlan.product || '-'}\n\nSe deseja adicionar outro produto do mesmo molde, use uma OP diferente.`);
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = `<i data-lucide="plus"></i><span>Adicionar</span>`;
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                    return;
+                }
+            }
+            
+            // Verificar também por product_cod na mesma máquina/data (mesmo produto sem OP)
+            if (docData.product_cod) {
+                const productDuplicateCheck = await db.collection('planning')
+                    .where('date', '==', docData.date)
+                    .where('machine', '==', docData.machine)
+                    .where('product_cod', '==', docData.product_cod)
+                    .get();
+                
+                if (!productDuplicateCheck.empty) {
+                    const existingPlan = productDuplicateCheck.docs[0].data();
+                    const confirmAdd = confirm(`⚠️ ATENÇÃO: Produto possivelmente duplicado!\n\nJá existe um planejamento para o produto ${docData.product_cod} na máquina ${docData.machine} nesta data.\n\nOP existente: ${existingPlan.order_number || 'Sem OP'}\nOP atual: ${docData.order_number || 'Sem OP'}\n\nDeseja adicionar mesmo assim?`);
+                    if (!confirmAdd) {
+                        submitButton.disabled = false;
+                        submitButton.innerHTML = `<i data-lucide="plus"></i><span>Adicionar</span>`;
+                        if (typeof lucide !== 'undefined') lucide.createIcons();
+                        return;
+                    }
+                }
+            }
+            
             await db.collection('planning').add(docData);
             
             // Registrar log
@@ -16765,6 +16957,42 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
         updateQuickProductionPieceWeightUI({ forceUpdateInput: true });
+        
+        // ⚠️ MULTI-PRODUTO: Popular seletor se houver múltiplos planos na máquina
+        const planSelectorContainer = document.getElementById('quick-production-plan-selector-container');
+        const planSelector = document.getElementById('quick-production-plan-selector');
+        if (planSelectorContainer && planSelector && selectedMachineData?.machine) {
+            const machinePlans = machineCardData[selectedMachineData.machine];
+            if (Array.isArray(machinePlans) && machinePlans.length > 1) {
+                // Mostrar seletor e popular com os planos
+                planSelectorContainer.classList.remove('hidden');
+                planSelector.innerHTML = '<option value="">Selecione o produto para lançar...</option>';
+                machinePlans.forEach((p, idx) => {
+                    const productName = p.product || p.product_name || getProductByCode(p.product_cod)?.name || `Produto ${idx + 1}`;
+                    const orderNum = p.order_number || p.order_number_original || '-';
+                    planSelector.innerHTML += `<option value="${p.id}" ${p.id === selectedMachineData.id ? 'selected' : ''}>${productName} (OP: ${orderNum})</option>`;
+                });
+                
+                // Listener para trocar o plano selecionado
+                planSelector.onchange = function() {
+                    const selectedPlanId = this.value;
+                    if (selectedPlanId && Array.isArray(machinePlans)) {
+                        const newPlan = machinePlans.find(p => p.id === selectedPlanId);
+                        if (newPlan) {
+                            selectedMachineData = newPlan;
+                            updateQuickProductionPieceWeightUI({ forceUpdateInput: true });
+                            // Atualizar contexto do modal
+                            const contextProduct = document.querySelector('#quick-production-modal .context-product');
+                            const contextOrder = document.querySelector('#quick-production-modal .context-op');
+                            if (contextProduct) contextProduct.textContent = newPlan.product || getProductByCode(newPlan.product_cod)?.name || '-';
+                            if (contextOrder) contextOrder.textContent = newPlan.order_number || '-';
+                        }
+                    }
+                };
+            } else {
+                planSelectorContainer.classList.add('hidden');
+            }
+        }
         
         // ⚠️ ADICIONAR LISTENERS QUANDO O MODAL ABRE
         const form = document.getElementById('quick-production-form');
@@ -20282,8 +20510,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             await populateMachineSelector();
             
             // Atualizar selectedMachineData com os dados mais recentes
+            // machineCardData agora é array - pegar primeiro plano para compatibilidade
             if (selectedMachineData && selectedMachineData.machine && machineCardData[selectedMachineData.machine]) {
-                selectedMachineData = machineCardData[selectedMachineData.machine];
+                const machineDataArray = machineCardData[selectedMachineData.machine];
+                selectedMachineData = Array.isArray(machineDataArray) ? machineDataArray[0] : machineDataArray;
                 updateMachineInfo();
                 updateQuickProductionPieceWeightUI();
             }
@@ -22158,12 +22388,16 @@ function sendDowntimeNotification() {
         const planById = {};
         const machineOrder = Array.from(allMachineIds).sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
 
-        // Mapear plans por máquina
+        // Mapear plans por máquina - AGORA SUPORTA MÚLTIPLOS PLANOS (ARRAY)
         activePlans.forEach(plan => {
             if (!plan || !plan.machine) return;
             const mid = normalizeMachineId(plan.machine);
             const enrichedPlan = { id: plan.id, ...plan };
-            machineCardData[mid] = enrichedPlan;
+            // Armazenar como array para suportar múltiplas ordens na mesma máquina
+            if (!machineCardData[mid]) {
+                machineCardData[mid] = [];
+            }
+            machineCardData[mid].push(enrichedPlan);
             planById[plan.id] = enrichedPlan;
         });
 
@@ -22172,20 +22406,33 @@ function sendDowntimeNotification() {
                 .concat(machineOrder.map(machine => `<option value="${machine}">${machine}</option>`));
             machineSelector.innerHTML = selectorOptions.join('');
             machineOrder.forEach(machine => {
-                machineSelector.machineData[machine] = machineCardData[machine];
+                // Retornar o primeiro plano ou array completo no seletor
+                machineSelector.machineData[machine] = machineCardData[machine] ? machineCardData[machine][0] : null;
             });
         }
 
         // IMPORTANTE: Inicializar aggregated para TODAS as máquinas (mesmo sem planejamento)
+        // Agora suporta múltiplos planos por máquina
         const aggregated = {};
         machineOrder.forEach(machine => {
+            const plans = machineCardData[machine] || [];
             aggregated[machine] = {
-                plan: machineCardData[machine] || {},  // Plan pode ser vazio para máquinas sem planejamento
+                plans: plans,  // Array de todos os planos da máquina
+                plan: plans[0] || {},  // Primeiro plano para compatibilidade
                 totalProduced: 0,
                 totalLossesKg: 0,
                 entries: [],
-                byShift: { T1: 0, T2: 0, T3: 0 }
+                byShift: { T1: 0, T2: 0, T3: 0 },
+                byPlan: {}  // Produção separada por plano
             };
+            // Inicializar byPlan para cada plano
+            plans.forEach(p => {
+                aggregated[machine].byPlan[p.id] = {
+                    totalProduced: 0,
+                    totalLossesKg: 0,
+                    byShift: { T1: 0, T2: 0, T3: 0 }
+                };
+            });
         });
 
         const planIdSet = new Set(activePlans.map(plan => plan.id));
@@ -22206,11 +22453,22 @@ function sendDowntimeNotification() {
             const machine = plan.machine;
             const produced = coerceToNumber(entry.produzido ?? entry.quantity, 0);
             const turno = normalizeShiftValue(entry.turno);
+            const lossKg = coerceToNumber(entry.refugo_kg, 0);
 
             aggregated[machine].totalProduced += produced;
-            aggregated[machine].totalLossesKg += coerceToNumber(entry.refugo_kg, 0);
+            aggregated[machine].totalLossesKg += lossKg;
             if (turno) {
                 aggregated[machine].byShift[turno] = (aggregated[machine].byShift[turno] || 0) + produced;
+            }
+            
+            // Agregar também por plano individual
+            if (aggregated[machine].byPlan[entry.planId]) {
+                aggregated[machine].byPlan[entry.planId].totalProduced += produced;
+                aggregated[machine].byPlan[entry.planId].totalLossesKg += lossKg;
+                if (turno) {
+                    aggregated[machine].byPlan[entry.planId].byShift[turno] = 
+                        (aggregated[machine].byPlan[entry.planId].byShift[turno] || 0) + produced;
+                }
             }
 
             const entryForOee = {
@@ -22218,7 +22476,7 @@ function sendDowntimeNotification() {
                 turno,
                 produzido: produced,
                 duracao_min: coerceToNumber(entry.duracao_min ?? entry.duration_min ?? entry.duration, 0),
-                refugo_kg: coerceToNumber(entry.refugo_kg, 0),
+                refugo_kg: lossKg,
                 piece_weight: plan.piece_weight,
                 real_cycle_t1: plan.real_cycle_t1,
                 real_cycle_t2: plan.real_cycle_t2,
@@ -22314,59 +22572,9 @@ function sendDowntimeNotification() {
 
     machineCardGrid.innerHTML = machineOrder.map(machine => {
         const data = aggregated[machine];
-        const plan = data.plan || {};
-        const plannedQtyPrimary = parseOptionalNumber(plan.order_lot_size);
-        const plannedQtyFallback = parseOptionalNumber(plan.lot_size);
-        const plannedQty = Math.round(plannedQtyPrimary ?? plannedQtyFallback ?? 0);
-        // OTIMIZAÇÃO: Usar APENAS data.totalProduced (soma dos entries) como fonte única
-        // Isso elimina oscilação causada por conflito entre plan.total_produzido e soma dos entries
-        const totalAccumulatedProduced = Math.round(data.totalProduced ?? 0);
-        const lossesKg = Math.round(coerceToNumber(data.totalLossesKg, 0));
-        const pieceWeight = coerceToNumber(plan.piece_weight, 0);
-        const scrapPcs = pieceWeight > 0 ? Math.round((lossesKg * 1000) / pieceWeight) : 0;
-        const goodProductionRaw = Math.max(0, totalAccumulatedProduced - scrapPcs);
-        const goodProduction = Math.round(goodProductionRaw);
-        const progressPercentRaw = plannedQty > 0 ? (goodProduction / plannedQty) * 100 : 0;
-        const packagingMultiple = resolvePackagingMultiple(plan);
-        const executedDisplayQty = packagingMultiple > 0 ? Math.floor(goodProduction / packagingMultiple) * packagingMultiple : goodProduction;
-        const displayRemainingQty = Math.max(0, plannedQty - executedDisplayQty);
-
-        const normalizedProgress = Math.max(0, Math.min(progressPercentRaw, 100));
-        const progressPalette = resolveProgressPalette(progressPercentRaw);
-        const progressTextClass = progressPalette.textClass || 'text-slate-600';
-        const progressText = `${Math.max(0, progressPercentRaw).toFixed(progressPercentRaw >= 100 ? 0 : 1)}%`;
-        const remainingQty = Math.max(0, plannedQty - goodProduction);
-        const lotCompleted = plannedQty > 0 && goodProduction >= plannedQty;
-
-        machineProgressInfo[machine] = {
-            normalizedProgress,
-            progressPercent: progressPercentRaw,
-            palette: progressPalette
-        };
-
-        const oeeShiftData = oeeByMachine[machine]?.[currentShiftKey];
-        const oeePercent = Math.max(0, Math.min((oeeShiftData?.oee || 0) * 100, 100));
-        const oeePercentText = oeePercent ? oeePercent.toFixed(1) : '0.0';
-        const oeeColorClass = oeePercent >= 85 ? 'text-emerald-600' : oeePercent >= 70 ? 'text-amber-500' : 'text-red-500';
-        const nowRef = new Date();
-        const shiftStart = getShiftStartDateTime(nowRef);
-        let runtimeHours = 0, downtimeHours = 0;
-        if (shiftStart instanceof Date && !Number.isNaN(shiftStart.getTime())) {
-            const elapsedSec = Math.max(0, Math.floor((nowRef.getTime() - shiftStart.getTime()) / 1000));
-            if (elapsedSec > 0) {
-                const dts = filteredDowntimeEntries.filter(dt => dt && dt.machine === machine);
-                const runtimeSec = calculateProductionRuntimeSeconds({ shiftStart, now: nowRef, downtimes: dts });
-                runtimeHours = Math.max(0, runtimeSec / 3600);
-                downtimeHours = Math.max(0, (elapsedSec / 3600) - runtimeHours);
-            }
-        }
-        let qualityPct = 100;
-        if (totalAccumulatedProduced > 0) {
-            qualityPct = Math.max(0, Math.min(100, (goodProduction / totalAccumulatedProduced) * 100));
-        } else if (lossesKg > 0) {
-            qualityPct = 0;
-        }
-        const qualityColorClass = qualityPct >= 98 ? 'text-emerald-600' : (qualityPct >= 95 ? 'text-amber-600' : 'text-red-600');
+        const plans = data.plans || [];
+        const plan = data.plan || {};  // Primeiro plano (para compatibilidade)
+        const hasMultiplePlans = plans.length > 1;
         
         // Resolver nome do produto - priorizar nome sobre código
         const resolveProductName = (p) => {
@@ -22409,11 +22617,75 @@ function sendDowntimeNotification() {
             // 4. Fallback para product mesmo que pareça código
             return p.product || 'Produto não definido';
         };
-        const displayProductName = resolveProductName(plan);
         
-        const productLine = displayProductName !== 'Produto não definido' ? `<p class=\"mt-1 text-sm text-slate-600\">${displayProductName}</p>` : '<p class=\"mt-1 text-sm text-slate-400\">Produto não definido</p>';
-        const mpLine = plan.mp ? `<p class=\"text-xs text-slate-400 mt-1\">MP: ${plan.mp}</p>` : '';
-        const shiftProduced = data.byShift[currentShiftKey] ?? data.byShift[fallbackShiftKey] ?? 0;
+        // Calcular dados combinados de todos os planos
+        let totalPlannedQty = 0;
+        let totalProducedAllPlans = 0;
+        const plansWithData = plans.map(p => {
+            const planData = data.byPlan[p.id] || { totalProduced: 0, totalLossesKg: 0, byShift: { T1: 0, T2: 0, T3: 0 } };
+            const plannedQtyPrimary = parseOptionalNumber(p.order_lot_size);
+            const plannedQtyFallback = parseOptionalNumber(p.lot_size);
+            const plannedQty = Math.round(plannedQtyPrimary ?? plannedQtyFallback ?? 0);
+            const produced = Math.round(planData.totalProduced ?? 0);
+            const lossKg = Math.round(planData.totalLossesKg ?? 0);
+            const pieceWeight = coerceToNumber(p.piece_weight, 0);
+            const scrapPcs = pieceWeight > 0 ? Math.round((lossKg * 1000) / pieceWeight) : 0;
+            const goodProd = Math.max(0, produced - scrapPcs);
+            const progressPct = plannedQty > 0 ? (goodProd / plannedQty) * 100 : 0;
+            
+            totalPlannedQty += plannedQty;
+            totalProducedAllPlans += goodProd;
+            
+            return {
+                ...p,
+                displayName: resolveProductName(p),
+                plannedQty,
+                produced,
+                goodProd,
+                lossKg,
+                progressPct,
+                isCompleted: plannedQty > 0 && goodProd >= plannedQty
+            };
+        });
+        
+        // Dados agregados da máquina
+        const totalAccumulatedProduced = Math.round(data.totalProduced ?? 0);
+        const lossesKg = Math.round(coerceToNumber(data.totalLossesKg, 0));
+        const pieceWeight = coerceToNumber(plan.piece_weight, 0);
+        const scrapPcs = pieceWeight > 0 ? Math.round((lossesKg * 1000) / pieceWeight) : 0;
+        const goodProductionRaw = Math.max(0, totalAccumulatedProduced - scrapPcs);
+        const goodProduction = Math.round(goodProductionRaw);
+        
+        // Progresso geral da máquina (combinado de todos os planos)
+        const progressPercentRaw = totalPlannedQty > 0 ? (totalProducedAllPlans / totalPlannedQty) * 100 : 0;
+        const normalizedProgress = Math.max(0, Math.min(progressPercentRaw, 100));
+        const progressPalette = resolveProgressPalette(progressPercentRaw);
+        const progressTextClass = progressPalette.textClass || 'text-slate-600';
+        const progressText = `${Math.max(0, progressPercentRaw).toFixed(progressPercentRaw >= 100 ? 0 : 1)}%`;
+        const allCompleted = plansWithData.length > 0 && plansWithData.every(p => p.isCompleted);
+
+        machineProgressInfo[machine] = {
+            normalizedProgress,
+            progressPercent: progressPercentRaw,
+            palette: progressPalette
+        };
+
+        const oeeShiftData = oeeByMachine[machine]?.[currentShiftKey];
+        const oeePercent = Math.max(0, Math.min((oeeShiftData?.oee || 0) * 100, 100));
+        const oeePercentText = oeePercent ? oeePercent.toFixed(1) : '0.0';
+        const oeeColorClass = oeePercent >= 85 ? 'text-emerald-600' : oeePercent >= 70 ? 'text-amber-500' : 'text-red-500';
+        const nowRef = new Date();
+        const shiftStart = getShiftStartDateTime(nowRef);
+        let runtimeHours = 0, downtimeHours = 0;
+        if (shiftStart instanceof Date && !Number.isNaN(shiftStart.getTime())) {
+            const elapsedSec = Math.max(0, Math.floor((nowRef.getTime() - shiftStart.getTime()) / 1000));
+            if (elapsedSec > 0) {
+                const dts = filteredDowntimeEntries.filter(dt => dt && dt.machine === machine);
+                const runtimeSec = calculateProductionRuntimeSeconds({ shiftStart, now: nowRef, downtimes: dts });
+                runtimeHours = Math.max(0, runtimeSec / 3600);
+                downtimeHours = Math.max(0, (elapsedSec / 3600) - runtimeHours);
+            }
+        }
 
         // Lógica de cor do card: vermelho se houver parada ativa (normal OU longa)
         let cardColorClass = '';
@@ -22422,25 +22694,68 @@ function sendDowntimeNotification() {
         if (hasActiveDowntime || hasExtendedDowntime) {
             cardColorClass = 'machine-stopped'; // vermelho para parada ativa (normal ou longa)
         }
+        
+        // Gerar HTML para múltiplos produtos
+        const generateMultiProductSection = () => {
+            if (!hasMultiplePlans) return '';
+            
+            return `
+                <div class="mb-2 p-2 rounded-lg bg-purple-50 border border-purple-200">
+                    <div class="flex items-center gap-2 mb-2">
+                        <i data-lucide="layers" class="w-4 h-4 text-purple-600"></i>
+                        <span class="text-xs font-bold text-purple-700">MOLDE MULTI-PRODUTO (${plans.length} OPs)</span>
+                    </div>
+                    <div class="space-y-2 max-h-40 overflow-y-auto">
+                        ${plansWithData.map((p, idx) => `
+                            <div class="p-2 rounded bg-white border border-purple-100 ${p.isCompleted ? 'opacity-60' : ''}">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-xs font-semibold text-slate-700 truncate max-w-[100px]" title="${p.displayName}">${p.displayName}</span>
+                                    <span class="text-xs font-mono text-purple-600">${p.order_number || '-'}</span>
+                                </div>
+                                <div class="flex items-center justify-between text-[10px]">
+                                    <span class="text-slate-500">${formatQty(p.goodProd)}/${formatQty(p.plannedQty)}</span>
+                                    <span class="${p.progressPct >= 100 ? 'text-emerald-600 font-bold' : 'text-slate-600'}">${p.progressPct.toFixed(1)}%</span>
+                                </div>
+                                <div class="w-full bg-slate-100 rounded-full h-1 mt-1">
+                                    <div class="h-1 rounded-full transition-all duration-300 ${p.isCompleted ? 'bg-emerald-500' : 'bg-purple-500'}" style="width: ${Math.min(p.progressPct, 100)}%"></div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        };
+        
+        // Determinar nome do produto para exibição principal
+        const displayProductName = hasMultiplePlans 
+            ? `${plans.length} produtos` 
+            : resolveProductName(plan);
+        
+        // Determinar número da OP para exibição
+        const displayOrderNumber = hasMultiplePlans 
+            ? `${plans.length} OPs`
+            : (plan.order_number || plan.order_number_original || '-');
 
         return `
-            <div class="machine-card group relative bg-white rounded-lg border border-slate-200 hover:border-blue-300 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer p-3 ${lotCompleted && String(plan.status||'').toLowerCase()!=='concluida' ? 'completed-blink' : ''} ${cardColorClass}" data-machine="${machine}" data-plan-id="${plan.id}" data-order-id="${plan.order_id||''}" data-part-code="${plan.product_cod||''}"
+            <div class="machine-card group relative bg-white rounded-lg border border-slate-200 hover:border-blue-300 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer p-3 ${allCompleted && String(plan.status||'').toLowerCase()!=='concluida' ? 'completed-blink' : ''} ${cardColorClass} ${hasMultiplePlans ? 'ring-2 ring-purple-300' : ''}" data-machine="${machine}" data-plan-id="${plan.id}" data-order-id="${plan.order_id||''}" data-part-code="${plan.product_cod||''}" data-multi-plan="${hasMultiplePlans}">
                 <!-- Header compacto -->
                 <div class="flex items-center justify-between mb-2">
                     <div class="flex items-center gap-2">
-                        <div class="machine-identifier w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                        <div class="machine-identifier w-8 h-8 bg-gradient-to-br ${hasMultiplePlans ? 'from-purple-500 to-purple-600' : 'from-blue-500 to-blue-600'} rounded-full flex items-center justify-center text-white text-xs font-bold">
                             ${machine.slice(-2)}
                         </div>
                         <div>
                             <h3 class="text-sm font-bold text-slate-900">${machine}</h3>
-                            <p class="text-xs text-slate-500 truncate max-w-[120px]" title="${displayProductName}">${displayProductName}</p>
+                            <p class="text-xs ${hasMultiplePlans ? 'text-purple-600 font-medium' : 'text-slate-500'} truncate max-w-[120px]" title="${displayProductName}">${displayProductName}</p>
                         </div>
                     </div>
                     <div class="text-right">
-                        <div class="text-xs font-semibold text-blue-600">${plan.order_number || plan.order_number_original || '-'}</div>
+                        <div class="text-xs font-semibold ${hasMultiplePlans ? 'text-purple-600' : 'text-blue-600'}">${displayOrderNumber}</div>
                         <div class="text-[10px] text-slate-400 uppercase">OP</div>
                     </div>
                 </div>
+                
+                ${generateMultiProductSection()}
                 
                 <!-- OEE centralizado -->
                 <div class="flex items-center justify-center mb-2">
@@ -22453,11 +22768,11 @@ function sendDowntimeNotification() {
                 <!-- Indicadores principais em linha -->
                 <div class="grid grid-cols-2 gap-2 mb-3">
                     <div class="text-center">
-                        <div class="text-sm font-semibold text-slate-900">${formatQty(executedDisplayQty)}</div>
-                        <div class="text-[10px] text-slate-500 uppercase">Exec. OP</div>
+                        <div class="text-sm font-semibold text-slate-900">${formatQty(totalProducedAllPlans)}</div>
+                        <div class="text-[10px] text-slate-500 uppercase">Exec. Total</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-sm font-semibold text-slate-900">${formatQty(displayRemainingQty)}</div>
+                        <div class="text-sm font-semibold text-slate-900">${formatQty(Math.max(0, totalPlannedQty - totalProducedAllPlans))}</div>
                         <div class="text-[10px] text-slate-500 uppercase">Faltante</div>
                     </div>
                 </div>
@@ -22465,11 +22780,11 @@ function sendDowntimeNotification() {
                 <!-- Barra de progresso compacta -->
                 <div class="mb-2">
                     <div class="flex items-center justify-between mb-1">
-                        <span class="text-xs text-slate-500">OP Total (${formatQty(plannedQty)})</span>
+                        <span class="text-xs text-slate-500">${hasMultiplePlans ? 'Progresso Geral' : 'OP Total'} (${formatQty(totalPlannedQty)})</span>
                         <span class="text-xs font-semibold ${progressTextClass}">${progressText}</span>
                     </div>
                     <div class="w-full bg-slate-100 rounded-full h-2">
-                        <div class="h-2 rounded-full transition-all duration-300 ${progressPalette.bgClass || 'bg-blue-500'}" style="width: ${normalizedProgress}%"></div>
+                        <div class="h-2 rounded-full transition-all duration-300 ${hasMultiplePlans ? 'bg-purple-500' : (progressPalette.bgClass || 'bg-blue-500')}" style="width: ${normalizedProgress}%"></div>
                     </div>
                 </div>
 
@@ -22529,7 +22844,7 @@ function sendDowntimeNotification() {
                             <span class="text-xs font-bold text-red-700">PARADA ATIVA - MÁQUINA PARADA</span>
                         </div>
                     ` : '';
-                })()}                ${lotCompleted ? `
+                })()}                ${allCompleted ? `
                     <div class="card-actions flex gap-2 mt-3">
                         ${String(plan.status||'').toLowerCase()!=='concluida' && plan.order_id ? `
                             <button type="button" class="btn btn-finalize card-finalize-btn" data-plan-id="${plan.id}" data-order-id="${plan.order_id}" title="Finalizar OP">
@@ -22563,7 +22878,11 @@ function sendDowntimeNotification() {
             }
         });
 
-        if (selectedMachineData && selectedMachineData.machine && machineCardData[selectedMachineData.machine]) {
+        // machineCardData agora é array - verificar se tem dados
+        const machineHasPlans = selectedMachineData && selectedMachineData.machine && 
+            machineCardData[selectedMachineData.machine] && 
+            machineCardData[selectedMachineData.machine].length > 0;
+        if (machineHasPlans) {
             setActiveMachineCard(selectedMachineData.machine);
         } else {
             selectedMachineData = null;
@@ -22818,7 +23137,9 @@ function sendDowntimeNotification() {
     // Função para quando uma máquina é selecionada
     async function onMachineSelected(machine) {
         const previousMachine = selectedMachineData ? selectedMachineData.machine : null;
-        const machineData = machineCardData[machine] || machineSelector?.machineData?.[machine];
+        // machineCardData agora é array - pegar primeiro plano para compatibilidade
+        const machineDataArray = machineCardData[machine];
+        const machineData = Array.isArray(machineDataArray) ? machineDataArray[0] : (machineDataArray || machineSelector?.machineData?.[machine]);
 
         if (!machine || !machineData) {
             productionControlPanel.classList.add('hidden');
@@ -28278,6 +28599,141 @@ const OrdersPageModule = (function() {
 window.OrdersPageModule = OrdersPageModule;
 window.openOrderFormModal = function() { OrdersPageModule.openOrderFormModal(); };
 window.closeOrderFormModal = function() { OrdersPageModule.closeOrderFormModal(); };
+
+// =====================================================
+// FUNÇÕES DE ADMINISTRAÇÃO - LIMPEZA DE DUPLICATAS
+// =====================================================
+
+/**
+ * Função para detectar e remover planejamentos duplicados
+ * Uso no console: await window.cleanDuplicatePlanning('2026-01-06', ['H-05', 'H-28', 'H-12'])
+ */
+window.cleanDuplicatePlanning = async function(date, machines = null) {
+    console.log('🔍 Iniciando busca por planejamentos duplicados...');
+    
+    if (!date) {
+        const hoje = new Date();
+        date = hoje.getFullYear() + '-' + 
+               String(hoje.getMonth() + 1).padStart(2, '0') + '-' + 
+               String(hoje.getDate()).padStart(2, '0');
+    }
+    
+    try {
+        let query = db.collection('planning').where('date', '==', date);
+        const snapshot = await query.get();
+        
+        if (snapshot.empty) {
+            console.log('Nenhum planejamento encontrado para', date);
+            return { found: 0, duplicates: [] };
+        }
+        
+        const plansByMachineAndOrder = {};
+        const allPlans = [];
+        
+        snapshot.docs.forEach(doc => {
+            const data = { id: doc.id, ...doc.data() };
+            allPlans.push(data);
+            
+            // Filtrar por máquinas específicas se fornecidas
+            if (machines && !machines.includes(data.machine)) return;
+            
+            const key = `${data.machine}||${data.order_number || 'SEM_OP'}`;
+            if (!plansByMachineAndOrder[key]) {
+                plansByMachineAndOrder[key] = [];
+            }
+            plansByMachineAndOrder[key].push(data);
+        });
+        
+        const duplicates = [];
+        const toDelete = [];
+        
+        for (const [key, plans] of Object.entries(plansByMachineAndOrder)) {
+            if (plans.length > 1) {
+                console.log(`⚠️ DUPLICATA: ${key} - ${plans.length} registros`);
+                plans.forEach((p, idx) => {
+                    console.log(`   ${idx + 1}. ID: ${p.id} | Produto: ${p.product} | OP: ${p.order_number || '-'} | Criado: ${p.createdAt?.toDate?.() || 'N/A'}`);
+                });
+                
+                // Ordenar por data de criação (manter o mais antigo)
+                plans.sort((a, b) => {
+                    const aTime = a.createdAt?.toMillis?.() || a.createdAt?._seconds * 1000 || 0;
+                    const bTime = b.createdAt?.toMillis?.() || b.createdAt?._seconds * 1000 || 0;
+                    return aTime - bTime;
+                });
+                
+                // Marcar todos exceto o primeiro para exclusão
+                for (let i = 1; i < plans.length; i++) {
+                    toDelete.push(plans[i]);
+                    duplicates.push({
+                        machine: plans[i].machine,
+                        order_number: plans[i].order_number,
+                        product: plans[i].product,
+                        id: plans[i].id
+                    });
+                }
+            }
+        }
+        
+        console.log(`\n📊 Resumo: ${duplicates.length} duplicatas encontradas para exclusão`);
+        
+        if (duplicates.length > 0) {
+            console.log('\n🗑️ Duplicatas a serem removidas:');
+            duplicates.forEach((d, i) => {
+                console.log(`   ${i + 1}. ${d.machine} | OP: ${d.order_number} | ${d.product} | ID: ${d.id}`);
+            });
+            
+            const confirm = window.confirm(`Deseja remover ${duplicates.length} planejamentos duplicados?\n\nMáquinas afetadas: ${[...new Set(duplicates.map(d => d.machine))].join(', ')}`);
+            
+            if (confirm) {
+                console.log('\n🔄 Removendo duplicatas...');
+                for (const plan of toDelete) {
+                    await db.collection('planning').doc(plan.id).delete();
+                    console.log(`   ✅ Removido: ${plan.machine} | OP: ${plan.order_number} | ID: ${plan.id}`);
+                }
+                console.log('\n✅ Limpeza concluída! Recarregue a página para ver as alterações.');
+                
+                // Forçar atualização dos cards
+                if (typeof populateMachineSelector === 'function') {
+                    await populateMachineSelector();
+                }
+            } else {
+                console.log('❌ Operação cancelada pelo usuário.');
+            }
+        }
+        
+        return { found: allPlans.length, duplicates: duplicates };
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar duplicatas:', error);
+        return { error: error.message };
+    }
+};
+
+/**
+ * Função rápida para limpar duplicatas de hoje
+ * Uso no console: await window.cleanTodayDuplicates()
+ */
+window.cleanTodayDuplicates = async function() {
+    const hoje = new Date();
+    const date = hoje.getFullYear() + '-' + 
+           String(hoje.getMonth() + 1).padStart(2, '0') + '-' + 
+           String(hoje.getDate()).padStart(2, '0');
+    return await window.cleanDuplicatePlanning(date);
+};
+
+/**
+ * Função para limpar duplicatas de máquinas específicas hoje
+ * Uso no console: await window.cleanMachineDuplicates(['H-05', 'H-28', 'H-12'])
+ */
+window.cleanMachineDuplicates = async function(machines) {
+    const hoje = new Date();
+    const date = hoje.getFullYear() + '-' + 
+           String(hoje.getMonth() + 1).padStart(2, '0') + '-' + 
+           String(hoje.getDate()).padStart(2, '0');
+    return await window.cleanDuplicatePlanning(date, machines);
+};
+
+console.log('🛠️ Ferramentas de admin carregadas. Use window.cleanTodayDuplicates() ou window.cleanMachineDuplicates([...]) no console.');
 
 // Inicializar módulo de ordens quando página carregar
 document.addEventListener('DOMContentLoaded', function() {
