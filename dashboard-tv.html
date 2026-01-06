@@ -300,8 +300,8 @@
         /* ==================== MAIN DASHBOARD GRID ==================== */
         .dashboard-container {
             display: grid;
-            grid-template-columns: 1fr 1fr 380px;
-            grid-template-rows: auto 1fr auto auto;
+            grid-template-columns: 1fr 1fr 320px;
+            grid-template-rows: auto auto 1fr auto;
             gap: 12px;
             padding: 12px 24px;
             height: calc(100vh - 64px);
@@ -440,7 +440,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px 16px;
+            padding: 8px 12px;
             background: rgba(0, 0, 0, 0.2);
             border-bottom: 1px solid var(--industrial-border);
         }
@@ -660,10 +660,10 @@
             border: 1px solid rgba(124, 77, 255, 0.3);
         }
 
-        /* ==================== OEE GAUGE - MINDSPHERE STYLE - DESTACADO ==================== */
+        /* ==================== OEE GAUGE - MINDSPHERE STYLE ==================== */
         .oee-panel-highlight {
-            border: 2px solid var(--accent-primary) !important;
-            box-shadow: 0 0 30px rgba(0, 180, 216, 0.3), inset 0 0 20px rgba(0, 180, 216, 0.05) !important;
+            border: 1px solid var(--accent-primary) !important;
+            box-shadow: 0 0 15px rgba(0, 180, 216, 0.15) !important;
         }
 
         .oee-gauge-container {
@@ -672,14 +672,14 @@
             align-items: center;
             justify-content: space-around;
             height: 100%;
-            padding: 16px 20px;
-            gap: 20px;
+            padding: 12px 16px;
+            gap: 16px;
         }
 
         .gauge-wrapper {
             position: relative;
-            width: 180px;
-            height: 180px;
+            width: 140px;
+            height: 140px;
             flex-shrink: 0;
         }
 
@@ -716,12 +716,12 @@
         }
 
         .gauge-value {
-            font-size: 36px;
+            font-size: 28px;
             font-weight: 700;
             font-family: 'Roboto Mono', monospace;
             color: var(--accent-primary);
             line-height: 1;
-            text-shadow: 0 0 20px rgba(0, 180, 216, 0.5);
+            text-shadow: 0 0 15px rgba(0, 180, 216, 0.4);
         }
 
         .gauge-label {
@@ -743,12 +743,12 @@
         .oee-factor {
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 12px 16px;
+            gap: 10px;
+            padding: 8px 12px;
             background: rgba(0, 0, 0, 0.4);
             border-radius: 6px;
-            border-left: 4px solid var(--industrial-border);
-            min-width: 160px;
+            border-left: 3px solid var(--industrial-border);
+            min-width: 130px;
         }
 
         .oee-factor.availability { border-left-color: var(--oee-availability); }
@@ -756,10 +756,10 @@
         .oee-factor.quality { border-left-color: var(--oee-quality); }
 
         .oee-factor-value {
-            font-size: 22px;
+            font-size: 18px;
             font-weight: 700;
             font-family: 'Roboto Mono', monospace;
-            min-width: 65px;
+            min-width: 55px;
         }
 
         .oee-factor.availability .oee-factor-value { color: var(--oee-availability); }
@@ -776,51 +776,61 @@
         /* ==================== STOPPED MACHINES LIST ==================== */
         .stopped-machines-list {
             width: 100%;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 8px;
+            height: 100%;
+            overflow: hidden;
+            align-content: start;
+        }
+
+        .stopped-machine-card {
             display: flex;
             flex-direction: column;
-            gap: 8px;
-        }
-
-        .stopped-machine-row {
-            display: grid;
-            grid-template-columns: 80px 1fr auto;
             align-items: center;
-            gap: 12px;
-            padding: 12px 14px;
-            background: rgba(255, 23, 68, 0.08);
+            justify-content: center;
+            padding: 10px 8px;
+            background: rgba(255, 23, 68, 0.12);
             border-radius: 6px;
-            border-left: 4px solid var(--status-critical);
-            animation: stopped-pulse 2s infinite;
+            border: 2px solid var(--status-critical);
+            animation: stopped-card-pulse 2s infinite;
+            text-align: center;
+            min-height: 70px;
         }
 
-        @keyframes stopped-pulse {
-            0%, 100% { background: rgba(255, 23, 68, 0.08); }
-            50% { background: rgba(255, 23, 68, 0.15); }
+        @keyframes stopped-card-pulse {
+            0%, 100% { background: rgba(255, 23, 68, 0.12); border-color: var(--status-critical); }
+            50% { background: rgba(255, 23, 68, 0.22); border-color: #ff5252; }
         }
 
-        .stopped-machine-id {
-            font-size: 16px;
-            font-weight: 700;
+        .stopped-machine-card .machine-id {
+            font-size: 18px;
+            font-weight: 900;
             font-family: 'Roboto Mono', monospace;
             color: var(--status-critical);
+            line-height: 1;
         }
 
-        .stopped-machine-reason {
-            font-size: 13px;
+        .stopped-machine-card .machine-reason {
+            font-size: 9px;
             font-weight: 500;
-            color: var(--text-primary);
+            color: var(--text-secondary);
+            margin-top: 4px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            max-width: 100%;
         }
 
-        .stopped-machine-time {
-            font-size: 12px;
-            font-weight: 600;
+        .stopped-machine-card .machine-time {
+            font-size: 11px;
+            font-weight: 700;
             font-family: 'Roboto Mono', monospace;
             color: var(--status-warning);
-            text-align: right;
-            white-space: nowrap;
+            margin-top: 4px;
+            padding: 2px 6px;
+            background: rgba(255, 171, 0, 0.2);
+            border-radius: 3px;
         }
 
         .no-stopped-machines {
@@ -831,60 +841,120 @@
             padding: 30px;
             color: var(--status-running);
             text-align: center;
+            height: 100%;
+            grid-column: 1 / -1;
         }
 
         .no-stopped-machines i {
-            width: 40px;
-            height: 40px;
-            margin-bottom: 10px;
+            width: 48px;
+            height: 48px;
+            margin-bottom: 12px;
         }
 
         .no-stopped-machines p {
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 500;
+        }
+
+        /* Destaque para o painel de máquinas paradas */
+        .stopped-machines-highlight {
+            animation: panel-alert 3s infinite;
+        }
+
+        @keyframes panel-alert {
+            0%, 100% { box-shadow: 0 0 30px rgba(255, 23, 68, 0.3), inset 0 0 20px rgba(255, 23, 68, 0.06); }
+            50% { box-shadow: 0 0 50px rgba(255, 23, 68, 0.45), inset 0 0 30px rgba(255, 23, 68, 0.1); }
         }
 
         /* ==================== FOOTER - STATUS MÁQUINAS GRID ==================== */
         .industrial-footer {
             grid-column: 1 / -1;
             background: var(--industrial-panel);
-            border: 1px solid var(--industrial-border);
+            border: 2px solid var(--accent-primary);
             border-radius: 4px;
             display: flex;
             flex-direction: column;
-            min-height: 130px;
-            max-height: 180px;
-            overflow-y: auto;
+            min-height: 200px;
+            flex: 1;
+            overflow: hidden;
+            box-shadow: 0 0 30px rgba(0, 180, 216, 0.25), inset 0 0 20px rgba(0, 180, 216, 0.05);
         }
 
-        .footer-label {
-            background: var(--gradient-accent);
-            padding: 8px 16px;
+        .footer-header {
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            gap: 8px;
+            padding: 12px 16px;
+            background: linear-gradient(90deg, rgba(0, 180, 216, 0.2), rgba(0, 180, 216, 0.08));
+            border-bottom: 2px solid var(--accent-primary);
             flex-shrink: 0;
         }
 
+        .footer-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
         .footer-label i {
-            width: 14px;
-            height: 14px;
+            width: 18px;
+            height: 18px;
+            color: var(--accent-primary);
         }
 
         .footer-label span {
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 700;
             letter-spacing: 1.5px;
             text-transform: uppercase;
+            color: var(--accent-primary);
+        }
+
+        .footer-legend {
+            display: flex;
+            gap: 16px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 10px;
+            color: var(--text-tertiary);
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+
+        .footer-timestamp-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 16px;
+            background: rgba(0, 180, 216, 0.1);
+            border-top: 1px solid var(--industrial-border);
+            font-size: 11px;
+            color: var(--text-tertiary);
+            flex-shrink: 0;
+        }
+
+        .footer-timestamp-bar span:first-child {
+            font-family: 'Roboto Mono', monospace;
+            color: var(--accent-primary);
+            font-weight: 600;
+            font-size: 12px;
         }
 
         .machine-status-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
-            gap: 8px;
-            padding: 12px 16px;
+            grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
+            gap: 10px;
+            padding: 16px;
             flex: 1;
-            overflow-y: auto;
+            overflow: hidden;
         }
 
         .machine-status-card {
@@ -892,33 +962,33 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            min-width: 70px;
-            padding: 10px 14px;
-            border-radius: 6px;
+            min-width: 85px;
+            padding: 12px 16px;
+            border-radius: 8px;
             font-family: 'Roboto Mono', monospace;
             font-weight: 700;
-            font-size: 16px;
+            font-size: 18px;
             text-transform: uppercase;
             transition: all 0.3s ease;
             border: 2px solid transparent;
         }
 
         .machine-status-card:hover {
-            transform: scale(1.05);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transform: scale(1.08);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.4);
         }
 
         .machine-status-card .machine-number {
-            font-size: 18px;
+            font-size: 22px;
             font-weight: 900;
         }
 
         .machine-status-card .machine-label {
-            font-size: 8px;
-            font-weight: 500;
+            font-size: 22px;
+            font-weight: 600;
             letter-spacing: 0.5px;
-            margin-top: 2px;
-            opacity: 0.9;
+            margin-top: 4px;
+            opacity: 0.95;
         }
 
         /* Status colors */
@@ -987,15 +1057,15 @@
         .shift-kpis-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 12px;
+            gap: 8px;
             height: 100%;
         }
 
         .shift-kpi-card {
             background: linear-gradient(135deg, rgba(30, 40, 55, 0.9), rgba(20, 30, 45, 0.95));
             border: 1px solid var(--industrial-border);
-            border-radius: 8px;
-            padding: 12px;
+            border-radius: 6px;
+            padding: 8px;
             display: flex;
             flex-direction: column;
         }
@@ -1015,9 +1085,9 @@
         }
 
         .shift-badge {
-            padding: 4px 10px;
+            padding: 3px 8px;
             border-radius: 4px;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 700;
             letter-spacing: 0.5px;
         }
@@ -1047,14 +1117,14 @@
         }
 
         .shift-metric .metric-value {
-            font-size: 18px;
+            font-size: 14px;
             font-weight: 700;
             color: var(--text-primary);
             font-family: 'Roboto Mono', monospace;
         }
 
         .shift-metric .metric-label {
-            font-size: 10px;
+            font-size: 9px;
             color: var(--text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -1942,36 +2012,36 @@
     <main class="dashboard-container">
         <!-- KPI STRIP - PRODUÇÃO DO DIA -->
         <div class="kpi-strip">
-            <!-- 1. PEÇAS PRODUZIDAS HOJE -->
+            <!-- 1. PLANEJAMENTO DO DIA -->
             <div class="kpi-module production" style="grid-column: span 1;">
                 <div class="kpi-header">
-                    <span class="kpi-title">Produção Hoje</span>
+                    <span class="kpi-title">Planejamento do Dia</span>
                     <span class="kpi-trend" id="kpiProductionTrend">
-                        <i data-lucide="minus" style="width:12px;height:12px"></i>
-                        --
+                        <i data-lucide="calendar" style="width:12px;height:12px"></i>
+                        Meta
                     </span>
                 </div>
                 <div class="kpi-value-container">
-                    <span class="kpi-value" id="kpiProduction">0</span>
+                    <span class="kpi-value" id="kpiPlanning">0</span>
                     <span class="kpi-unit">pçs</span>
                 </div>
-                <div class="kpi-target">Meta: <span id="kpiProductionTarget">0 pçs</span></div>
+                <div class="kpi-target">Soma dos produtos planejados</div>
             </div>
 
-            <!-- 2. PROGRESSO DA META -->
+            <!-- 2. EXECUTADO -->
             <div class="kpi-module oee" style="grid-column: span 1;">
                 <div class="kpi-header">
-                    <span class="kpi-title">Progresso Meta</span>
+                    <span class="kpi-title">Executado</span>
                     <span class="kpi-trend" id="kpiCompletionTrend">
                         <i data-lucide="minus" style="width:12px;height:12px"></i>
                         --
                     </span>
                 </div>
                 <div class="kpi-value-container">
-                    <span class="kpi-value" id="kpiCompletion">0</span>
-                    <span class="kpi-unit">%</span>
+                    <span class="kpi-value" id="kpiExecuted">0</span>
+                    <span class="kpi-unit">pçs</span>
                 </div>
-                <div class="kpi-target">Realizado / Planejado</div>
+                <div class="kpi-target">Progresso: <span id="kpiProgress">0%</span></div>
             </div>
         </div>
 
@@ -2076,12 +2146,12 @@
             </div>
         </div>
 
-        <!-- OEE GAUGE - COM DESTAQUE -->
-        <div class="data-panel oee-panel-highlight" style="grid-row: span 2;">
-            <div class="panel-header" style="background: rgba(0, 180, 216, 0.1);">
+        <!-- OEE GAUGE - COMPACTO -->
+        <div class="data-panel oee-panel-highlight">
+            <div class="panel-header" style="background: rgba(0, 180, 216, 0.08);">
                 <div class="panel-title" style="color: var(--accent-primary);">
-                    <i data-lucide="gauge" style="width:16px;height:16px"></i>
-                    COMPOSIÇÃO DO OEE
+                    <i data-lucide="gauge" style="width:14px;height:14px"></i>
+                    OEE
                 </div>
             </div>
             <div class="panel-body">
@@ -2113,65 +2183,45 @@
                     <div class="oee-breakdown">
                         <div class="oee-factor availability">
                             <div class="oee-factor-value" id="oeeAvailValue">--%</div>
-                            <div class="oee-factor-label">Disponibilidade</div>
+                            <div class="oee-factor-label">Disp.</div>
                         </div>
                         <div class="oee-factor performance">
                             <div class="oee-factor-value" id="oeePerformValue">--%</div>
-                            <div class="oee-factor-label">Performance</div>
+                            <div class="oee-factor-label">Perf.</div>
                         </div>
                         <div class="oee-factor quality">
                             <div class="oee-factor-value" id="oeeQualValue">--%</div>
-                            <div class="oee-factor-label">Qualidade</div>
+                            <div class="oee-factor-label">Qual.</div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- MACHINES LIST -->
-        <div class="data-panel machines-panel">
-            <div class="panel-header">
-                <div class="panel-title">
-                    <i data-lucide="cpu" style="width:14px;height:14px"></i>
-                    Status das Máquinas
-                </div>
-                <div class="panel-actions">
-                    <span class="panel-tag live" id="machinesTag">-- Máquinas</span>
-                </div>
-            </div>
-            <div class="panel-body" style="padding: 12px;">
-                <div class="machines-grid" id="machinesGrid">
-                    <!-- Populated by JS -->
-                </div>
-            </div>
-        </div>
+        <!-- Elemento oculto para compatibilidade -->
+        <div id="machinesGrid" style="display: none;\"></div>
 
-        <!-- MÁQUINAS PARADAS - COM DESTAQUE -->
-        <div class="data-panel" style="grid-column: span 3; border: 2px solid var(--status-critical); box-shadow: 0 0 20px rgba(255, 23, 68, 0.2);">
-            <div class="panel-header" style="background: rgba(255, 23, 68, 0.1);">
-                <div class="panel-title" style="color: var(--status-critical);">
-                    <i data-lucide="alert-octagon" style="width:16px;height:16px"></i>
-                    MÁQUINAS PARADAS AGORA
-                </div>
-                <div class="panel-actions">
-                    <span class="panel-tag" id="stoppedMachinesTag" style="background: rgba(255, 23, 68, 0.2); color: var(--status-critical); border: 1px solid rgba(255, 23, 68, 0.4);">0 Paradas</span>
-                </div>
-            </div>
-            <div class="panel-body" style="padding: 12px;">
-                <div class="stopped-machines-list" id="stoppedMachinesList">
-                    <!-- Populated by JS -->
-                </div>
-            </div>
-        </div>
-
-        <!-- FOOTER - STATUS GRID DE TODAS AS MÁQUINAS -->
+        <!-- FOOTER - STATUS GRID DE TODAS AS MÁQUINAS (Estilo Lançamento) -->
         <footer class="industrial-footer">
-            <div class="footer-label">
-                <i data-lucide="cpu"></i>
-                <span>Status Máquinas</span>
+            <div class="footer-header">
+                <div class="footer-label">
+                    <i data-lucide="cpu"></i>
+                    <span>Status das Máquinas</span>
+                </div>
+                <div class="footer-legend">
+                    <span class="legend-item"><span class="legend-color" style="background: var(--status-running);"></span>Produzindo</span>
+                    <span class="legend-item"><span class="legend-color" style="background: var(--status-critical);"></span>Parada</span>
+                    <span class="legend-item"><span class="legend-color" style="background: var(--status-warning);"></span>Manutenção</span>
+                    <span class="legend-item"><span class="legend-color" style="background: #3B82F6;"></span>Setup</span>
+                    <span class="legend-item"><span class="legend-color" style="background: var(--status-idle);"></span>Sem OP</span>
+                </div>
             </div>
             <div class="machine-status-grid" id="machineStatusGrid">
                 <!-- Populated by JS - Cards com número da máquina e cor do status -->
+            </div>
+            <div class="footer-timestamp-bar">
+                <span id="lastUpdate">--:--:--</span>
+                <span>Atualização automática a cada 1 minuto</span>
             </div>
         </footer>
     </main>
@@ -3036,28 +3086,25 @@
             
             console.log('[Dashboard TV] Paradas do dia:', today, 'Total minutos:', totalDowntimeMinutes);
             
-            // ========== 1. PRODUÇÃO HOJE ==========
-            const prodEl = document.getElementById('kpiProduction');
-            const prodTargetEl = document.getElementById('kpiProductionTarget');
+            // ========== 1. PLANEJAMENTO DO DIA (soma do planejado) ==========
+            const planningEl = document.getElementById('kpiPlanning');
             const prodTrendEl = document.getElementById('kpiProductionTrend');
             
-            if (prodEl) prodEl.textContent = formatNumber(totalProduced);
-            if (prodTargetEl) prodTargetEl.textContent = formatNumber(totalTarget) + ' pçs';
-            
-            // Tendência baseada na meta
-            const prodPercent = totalTarget > 0 ? (totalProduced / totalTarget) * 100 : 0;
+            if (planningEl) planningEl.textContent = formatNumber(totalTarget);
             if (prodTrendEl) {
                 prodTrendEl.className = 'kpi-trend neutral';
-                prodTrendEl.innerHTML = `<i data-lucide="clock" style="width:12px;height:12px"></i>Últ. hora: ${formatNumber(lastHourProduced)} pçs`;
+                prodTrendEl.innerHTML = `<i data-lucide="calendar" style="width:12px;height:12px"></i>Meta`;
             }
             
-            // ========== 2. % CONCLUSÃO DO DIA ==========
-            const completionEl = document.getElementById('kpiCompletion');
+            // ========== 2. EXECUTADO (soma do produzido) ==========
+            const executedEl = document.getElementById('kpiExecuted');
+            const progressEl = document.getElementById('kpiProgress');
             const completionTrendEl = document.getElementById('kpiCompletionTrend');
             const safeTarget = totalTarget || totalProduced || 1;
             const completionPercent = Math.min((totalProduced / safeTarget) * 100, 150);
             
-            if (completionEl) completionEl.textContent = completionPercent.toFixed(1);
+            if (executedEl) executedEl.textContent = formatNumber(totalProduced);
+            if (progressEl) progressEl.textContent = completionPercent.toFixed(1) + '%';
             if (completionTrendEl) {
                 if (completionPercent >= 100) {
                     completionTrendEl.className = 'kpi-trend positive';
@@ -3814,55 +3861,83 @@
             const tagEl = document.getElementById('stoppedMachinesTag');
             if (!listEl) return;
             
-            // Buscar máquinas paradas do cache
-            const stoppedMachines = cachedMachines.filter(m => {
-                const status = (m.status || '').toLowerCase();
-                return status === 'parada' || status === 'stopped' || status === 'setup' || 
-                       status === 'manutencao' || status === 'manutenção' || status === 'maintenance' ||
-                       status === 'ferramentaria' || status === 'tooling';
+            // Buscar paradas ativas do cache (extended_downtime_logs com status = 'active')
+            const activeDowntimes = cachedDowntimes.filter(dt => {
+                // Priorizar extended downtimes ativos
+                if (dt.source === 'extended' && dt.status === 'active') return true;
+                
+                // Ou paradas do dia que não foram finalizadas
+                const reason = (dt.reason || dt.motivo || '').toLowerCase();
+                const isLongStop = reason.includes('parada') || reason.includes('manutencao') || 
+                                   reason.includes('manutenção') || reason.includes('ferramentaria') ||
+                                   reason.includes('setup') || reason.includes('comercial');
+                return isLongStop && !dt.endTime;
             });
             
             if (tagEl) {
-                tagEl.textContent = stoppedMachines.length + ' Parada' + (stoppedMachines.length !== 1 ? 's' : '');
+                const count = activeDowntimes.length;
+                tagEl.textContent = count + ' Parada' + (count !== 1 ? 's' : '');
             }
             
-            if (stoppedMachines.length === 0) {
+            if (activeDowntimes.length === 0) {
                 listEl.innerHTML = `
-                    <div class="no-stopped-machines">
-                        <i data-lucide="check-circle-2"></i>
-                        <p>Todas as máquinas em operação!</p>
+                    <div class="no-stopped-machines" style="height: 100%;">
+                        <i data-lucide="check-circle-2" style="width: 60px; height: 60px; color: var(--status-running);"></i>
+                        <p style="font-size: 18px; margin-top: 16px;">Todas as máquinas em operação!</p>
+                        <p style="font-size: 12px; color: var(--text-tertiary); margin-top: 8px;">Nenhuma parada registrada no momento</p>
                     </div>
                 `;
                 if (typeof lucide !== 'undefined') lucide.createIcons();
                 return;
             }
             
-            // Renderizar lista de máquinas paradas
-            listEl.innerHTML = stoppedMachines.map(machine => {
-                const machineId = machine.name || machine.id || 'N/A';
-                const reason = machine.reason || machine.motivo || machine.downtime_reason || 'Motivo não informado';
-                const startTime = machine.downtime_start || machine.startTime || '';
+            // Ordenar por duração (maior primeiro)
+            activeDowntimes.sort((a, b) => (b.duration || 0) - (a.duration || 0));
+            
+            // Renderizar cards de máquinas paradas
+            listEl.innerHTML = activeDowntimes.map(dt => {
+                const machineId = dt.machine || dt.machine_id || dt.maquina || 'N/A';
+                const reason = dt.reason || dt.motivo || dt.type || 'Sem motivo';
+                
+                // Abreviar motivo para caber no card
+                const shortReason = reason.length > 18 ? reason.substring(0, 16) + '...' : reason;
                 
                 // Calcular tempo parada
-                let duration = '';
-                if (startTime) {
-                    const start = new Date(startTime);
-                    const now = new Date();
-                    const diffMin = Math.round((now - start) / 60000);
-                    if (diffMin >= 60) {
-                        const hours = Math.floor(diffMin / 60);
-                        const mins = diffMin % 60;
-                        duration = `${hours}h${mins > 0 ? mins + 'm' : ''}`;
-                    } else {
-                        duration = `${diffMin}min`;
-                    }
+                let duration = dt.duration || 0;
+                let durationStr = '';
+                
+                if (dt.status === 'active' && (dt.start_datetime || dt.startTime)) {
+                    // Calcular tempo em tempo real
+                    const startTime = dt.start_datetime?.toDate?.() || new Date(dt.start_date + 'T' + (dt.start_time || dt.startTime || '00:00'));
+                    duration = Math.floor((new Date() - startTime) / (1000 * 60));
+                }
+                
+                if (duration >= 60) {
+                    const hours = Math.floor(duration / 60);
+                    const mins = duration % 60;
+                    durationStr = `${hours}h${mins > 0 ? mins + 'm' : ''}`;
+                } else {
+                    durationStr = `${duration}min`;
+                }
+                
+                // Determinar cor baseada na categoria
+                let borderColor = 'var(--status-critical)';
+                const reasonLower = reason.toLowerCase();
+                if (reasonLower.includes('setup') || reasonLower.includes('troca')) {
+                    borderColor = '#3B82F6';
+                } else if (reasonLower.includes('manutencao') || reasonLower.includes('manutenção')) {
+                    borderColor = 'var(--status-warning)';
+                } else if (reasonLower.includes('ferramentaria') || reasonLower.includes('molde')) {
+                    borderColor = 'var(--status-warning)';
+                } else if (reasonLower.includes('comercial') || reasonLower.includes('pcp') || reasonLower.includes('sem pedido')) {
+                    borderColor = 'var(--status-idle)';
                 }
                 
                 return `
-                    <div class="stopped-machine-row">
-                        <span class="stopped-machine-id">${machineId}</span>
-                        <span class="stopped-machine-reason">${reason}</span>
-                        <span class="stopped-machine-time">${duration || '--'}</span>
+                    <div class="stopped-machine-card" style="border-color: ${borderColor};" title="${reason}">
+                        <span class="machine-id" style="color: ${borderColor};">${machineId}</span>
+                        <span class="machine-reason">${shortReason}</span>
+                        <span class="machine-time">${durationStr || '--'}</span>
                     </div>
                 `;
             }).join('');
@@ -3873,11 +3948,10 @@
             const gridEl = document.getElementById('machineStatusGrid');
             if (!gridEl) return;
             
-            // Definir todas as máquinas do sistema
-            const allMachineIds = ['H01', 'H02', 'H04', 'H05', 'H06', 'H07', 'H08', 'H10', 'H11', 'H12', 
-                                   'H14', 'H17', 'H18', 'H19', 'H20', 'H21', 'H22', 'H23', 'H24', 'H26', 
-                                   'H27', 'H28', 'H29', 'H30', 'H31', 'H32', 'H33', 'H34', 'H35', 'H37', 
-                                   'H39', 'H40', 'H41'];
+            // Definir todas as máquinas do sistema (conforme database.js)
+            const allMachineIds = ['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
+                                   'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                                   'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32'];
             
             // Criar mapa de paradas ativas para cada máquina
             const machineDowntimeMap = new Map();
