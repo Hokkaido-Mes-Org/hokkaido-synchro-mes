@@ -17377,7 +17377,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             };
             
             // Usar merge para não perder dados em caso de erro parcial
-            await db.collection('active_downtimes').doc(selectedMachineData.machine).set(activeDowntimeData, { merge: true });
+            // IMPORTANTE: Normalizar ID da máquina para garantir consistência
+            const normalizedMachineIdForDowntime = normalizeMachineId(selectedMachineData.machine);
+            await db.collection('active_downtimes').doc(normalizedMachineIdForDowntime).set(activeDowntimeData, { merge: true });
             
             console.log('[DOWNTIME][START] Parada ativa persistida no Firebase:', activeDowntimeData);
         } catch (error) {
@@ -24410,7 +24412,27 @@ function sendDowntimeNotification() {
             const now = new Date();
             const todayStr = now.toISOString().split('T')[0];  // YYYY-MM-DD
             
-            // PRIORIDADE 1: Buscar paradas com status='active' (paradas em andamento)
+            // PRIORIDADE 1: Buscar paradas em "active_downtimes" (paradas iniciadas via "Parar Máquina")
+            const activeDowntimeRef = window.db.collection('active_downtimes').doc(normalizedId);
+            const activeDowntimeSnap = await activeDowntimeRef.get();
+            
+            if (activeDowntimeSnap.exists) {
+                const data = activeDowntimeSnap.data();
+                if (data && data.isActive) {
+                    console.log('[MACHINE-DOWNTIME] Parada ATIVA encontrada em active_downtimes:', { machine: normalizedId, data });
+                    return {
+                        recordId: normalizedId, // Usar ID da máquina como recordId para paradas em active_downtimes
+                        type: 'active_downtime_live',
+                        reason: data.reason || 'Parada ativa',
+                        startDate: data.startDate,
+                        endDate: null,
+                        status: 'active',
+                        durationMinutes: data.durationMinutes
+                    };
+                }
+            }
+            
+            // PRIORIDADE 2: Buscar paradas com status='active' em extended_downtime_logs (paradas longas)
             const activeSnap = await window.db
                 .collection('extended_downtime_logs')
                 .where('machine_id', '==', normalizedId)
@@ -24420,7 +24442,7 @@ function sendDowntimeNotification() {
             // Se encontrou parada ativa, retorna imediatamente
             for (const doc of activeSnap.docs) {
                 const data = doc.data();
-                console.log('[MACHINE-DOWNTIME] Parada ATIVA encontrada:', { id: doc.id, machine: normalizedId, status: data.status });
+                console.log('[MACHINE-DOWNTIME] Parada ATIVA encontrada em extended_downtime_logs:', { id: doc.id, machine: normalizedId, status: data.status });
                 return {
                     recordId: doc.id,
                     type: data.type || 'maintenance',
@@ -24432,7 +24454,7 @@ function sendDowntimeNotification() {
                 };
             }
             
-            // PRIORIDADE 2: Buscar paradas programadas (com end_date futuro)
+            // PRIORIDADE 3: Buscar paradas programadas (com end_date futuro)
             const extendedSnap = await window.db
                 .collection('extended_downtime_logs')
                 .where('machine_id', '==', normalizedId)
@@ -24516,30 +24538,82 @@ function sendDowntimeNotification() {
         }
 
         try {
-            // 1. Buscar o registro de parada ANTES de confirmar
-            const recordSnapshot = await db.collection('extended_downtime_logs').doc(recordId).get();
-            if (!recordSnapshot.exists) {
-                showNotification('Registro de parada não encontrado', 'error');
-                return;
-            }
-
-            const downtimeData = recordSnapshot.data();
+            const normalizedMachineId = normalizeMachineId(machineId);
             const now = new Date();
             
+            // Verificar se é uma parada em "active_downtimes" (parada iniciada via "Parar Máquina")
+            const isActiveDowttimeRecord = recordId === normalizedMachineId;
+            
+            let downtimeData = null;
+            let recordSnapshot = null;
+            
+            if (isActiveDowttimeRecord) {
+                // CASO 1: Parada em "active_downtimes"
+                recordSnapshot = await db.collection('active_downtimes').doc(recordId).get();
+                if (!recordSnapshot.exists) {
+                    showNotification('Registro de parada não encontrado', 'error');
+                    return;
+                }
+                downtimeData = recordSnapshot.data();
+            } else {
+                // CASO 2: Parada em "extended_downtime_logs"
+                recordSnapshot = await db.collection('extended_downtime_logs').doc(recordId).get();
+                if (!recordSnapshot.exists) {
+                    showNotification('Registro de parada não encontrado', 'error');
+                    return;
+                }
+                downtimeData = recordSnapshot.data();
+            }
+            
+            console.log('[FINALIZAR-PARADA] Dados do registro:', downtimeData);
+            
             // Calcular duração prévia para mostrar no alerta
-            const startDatetime = downtimeData.start_datetime?.toDate?.() || new Date(downtimeData.start_date + 'T' + (downtimeData.start_time || '00:00'));
-            const durationMinutes = Math.floor((now - startDatetime) / (1000 * 60));
+            let startDatetime = null;
+            
+            // Tentar diferentes formas de obter a data de início
+            if (isActiveDowttimeRecord) {
+                // Para paradas em active_downtimes
+                if (downtimeData.startTimestamp) {
+                    startDatetime = downtimeData.startTimestamp.toDate?.() || new Date(downtimeData.startTimestamp);
+                } else if (downtimeData.startTimestampLocal) {
+                    startDatetime = new Date(downtimeData.startTimestampLocal);
+                } else if (downtimeData.startDate && downtimeData.startTime) {
+                    startDatetime = new Date(downtimeData.startDate + 'T' + downtimeData.startTime);
+                }
+            } else {
+                // Para paradas em extended_downtime_logs
+                if (downtimeData.start_datetime) {
+                    startDatetime = downtimeData.start_datetime.toDate?.() || new Date(downtimeData.start_datetime);
+                } else if (downtimeData.start_date && downtimeData.start_time) {
+                    startDatetime = new Date(downtimeData.start_date + 'T' + downtimeData.start_time);
+                } else if (downtimeData.createdAt) {
+                    startDatetime = downtimeData.createdAt.toDate?.() || new Date(downtimeData.createdAt);
+                }
+            }
+            
+            // Validar se a data é válida
+            if (!startDatetime || isNaN(startDatetime.getTime())) {
+                startDatetime = new Date(now.getTime() - 60 * 60 * 1000); // Fallback: 1 hora atrás
+            }
+            
+            const durationMinutes = Math.max(0, Math.floor((now - startDatetime) / (1000 * 60)));
             const hours = Math.floor(durationMinutes / 60);
             const mins = durationMinutes % 60;
             const durationText = hours > 0 ? `${hours}h ${mins}min` : `${mins}min`;
             
             // Tipo/Motivo da parada
             const reasonText = downtimeData.reason || downtimeData.type || 'Não informado';
-            const startText = `${downtimeData.start_date || ''} às ${downtimeData.start_time || ''}`;
+            const startDateStr = isActiveDowttimeRecord 
+                ? (downtimeData.startDate || '?') 
+                : (downtimeData.start_date || '?');
+            const startTimeStr = isActiveDowttimeRecord 
+                ? (downtimeData.startTime || '?') 
+                : (downtimeData.start_time || '?');
+            const startText = `${startDateStr} às ${startTimeStr}`;
             
             // 2. ALERTA DE CONFIRMAÇÃO
             const confirmMessage = `⚠️ FINALIZAR PARADA LONGA?\n\n` +
-                `🏭 Máquina: ${machineId}\n` +
+                `🏭 Máquina: ${normalizedMachineId}\n` +
                 `📋 Motivo: ${reasonText}\n` +
                 `🕐 Início: ${startText}\n` +
                 `⏱️ Duração: ${durationText}\n\n` +
@@ -24558,24 +24632,57 @@ function sendDowntimeNotification() {
             const endTime = now.toTimeString().split(' ')[0].substring(0, 5);  // HH:MM
 
             // 4. Atualizar registro: marcar como inativo/finalizado
-            await db.collection('extended_downtime_logs').doc(recordId).update({
-                end_date: endDate,
-                end_time: endTime,
-                end_datetime: firebase.firestore.Timestamp.fromDate(now),
-                duration_minutes: durationMinutes,
-                status: 'inactive',  // Muda de 'active' para 'inactive'
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                updatedBy: getActiveUser()?.name || 'Sistema'
-            });
+            if (isActiveDowttimeRecord) {
+                // Para paradas em active_downtimes: registrar histórico e depois deletar
+                
+                // Primeiro, registrar em downtime_entries para histórico
+                const downtimeEntryData = {
+                    machine: normalizedMachineId,
+                    date: startDateStr,
+                    startTime: startTimeStr,
+                    endTime: endTime,
+                    duration: durationMinutes,
+                    reason: reasonText,
+                    observations: downtimeData.observations || '',
+                    registradoPor: getActiveUser()?.username || null,
+                    registradoPorNome: getActiveUser()?.name || 'Sistema',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                
+                await db.collection('downtime_entries').add(downtimeEntryData);
+                console.log('[FINALIZAR-PARADA] Registrado em downtime_entries para histórico:', downtimeEntryData);
+                
+                // Depois, deletar o documento de active_downtimes (o padrão do sistema é deletar, não atualizar)
+                await db.collection('active_downtimes').doc(recordId).delete();
+                console.log('[FINALIZAR-PARADA] Documento active_downtimes deletado:', recordId);
+            } else {
+                // Para paradas em extended_downtime_logs: atualizar status
+                const updateData = {
+                    end_date: endDate,
+                    end_time: endTime,
+                    end_datetime: firebase.firestore.Timestamp.fromDate(now),
+                    duration_minutes: durationMinutes,
+                    status: 'inactive',  // Muda de 'active' para 'inactive'
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                
+                // Adicionar usuário apenas se existir
+                const activeUser = getActiveUser();
+                if (activeUser && activeUser.name) {
+                    updateData.updatedBy = activeUser.name;
+                }
+                
+                await db.collection('extended_downtime_logs').doc(recordId).update(updateData);
+            }
 
             console.log('[FINALIZAR-PARADA] Registrado como finalizado:', { 
                 recordId, 
-                machineId, 
+                machineId: normalizedMachineId, 
                 durationMinutes: `${hours}h ${mins}m`
             });
 
             // 5. Limpar cache e timers
-            const mid = normalizeMachineId(machineId);
+            const mid = normalizedMachineId;
             
             // Limpar status cache
             if (window.downtimeStatusCache && window.downtimeStatusCache[mid]) {
@@ -24606,7 +24713,8 @@ function sendDowntimeNotification() {
             }
 
         } catch (error) {
-            console.error('[FINALIZAR-PARADA] Erro:', error);
+            console.error('[FINALIZAR-PARADA] Erro completo:', error);
+            console.error('[FINALIZAR-PARADA] Stack:', error.stack);
             showNotification(`Erro ao finalizar parada: ${error.message}`, 'error');
         }
     }

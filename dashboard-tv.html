@@ -912,21 +912,22 @@
 
         .footer-legend {
             display: flex;
-            gap: 16px;
+            gap: 10px;
+            flex-wrap: wrap;
         }
 
         .legend-item {
             display: flex;
             align-items: center;
-            gap: 6px;
-            font-size: 10px;
+            gap: 4px;
+            font-size: 9px;
             color: var(--text-tertiary);
         }
 
         .legend-color {
-            width: 12px;
-            height: 12px;
-            border-radius: 3px;
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
         }
 
         .footer-timestamp-bar {
@@ -992,43 +993,77 @@
         }
 
         /* Status colors */
+        /* Produzindo = Verde */
         .machine-status-card.produzindo {
             background: rgba(0, 230, 118, 0.2);
-            border-color: var(--status-running);
-            color: var(--status-running);
+            border-color: #00e676;
+            color: #00e676;
         }
 
+        /* Manutenção = Amarelo */
         .machine-status-card.manutencao {
-            background: rgba(255, 171, 0, 0.2);
-            border-color: var(--status-warning);
-            color: var(--status-warning);
+            background: rgba(255, 235, 59, 0.2);
+            border-color: #FFEB3B;
+            color: #FFEB3B;
         }
 
+        /* Ferramentaria = Laranja */
         .machine-status-card.ferramentaria {
-            background: rgba(255, 171, 0, 0.2);
-            border-color: var(--status-warning);
-            color: var(--status-warning);
+            background: rgba(255, 152, 0, 0.2);
+            border-color: #FF9800;
+            color: #FF9800;
         }
 
-        .machine-status-card.comercial-pcp {
-            background: rgba(30, 30, 30, 0.8);
-            border-color: #333;
-            color: #999;
+        /* Compras = Marrom */
+        .machine-status-card.compras {
+            background: rgba(121, 85, 72, 0.2);
+            border-color: #795548;
+            color: #795548;
         }
 
+        /* Processo = Roxo */
+        .machine-status-card.processo {
+            background: rgba(156, 39, 176, 0.2);
+            border-color: #9C27B0;
+            color: #9C27B0;
+        }
+
+        /* Qualidade = Vermelho */
+        .machine-status-card.qualidade {
+            background: rgba(244, 67, 54, 0.2);
+            border-color: #F44336;
+            color: #F44336;
+        }
+
+        /* PMP = Rosa */
+        .machine-status-card.pmp {
+            background: rgba(233, 30, 99, 0.2);
+            border-color: #E91E63;
+            color: #E91E63;
+        }
+
+        /* PCP = Preto */
+        .machine-status-card.pcp {
+            background: rgba(33, 33, 33, 0.8);
+            border-color: #212121;
+            color: #BDBDBD;
+        }
+
+        /* Comercial = Cinza Escuro */
+        .machine-status-card.comercial {
+            background: rgba(97, 97, 97, 0.3);
+            border-color: #616161;
+            color: #BDBDBD;
+        }
+
+        /* Setup = Azul Claro */
         .machine-status-card.setup {
-            background: rgba(59, 130, 246, 0.2);
-            border-color: #3B82F6;
-            color: #3B82F6;
+            background: rgba(3, 169, 244, 0.2);
+            border-color: #03A9F4;
+            color: #03A9F4;
         }
 
-        .machine-status-card.parada {
-            background: rgba(255, 23, 68, 0.2);
-            border-color: var(--status-critical);
-            color: var(--status-critical);
-            animation: card-pulse 2s infinite;
-        }
-
+        /* Outros/Sem status */
         .machine-status-card.outros {
             background: rgba(120, 144, 156, 0.2);
             border-color: var(--status-idle);
@@ -2209,11 +2244,16 @@
                     <span>Status das Máquinas</span>
                 </div>
                 <div class="footer-legend">
-                    <span class="legend-item"><span class="legend-color" style="background: var(--status-running);"></span>Produzindo</span>
-                    <span class="legend-item"><span class="legend-color" style="background: var(--status-critical);"></span>Parada</span>
-                    <span class="legend-item"><span class="legend-color" style="background: var(--status-warning);"></span>Manutenção</span>
-                    <span class="legend-item"><span class="legend-color" style="background: #3B82F6;"></span>Setup</span>
-                    <span class="legend-item"><span class="legend-color" style="background: var(--status-idle);"></span>Sem OP</span>
+                    <span class="legend-item"><span class="legend-color" style="background: #00e676;"></span>OK</span>
+                    <span class="legend-item"><span class="legend-color" style="background: #03A9F4;"></span>Setup</span>
+                    <span class="legend-item"><span class="legend-color" style="background: #795548;"></span>Compras</span>
+                    <span class="legend-item"><span class="legend-color" style="background: #FF9800;"></span>Ferram.</span>
+                    <span class="legend-item"><span class="legend-color" style="background: #9C27B0;"></span>Processo</span>
+                    <span class="legend-item"><span class="legend-color" style="background: #FFEB3B;"></span>Manut.</span>
+                    <span class="legend-item"><span class="legend-color" style="background: #F44336;"></span>Qualid.</span>
+                    <span class="legend-item"><span class="legend-color" style="background: #E91E63;"></span>PMP</span>
+                    <span class="legend-item"><span class="legend-color" style="background: #616161;"></span>Comerc.</span>
+                    <span class="legend-item"><span class="legend-color" style="background: #212121;"></span>PCP</span>
                 </div>
             </div>
             <div class="machine-status-grid" id="machineStatusGrid">
@@ -3454,9 +3494,8 @@
         }
 
         function formatNumber(num) {
-            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-            if (num >= 1000) return Math.round(num / 1000) + 'K';
-            return num.toLocaleString('pt-BR');
+            // Retornar número inteiro formatado (sem K, M)
+            return Math.round(num).toLocaleString('pt-BR');
         }
 
         function updateOEERing(availability, performance, quality) {
@@ -3979,25 +4018,85 @@
                 // Se tem parada ativa, verificar tipo
                 const downtimes = machineDowntimeMap.get(machineId);
                 if (downtimes && downtimes.length > 0) {
-                    const lastDowntime = downtimes[downtimes.length - 1];
+                    // Filtrar apenas paradas ativas (não finalizadas)
+                    const activeDowntimes = downtimes.filter(dt => {
+                        // Se tem status, verificar se é ativo
+                        if (dt.status && dt.status !== 'active' && dt.status !== 'registered') {
+                            return false;
+                        }
+                        // Se tem endTime, a parada já foi finalizada
+                        if (dt.endTime && dt.endTime !== '' && dt.endTime !== '--:--') {
+                            return false;
+                        }
+                        return true;
+                    });
+                    
+                    // Se não há paradas ativas, verificar se está produzindo
+                    if (activeDowntimes.length === 0) {
+                        if (machineProductionMap.has(machineId)) {
+                            return 'produzindo';
+                        }
+                        return 'outros';
+                    }
+                    
+                    const lastDowntime = activeDowntimes[activeDowntimes.length - 1];
                     const reason = (lastDowntime.reason || lastDowntime.motivo || lastDowntime.downtime_reason || '').toLowerCase();
                     
-                    if (reason.includes('manutenção') || reason.includes('manutencao') || reason.includes('maintenance')) {
-                        return 'manutencao';
-                    }
-                    if (reason.includes('ferramentaria') || reason.includes('tooling') || reason.includes('molde')) {
-                        return 'ferramentaria';
-                    }
-                    if (reason.includes('comercial') || reason.includes('pcp') || reason.includes('estratégia') || 
-                        reason.includes('estrategia') || reason.includes('sem op') || reason.includes('sem pedido')) {
-                        return 'comercial-pcp';
-                    }
+                    // Setup = Azul Claro
                     if (reason.includes('setup') || reason.includes('troca') || reason.includes('preparação') || 
-                        reason.includes('preparacao')) {
+                        reason.includes('preparacao') || reason.includes('instalação') || reason.includes('instalacao')) {
                         return 'setup';
                     }
                     
-                    return 'parada';
+                    // Compras = Marrom
+                    if (reason.includes('compra') || reason.includes('insumo') || reason.includes('falta de material')) {
+                        return 'compras';
+                    }
+                    
+                    // Ferramentaria = Laranja
+                    if (reason.includes('ferramentaria') || reason.includes('tooling') || reason.includes('molde') || 
+                        reason.includes('corretiva de molde') || reason.includes('preventiva de molde') || reason.includes('versão')) {
+                        return 'ferramentaria';
+                    }
+                    
+                    // Processo = Roxo
+                    if (reason.includes('processo') || reason.includes('ajuste') || reason.includes('cavidade') || 
+                        reason.includes('try out') || reason.includes('inicio') || reason.includes('reinicio') || 
+                        reason.includes('revezamento') || reason.includes('almoço') || reason.includes('janta')) {
+                        return 'processo';
+                    }
+                    
+                    // Manutenção = Amarelo
+                    if (reason.includes('manutenção') || reason.includes('manutencao') || reason.includes('maintenance') ||
+                        reason.includes('vazamento') && reason.includes('máquina')) {
+                        return 'manutencao';
+                    }
+                    
+                    // Qualidade = Vermelho
+                    if (reason.includes('qualidade') || reason.includes('liberação') || reason.includes('aguardando cliente') || 
+                        reason.includes('aguardando fornecedor') || reason.includes('inspeção')) {
+                        return 'qualidade';
+                    }
+                    
+                    // PMP/Produção = Rosa
+                    if (reason.includes('produção') || reason.includes('operador') || reason.includes('prendendo') || 
+                        reason.includes('galho') || reason.includes('peças')) {
+                        return 'pmp';
+                    }
+                    
+                    // Comercial = Cinza (separado de PCP)
+                    if (reason.includes('comercial') || reason.includes('sem pedido') || reason.includes('sem op')) {
+                        return 'comercial';
+                    }
+                    
+                    // PCP = Preto
+                    if (reason.includes('pcp') || reason.includes('estratégia') || reason.includes('estrategia') || 
+                        reason.includes('sem programação') || reason.includes('sem programacao')) {
+                        return 'pcp';
+                    }
+                    
+                    // Default para paradas não mapeadas = Outros
+                    return 'outros';
                 }
                 
                 // Se não tem parada mas tem planejamento, está produzindo
@@ -4015,9 +4114,13 @@
                     'produzindo': 'OK',
                     'manutencao': 'MNT',
                     'ferramentaria': 'FER',
-                    'comercial-pcp': 'PCP',
+                    'compras': 'CMP',
+                    'processo': 'PRC',
+                    'qualidade': 'QLD',
+                    'pmp': 'PMP',
+                    'pcp': 'PCP',
+                    'comercial': 'COM',
                     'setup': 'SET',
-                    'parada': 'PAR',
                     'outros': '---'
                 };
                 return labels[statusClass] || '---';
