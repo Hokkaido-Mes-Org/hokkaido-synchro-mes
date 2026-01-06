@@ -1092,15 +1092,15 @@
         .shift-kpis-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 8px;
+            gap: 12px;
             height: 100%;
         }
 
         .shift-kpi-card {
             background: linear-gradient(135deg, rgba(30, 40, 55, 0.9), rgba(20, 30, 45, 0.95));
             border: 1px solid var(--industrial-border);
-            border-radius: 6px;
-            padding: 8px;
+            border-radius: 8px;
+            padding: 12px;
             display: flex;
             flex-direction: column;
         }
@@ -1108,21 +1108,22 @@
         .shift-kpi-card.total {
             background: linear-gradient(135deg, rgba(0, 180, 216, 0.15), rgba(0, 230, 118, 0.1));
             border-color: var(--industrial-cyan);
+            border-width: 2px;
         }
 
         .shift-kpi-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 12px;
-            padding-bottom: 8px;
+            margin-bottom: 14px;
+            padding-bottom: 10px;
             border-bottom: 1px solid var(--industrial-border);
         }
 
         .shift-badge {
-            padding: 3px 8px;
+            padding: 4px 12px;
             border-radius: 4px;
-            font-size: 10px;
+            font-size: 13px;
             font-weight: 700;
             letter-spacing: 0.5px;
         }
@@ -1133,7 +1134,7 @@
         .shift-badge.total { background: rgba(0, 230, 118, 0.2); color: var(--status-success); }
 
         .shift-time {
-            font-size: 10px;
+            font-size: 12px;
             color: var(--text-secondary);
             font-family: 'Roboto Mono', monospace;
         }
@@ -1141,7 +1142,7 @@
         .shift-kpi-body {
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 12px;
             flex: 1;
         }
 
@@ -1149,24 +1150,36 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            padding: 4px 0;
+            border-bottom: 1px dashed rgba(255,255,255,0.05);
+        }
+
+        .shift-metric:last-child {
+            border-bottom: none;
         }
 
         .shift-metric .metric-value {
-            font-size: 14px;
+            font-size: 18px;
             font-weight: 700;
             color: var(--text-primary);
             font-family: 'Roboto Mono', monospace;
         }
 
         .shift-metric .metric-label {
-            font-size: 9px;
+            font-size: 11px;
             color: var(--text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            font-weight: 500;
         }
 
         .shift-kpi-card.total .metric-value {
             color: var(--industrial-cyan);
+            font-size: 20px;
+        }
+
+        .shift-kpi-card.total .metric-label {
+            color: rgba(0, 230, 118, 0.8);
         }
 
         /* ==================== ACCESS CONTROL ==================== */
@@ -2003,8 +2016,6 @@
         <div class="brand-section">
             <div class="brand-logo" style="display: flex; align-items: center; gap: 15px;">
                 <img src="https://i.postimg.cc/5jdHwhF9/hokkaido-logo-110.png" alt="Hokkaido" style="height: 45px; width: auto;">
-                <div style="width: 2px; height: 45px; background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.3), transparent);"></div>
-                <img src="https://i.postimg.cc/bvW17wmV/Gemini-Generated-Image-mt4zjfmt4zjfmt4z-(2).png" alt="Synchro" style="height: 98px; width: auto;">
             </div>
         </div>
 
@@ -2101,12 +2112,16 @@
                         </div>
                         <div class="shift-kpi-body">
                             <div class="shift-metric">
+                                <span class="metric-value" id="t1Planned">0</span>
+                                <span class="metric-label">Planejado</span>
+                            </div>
+                            <div class="shift-metric">
                                 <span class="metric-value" id="t1Production">0</span>
-                                <span class="metric-label">Peças</span>
+                                <span class="metric-label">Executado</span>
                             </div>
                             <div class="shift-metric">
                                 <span class="metric-value" id="t1Efficiency">0%</span>
-                                <span class="metric-label">Eficiência</span>
+                                <span class="metric-label">% Meta</span>
                             </div>
                             <div class="shift-metric">
                                 <span class="metric-value" id="t1Downtime">0min</span>
@@ -2122,12 +2137,16 @@
                         </div>
                         <div class="shift-kpi-body">
                             <div class="shift-metric">
+                                <span class="metric-value" id="t2Planned">0</span>
+                                <span class="metric-label">Planejado</span>
+                            </div>
+                            <div class="shift-metric">
                                 <span class="metric-value" id="t2Production">0</span>
-                                <span class="metric-label">Peças</span>
+                                <span class="metric-label">Executado</span>
                             </div>
                             <div class="shift-metric">
                                 <span class="metric-value" id="t2Efficiency">0%</span>
-                                <span class="metric-label">Eficiência</span>
+                                <span class="metric-label">% Meta</span>
                             </div>
                             <div class="shift-metric">
                                 <span class="metric-value" id="t2Downtime">0min</span>
@@ -2143,12 +2162,16 @@
                         </div>
                         <div class="shift-kpi-body">
                             <div class="shift-metric">
+                                <span class="metric-value" id="t3Planned">0</span>
+                                <span class="metric-label">Planejado</span>
+                            </div>
+                            <div class="shift-metric">
                                 <span class="metric-value" id="t3Production">0</span>
-                                <span class="metric-label">Peças</span>
+                                <span class="metric-label">Executado</span>
                             </div>
                             <div class="shift-metric">
                                 <span class="metric-value" id="t3Efficiency">0%</span>
-                                <span class="metric-label">Eficiência</span>
+                                <span class="metric-label">% Meta</span>
                             </div>
                             <div class="shift-metric">
                                 <span class="metric-value" id="t3Downtime">0min</span>
@@ -2164,12 +2187,16 @@
                         </div>
                         <div class="shift-kpi-body">
                             <div class="shift-metric">
+                                <span class="metric-value" id="totalDayPlanned">0</span>
+                                <span class="metric-label">Planejado</span>
+                            </div>
+                            <div class="shift-metric">
                                 <span class="metric-value" id="totalDayProduction">0</span>
-                                <span class="metric-label">Peças</span>
+                                <span class="metric-label">Executado</span>
                             </div>
                             <div class="shift-metric">
                                 <span class="metric-value" id="totalDayEfficiency">0%</span>
-                                <span class="metric-label">Eficiência</span>
+                                <span class="metric-label">% Meta</span>
                             </div>
                             <div class="shift-metric">
                                 <span class="metric-value" id="totalDayDowntime">0min</span>
@@ -3627,7 +3654,13 @@
             }
             
             // Calcular meta por turno (dividir meta total por 3)
-            const totalTarget = cachedPlanning.reduce((sum, p) => sum + getPlanTarget(p), 0);
+            // Usar normalizedData?.plan se disponível (igual ao updateKPIs)
+            let totalTarget = 0;
+            if (normalizedData?.plan) {
+                totalTarget = normalizedData.plan.reduce((sum, item) => sum + (item.quantity || 0), 0);
+            } else {
+                totalTarget = cachedPlanning.reduce((sum, p) => sum + getPlanTarget(p), 0);
+            }
             const targetPerShift = Math.round(totalTarget / 3);
             shifts.T1.target = targetPerShift;
             shifts.T2.target = targetPerShift;
@@ -3686,58 +3719,70 @@
             console.log('[Dashboard TV] Dados por turno após filtro:', shifts);
             
             // Atualizar elementos do DOM
-            const formatQty = (n) => n >= 1000 ? (n/1000).toFixed(1) + 'K' : n.toLocaleString('pt-BR');
+            const formatQty = (n) => n.toLocaleString('pt-BR');
             const calcEfficiency = (prod, target) => target > 0 ? Math.min((prod / target) * 100, 150).toFixed(0) : 0;
             
             // T1 - sempre ativo após 7h
+            const t1Planned = document.getElementById('t1Planned');
             const t1Prod = document.getElementById('t1Production');
             const t1Eff = document.getElementById('t1Efficiency');
             const t1Down = document.getElementById('t1Downtime');
             if (isT1Active) {
+                if (t1Planned) t1Planned.textContent = formatQty(shifts.T1.target);
                 if (t1Prod) t1Prod.textContent = formatQty(shifts.T1.production);
                 if (t1Eff) t1Eff.textContent = calcEfficiency(shifts.T1.production, shifts.T1.target) + '%';
                 if (t1Down) t1Down.textContent = shifts.T1.downtime + 'min';
             } else {
+                if (t1Planned) t1Planned.textContent = '--';
                 if (t1Prod) t1Prod.textContent = '--';
                 if (t1Eff) t1Eff.textContent = '--';
                 if (t1Down) t1Down.textContent = '--';
             }
             
             // T2 - ativo após 15h
+            const t2Planned = document.getElementById('t2Planned');
             const t2Prod = document.getElementById('t2Production');
             const t2Eff = document.getElementById('t2Efficiency');
             const t2Down = document.getElementById('t2Downtime');
             if (isT2Active) {
+                if (t2Planned) t2Planned.textContent = formatQty(shifts.T2.target);
                 if (t2Prod) t2Prod.textContent = formatQty(shifts.T2.production);
                 if (t2Eff) t2Eff.textContent = calcEfficiency(shifts.T2.production, shifts.T2.target) + '%';
                 if (t2Down) t2Down.textContent = shifts.T2.downtime + 'min';
             } else {
+                if (t2Planned) t2Planned.textContent = '--';
                 if (t2Prod) t2Prod.textContent = '--';
                 if (t2Eff) t2Eff.textContent = '--';
                 if (t2Down) t2Down.textContent = '--';
             }
             
             // T3 - ativo após 23h ou antes das 7h (madrugada)
+            const t3Planned = document.getElementById('t3Planned');
             const t3Prod = document.getElementById('t3Production');
             const t3Eff = document.getElementById('t3Efficiency');
             const t3Down = document.getElementById('t3Downtime');
             if (isT3Active) {
+                if (t3Planned) t3Planned.textContent = formatQty(shifts.T3.target);
                 if (t3Prod) t3Prod.textContent = formatQty(shifts.T3.production);
                 if (t3Eff) t3Eff.textContent = calcEfficiency(shifts.T3.production, shifts.T3.target) + '%';
                 if (t3Down) t3Down.textContent = shifts.T3.downtime + 'min';
             } else {
+                if (t3Planned) t3Planned.textContent = '--';
                 if (t3Prod) t3Prod.textContent = '--';
                 if (t3Eff) t3Eff.textContent = '--';
                 if (t3Down) t3Down.textContent = 'Não iniciado';
             }
             
             // Totais
+            const totalPlanned = totalTarget; // Usar o totalTarget original, não a soma dos turnos
             const totalProd = shifts.T1.production + shifts.T2.production + shifts.T3.production;
             const totalDown = shifts.T1.downtime + shifts.T2.downtime + shifts.T3.downtime;
             
+            const totalDayPlanned = document.getElementById('totalDayPlanned');
             const totalDayProd = document.getElementById('totalDayProduction');
             const totalDayEff = document.getElementById('totalDayEfficiency');
             const totalDayDown = document.getElementById('totalDayDowntime');
+            if (totalDayPlanned) totalDayPlanned.textContent = formatQty(totalPlanned);
             if (totalDayProd) totalDayProd.textContent = formatQty(totalProd);
             if (totalDayEff) totalDayEff.textContent = calcEfficiency(totalProd, totalTarget) + '%';
             if (totalDayDown) totalDayDown.textContent = totalDown >= 60 ? Math.floor(totalDown/60) + 'h' + (totalDown%60) + 'm' : totalDown + 'min';
