@@ -1,5 +1,6 @@
 // database.js
-const productDatabase = [
+// Usar var para garantir que seja global (const/let ficam no escopo do módulo)
+var productDatabase = [
     // --- SILGAN ---
     { "cod": 3, "client": "SILGAN", "name": "ROSCA BAIXA P2000 28 400 ESTRIADA BRANCO 767 DPB064 - 1.01.01.005.071", "cavities": 46, "cycle": 33, "weight": 2.09, "pieces_per_hour_goal": 5018, "mp": "" },
     { "cod": 4, "client": "SILGAN", "name": "ROSCA BAIXA P2000 28 400 ESTRIADA OURO CB101 DPB064 - 1.01.01.005.114", "cavities": 46, "cycle": 33, "weight": 2.09, "pieces_per_hour_goal": 5018, "mp": "" },
@@ -301,7 +302,7 @@ const productDatabase = [
     { "cod": 4687, "client": "APTAR", "name": "FIXAÇÃO-GS-28/410CUST---THREAD-HDPE-YELL - 31300875", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
     { "cod": 4688, "client": "APTAR", "name": "ATUADOR-SENTIDOS-PP--5,85-YELL---LOT---- 31300894", "cavities": 22, "cycle": 25.5, "weight": 7.30, "pieces_per_hour_goal": 3106, "mp": "" },
     { "cod": 4689, "client": "APTAR", "name": "ATUADOR-POEMA-PP--5,85-YELL---LOT-- 31300895", "cavities": 22, "cycle": 25.5, "weight": 7.30, "pieces_per_hour_goal": 3106, "mp": "" },
-{ "cod": 4690, "client": "APTAR", "name": "TAMPA-EM-28,20-PP-ORAN--SHNY-----EUROMIS  31300904", "cavities": 29, "cycle": 12, "weight": 0.95, "pieces_per_hour_goal": 8700, "mp": "" }
+    { "cod": 4690, "client": "APTAR", "name": "TAMPA-EM-28,20-PP-ORAN--SHNY-----EUROMIS  31300904", "cavities": 29, "cycle": 12, "weight": 0.95, "pieces_per_hour_goal": 8700, "mp": "" },
     { "cod": 4691, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-ORAN---SPRAY----EU - 31300906", "cavities": 30, "cycle": 20, "weight": 1.85, "pieces_per_hour_goal": 5400, "mp": "" },
     { "cod": 4692, "client": "APTAR", "name": "TAMPA-EM-28,20-PP-BLUE--SHNY----- 31302653", "cavities": 29, "cycle": 12, "weight": 0.95, "pieces_per_hour_goal": 8700, "mp": "" },
     { "cod": 4693, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-BLUE---SPRAY----CL - 31302654", "cavities": 30, "cycle": 20, "weight": 1.85, "pieces_per_hour_goal": 5400, "mp": "" },
@@ -647,9 +648,8 @@ const productDatabase = [
 ];
 
 
-
 // Catálogo de máquinas (fonte única para app)
-const machineDatabase = [
+var machineDatabase = [
     { id: "H01", model: "SANDRETTO OTTO" },
     { id: "H02", model: "SANDRETTO SERIE 200" },
     { id: "H03", model: "LS LTE280" },
@@ -682,7 +682,7 @@ const machineDatabase = [
 // ================================
 // TARA DAS CAIXAS PLÁSTICAS (em kilos)
 // ================================
-const tareBoxesDatabase = [
+var tareBoxesDatabase = [
     { "machine": "H-01", "weight": 3.010 },
     { "machine": "H-02", "weight": 3.165 },
     { "machine": "H-03", "weight": 3.005 },
@@ -709,7 +709,7 @@ const tareBoxesDatabase = [
 ];
 
 // Motivos de perdas (agrupados)
-const groupedLossReasons = {
+var groupedLossReasons = {
     "PROCESSO": [
         "BOLHA", "CHUPAGEM", "CONTAMINAÇÃO", "DEGRADAÇÃO", "EMPENAMENTO", "FALHA",
         "FIAPO", "FORA DE COR", "INÍCIO/REÍNICIO", "JUNÇÃO", "MANCHAS",
@@ -724,7 +724,7 @@ const groupedLossReasons = {
 };
 
 // Motivos de parada (agrupados)
-const groupedDowntimeReasons = {
+var groupedDowntimeReasons = {
     "FERRAMENTARIA": ["CORRETIVA DE MOLDE", "PREVENTIVA DE MOLDE", "TROCA DE VERSÃO", "VAZAMENTO DE ÓLEO MOLDE"],
     "PROCESSO": ["ABERTURA DE CAVIDADE", "AJUSTE DE PROCESSO", "FECHAMENTO DE CAVIDADE", "TRY OUT", "INICIO/REINICIO", "F.O REVEZAMENTO ALMOÇO", "F.O REVEZAMENTO JANTA"],
     "COMPRAS": ["FALTA DE INSUMO PLANEJADA", "FALTA DE INSUMO NÃO PLANEJADA"],
@@ -757,10 +757,10 @@ function atualizarDatabase(novosDados) {
 // ÍNDICES PARA BUSCA RÁPIDA
 // ================================
 // Criar Map para O(1) lookups em vez de O(n) array searches
-const productByCode = new Map();
-const productByClient = new Map();
-const machineById = new Map();
-const tareByMachine = new Map();
+var productByCode = new Map();
+var productByClient = new Map();
+var machineById = new Map();
+var tareByMachine = new Map();
 
 // Indexar produtos por código
 productDatabase.forEach(product => {
@@ -784,6 +784,22 @@ machineDatabase.forEach(machine => {
 tareBoxesDatabase.forEach(tare => {
     tareByMachine.set(tare.machine, tare.weight);
 });
+
+// Expor variáveis globais IMEDIATAMENTE para acesso direto
+// Isso garante que estejam disponíveis mesmo antes do DOMContentLoaded
+if (typeof window !== 'undefined') {
+    window.productDatabase = productDatabase;
+    window.machineDatabase = machineDatabase;
+    window.productByCode = productByCode;
+    window.productByClient = productByClient;
+    window.machineById = machineById;
+    window.groupedLossReasons = groupedLossReasons;
+    window.groupedDowntimeReasons = groupedDowntimeReasons;
+    console.log('[database.js] Variáveis globais expostas:', {
+        productDatabase: productDatabase?.length || 0,
+        productByCode: productByCode?.size || 0
+    });
+}
 
 // Suporte a Node (tests) e browser
 (function(root, factory) {

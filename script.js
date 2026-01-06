@@ -1,5 +1,18 @@
 ﻿// Popular o select de MP no cadastro de ordem de produção
 document.addEventListener('DOMContentLoaded', async function() {
+    // Aguardar database estar carregado (máximo 3 segundos)
+    let attempts = 0;
+    while (attempts < 30 && (typeof productDatabase === 'undefined' || !productDatabase || productDatabase.length === 0)) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+    }
+    
+    if (typeof productDatabase === 'undefined' || !productDatabase || productDatabase.length === 0) {
+        console.error('[CRÍTICO] Database não carregado após 3 segundos!');
+    } else {
+        console.log(`[OK] Database carregado: ${productDatabase.length} produtos, productByCode size: ${productByCode?.size || 0}`);
+    }
+    
     // Ocultar subaba Analytics IA para todos, exceto usuários autorizados (Leandro Camargo ou role 'suporte')
     setTimeout(() => {
         try {
@@ -690,6 +703,55 @@ document.addEventListener('DOMContentLoaded', function() {
     // Observação: o app usa funções getGrouped* abaixo para popular selects/relatórios
 
     const preparadores = ['Daniel', 'João', 'Luis', 'Manaus', 'Rafael', 'Stanley', 'Wagner', 'Yohan'].sort();
+
+    /**
+     * Função helper para buscar produto por código com fallback seguro
+     * Evita erros de "Cannot read properties of undefined"
+     * @param {string|number} code - Código do produto
+     * @returns {object|null} - Produto encontrado ou null
+     */
+    function getProductByCode(code) {
+        if (!code && code !== 0) return null;
+        
+        const numericCode = Number(code);
+        const stringCode = String(code).trim();
+        let product = null;
+
+        // 1. Tentar via window.productByCode (exposto diretamente pelo database.js)
+        if (window.productByCode instanceof Map && window.productByCode.size > 0) {
+            product = window.productByCode.get(numericCode) || window.productByCode.get(stringCode);
+            if (product) return product;
+        }
+
+        // 2. Tentar via window.databaseModule.productByCode
+        const moduleIndex = window.databaseModule?.productByCode;
+        if (moduleIndex instanceof Map && moduleIndex.size > 0) {
+            product = moduleIndex.get(numericCode) || moduleIndex.get(stringCode);
+            if (product) return product;
+        }
+
+        // 3. Fallback: window.productDatabase (exposto diretamente pelo database.js)
+        if (Array.isArray(window.productDatabase) && window.productDatabase.length > 0) {
+            product = window.productDatabase.find(p => Number(p.cod) === numericCode || String(p.cod) === stringCode);
+            if (product) return product;
+        }
+
+        // 4. Fallback: buscar no array do databaseModule
+        const dbArray = window.databaseModule?.productDatabase;
+        if (Array.isArray(dbArray) && dbArray.length > 0) {
+            product = dbArray.find(p => Number(p.cod) === numericCode || String(p.cod) === stringCode);
+            if (product) return product;
+        }
+
+        // Debug: logar se não encontrou
+        console.warn(`[getProductByCode] Produto ${code} não encontrado. Status:`, {
+            windowProductByCodeSize: window.productByCode?.size || 0,
+            windowProductDatabaseLength: window.productDatabase?.length || 0,
+            databaseModuleExists: !!window.databaseModule
+        });
+
+        return null;
+    }
     
     // Global Variables
     let currentAnalysisView = 'resumo';
@@ -838,7 +900,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function getCatalogPieceWeight(machineData = selectedMachineData) {
-        if (!machineData || !window.databaseModule || !(window.databaseModule.productByCode instanceof Map)) {
+        if (!machineData) {
             return 0;
         }
 
@@ -852,10 +914,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         for (const candidate of codeCandidates) {
             if (candidate === undefined || candidate === null || candidate === '') continue;
-            const numericCode = Number(candidate);
-            const catalogEntry = Number.isFinite(numericCode)
-                ? window.databaseModule.productByCode.get(numericCode)
-                : window.databaseModule.productByCode.get(candidate);
+            const catalogEntry = getProductByCode(candidate);
             if (catalogEntry && catalogEntry.weight !== undefined && catalogEntry.weight !== null) {
                 let weightGrams = parseFloat(catalogEntry.weight);
                 if (Number.isFinite(weightGrams) && weightGrams > 0) {
@@ -1772,35 +1831,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // === SEÇÃO 2: Dados do Produto (do productDatabase via databaseModule) ===
-        // Buscar produto no database pelo código usando o índice productByCode
+        // Buscar produto no database pelo código usando a função helper getProductByCode
         const partCodeStr = String(partCode || '').trim();
         const productCode = parseInt(partCodeStr, 10);
-        let productFromDatabase = null;
         
         console.log(`[Planejamento] Buscando produto com código: "${partCodeStr}" (parseado: ${productCode})`);
         
-        // Tentar buscar via productByCode (Map indexado - mais rápido)
-        if (window.databaseModule && window.databaseModule.productByCode instanceof Map) {
-            productFromDatabase = window.databaseModule.productByCode.get(productCode);
-            if (!productFromDatabase) {
-                // Tentar como string
-                productFromDatabase = window.databaseModule.productByCode.get(partCodeStr);
-            }
-        }
-        
-        // Fallback: buscar diretamente no array productDatabase
-        if (!productFromDatabase && window.databaseModule && Array.isArray(window.databaseModule.productDatabase)) {
-            productFromDatabase = window.databaseModule.productDatabase.find(p => 
-                p.cod === productCode || String(p.cod) === partCodeStr
-            );
-        }
-        
-        // Fallback final: tentar acessar productDatabase global (se existir)
-        if (!productFromDatabase && typeof productDatabase !== 'undefined' && Array.isArray(productDatabase)) {
-            productFromDatabase = productDatabase.find(p => 
-                p.cod === productCode || String(p.cod) === partCodeStr
-            );
-        }
+        // Usar função helper com fallback seguro
+        const productFromDatabase = getProductByCode(partCodeStr);
 
         let resolvedCycle = 0;
         let resolvedCavities = 0;
@@ -4066,7 +4104,7 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         });
 
         // Gerar gráficos
-    await generateOEEDistributionChart(productionData, lossesData, downtimeData);
+        await generateOEEDistributionChart(productionData, lossesData, downtimeConsolidated);
     await generateMachineRanking(productionData, planFiltered);
     }
 
@@ -13345,7 +13383,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const productCodInput = document.getElementById('planning-product-cod');
         const productCodDatalist = document.getElementById('planning-product-cod-list');
         if (productCodInput && productCodDatalist) {
-            const sortedProducts = [...productDatabase].sort((a, b) => a.cod - b.cod);
+            const prodDatabase = (window.databaseModule && window.databaseModule.productDatabase) 
+                ? window.databaseModule.productDatabase 
+                : (typeof productDatabase !== 'undefined' ? productDatabase : []);
+            const sortedProducts = [...prodDatabase].sort((a, b) => a.cod - b.cod);
             const escapeOptionLabel = (str = '') => String(str)
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
@@ -13421,9 +13462,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
 
-        // Usar índice Map para O(1) lookup em vez de O(n) search
-        const product = window.databaseModule.productByCode.get(Number(rawCode)) || 
-                       window.databaseModule.productByCode.get(rawCode);
+        // Usar função helper com fallback seguro
+        const product = getProductByCode(rawCode);
 
         if (product) {
             fillProductionOrderFields(product);
@@ -14675,8 +14715,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const normalizedOrderNumber = orderNumber.toUpperCase();
 
         const partCode = (rawData.part_code || '').trim();
-        // Usar índice Map para O(1) lookup
-        const matchedProduct = partCode ? (window.databaseModule.productByCode.get(Number(partCode)) || window.databaseModule.productByCode.get(partCode)) : null;
+        // Usar função helper com fallback seguro
+        const matchedProduct = partCode ? getProductByCode(partCode) : null;
 
         const submitButton = productionOrderForm.querySelector('button[type="submit"]');
         const originalButtonContent = submitButton ? submitButton.innerHTML : '';
@@ -14793,8 +14833,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (!input) return;
 
         const rawCode = (input.value || '').trim();
-        // Usar índice Map para O(1) lookup
-        const product = window.databaseModule.productByCode.get(Number(rawCode)) || window.databaseModule.productByCode.get(rawCode);
+        // Usar função helper com fallback seguro
+        const product = getProductByCode(rawCode);
 
         const cycleInput = document.getElementById('budgeted-cycle');
         const cavitiesInput = document.getElementById('mold-cavities');
@@ -14893,8 +14933,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         // Buscar dados completos do produto selecionado
         const productCod = data.product_cod;
-        // Usar índice Map para O(1) lookup
-        const product = window.databaseModule.productByCode.get(Number(productCod)) || window.databaseModule.productByCode.get(productCod);
+        // Usar função helper com fallback seguro
+        const product = getProductByCode(productCod);
         
         if (!product) {
             alert('Produto não encontrado!');
@@ -22334,9 +22374,8 @@ function sendDowntimeNotification() {
             
             // 1. Tentar buscar no database de produtos pelo código
             const productCode = p.product_cod || p.product_code || p.part_code;
-            if (productCode && window.databaseModule?.productByCode) {
-                const dbProduct = window.databaseModule.productByCode.get(Number(productCode)) || 
-                                  window.databaseModule.productByCode.get(String(productCode));
+            if (productCode) {
+                const dbProduct = getProductByCode(productCode);
                 if (dbProduct?.name) {
                     return dbProduct.name.trim();
                 }
@@ -26247,8 +26286,8 @@ async function confirmImportOrders(orders) {
 
     for (const order of orders) {
         try {
-            // Buscar produto para extrair dados
-            const product = window.databaseModule.productByCode.get(Number(order.part_code)) || window.databaseModule.productByCode.get(order.part_code);
+            // Buscar produto para extrair dados usando função helper
+            const product = getProductByCode(order.part_code);
 
             const docData = {
                 order_number: order.order_number,
