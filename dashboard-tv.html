@@ -2016,6 +2016,7 @@
         <div class="brand-section">
             <div class="brand-logo" style="display: flex; align-items: center; gap: 15px;">
                 <img src="https://i.postimg.cc/5jdHwhF9/hokkaido-logo-110.png" alt="Hokkaido" style="height: 45px; width: auto;">
+                <img src="https://i.postimg.cc/bNrChs97/Gemini-Generated-Image-hli5dqhli5dqhli5-removebg-preview.png" alt="Lean" style="height: 45px; width: auto;">
             </div>
         </div>
 
@@ -2519,10 +2520,13 @@
                     baseDate.setDate(baseDate.getDate() - 1);
                 }
             }
-            return baseDate.toISOString().split('T')[0];
+            // Usar mesma lógica de getTodayString para evitar problemas de timezone
+            return new Date(baseDate.getTime() - (baseDate.getTimezoneOffset() * 60000))
+                .toISOString()
+                .split('T')[0];
         }
         
-        // Obter workDay a partir de timestamp
+        // Obter workDay a partir de timestamp - CORRIGIDO para usar hora local
         function getWorkDayFromTimestamp(timestamp) {
             if (!timestamp) return null;
             let date;
@@ -2540,7 +2544,10 @@
             if (hours < 7) {
                 date.setDate(date.getDate() - 1);
             }
-            return date.toISOString().split('T')[0];
+            // Usar mesma lógica de getTodayString para evitar problemas de timezone
+            return new Date(date.getTime() - (date.getTimezoneOffset() * 60000))
+                .toISOString()
+                .split('T')[0];
         }
         
         // Resolver datetime de produção
@@ -3069,13 +3076,31 @@
             // Usar dados normalizados quando disponíveis
             const normalizedData = window._tvNormalizedData;
             
+            // IMPORTANTE: Usar o workDay para filtrar dados do dia de trabalho correto
+            const workDay = getTodayString(); // Esta função já retorna o dia anterior se hora < 7
+            
             console.log('[Dashboard TV] updateKPIs - cachedProductions:', cachedProductions.length);
             console.log('[Dashboard TV] updateKPIs - cachedPlanning:', cachedPlanning.length);
             console.log('[Dashboard TV] updateKPIs - normalizedData:', normalizedData ? 'disponível' : 'não disponível');
+            console.log('[Dashboard TV] updateKPIs - workDay:', workDay);
+            
+            // DEBUG: Listar workDays únicos nos dados
+            if (normalizedData?.production) {
+                const uniqueWorkDays = [...new Set(normalizedData.production.map(p => p.workDay))];
+                console.log('[Dashboard TV] updateKPIs - WorkDays únicos nos dados:', uniqueWorkDays);
+                console.log('[Dashboard TV] updateKPIs - Total registros produção:', normalizedData.production.length);
+                const matchingRecords = normalizedData.production.filter(p => p.workDay === workDay);
+                console.log('[Dashboard TV] updateKPIs - Registros do workDay atual:', matchingRecords.length);
+                const totalMatchingQty = matchingRecords.reduce((sum, p) => sum + (p.quantity || 0), 0);
+                console.log('[Dashboard TV] updateKPIs - Soma produção do workDay atual:', totalMatchingQty);
+            }
             
             // Somar produção do dia (usando dados normalizados)
             if (normalizedData?.production) {
                 normalizedData.production.forEach(item => {
+                    // Só contar produções do workDay atual (dia de produção) - CONSISTENTE com updateShiftKPIs
+                    if (item.workDay !== workDay) return;
+                    
                     totalProduced += item.quantity || 0;
                     
                     // Produção da última hora
@@ -3111,10 +3136,12 @@
                 });
             }
             
-            // Somar refugo (usando dados normalizados de losses - IDÊNTICO ao Synchro)
+            // Somar refugo (usando dados normalizados de losses - CONSISTENTE com updateShiftKPIs)
             if (normalizedData?.losses) {
-                totalRefugo = normalizedData.losses.reduce((sum, item) => sum + (item.scrapPcs || item.quantity || 0), 0);
-                console.log('[Dashboard TV] Refugo normalizado:', totalRefugo, 'pçs');
+                totalRefugo = normalizedData.losses
+                    .filter(item => item.workDay === workDay)
+                    .reduce((sum, item) => sum + (item.scrapPcs || item.quantity || 0), 0);
+                console.log('[Dashboard TV] Refugo normalizado (workDay=' + workDay + '):', totalRefugo, 'pçs');
             } else {
                 cachedProductions.forEach(prod => {
                     const bad = prod.pecasRuins || prod.refugo_pcs || prod.refugo || prod.scrap || 0;
