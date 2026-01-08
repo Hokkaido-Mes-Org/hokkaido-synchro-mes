@@ -5336,18 +5336,22 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
     async function populateDowntimeReasonFilter(allDowntimeData, rawSegments) {
         const filterSelect = document.getElementById('downtime-reason-filter');
+        const machineFilterSelect = document.getElementById('downtime-machine-filter');
         const countEl = document.getElementById('downtime-reason-count');
         
         if (!filterSelect) return;
         
         // Extrair todos os motivos únicos
         const reasons = new Set();
+        const machines = new Set();
         allDowntimeData.forEach(item => {
             const reason = (item.reason || 'Sem motivo').trim();
             if (reason) reasons.add(reason);
+            const machine = (item.machine || 'N/A').trim();
+            if (machine && machine !== 'N/A') machines.add(machine);
         });
         
-        // Popular o select
+        // Popular o select de motivos
         filterSelect.innerHTML = '<option value="">-- Todos os Motivos --</option>';
         const sortedReasons = Array.from(reasons).sort((a, b) => a.localeCompare(b, 'pt-BR'));
         
@@ -5358,6 +5362,20 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             opt.textContent = `${reason} (${count})`;
             filterSelect.appendChild(opt);
         });
+        
+        // Popular o select de máquinas
+        if (machineFilterSelect) {
+            machineFilterSelect.innerHTML = '<option value="">-- Todas as Máquinas --</option>';
+            const sortedMachines = Array.from(machines).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+            
+            sortedMachines.forEach(machine => {
+                const count = allDowntimeData.filter(d => (d.machine || '').trim() === machine).length;
+                const opt = document.createElement('option');
+                opt.value = machine;
+                opt.textContent = `${machine} (${count})`;
+                machineFilterSelect.appendChild(opt);
+            });
+        }
         
         // Guardar detalhes no cache com dados completos
         cachedDowntimeDetails = rawSegments.map(seg => ({
@@ -5382,17 +5400,25 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             countEl.textContent = `${cachedDowntimeDetails.length} ocorrências`;
         }
         
-        // Event listener para o filtro
-        filterSelect.onchange = () => {
+        // Função para aplicar filtros
+        const applyFilters = () => {
             currentDowntimePage = 1;
-            renderDowntimeReasonTable(filterSelect.value);
+            const reasonValue = filterSelect.value;
+            const machineValue = machineFilterSelect ? machineFilterSelect.value : '';
+            renderDowntimeReasonTable(reasonValue, machineValue);
         };
         
+        // Event listeners para os filtros
+        filterSelect.onchange = applyFilters;
+        if (machineFilterSelect) {
+            machineFilterSelect.onchange = applyFilters;
+        }
+        
         // Renderizar tabela inicial (todos)
-        renderDowntimeReasonTable('');
+        renderDowntimeReasonTable('', '');
     }
 
-    function renderDowntimeReasonTable(reasonFilter) {
+    function renderDowntimeReasonTable(reasonFilter, machineFilter) {
         const tbody = document.getElementById('downtime-reason-table-body');
         const countEl = document.getElementById('downtime-reason-count');
         const paginationEl = document.getElementById('downtime-reason-pagination');
@@ -5402,10 +5428,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         if (!tbody) return;
         
-        // Filtrar dados
+        // Filtrar dados por motivo e máquina
         let filteredData = cachedDowntimeDetails;
         if (reasonFilter) {
-            filteredData = cachedDowntimeDetails.filter(d => d.reason === reasonFilter);
+            filteredData = filteredData.filter(d => d.reason === reasonFilter);
+        }
+        if (machineFilter) {
+            filteredData = filteredData.filter(d => d.machine === machineFilter);
         }
         
         // Atualizar contador
@@ -5431,7 +5460,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             prevBtn.onclick = () => {
                 if (currentDowntimePage > 1) {
                     currentDowntimePage--;
-                    renderDowntimeReasonTable(reasonFilter);
+                    renderDowntimeReasonTable(reasonFilter, machineFilter);
                 }
             };
         }
@@ -5440,7 +5469,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             nextBtn.onclick = () => {
                 if (currentDowntimePage < totalPages) {
                     currentDowntimePage++;
-                    renderDowntimeReasonTable(reasonFilter);
+                    renderDowntimeReasonTable(reasonFilter, machineFilter);
                 }
             };
         }
@@ -5451,7 +5480,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 <tr>
                     <td colspan="7" class="text-center py-8 text-gray-500">
                         <i data-lucide="inbox" class="w-6 h-6 mx-auto mb-2 text-gray-400"></i>
-                        <p>${reasonFilter ? 'Nenhuma ocorrência encontrada para este motivo' : 'Nenhuma parada registrada no período'}</p>
+                        <p>${(reasonFilter || machineFilter) ? 'Nenhuma ocorrência encontrada para os filtros selecionados' : 'Nenhuma parada registrada no período'}</p>
                     </td>
                 </tr>
             `;
