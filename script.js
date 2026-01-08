@@ -359,6 +359,24 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // --- Configuration Lists ---
+    
+    // Função centralizada para extrair quantidade planejada de um plano
+    // Usada para garantir consistência entre Dashboard TV e Aba Análise
+    function getPlanQuantity(raw) {
+        if (!raw) return 0;
+        // Prioridade: lot_size > order_lot_size > planned_quantity > planned_qty > quantidade > meta > target > qtdPlanejada
+        const qty = raw.lot_size || 
+                    raw.order_lot_size || 
+                    raw.planned_quantity || 
+                    raw.planned_qty || 
+                    raw.quantidade || 
+                    raw.meta || 
+                    raw.target || 
+                    raw.qtdPlanejada || 
+                    0;
+        return Math.round(Number(qty) || 0);
+    }
+    
     // Normalização de IDs de máquina: H01, H02, ...
     function normalizeMachineId(id) {
         if (!id) return null;
@@ -6123,7 +6141,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                             id,
                             date: dateValue,
                             machine: normalizeMachineId(raw.machine || null),
-                            quantity: Number(raw.planned_quantity ?? raw.quantity ?? 0) || 0,
+                            quantity: getPlanQuantity(raw), // Usa função centralizada para consistência com Dashboard TV
                             shift: normalizeShift(raw.shift ?? raw.turno),
                             product: raw.product || '',
                             mp: raw.mp || '',

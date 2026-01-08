@@ -214,6 +214,7 @@
             display: flex;
             align-items: center;
             gap: 24px;
+            position: relative;
         }
 
         .datetime-display {
@@ -265,6 +266,156 @@
             background: rgba(59, 130, 246, 0.3);
             border-color: var(--accent-primary);
             color: var(--accent-primary);
+        }
+
+        /* ==================== FILTERED DATE BADGE ==================== */
+        .filtered-date-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255, 171, 0, 0.15);
+            border: 1px solid rgba(255, 171, 0, 0.4);
+            border-radius: 20px;
+            padding: 6px 14px;
+            color: #ffab00;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            animation: pulse-filter 2s infinite;
+        }
+
+        @keyframes pulse-filter {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* ==================== DATE FILTER BUTTON ==================== */
+        .date-filter-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            background: rgba(0, 180, 216, 0.1);
+            border: 1px solid rgba(0, 180, 216, 0.3);
+            border-radius: 6px;
+            color: var(--accent-primary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-right: 8px;
+            position: relative;
+        }
+
+        .date-filter-btn:hover {
+            background: rgba(0, 180, 216, 0.2);
+            border-color: rgba(0, 180, 216, 0.5);
+            transform: scale(1.05);
+        }
+
+        .date-filter-btn:active {
+            transform: scale(0.95);
+        }
+
+        .date-filter-btn.active {
+            background: rgba(0, 180, 216, 0.3);
+            border-color: var(--accent-primary);
+            color: var(--accent-tertiary);
+        }
+
+        /* Panel de filtro de data */
+        .date-filter-panel {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 8px;
+            background: var(--industrial-card);
+            border: 1px solid var(--industrial-border);
+            border-radius: 8px;
+            padding: 16px;
+            min-width: 280px;
+            box-shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        .date-filter-header {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+            letter-spacing: 0.5px;
+        }
+
+        .date-filter-input {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--industrial-panel);
+            border: 1px solid var(--industrial-border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-family: 'Roboto', sans-serif;
+            font-size: 14px;
+            margin-bottom: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .date-filter-input:hover {
+            border-color: var(--accent-primary);
+        }
+
+        .date-filter-input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            background: var(--industrial-card);
+            box-shadow: 0 0 0 3px rgba(0, 180, 216, 0.1);
+        }
+
+        .date-filter-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .date-filter-apply,
+        .date-filter-reset {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            letter-spacing: 0.5px;
+        }
+
+        .date-filter-apply {
+            background: var(--accent-primary);
+            color: var(--industrial-black);
+        }
+
+        .date-filter-apply:hover {
+            background: var(--accent-tertiary);
+            transform: translateY(-2px);
+        }
+
+        .date-filter-reset {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-secondary);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .date-filter-reset:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Ocultar filtro de data em fullscreen */
+        :fullscreen .date-filter-btn,
+        :-webkit-full-screen .date-filter-btn,
+        :-moz-full-screen .date-filter-btn {
+            display: none !important;
         }
 
         .live-badge {
@@ -951,11 +1102,13 @@
 
         .machine-status-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
-            gap: 10px;
-            padding: 16px;
+            grid-template-columns: repeat(14, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 8px;
+            padding: 12px 16px;
             flex: 1;
             overflow: hidden;
+            align-content: center;
         }
 
         .machine-status-card {
@@ -963,33 +1116,36 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            min-width: 85px;
-            padding: 12px 16px;
+            min-width: 70px;
+            padding: 8px 6px;
             border-radius: 8px;
             font-family: 'Roboto Mono', monospace;
             font-weight: 700;
-            font-size: 18px;
+            font-size: 14px;
             text-transform: uppercase;
             transition: all 0.3s ease;
             border: 2px solid transparent;
         }
 
         .machine-status-card:hover {
-            transform: scale(1.08);
-            box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
         }
 
         .machine-status-card .machine-number {
-            font-size: 22px;
+            font-size: 16px;
             font-weight: 900;
+            line-height: 1.1;
         }
 
         .machine-status-card .machine-label {
-            font-size: 22px;
+            font-size: 9px;
             font-weight: 600;
-            letter-spacing: 0.5px;
-            margin-top: 4px;
+            letter-spacing: 0.3px;
+            margin-top: 3px;
             opacity: 0.95;
+            white-space: nowrap;
+            text-align: center;
         }
 
         /* Status colors */
@@ -1254,11 +1410,19 @@
                 grid-template-columns: 1fr 1fr 320px;
             }
             .machine-status-grid {
+                grid-template-columns: repeat(9, 1fr);
+                grid-template-rows: repeat(3, 1fr);
                 gap: 6px;
             }
             .machine-status-card {
-                min-width: 60px;
-                padding: 8px 10px;
+                min-width: 55px;
+                padding: 6px 4px;
+            }
+            .machine-status-card .machine-number {
+                font-size: 14px;
+            }
+            .machine-status-card .machine-label {
+                font-size: 8px;
             }
         }
         
@@ -1348,18 +1512,24 @@
             }
             
             .machine-status-grid {
+                grid-template-columns: repeat(7, 1fr);
+                grid-template-rows: repeat(4, 1fr);
                 gap: 6px;
                 justify-content: center;
             }
             
             .machine-status-card {
-                min-width: 55px;
-                padding: 8px 10px;
-                font-size: 14px;
+                min-width: 50px;
+                padding: 6px 4px;
+                font-size: 12px;
             }
             
             .machine-status-card .machine-number {
-                font-size: 15px;
+                font-size: 13px;
+            }
+
+            .machine-status-card .machine-label {
+                font-size: 7px;
             }
             
             .stopped-machines-list {
@@ -1574,21 +1744,22 @@
             
             /* Machine Status Grid - 768px */
             .machine-status-grid {
-                grid-template-columns: repeat(4, 1fr);
-                gap: 6px;
-                padding: 10px;
-            }
-            
-            .machine-status-card {
+                grid-template-columns: repeat(5, 1fr);
+                grid-template-rows: auto;
+                gap: 5px;
                 padding: 8px;
             }
             
-            .machine-status-card .machine-name {
-                font-size: 10px;
+            .machine-status-card {
+                padding: 5px 3px;
             }
             
-            .machine-status-card .machine-status-label {
-                font-size: 7px;
+            .machine-status-card .machine-number {
+                font-size: 11px;
+            }
+            
+            .machine-status-card .machine-label {
+                font-size: 6px;
             }
             
             /* Stopped Machines List - 768px */
@@ -2039,13 +2210,38 @@
         </div>
 
         <div class="datetime-section">
-            <div class="live-badge">
+            <div class="live-badge" id="liveBadge">
                 <div class="live-dot"></div>
                 <span class="live-text">AO VIVO</span>
+            </div>
+            <div class="filtered-date-badge" id="filteredDateBadge" style="display: none;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                </svg>
+                <span id="filteredDateText">--/--/----</span>
             </div>
             <div class="datetime-display">
                 <div class="time-value" id="currentTime">00:00:00</div>
                 <div class="date-value" id="currentDate">Carregando...</div>
+            </div>
+            <button id="dateFilterBtn" class="date-filter-btn" title="Filtrar por Data">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                </svg>
+            </button>
+            <div id="dateFilterPanel" class="date-filter-panel" style="display: none;">
+                <div class="date-filter-header">Filtro de Data</div>
+                <input type="date" id="filterDate" class="date-filter-input">
+                <div class="date-filter-buttons">
+                    <button id="dateFilterApply" class="date-filter-apply">Aplicar</button>
+                    <button id="dateFilterReset" class="date-filter-reset">Hoje</button>
+                </div>
             </div>
             <button id="fullscreenBtn" class="fullscreen-btn" title="Tela Cheia (F11)">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2314,6 +2510,7 @@
         let cachedProductions = [];
         let cachedPlanning = [];
         let cachedDowntimes = [];
+        let selectedDate = null; // Data filtrada (null = hoje/workDay)
 
         // ==================== INITIALIZATION ====================
         document.addEventListener('DOMContentLoaded', async function() {
@@ -2364,6 +2561,103 @@
                         console.error(`[Dashboard TV] Erro ao sair de fullscreen: ${err.message}`);
                     });
                 }
+            }
+            
+            // ==================== CONTROLE DE FILTRO DE DATA ====================
+            const dateFilterBtn = document.getElementById('dateFilterBtn');
+            const dateFilterPanel = document.getElementById('dateFilterPanel');
+            const filterDateInput = document.getElementById('filterDate');
+            const dateFilterApply = document.getElementById('dateFilterApply');
+            const dateFilterReset = document.getElementById('dateFilterReset');
+            const liveBadge = document.getElementById('liveBadge');
+            const filteredDateBadge = document.getElementById('filteredDateBadge');
+            const filteredDateText = document.getElementById('filteredDateText');
+            
+            // Função para atualizar indicadores visuais de data
+            function updateDateIndicators() {
+                if (selectedDate) {
+                    // Modo histórico - mostrar badge de data filtrada
+                    if (liveBadge) liveBadge.style.display = 'none';
+                    if (filteredDateBadge) filteredDateBadge.style.display = 'flex';
+                    if (filteredDateText) {
+                        const d = selectedDate;
+                        filteredDateText.textContent = `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getFullYear()}`;
+                    }
+                } else {
+                    // Modo ao vivo
+                    if (liveBadge) liveBadge.style.display = 'flex';
+                    if (filteredDateBadge) filteredDateBadge.style.display = 'none';
+                }
+            }
+            
+            if (dateFilterBtn && dateFilterPanel) {
+                console.log('[Dashboard TV] Filtro de data inicializado');
+                
+                // Toggle do painel de filtro
+                dateFilterBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const isVisible = dateFilterPanel.style.display !== 'none';
+                    dateFilterPanel.style.display = isVisible ? 'none' : 'block';
+                    
+                    // Atualizar input com data selecionada ou hoje
+                    const todayDate = new Date();
+                    const dateToShow = selectedDate || todayDate;
+                    filterDateInput.value = dateToShow.toISOString().split('T')[0];
+                    console.log('[Dashboard TV] Painel de filtro:', isVisible ? 'fechado' : 'aberto');
+                });
+                
+                // Fechar painel ao clicar fora
+                document.addEventListener('click', (e) => {
+                    if (!e.target.closest('.datetime-section')) {
+                        dateFilterPanel.style.display = 'none';
+                    }
+                });
+                
+                // Aplicar filtro
+                if (dateFilterApply) {
+                    dateFilterApply.addEventListener('click', async () => {
+                        const dateStr = filterDateInput.value;
+                        if (dateStr) {
+                            // Atualizar a variável global selectedDate
+                            selectedDate = new Date(dateStr + 'T12:00:00');
+                            dateFilterBtn.classList.add('active');
+                            updateDateIndicators();
+                            console.log('[Dashboard TV] ✅ Filtro de data aplicado:', dateStr);
+                            console.log('[Dashboard TV] selectedDate agora é:', selectedDate);
+                            dateFilterPanel.style.display = 'none';
+                            
+                            // Recarregar dados com a data filtrada
+                            try {
+                                await loadRealTimeData();
+                                console.log('[Dashboard TV] ✅ Dados recarregados para:', dateStr);
+                            } catch (err) {
+                                console.error('[Dashboard TV] ❌ Erro ao recarregar:', err);
+                            }
+                        }
+                    });
+                }
+                
+                // Resetar para hoje
+                if (dateFilterReset) {
+                    dateFilterReset.addEventListener('click', async () => {
+                        selectedDate = null;
+                        filterDateInput.value = new Date().toISOString().split('T')[0];
+                        dateFilterBtn.classList.remove('active');
+                        updateDateIndicators();
+                        console.log('[Dashboard TV] 🔄 Filtro de data resetado para hoje');
+                        dateFilterPanel.style.display = 'none';
+                        
+                        // Recarregar dados para hoje
+                        try {
+                            await loadRealTimeData();
+                            console.log('[Dashboard TV] ✅ Dados recarregados para hoje');
+                        } catch (err) {
+                            console.error('[Dashboard TV] ❌ Erro ao recarregar:', err);
+                        }
+                    });
+                }
+            } else {
+                console.error('[Dashboard TV] ❌ Elementos do filtro de data não encontrados!');
             }
             
             // Criar ícones Lucide com verificação
@@ -2594,11 +2888,14 @@
                             const workDay = getWorkDayFromTimestamp(resolvedDateTime) || getWorkDay(mappedDate, timeHint);
                             const product = raw.product || raw.produto || raw.product_cod || raw.cod_produto || raw.productName || raw.mp || '';
                             
+                            // Garantir que quantity seja sempre inteiro (sem decimais)
+                            const rawQty = Number(raw.produzido ?? raw.pecasBoas ?? raw.quantity ?? raw.produced ?? 0) || 0;
+                            
                             return {
                                 id,
                                 date: mappedDate,
                                 machine: normalizeMachineId(raw.machine || raw.machineRef || raw.machine_id || null),
-                                quantity: Number(raw.produzido ?? raw.quantity ?? 0) || 0,
+                                quantity: Math.round(rawQty), // Sempre inteiro
                                 shift: normalizeShift(raw.turno ?? raw.shift),
                                 mp: raw.mp || '',
                                 product: product,
@@ -2776,15 +3073,17 @@
         async function loadRealTimeData() {
             try {
                 console.log('[Dashboard TV] Carregando dados reais...');
-                const today = getTodayString();
-                console.log('[Dashboard TV] Data de hoje (workDay):', today);
+                // Usar data filtrada se selecionada, senão usar hoje (workDay)
+                const dataToLoad = getFilteredDateForData();
+                const today = dataToLoad; // Alias para compatibilidade
+                console.log('[Dashboard TV] Data carregando:', dataToLoad, '(Filtrado:', selectedDate ? 'Sim' : 'Não', ')');
                 
                 // Usar getFilteredData - IDÊNTICO ao Synchro
                 const [productionData, lossesData, downtimeData, planData] = await Promise.all([
-                    getFilteredData('production', today, today, 'all', 'all'),
-                    getFilteredData('losses', today, today, 'all', 'all'),
-                    getFilteredData('downtime', today, today, 'all', 'all'),
-                    getFilteredData('plan', today, today, 'all', 'all')
+                    getFilteredData('production', dataToLoad, dataToLoad, 'all', 'all'),
+                    getFilteredData('losses', dataToLoad, dataToLoad, 'all', 'all'),
+                    getFilteredData('downtime', dataToLoad, dataToLoad, 'all', 'all'),
+                    getFilteredData('plan', dataToLoad, dataToLoad, 'all', 'all')
                 ]);
                 
                 console.log('[Dashboard TV] Dados carregados via getFilteredData:', {
@@ -2832,9 +3131,44 @@
                         };
                     });
                 
-                // Adicionar paradas longas ao cache
-                cachedDowntimes = [...cachedDowntimes, ...extendedDowntimes];
-                console.log('[Dashboard TV] Total de paradas (+ extended):', cachedDowntimes.length);
+                // NOVO: Buscar paradas ativas em tempo real (active_downtimes) - PRIORIDADE MÁXIMA
+                const activeDowntimesSnapshot = await db.collection('active_downtimes').get();
+                const liveActiveDowntimes = activeDowntimesSnapshot.docs
+                    .filter(doc => {
+                        const data = doc.data();
+                        return data && data.isActive === true;
+                    })
+                    .map(doc => {
+                        const data = doc.data();
+                        const machineId = doc.id; // O ID do documento é o ID da máquina
+                        let duration = data.durationMinutes || 0;
+                        
+                        // Calcular duração se tiver startDate
+                        if (data.startDate) {
+                            const startTime = data.startDate?.toDate?.() || new Date(data.startDate);
+                            duration = Math.floor((new Date() - startTime) / (1000 * 60));
+                        }
+                        
+                        return {
+                            id: machineId,
+                            source: 'active_live',
+                            status: 'active',
+                            isActive: true,
+                            date: today,
+                            machine: machineId,
+                            machine_id: machineId,
+                            reason: data.reason || 'Parada ativa',
+                            type: data.type || 'parada',
+                            duration: duration,
+                            startDate: data.startDate
+                        };
+                    });
+                
+                console.log('[Dashboard TV] Paradas LIVE (active_downtimes):', liveActiveDowntimes.length, liveActiveDowntimes.map(d => d.machine));
+                
+                // Adicionar paradas longas e paradas live ao cache
+                cachedDowntimes = [...cachedDowntimes, ...extendedDowntimes, ...liveActiveDowntimes];
+                console.log('[Dashboard TV] Total de paradas (+ extended + live):', cachedDowntimes.length);
                 
                 // Debug: amostras
                 if (cachedProductions.length > 0) {
@@ -2891,6 +3225,15 @@
                 .split('T')[0];
         }
 
+        // Função para obter data atual ou filtrada (escopo global)
+        function getFilteredDateForData() {
+            if (selectedDate) {
+                // Retornar data filtrada no formato YYYY-MM-DD
+                return selectedDate.toISOString().split('T')[0];
+            }
+            return getTodayString(); // Usar workDay de hoje
+        }
+
         function getYesterdayString() {
             const yesterday = new Date();
             yesterday.setDate(yesterday.getDate() - 1);
@@ -2924,9 +3267,10 @@
             
             if (!alertEl || !alertText) return;
             
-            // Contar paradas ativas (extended downtimes com status = 'active')
+            // Contar paradas ativas (extended downtimes com status = 'active' OU active_downtimes live)
             const activeDowntimes = cachedDowntimes.filter(dt => 
-                dt.source === 'extended' && dt.status === 'active'
+                (dt.source === 'extended' && dt.status === 'active') ||
+                (dt.source === 'active_live' && dt.isActive === true)
             );
             
             if (activeDowntimes.length > 0) {
@@ -2959,11 +3303,62 @@
                 idle: 'OCIOSA'
             };
             
-            // Agrupar produção por máquina
+            // Obter hora atual para comparação
+            const now = new Date();
+            const currentTime = now.toTimeString().slice(0, 5); // HH:MM
+            const today = getFilteredDateForData(); // Usa data filtrada se selecionada
+            
+            // Primeiro: Obter TODAS as paradas ativas
+            // Inclui: extended_downtime_logs com status = 'active' E downtime_entries sem endTime ou em andamento
+            const activeDowntimesMap = {};
+            
+            cachedDowntimes.forEach(dt => {
+                const dtMachine = normalizeMachineId(dt.machine || dt.machine_id || dt.maquina);
+                if (!dtMachine) return;
+                
+                // PRIORIDADE 1: Parada LIVE (active_downtimes) - maior prioridade
+                const isLiveActive = dt.source === 'active_live' && dt.isActive === true;
+                
+                // PRIORIDADE 2: Parada ativa de extended_downtime_logs
+                const isExtendedActive = dt.source === 'extended' && dt.status === 'active';
+                
+                // PRIORIDADE 3: Parada normal (downtime_entries) em andamento
+                const dtDate = dt.date || dt.workDay || '';
+                const isToday = dtDate === today;
+                const hasNoEndTime = !dt.endTime || dt.endTime === '';
+                const endTimeNotPassed = dt.endTime && currentTime < dt.endTime;
+                const isNormalActive = !dt.source && isToday && (hasNoEndTime || endTimeNotPassed);
+                
+                // Se qualquer condição de parada ativa for verdadeira
+                if ((isLiveActive || isExtendedActive || isNormalActive) && !activeDowntimesMap[dtMachine]) {
+                    const reason = (dt.reason || dt.type || '').toLowerCase();
+                    let sourceType = 'normal';
+                    if (isLiveActive) sourceType = 'live';
+                    else if (isExtendedActive) sourceType = 'extended';
+                    
+                    activeDowntimesMap[dtMachine] = {
+                        reason: reason,
+                        rawReason: dt.reason || dt.type || 'Parada',
+                        startTime: dt.startTime || dt.start_time || '',
+                        endTime: dt.endTime || dt.end_time || '',
+                        duration: dt.duration || 0,
+                        source: dt.source || 'normal',
+                        isActive: sourceType
+                    };
+                    console.log(`[Dashboard TV] Parada detectada: Máquina ${dtMachine}, Fonte: ${sourceType.toUpperCase()}, Motivo: "${dt.reason || dt.type || 'N/A'}"`);
+                }
+            });
+            
+            console.log('[Dashboard TV] Hora atual:', currentTime);
+            console.log('[Dashboard TV] Paradas ativas encontradas:', Object.keys(activeDowntimesMap));
+            console.log('[Dashboard TV] Detalhes das paradas:', activeDowntimesMap);
+            
+            // Agrupar produção por máquina (do planejamento)
             const machineData = {};
             
             cachedPlanning.forEach(plan => {
-                const machineId = plan.machine || plan.machineId || plan.maquina || 'N/A';
+                const rawMachineId = plan.machine || plan.machineId || plan.maquina || 'N/A';
+                const machineId = normalizeMachineId(rawMachineId) || rawMachineId;
                 if (!machineData[machineId]) {
                     machineData[machineId] = {
                         id: machineId,
@@ -2973,28 +3368,47 @@
                         produced: 0,
                         target: getPlanTarget(plan),
                         cycleTime: plan.budgeted_cycle || plan.tempoCiclo || 0,
-                        status: plan.status || 'running'
+                        status: 'running'
                     };
                 }
             });
             
+            // IMPORTANTE: Adicionar máquinas com paradas ativas que NÃO estão no planejamento
+            Object.keys(activeDowntimesMap).forEach(machineId => {
+                if (!machineData[machineId]) {
+                    machineData[machineId] = {
+                        id: machineId,
+                        type: 'Injetora',
+                        product: activeDowntimesMap[machineId].rawReason,
+                        order: 'Parada Ativa',
+                        produced: 0,
+                        target: 0,
+                        cycleTime: 0,
+                        status: 'stopped'
+                    };
+                    console.log(`[Dashboard TV] Máquina ${machineId} adicionada (parada ativa sem planejamento)`);
+                }
+            });
+            
+            console.log('[Dashboard TV] IDs de máquinas (planejamento + paradas):', Object.keys(machineData));
+            
             // Somar produções por máquina (via planId ou diretamente pela máquina)
             cachedProductions.forEach(prod => {
                 const planId = prod.planId;
-                const prodMachine = prod.machine || prod.machineId || prod.maquina;
+                const prodMachine = normalizeMachineId(prod.machine || prod.machineId || prod.maquina);
                 
                 // Tentar encontrar plano pelo planId
                 let plan = cachedPlanning.find(p => p.id === planId);
                 
-                // Se não encontrou pelo planId, tentar pela máquina
+                // Se não encontrou pelo planId, tentar pela máquina normalizada
                 if (!plan && prodMachine) {
                     plan = cachedPlanning.find(p => 
-                        (p.machine || p.machineId || p.maquina) === prodMachine
+                        normalizeMachineId(p.machine || p.machineId || p.maquina) === prodMachine
                     );
                 }
                 
                 if (plan) {
-                    const machineId = plan.machine || plan.machineId || plan.maquina;
+                    const machineId = normalizeMachineId(plan.machine || plan.machineId || plan.maquina);
                     if (machineData[machineId]) {
                         machineData[machineId].produced += getProducedQty(prod);
                     }
@@ -3004,16 +3418,32 @@
                 }
             });
             
-            // Calcular OEE por máquina
+            // Calcular OEE por máquina e APLICAR STATUS DAS PARADAS ATIVAS
             const machines = Object.values(machineData).map(m => {
                 let oee = 0;
                 if (m.target > 0) {
                     oee = Math.min((m.produced / m.target) * 100, 100);
                 }
                 
-                // Determinar status baseado em atividade
+                // Determinar status baseado em paradas ativas - PRIORIDADE MÁXIMA
                 let status = 'running';
-                if (oee === 0 && m.produced === 0) status = 'idle';
+                const normalizedId = normalizeMachineId(m.id);
+                const activeDowntime = activeDowntimesMap[normalizedId];
+                
+                if (activeDowntime) {
+                    // Máquina tem parada ativa - determinar tipo de parada
+                    const reason = activeDowntime.reason;
+                    if (reason.includes('setup') || reason.includes('troca') || reason.includes('ajuste')) {
+                        status = 'setup';
+                    } else if (reason.includes('manut') || reason.includes('quebra') || reason.includes('mecânic') || reason.includes('elétric')) {
+                        status = 'maintenance';
+                    } else {
+                        status = 'stopped';
+                    }
+                    console.log(`[Dashboard TV] Máquina ${m.id} - PARADA ATIVA: "${activeDowntime.rawReason}" -> Status: ${status}`);
+                } else if (oee === 0 && m.produced === 0) {
+                    status = 'idle';
+                }
                 
                 return {
                     ...m,
@@ -3035,7 +3465,21 @@
                 return;
             }
             
-            grid.innerHTML = machines.slice(0, 8).map(m => `
+            // Ordenar: paradas primeiro, depois por ID
+            machines.sort((a, b) => {
+                const statusOrder = { stopped: 0, maintenance: 1, setup: 2, idle: 3, running: 4 };
+                const orderA = statusOrder[a.status] ?? 5;
+                const orderB = statusOrder[b.status] ?? 5;
+                if (orderA !== orderB) return orderA - orderB;
+                return (a.id || '').localeCompare(b.id || '');
+            });
+            
+            // Filtrar apenas máquinas que estão produzindo (sem paradas ativas)
+            // Inclui status 'running' (produzindo) e 'idle' (planejamento sem produção ainda)
+            // Exclui máquinas com paradas ativas (stopped, maintenance, setup)
+            const producingMachines = machines.filter(m => m.status === 'running' || m.status === 'idle');
+            
+            grid.innerHTML = producingMachines.slice(0, 8).map(m => `
                 <div class="machine-row ${m.status}">
                     <div class="machine-id">
                         <span class="machine-name">${m.id}</span>
@@ -3055,13 +3499,13 @@
                 </div>
             `).join('');
             
-            // Atualizar contadores de máquinas
-            const machineCount = machines.length;
+            // Atualizar contadores de máquinas - apenas as que estão realmente produzindo
+            const machineCount = producingMachines.length;
             const headerStatus = document.getElementById('headerMachineCount');
             const machinesTag = document.getElementById('machinesTag');
             
-            if (headerStatus) headerStatus.textContent = `${machineCount} Máquinas Conectadas`;
-            if (machinesTag) machinesTag.textContent = `${machineCount} Máquinas`;
+            if (headerStatus) headerStatus.textContent = `${machineCount} Máquina${machineCount !== 1 ? 's' : ''} Produzindo`;
+            if (machinesTag) machinesTag.textContent = `${machineCount} Produzindo`;
         }
 
         // ==================== KPIs UPDATE - DADOS REAIS ====================
@@ -3076,8 +3520,8 @@
             // Usar dados normalizados quando disponíveis
             const normalizedData = window._tvNormalizedData;
             
-            // IMPORTANTE: Usar o workDay para filtrar dados do dia de trabalho correto
-            const workDay = getTodayString(); // Esta função já retorna o dia anterior se hora < 7
+            // IMPORTANTE: Usar a data filtrada ou workDay atual
+            const workDay = getFilteredDateForData(); // Usa data filtrada se selecionada
             
             console.log('[Dashboard TV] updateKPIs - cachedProductions:', cachedProductions.length);
             console.log('[Dashboard TV] updateKPIs - cachedPlanning:', cachedPlanning.length);
@@ -3101,7 +3545,7 @@
                     // Só contar produções do workDay atual (dia de produção) - CONSISTENTE com updateShiftKPIs
                     if (item.workDay !== workDay) return;
                     
-                    totalProduced += item.quantity || 0;
+                    totalProduced += Math.round(item.quantity || 0);
                     
                     // Produção da última hora
                     const now = new Date();
@@ -3111,7 +3555,7 @@
                         if (!Number.isNaN(h)) {
                             const currentHour = now.getHours();
                             if (h === currentHour || h === (currentHour - 1)) {
-                                lastHourProduced += item.quantity || 0;
+                                lastHourProduced += Math.round(item.quantity || 0);
                             }
                         }
                     }
@@ -3138,13 +3582,13 @@
             
             // Somar refugo (usando dados normalizados de losses - CONSISTENTE com updateShiftKPIs)
             if (normalizedData?.losses) {
-                totalRefugo = normalizedData.losses
+                totalRefugo = Math.round(normalizedData.losses
                     .filter(item => item.workDay === workDay)
-                    .reduce((sum, item) => sum + (item.scrapPcs || item.quantity || 0), 0);
+                    .reduce((sum, item) => sum + (item.scrapPcs || item.quantity || 0), 0));
                 console.log('[Dashboard TV] Refugo normalizado (workDay=' + workDay + '):', totalRefugo, 'pçs');
             } else {
                 cachedProductions.forEach(prod => {
-                    const bad = prod.pecasRuins || prod.refugo_pcs || prod.refugo || prod.scrap || 0;
+                    const bad = Math.round(prod.pecasRuins || prod.refugo_pcs || prod.refugo || prod.scrap || 0);
                     totalRefugo += bad;
                 });
             }
@@ -3152,18 +3596,18 @@
             // Somar metas do planejamento ativo
             if (normalizedData?.plan) {
                 normalizedData.plan.forEach(item => {
-                    totalTarget += item.quantity || 0;
+                    totalTarget += Math.round(item.quantity || 0);
                 });
             } else {
                 cachedPlanning.forEach(plan => {
-                    totalTarget += getPlanTarget(plan);
+                    totalTarget += Math.round(getPlanTarget(plan));
                 });
             }
             
             console.log('[Dashboard TV] KPIs calculados - Produção:', totalProduced, 'Refugo:', totalRefugo, 'Meta:', totalTarget);
             
             // Somar tempo de paradas do dia (usando dados normalizados)
-            const today = getTodayString();
+            const today = getFilteredDateForData(); // Usa data filtrada se selecionada
             if (normalizedData?.downtime) {
                 totalDowntimeMinutes = normalizedData.downtime.reduce((sum, item) => sum + (item.duration || 0), 0);
             } else {
@@ -3615,9 +4059,13 @@
             // Usar dados normalizados que já têm workDay correto
             const normalizedData = window._tvNormalizedData;
             
-            // IMPORTANTE: Usar o dia de produção (workDay) que NÃO reseta à meia-noite
+            // IMPORTANTE: Usar a data filtrada ou workDay atual
             // O workDay só muda às 07:00, então T1, T2 e T3 permanecem do mesmo dia até o fim do T3
-            const workDay = getTodayString(); // Esta função já retorna o dia anterior se hora < 7
+            const workDay = getFilteredDateForData(); // Usa data filtrada se selecionada
+            
+            // Verificar se estamos visualizando dados históricos (data passada)
+            const todayWorkDay = getTodayString();
+            const isHistoricalView = selectedDate !== null && workDay !== todayWorkDay;
             
             const now = new Date();
             const currentHour = now.getHours();
@@ -3635,15 +4083,16 @@
                 minutesSinceWorkDayStart = (currentHour - 7) * 60 + currentMinute;
             }
             
-            // Determinar quais turnos já ocorreram/estão em andamento no DIA DE TRABALHO atual
+            // Determinar quais turnos já ocorreram/estão em andamento
+            // Se é visualização histórica, todos os turnos são considerados ativos (dia completo)
             // T1: 07:00-15:00 (minutos 0-479 do workday)
             // T2: 15:00-23:20 (minutos 480-979 do workday)
             // T3: 23:20-07:00 (minutos 980-1439 do workday)
-            const isT1Active = minutesSinceWorkDayStart >= 0;    // T1 sempre ativo após 07:00
-            const isT2Active = minutesSinceWorkDayStart >= 480;  // T2 ativo após 15:00 (8h * 60min)
-            const isT3Active = minutesSinceWorkDayStart >= 980;  // T3 ativo após 23:20 (16h20 * 60min = 980min)
+            const isT1Active = isHistoricalView || minutesSinceWorkDayStart >= 0;    // T1 sempre ativo após 07:00
+            const isT2Active = isHistoricalView || minutesSinceWorkDayStart >= 480;  // T2 ativo após 15:00 (8h * 60min)
+            const isT3Active = isHistoricalView || minutesSinceWorkDayStart >= 980;  // T3 ativo após 23:20 (16h20 * 60min = 980min)
             
-            console.log('[Dashboard TV] WorkDay:', workDay, '| Minutos desde início:', minutesSinceWorkDayStart);
+            console.log('[Dashboard TV] WorkDay:', workDay, '| Histórico:', isHistoricalView, '| Minutos desde início:', minutesSinceWorkDayStart);
             console.log('[Dashboard TV] Turnos ativos - T1:', isT1Active, 'T2:', isT2Active, 'T3:', isT3Active, '| Hora atual:', currentHour + ':' + currentMinute);
             
             // Contar produção por turno usando dados normalizados
@@ -3654,7 +4103,7 @@
                     
                     const turnoNum = item.shift || 1;
                     const turnoKey = 'T' + turnoNum;
-                    const qty = item.quantity || 0;
+                    const qty = Math.round(item.quantity || 0);
                     
                     if (shifts[turnoKey]) {
                         shifts[turnoKey].production += qty;
@@ -3746,7 +4195,7 @@
             console.log('[Dashboard TV] Dados por turno após filtro:', shifts);
             
             // Atualizar elementos do DOM
-            const formatQty = (n) => n.toLocaleString('pt-BR');
+            const formatQty = (n) => Math.round(n).toLocaleString('pt-BR');
             const calcEfficiency = (prod, target) => target > 0 ? Math.min((prod / target) * 100, 150).toFixed(0) : 0;
             
             // T1 - sempre ativo após 7h
@@ -4180,22 +4629,22 @@
                 return 'outros';
             }
             
-            // Função para obter label do status
+            // Função para obter label do status - nomes completos
             function getStatusLabel(statusClass) {
                 const labels = {
-                    'produzindo': 'OK',
-                    'manutencao': 'MNT',
-                    'ferramentaria': 'FER',
-                    'compras': 'CMP',
-                    'processo': 'PRC',
-                    'qualidade': 'QLD',
-                    'pmp': 'PMP',
+                    'produzindo': 'Produzindo',
+                    'manutencao': 'Manutenção',
+                    'ferramentaria': 'Ferrament.',
+                    'compras': 'Compras',
+                    'processo': 'Processo',
+                    'qualidade': 'Qualidade',
+                    'pmp': 'Produção',
                     'pcp': 'PCP',
-                    'comercial': 'COM',
-                    'setup': 'SET',
-                    'outros': '---'
+                    'comercial': 'Comercial',
+                    'setup': 'Setup',
+                    'outros': 'Outros'
                 };
-                return labels[statusClass] || '---';
+                return labels[statusClass] || 'Outros';
             }
             
             // Renderizar grid
@@ -4323,7 +4772,7 @@
             const completion = totalTarget > 0 ? ((totalProduced / totalTarget) * 100).toFixed(1) : 0;
             
             // Calcular paradas do dia
-            const today = getTodayString();
+            const today = getFilteredDateForData(); // Usa data filtrada se selecionada
             const todayDowntimes = cachedDowntimes.filter(dt => (dt.date || dt.data) === today);
             let totalDowntimeMinutes = 0;
             todayDowntimes.forEach(dt => {
@@ -4408,12 +4857,25 @@
         }
 
         // ==================== HELPERS ====================
+        // Função centralizada para extrair quantidade planejada (consistente com script.js)
         function getPlanTarget(plan) {
-            return plan.lot_size || plan.order_lot_size || plan.planned_quantity || plan.planned_qty || plan.quantidade || plan.meta || plan.target || plan.qtdPlanejada || 0;
+            if (!plan) return 0;
+            // Prioridade: lot_size > order_lot_size > planned_quantity > planned_qty > quantidade > meta > target > qtdPlanejada
+            const qty = plan.lot_size || 
+                        plan.order_lot_size || 
+                        plan.planned_quantity || 
+                        plan.planned_qty || 
+                        plan.quantidade || 
+                        plan.meta || 
+                        plan.target || 
+                        plan.qtdPlanejada || 
+                        0;
+            return Math.round(Number(qty) || 0);
         }
 
         function getProducedQty(prod) {
-            return prod.produzido || prod.pecasBoas || prod.quantity || prod.produced || prod.qtd || prod.quantidade || prod.total_produzido || 0;
+            const qty = prod.produzido || prod.pecasBoas || prod.quantity || prod.produced || prod.qtd || prod.quantidade || prod.total_produzido || 0;
+            return Math.round(Number(qty) || 0); // Sempre retornar inteiro
         }
     </script>
 </body>
