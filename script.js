@@ -5322,8 +5322,197 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         await generateDowntimeByMachineChart(allDowntimeData);
         await generateDowntimeTimelineChart(downtimeData); // Timeline mantém só normais para não distorcer
 
+        // ✅ Popular filtro de motivos de parada com detalhes
+        await populateDowntimeReasonFilter(allDowntimeData, downtimeSegments);
+
         // Carregar lista detalhada de paradas longas programadas
         await loadExtendedDowntimeAnalysis(startDate, endDate, machine);
+    }
+
+    // ==================== FILTRO POR MOTIVO DE PARADA ====================
+    let cachedDowntimeDetails = []; // Cache para os detalhes das paradas
+    let currentDowntimePage = 1;
+    const DOWNTIME_PAGE_SIZE = 20;
+
+    async function populateDowntimeReasonFilter(allDowntimeData, rawSegments) {
+        const filterSelect = document.getElementById('downtime-reason-filter');
+        const countEl = document.getElementById('downtime-reason-count');
+        
+        if (!filterSelect) return;
+        
+        // Extrair todos os motivos únicos
+        const reasons = new Set();
+        allDowntimeData.forEach(item => {
+            const reason = (item.reason || 'Sem motivo').trim();
+            if (reason) reasons.add(reason);
+        });
+        
+        // Popular o select
+        filterSelect.innerHTML = '<option value="">-- Todos os Motivos --</option>';
+        const sortedReasons = Array.from(reasons).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+        
+        sortedReasons.forEach(reason => {
+            const count = allDowntimeData.filter(d => (d.reason || 'Sem motivo').trim() === reason).length;
+            const opt = document.createElement('option');
+            opt.value = reason;
+            opt.textContent = `${reason} (${count})`;
+            filterSelect.appendChild(opt);
+        });
+        
+        // Guardar detalhes no cache com dados completos
+        cachedDowntimeDetails = rawSegments.map(seg => ({
+            date: seg.date || seg.data || '',
+            startTime: seg.startTime || seg.start_time || '--:--',
+            endTime: seg.endTime || seg.end_time || '--:--',
+            machine: seg.machine || seg.maquina || 'N/A',
+            reason: (seg.reason || seg.motivo || 'Sem motivo').trim(),
+            duration: seg.duration || 0,
+            observations: seg.observations || seg.observacoes || seg.obs || seg.notes || seg.raw?.observations || seg.raw?.observacoes || seg.raw?.obs || ''
+        }));
+        
+        // Ordenar por data e hora (mais recente primeiro)
+        cachedDowntimeDetails.sort((a, b) => {
+            const dateA = a.date + ' ' + a.startTime;
+            const dateB = b.date + ' ' + b.startTime;
+            return dateB.localeCompare(dateA);
+        });
+        
+        // Atualizar contador
+        if (countEl) {
+            countEl.textContent = `${cachedDowntimeDetails.length} ocorrências`;
+        }
+        
+        // Event listener para o filtro
+        filterSelect.onchange = () => {
+            currentDowntimePage = 1;
+            renderDowntimeReasonTable(filterSelect.value);
+        };
+        
+        // Renderizar tabela inicial (todos)
+        renderDowntimeReasonTable('');
+    }
+
+    function renderDowntimeReasonTable(reasonFilter) {
+        const tbody = document.getElementById('downtime-reason-table-body');
+        const countEl = document.getElementById('downtime-reason-count');
+        const paginationEl = document.getElementById('downtime-reason-pagination');
+        const showingInfo = document.getElementById('downtime-showing-info');
+        const prevBtn = document.getElementById('downtime-prev-page');
+        const nextBtn = document.getElementById('downtime-next-page');
+        
+        if (!tbody) return;
+        
+        // Filtrar dados
+        let filteredData = cachedDowntimeDetails;
+        if (reasonFilter) {
+            filteredData = cachedDowntimeDetails.filter(d => d.reason === reasonFilter);
+        }
+        
+        // Atualizar contador
+        if (countEl) {
+            countEl.textContent = `${filteredData.length} ocorrência${filteredData.length !== 1 ? 's' : ''}`;
+        }
+        
+        // Calcular paginação
+        const totalPages = Math.ceil(filteredData.length / DOWNTIME_PAGE_SIZE);
+        const startIndex = (currentDowntimePage - 1) * DOWNTIME_PAGE_SIZE;
+        const endIndex = Math.min(startIndex + DOWNTIME_PAGE_SIZE, filteredData.length);
+        const pageData = filteredData.slice(startIndex, endIndex);
+        
+        // Mostrar paginação se necessário
+        if (paginationEl) {
+            paginationEl.classList.toggle('hidden', filteredData.length <= DOWNTIME_PAGE_SIZE);
+        }
+        if (showingInfo) {
+            showingInfo.textContent = `Mostrando ${startIndex + 1}-${endIndex} de ${filteredData.length} registros`;
+        }
+        if (prevBtn) {
+            prevBtn.disabled = currentDowntimePage <= 1;
+            prevBtn.onclick = () => {
+                if (currentDowntimePage > 1) {
+                    currentDowntimePage--;
+                    renderDowntimeReasonTable(reasonFilter);
+                }
+            };
+        }
+        if (nextBtn) {
+            nextBtn.disabled = currentDowntimePage >= totalPages;
+            nextBtn.onclick = () => {
+                if (currentDowntimePage < totalPages) {
+                    currentDowntimePage++;
+                    renderDowntimeReasonTable(reasonFilter);
+                }
+            };
+        }
+        
+        // Renderizar tabela
+        if (pageData.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center py-8 text-gray-500">
+                        <i data-lucide="inbox" class="w-6 h-6 mx-auto mb-2 text-gray-400"></i>
+                        <p>${reasonFilter ? 'Nenhuma ocorrência encontrada para este motivo' : 'Nenhuma parada registrada no período'}</p>
+                    </td>
+                </tr>
+            `;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            return;
+        }
+        
+        tbody.innerHTML = pageData.map(item => {
+            // Formatar data
+            const dateFormatted = item.date ? formatDateBR(item.date) : '--';
+            
+            // Formatar duração
+            let durationStr = '--';
+            if (item.duration > 0) {
+                if (item.duration >= 60) {
+                    const hours = Math.floor(item.duration / 60);
+                    const mins = item.duration % 60;
+                    durationStr = `${hours}h${mins > 0 ? mins + 'min' : ''}`;
+                } else {
+                    durationStr = `${item.duration}min`;
+                }
+            }
+            
+            // Cor baseada na duração
+            let durationClass = 'text-gray-700';
+            if (item.duration >= 120) durationClass = 'text-red-600 font-semibold';
+            else if (item.duration >= 60) durationClass = 'text-orange-600 font-medium';
+            else if (item.duration >= 30) durationClass = 'text-amber-600';
+            
+            // Truncar observações se muito longas
+            const obsText = item.observations || '-';
+            const obsDisplay = obsText.length > 50 ? obsText.substring(0, 47) + '...' : obsText;
+            
+            return `
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="py-2.5 px-3 text-gray-700">${dateFormatted}</td>
+                    <td class="py-2.5 px-3 text-gray-700 font-mono">${item.startTime}</td>
+                    <td class="py-2.5 px-3 text-gray-700 font-mono">${item.endTime}</td>
+                    <td class="py-2.5 px-3">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800">
+                            ${item.machine}
+                        </span>
+                    </td>
+                    <td class="py-2.5 px-3 text-gray-800 font-medium">${item.reason}</td>
+                    <td class="py-2.5 px-3 text-center ${durationClass}">${durationStr}</td>
+                    <td class="py-2.5 px-3 text-gray-500 text-xs" title="${obsText}">${obsDisplay}</td>
+                </tr>
+            `;
+        }).join('');
+        
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    // Helper para formatar data no padrão brasileiro
+    function formatDateBR(dateStr) {
+        if (!dateStr) return '--';
+        const parts = dateStr.split('-');
+        if (parts.length === 3) {
+            return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+        return dateStr;
     }
 
     // Função para carregar paradas longas na análise
