@@ -21951,8 +21951,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             }
 
             historyList.innerHTML = records.map(record => `
-                <div class="flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors">
-                    <div class="flex items-center gap-3">
+                <div class="flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors group">
+                    <div class="flex items-center gap-3 flex-1">
                         <div class="p-2 rounded-lg bg-yellow-100">
                             <i data-lucide="droplet" class="w-4 h-4 text-yellow-600"></i>
                         </div>
@@ -21968,9 +21968,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                             </p>
                         </div>
                     </div>
-                    <div class="text-right">
-                        <p class="text-xs text-gray-500">${record.hour || '-'}</p>
-                        <p class="text-xs text-gray-400">${record.registeredBy || 'Sistema'}</p>
+                    <div class="flex items-center gap-3">
+                        <div class="text-right">
+                            <p class="text-xs text-gray-500">${record.hour || '-'}</p>
+                            <p class="text-xs text-gray-400">${record.registeredBy || 'Sistema'}</p>
+                        </div>
+                        <button onclick="deletePMPBorraEntry('${record.id}')" class="p-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-600 transition-colors opacity-0 group-hover:opacity-100" title="Excluir lançamento">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
                     </div>
                 </div>
             `).join('');
@@ -22201,10 +22206,34 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
     }
 
+    // Deletar lançamento de borra
+    async function deletePMPBorraEntry(docId) {
+        try {
+            const confirmed = confirm('Tem certeza que deseja excluir este lançamento de borra?');
+            if (!confirmed) return;
+
+            await db.collection('pmp_borra').doc(docId).delete();
+            
+            showNotification('Lançamento de borra excluído com sucesso', 'success');
+            
+            // Recarregar o histórico
+            await loadPMPHistory();
+            
+            // Recarregar análise se estiver aberta
+            if (document.getElementById('analise-page').style.display !== 'none') {
+                await loadLossesAnalysis();
+            }
+        } catch (error) {
+            console.error('[ERROR][deletePMPBorraEntry]', error);
+            showNotification('Erro ao excluir lançamento: ' + error.message, 'error');
+        }
+    }
+
     // Expor funções globalmente
     window.initPMPPage = initPMPPage;
     window.openPmpBorraModal = openPmpBorraModal;
     window.loadPMPHistory = loadPMPHistory;
+    window.deletePMPBorraEntry = deletePMPBorraEntry;
     
     // Função para lançamento manual de parada passada
     async function handleManualDowntimeSubmit(e) {
