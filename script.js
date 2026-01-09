@@ -5183,31 +5183,97 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const lossesData = await getFilteredData('losses', startDate, endDate, machine, shift);
         const productionData = await getFilteredData('production', startDate, endDate, machine, shift);
 
+        // =====================================================
+        // BUSCAR BORRAS DA COLEÇÃO pmp_borra (Nova aba PMP)
+        // =====================================================
+        let pmpBorraData = [];
+        try {
+            // Buscar borras do período selecionado
+            const pmpBorraSnapshot = await db.collection('pmp_borra')
+                .where('date', '>=', startDate)
+                .where('date', '<=', endDate)
+                .get();
+            
+            pmpBorraSnapshot.forEach(doc => {
+                const data = doc.data();
+                const machineId = normalizeMachineId(data.machine || '');
+                
+                // Aplicar filtros de máquina e turno
+                if (machine !== 'all' && machineId !== normalizeMachineId(machine)) {
+                    return;
+                }
+                
+                // Para turno, inferir pelo horário se disponível
+                if (shift !== 'all' && data.hour) {
+                    const hourNum = parseInt(data.hour.split(':')[0], 10);
+                    let inferredShift = 1;
+                    if (hourNum >= 7 && hourNum < 15) inferredShift = 1;
+                    else if (hourNum >= 15 && hourNum < 23) inferredShift = 2;
+                    else inferredShift = 3;
+                    
+                    if (inferredShift !== parseInt(shift, 10)) {
+                        return;
+                    }
+                }
+                
+                // Mapear para formato compatível com análise
+                pmpBorraData.push({
+                    id: doc.id,
+                    date: data.date,
+                    machine: machineId,
+                    quantity: 0, // Borra não tem peças, só peso
+                    reason: 'BORRA - PMP',
+                    mp: '',
+                    mp_type: '',
+                    workDay: data.date,
+                    scrapPcs: 0,
+                    scrapKg: data.quantityKg || 0,
+                    pieceWeight: 0,
+                    raw: {
+                        ...data,
+                        tipo_lancamento: 'borra',
+                        refugo_kg: data.quantityKg || 0,
+                        source: 'pmp_borra'
+                    }
+                });
+            });
+            
+            console.log('[TRACE][loadLossesAnalysis] PMP Borra data loaded:', pmpBorraData.length);
+        } catch (error) {
+            console.warn('[TRACE][loadLossesAnalysis] Erro ao carregar pmp_borra:', error);
+        }
+        
+        // Combinar dados de perdas com borras do PMP
+        const allLossesData = [...lossesData, ...pmpBorraData];
+
         console.log('[TRACE][loadLossesAnalysis] datasets received', {
             lossesCount: lossesData.length,
+            pmpBorraCount: pmpBorraData.length,
+            totalLossesCount: allLossesData.length,
             productionCount: productionData.length
         });
         
-        const totalLosses = lossesData.reduce((sum, item) => sum + item.quantity, 0);
+        const totalLosses = allLossesData.reduce((sum, item) => sum + item.quantity, 0);
         const totalProduction = productionData.reduce((sum, item) => sum + item.quantity, 0);
         const lossesPercentage = totalProduction > 0 ? (totalLosses / totalProduction * 100) : 0;
         
         // Calcular principal motivo
         const reasonCounts = {};
-        lossesData.forEach(item => {
+        allLossesData.forEach(item => {
             reasonCounts[item.reason] = (reasonCounts[item.reason] || 0) + item.quantity;
         });
         const mainReason = Object.keys(reasonCounts).reduce((a, b) => 
             reasonCounts[a] > reasonCounts[b] ? a : b, '---'
         );
         
-        // Separar dados de borra
-        const borraData = lossesData.filter(item => {
+        // Separar dados de borra (inclui pmp_borra)
+        const borraData = allLossesData.filter(item => {
             const reasonStr = (item.reason || item.raw?.perdas || '').toString().toLowerCase();
             const isTagged = (item.raw && item.raw.tipo_lancamento === 'borra');
-            return isTagged || reasonStr.includes('borra');
+            const isPmpBorra = item.raw?.source === 'pmp_borra';
+            return isTagged || isPmpBorra || reasonStr.includes('borra');
         });
-        const regularLossesData = lossesData.filter(item => !borraData.includes(item));
+        const regularLossesData = allLossesData.filter(item => !borraData.includes(item));
         console.log('[TRACE][loadLossesAnalysis] borra split', {
             borraCount: borraData.length,
             regularLossesCount: regularLossesData.length,
@@ -5217,16 +5283,16 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         // Calcular total de borra em kg
         const totalBorraKg = borraData.reduce((sum, item) => {
             // Para borra, usar preferencialmente o peso em kg
-            const weight = item.raw?.refugo_kg || item.quantity || 0;
+            const weight = item.raw?.refugo_kg || item.raw?.quantityKg || item.scrapKg || 0;
             return sum + weight;
         }, 0);
-        if (lossesData.length > 0 && borraData.length === 0) {
+        if (allLossesData.length > 0 && borraData.length === 0) {
             console.warn('[TRACE][loadLossesAnalysis] Atenção: há perdas mas nenhuma BORRA detectada. Verifique se os lançamentos de borra possuem tipo_lancamento="borra" ou motivo contendo "borra".');
         }
 
         // Calcular MP mais perdida
         const materialCounts = {};
-        lossesData.forEach(item => {
+        allLossesData.forEach(item => {
             const mpType = item.mp_type || 'Não especificado';
             materialCounts[mpType] = (materialCounts[mpType] || 0) + item.quantity;
         });
@@ -5280,11 +5346,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (topBorraReasonElement) topBorraReasonElement.textContent = topBorraReason.replace('BORRA - ', '');
         if (topBorraMachineElement) topBorraMachineElement.textContent = topBorraMachine;
 
-        // Gerar gráficos
-        await generateLossesParetoChart(lossesData);
-        await generateLossesByMachineChart(lossesData);
-        await generateLossesByMaterialChart(lossesData);
-        await generateLossesTrendChart(lossesData, startDate, endDate);
+        // Gerar gráficos (usando allLossesData que inclui pmp_borra)
+        await generateLossesParetoChart(allLossesData);
+        await generateLossesByMachineChart(allLossesData);
+        await generateLossesByMaterialChart(allLossesData);
+        await generateLossesTrendChart(allLossesData, startDate, endDate);
         
         // Gerar gráficos específicos de borra
         await generateBorraByMPChart(borraData);
@@ -9057,7 +9123,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const mpCounts = {};
         borraData.forEach(item => {
             const mpType = item.mp_type || item.raw?.mp_type || 'Não especificado';
-            const weight = item.raw?.refugo_kg || item.quantity || 0;
+            const weight = item.raw?.refugo_kg || item.raw?.quantityKg || item.scrapKg || item.quantity || 0;
             mpCounts[mpType] = (mpCounts[mpType] || 0) + weight;
         });
 
@@ -9118,7 +9184,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             let reason = item.reason || item.raw?.perdas || 'Não especificado';
             // Remover prefixo "BORRA - " se existir
             reason = reason.replace(/^BORRA\s*-\s*/i, '');
-            const weight = item.raw?.refugo_kg || item.quantity || 0;
+            const weight = item.raw?.refugo_kg || item.raw?.quantityKg || item.scrapKg || item.quantity || 0;
             reasonCounts[reason] = (reasonCounts[reason] || 0) + weight;
         });
 
@@ -9189,7 +9255,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const machineCounts = {};
         borraData.forEach(item => {
             const machine = item.machine || 'Não especificado';
-            const weight = item.raw?.refugo_kg || item.quantity || 0;
+            const weight = item.raw?.refugo_kg || item.raw?.quantityKg || item.scrapKg || item.quantity || 0;
             machineCounts[machine] = (machineCounts[machine] || 0) + weight;
         });
 
@@ -10941,6 +11007,16 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         if (page === 'admin-dados') {
             setupAdminDadosPage();
+        }
+
+        if (page === 'pmp') {
+            // Inicializar aba PMP - Gestão de Materiais
+            if (typeof initPMPPage === 'function') {
+                initPMPPage();
+            }
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
         }
 
         if (page === 'qualidade') {
@@ -15275,7 +15351,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 // Validar dados mínimos
                 if (!activeDowntime.machine || !activeDowntime.startDate || !activeDowntime.startTime) {
                     console.warn('[DOWNTIME][CHECK] Dados de parada ativa incompletos, removendo...');
-                    await db.collection('active_downtimes').doc(selectedMachineData.machine).delete();
+                    const normalizedMachineForDelete = normalizeMachineId(selectedMachineData.machine);
+                    await db.collection('active_downtimes').doc(normalizedMachineForDelete).delete();
                     return;
                 }
                 
@@ -15292,7 +15369,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 
                 if (!startTimestamp || isNaN(startTimestamp.getTime())) {
                     console.warn('[DOWNTIME][CHECK] Timestamp de início inválido, removendo parada...');
-                    await db.collection('active_downtimes').doc(selectedMachineData.machine).delete();
+                    const normalizedMachineForDelete = normalizeMachineId(selectedMachineData.machine);
+                    await db.collection('active_downtimes').doc(normalizedMachineForDelete).delete();
                     return;
                 }
                 
@@ -15313,7 +15391,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     );
                     
                     if (!confirmar) {
-                        await db.collection('active_downtimes').doc(selectedMachineData.machine).delete();
+                        const normalizedMachineForDelete = normalizeMachineId(selectedMachineData.machine);
+                        await db.collection('active_downtimes').doc(normalizedMachineForDelete).delete();
                         console.log('[DOWNTIME][CHECK] Parada antiga removida pelo usuário');
                         return;
                     }
@@ -18465,8 +18544,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             
             try {
                 if (machineToClean) {
-                    await db.collection('active_downtimes').doc(machineToClean).delete();
-                    console.log('[DOWNTIME][FINALIZE] active_downtime removed for machine', machineToClean);
+                    const normalizedMachineForDelete = normalizeMachineId(machineToClean);
+                    await db.collection('active_downtimes').doc(normalizedMachineForDelete).delete();
+                    console.log('[DOWNTIME][FINALIZE] active_downtime removed for machine', normalizedMachineForDelete);
                 }
             } catch (err) {
                 console.warn('[DOWNTIME][FINALIZE] failed to delete active_downtime doc', err);
@@ -20976,6 +21056,16 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const turno = [1, 2, 3].includes(shiftNumeric) ? shiftNumeric : getCurrentShift();
             const currentUser = getActiveUser();
 
+            // ✅ NOVO: Buscar tipo de matéria prima do banco de dados
+            const mpValue = selectedMachineData.mp || '';
+            let tipoMateriaPrima = '';
+            if (mpValue && window.materiaPrimaDatabase) {
+                const materialFound = window.materiaPrimaDatabase.find(m => String(m.codigo) === String(mpValue));
+                if (materialFound) {
+                    tipoMateriaPrima = materialFound.descricao;
+                }
+            }
+
             const payloadBase = {
                 planId,
                 data: dateValue,
@@ -20987,7 +21077,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 perdas: reasonValue,
                 observacoes: observations,
                 machine: selectedMachineData.machine || null,
-                mp: selectedMachineData.mp || '',
+                mp: mpValue,
+                tipoMateriaPrima: tipoMateriaPrima,  // ✅ NOVO: Tipo de matéria prima do banco de dados
                 orderId: selectedMachineData.order_id || null,
                 manual: true,
                 horaInformada: hourValue || null,
@@ -21171,6 +21262,15 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const machineRef = isEditing ? (originalData?.machine || selectedMachineData?.machine) : selectedMachineData?.machine;
         const mpValue = isEditing ? (originalData?.mp || selectedMachineData?.mp || '') : (selectedMachineData?.mp || '');
 
+        // ✅ NOVO: Buscar tipo de matéria prima do banco de dados
+        let tipoMateriaPrima = '';
+        if (mpValue && window.materiaPrimaDatabase) {
+            const materialFound = window.materiaPrimaDatabase.find(m => String(m.codigo) === String(mpValue));
+            if (materialFound) {
+                tipoMateriaPrima = materialFound.descricao;
+            }
+        }
+
         // Calcular peso total se necessário (peças  x  peso médio)
         let pesoTotalKg = weightGrams > 0 ? gramsToKg(weightGrams) : 0;
         if (pesoTotalKg <= 0 && refugoQty > 0 && pieceWeightGrams > 0) {
@@ -21190,6 +21290,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             observacoes: obs,
             machine: machineRef || null,
             mp: mpValue,
+            tipoMateriaPrima: tipoMateriaPrima,  // ✅ NOVO: Tipo de matéria prima do banco de dados
             orderId: selectedMachineData?.order_id || null,
             orderNumber: selectedMachineData?.order_number || null,
             userCod: userCod,
@@ -21472,6 +21573,638 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             }
         }
     }
+
+    // ==============================================
+    // PMP - GESTÃO DE MATERIAIS (MOÍDO)
+    // ==============================================
+
+    // Inicializar aba PMP
+    function initPMPPage() {
+        console.log('[TRACE][initPMPPage] Inicializando aba PMP');
+        
+        // Botão de lançar borra na aba PMP - NOVO MODAL
+        const btnPmpBorra = document.getElementById('btn-pmp-borra');
+        if (btnPmpBorra) {
+            btnPmpBorra.addEventListener('click', openPmpBorraModal);
+        }
+
+        // =============================================
+        // MODAL BORRA PMP - Event Listeners
+        // =============================================
+        
+        // Form de borra PMP
+        const pmpBorraForm = document.getElementById('pmp-borra-form');
+        if (pmpBorraForm) {
+            pmpBorraForm.addEventListener('submit', handlePmpBorraSubmit);
+        }
+
+        // Botão cancelar do modal borra PMP
+        const pmpBorraCancel = document.getElementById('pmp-borra-cancel');
+        if (pmpBorraCancel) {
+            pmpBorraCancel.addEventListener('click', () => closeModal('pmp-borra-modal'));
+        }
+
+        // Botão fechar do modal borra PMP
+        const pmpBorraClose = document.getElementById('pmp-borra-modal-close');
+        if (pmpBorraClose) {
+            pmpBorraClose.addEventListener('click', () => closeModal('pmp-borra-modal'));
+        }
+
+        // Evento de busca de operador pelo código
+        const pmpBorraOperador = document.getElementById('pmp-borra-operador');
+        if (pmpBorraOperador) {
+            pmpBorraOperador.addEventListener('input', debounce(searchOperadorByCode, 500));
+            pmpBorraOperador.addEventListener('blur', searchOperadorByCode);
+        }
+
+        // =============================================
+        // FILTRO DE HISTÓRICO
+        // =============================================
+
+        // Filtro de histórico PMP
+        const btnPmpFilter = document.getElementById('btn-pmp-filter');
+        if (btnPmpFilter) {
+            btnPmpFilter.addEventListener('click', loadPMPHistory);
+        }
+
+        // Data padrão para filtro
+        const pmpFilterDate = document.getElementById('pmp-filter-date');
+        if (pmpFilterDate) {
+            pmpFilterDate.value = new Date().toISOString().split('T')[0];
+        }
+    }
+
+    // Abrir modal de moído
+    function openMoidoModal() {
+        console.log('[TRACE][openMoidoModal] Abrindo modal de moído');
+        
+        const dateInput = document.getElementById('moido-date');
+        const hourInput = document.getElementById('moido-hour');
+        
+        // Preencher data e hora atuais
+        if (dateInput) {
+            dateInput.value = new Date().toISOString().split('T')[0];
+        }
+        if (hourInput) {
+            const now = new Date();
+            hourInput.value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        }
+
+        // Limpar campos
+        const productCode = document.getElementById('moido-product-code');
+        const mpCode = document.getElementById('moido-mp-code');
+        const quantity = document.getElementById('moido-quantity');
+        const obs = document.getElementById('moido-obs');
+        
+        if (productCode) productCode.value = '';
+        if (mpCode) mpCode.value = '';
+        if (quantity) quantity.value = '';
+        if (obs) obs.value = '';
+
+        // Esconder info boxes
+        const productInfo = document.getElementById('moido-product-info');
+        const mpInfo = document.getElementById('moido-mp-info');
+        const productError = document.getElementById('moido-product-error');
+        const mpError = document.getElementById('moido-mp-error');
+        
+        if (productInfo) productInfo.classList.add('hidden');
+        if (mpInfo) mpInfo.classList.add('hidden');
+        if (productError) productError.classList.add('hidden');
+        if (mpError) mpError.classList.add('hidden');
+
+        // Limpar status
+        const statusDiv = document.getElementById('moido-status');
+        if (statusDiv) statusDiv.textContent = '';
+
+        openModal('moido-modal');
+    }
+
+    // Buscar produto pelo código
+    function searchProductByCode() {
+        const codeInput = document.getElementById('moido-product-code');
+        const infoDiv = document.getElementById('moido-product-info');
+        const errorDiv = document.getElementById('moido-product-error');
+        const nameSpan = document.getElementById('moido-product-name');
+        const clientSpan = document.getElementById('moido-product-client');
+
+        if (!codeInput || !infoDiv || !errorDiv) return;
+
+        const code = parseInt(codeInput.value, 10);
+        
+        if (!code || isNaN(code)) {
+            infoDiv.classList.add('hidden');
+            errorDiv.classList.add('hidden');
+            return;
+        }
+
+        // Buscar no productDatabase
+        const product = window.productDatabase ? window.productDatabase.find(p => p.cod === code) : null;
+        
+        if (product) {
+            if (nameSpan) nameSpan.textContent = product.name || '-';
+            if (clientSpan) clientSpan.textContent = product.client || '-';
+            infoDiv.classList.remove('hidden');
+            errorDiv.classList.add('hidden');
+        } else {
+            infoDiv.classList.add('hidden');
+            errorDiv.classList.remove('hidden');
+        }
+    }
+
+    // Buscar matéria prima pelo código
+    function searchMpByCode() {
+        const codeInput = document.getElementById('moido-mp-code');
+        const infoDiv = document.getElementById('moido-mp-info');
+        const errorDiv = document.getElementById('moido-mp-error');
+        const nameSpan = document.getElementById('moido-mp-name');
+
+        if (!codeInput || !infoDiv || !errorDiv) return;
+
+        const code = parseInt(codeInput.value, 10);
+        
+        if (!code || isNaN(code)) {
+            infoDiv.classList.add('hidden');
+            errorDiv.classList.add('hidden');
+            return;
+        }
+
+        // Buscar no materiaPrimaDatabase
+        const mp = window.materiaPrimaDatabase ? window.materiaPrimaDatabase.find(m => m.codigo === code) : null;
+        
+        if (mp) {
+            if (nameSpan) nameSpan.textContent = mp.descricao || '-';
+            infoDiv.classList.remove('hidden');
+            errorDiv.classList.add('hidden');
+        } else {
+            infoDiv.classList.add('hidden');
+            errorDiv.classList.remove('hidden');
+        }
+    }
+
+    // Debounce helper
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
+    // Submeter formulário de moído
+    async function handleMoidoSubmit(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        console.log('[TRACE][handleMoidoSubmit] Iniciando lançamento de moído');
+
+        const dateInput = document.getElementById('moido-date');
+        const hourInput = document.getElementById('moido-hour');
+        const productCodeInput = document.getElementById('moido-product-code');
+        const mpCodeInput = document.getElementById('moido-mp-code');
+        const quantityInput = document.getElementById('moido-quantity');
+        const obsInput = document.getElementById('moido-obs');
+        const statusDiv = document.getElementById('moido-status');
+        const submitBtn = document.getElementById('moido-save');
+
+        // Validações
+        const dateValue = dateInput?.value;
+        const hourValue = hourInput?.value;
+        const productCode = parseInt(productCodeInput?.value, 10);
+        const mpCode = parseInt(mpCodeInput?.value, 10);
+        const quantity = parseFloat(quantityInput?.value);
+        const obs = obsInput?.value?.trim() || '';
+
+        if (!dateValue) {
+            showNotification('Informe a data', 'warning');
+            return;
+        }
+        if (!hourValue) {
+            showNotification('Informe a hora', 'warning');
+            return;
+        }
+        if (!productCode || isNaN(productCode)) {
+            showNotification('Informe o código do produto', 'warning');
+            return;
+        }
+        if (!mpCode || isNaN(mpCode)) {
+            showNotification('Informe o código da matéria prima', 'warning');
+            return;
+        }
+        if (!quantity || isNaN(quantity) || quantity <= 0) {
+            showNotification('Informe uma quantidade válida', 'warning');
+            return;
+        }
+
+        // Buscar produto e MP no banco
+        const product = window.productDatabase ? window.productDatabase.find(p => p.cod === productCode) : null;
+        const mp = window.materiaPrimaDatabase ? window.materiaPrimaDatabase.find(m => m.codigo === mpCode) : null;
+
+        if (!product) {
+            showNotification('Produto não encontrado no banco de dados', 'error');
+            return;
+        }
+        if (!mp) {
+            showNotification('Matéria prima não encontrada no banco de dados', 'error');
+            return;
+        }
+
+        // Desabilitar botão
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Salvando...';
+        }
+
+        try {
+            const currentUser = getActiveUser();
+            
+            const moidoData = {
+                tipo: 'moido',
+                data: dateValue,
+                hora: hourValue,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                
+                // Produto
+                productCode: productCode,
+                productName: product.name,
+                productClient: product.client,
+                
+                // Matéria Prima
+                mpCode: mpCode,
+                mpName: mp.descricao,
+                
+                // Quantidade
+                quantidadeKg: quantity,
+                
+                // Observações
+                observacoes: obs,
+                
+                // Usuário
+                registradoPor: currentUser?.username || 'sistema',
+                registradoPorNome: getCurrentUserName() || 'Sistema'
+            };
+
+            console.log('[TRACE][handleMoidoSubmit] Dados do moído:', moidoData);
+
+            // Salvar no Firestore na coleção 'pmp_moido'
+            const docRef = await db.collection('pmp_moido').add(moidoData);
+            
+            console.log('[TRACE][handleMoidoSubmit] Moído salvo com sucesso, ID:', docRef.id);
+
+            if (statusDiv) {
+                statusDiv.textContent = '✅ Moído registrado com sucesso!';
+                statusDiv.classList.remove('text-red-500');
+                statusDiv.classList.add('text-green-600');
+            }
+
+            showNotification('✅ Moído registrado com sucesso!', 'success');
+
+            // Registrar log
+            if (typeof registrarLogSistema === 'function') {
+                registrarLogSistema('LANÇAMENTO DE MOÍDO', 'moido', {
+                    productCode,
+                    productName: product.name,
+                    mpCode,
+                    mpName: mp.descricao,
+                    quantidadeKg: quantity
+                });
+            }
+
+            // Fechar modal após 1.5s
+            setTimeout(() => {
+                closeModal('moido-modal');
+                loadPMPHistory();
+            }, 1500);
+
+        } catch (error) {
+            console.error('[ERROR][handleMoidoSubmit] Erro ao salvar moído:', error);
+            
+            if (statusDiv) {
+                statusDiv.textContent = 'Erro ao registrar moído. Tente novamente.';
+                statusDiv.classList.remove('text-green-600');
+                statusDiv.classList.add('text-red-500');
+            }
+
+            showNotification('Erro ao registrar moído: ' + error.message, 'error');
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Registrar Moído';
+            }
+        }
+    }
+
+    // Carregar histórico PMP
+    async function loadPMPHistory() {
+        console.log('[TRACE][loadPMPHistory] Carregando histórico PMP (Borras)');
+        
+        const filterDate = document.getElementById('pmp-filter-date')?.value;
+        const historyList = document.getElementById('pmp-history-list');
+
+        if (!historyList) return;
+
+        if (!filterDate) {
+            showNotification('Selecione uma data para filtrar', 'warning');
+            return;
+        }
+
+        historyList.innerHTML = `
+            <div class="text-center py-8 text-gray-400">
+                <i data-lucide="loader-2" class="w-8 h-8 mx-auto mb-2 opacity-50 animate-spin"></i>
+                <p>Carregando...</p>
+            </div>
+        `;
+        lucide.createIcons();
+
+        try {
+            const records = [];
+            
+            // Buscar borras do dia (sem orderBy para evitar necessidade de índice composto)
+            const borraSnapshot = await db.collection('pmp_borra')
+                .where('date', '==', filterDate)
+                .get();
+
+            borraSnapshot.forEach(doc => {
+                records.push({ id: doc.id, ...doc.data(), tipo: 'borra' });
+            });
+            
+            // Ordenar por hora localmente (mais recente primeiro)
+            records.sort((a, b) => {
+                const hourA = a.hour || '00:00';
+                const hourB = b.hour || '00:00';
+                return hourB.localeCompare(hourA);
+            });
+
+            if (records.length === 0) {
+                historyList.innerHTML = `
+                    <div class="text-center py-8 text-gray-400">
+                        <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                        <p>Nenhum lançamento de borra encontrado para esta data</p>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            historyList.innerHTML = records.map(record => `
+                <div class="flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 rounded-lg bg-yellow-100">
+                            <i data-lucide="droplet" class="w-4 h-4 text-yellow-600"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm font-semibold text-gray-800">
+                                Borra - ${record.quantityKg?.toFixed(3) || '0.000'} Kg
+                            </p>
+                            <p class="text-xs text-gray-500">
+                                Máquina: ${record.machine || '-'} ${record.machineModel ? '(' + record.machineModel + ')' : ''}
+                            </p>
+                            <p class="text-xs text-gray-400">
+                                Operador: ${record.operadorName || ('Cod ' + record.operadorCod) || '-'}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs text-gray-500">${record.hour || '-'}</p>
+                        <p class="text-xs text-gray-400">${record.registeredBy || 'Sistema'}</p>
+                    </div>
+                </div>
+            `).join('');
+
+            lucide.createIcons();
+            
+        } catch (error) {
+            console.error('[ERROR][loadPMPHistory] Erro ao carregar histórico:', error);
+            historyList.innerHTML = `
+                <div class="text-center py-8 text-red-400">
+                    <i data-lucide="alert-circle" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                    <p>Erro ao carregar histórico</p>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+    }
+
+    // ==============================================
+    // PMP - LANÇAMENTO DE BORRA
+    // ==============================================
+    
+    // Abrir modal de borra PMP
+    function openPmpBorraModal() {
+        console.log('[TRACE][openPmpBorraModal] Abrindo modal de borra PMP');
+        
+        const dateInput = document.getElementById('pmp-borra-date');
+        const hourInput = document.getElementById('pmp-borra-hour');
+        
+        // Preencher data e hora atuais
+        if (dateInput) {
+            dateInput.value = new Date().toISOString().split('T')[0];
+        }
+        if (hourInput) {
+            const now = new Date();
+            hourInput.value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        }
+
+        // Limpar campos
+        const operadorInput = document.getElementById('pmp-borra-operador');
+        const machineSelect = document.getElementById('pmp-borra-machine');
+        const quantityInput = document.getElementById('pmp-borra-quantity');
+        const obsInput = document.getElementById('pmp-borra-obs');
+        const statusDiv = document.getElementById('pmp-borra-status');
+        
+        if (operadorInput) operadorInput.value = '';
+        if (quantityInput) quantityInput.value = '';
+        if (obsInput) obsInput.value = '';
+        if (statusDiv) statusDiv.textContent = '';
+        
+        // Esconder info do operador
+        const operadorInfo = document.getElementById('pmp-borra-operador-info');
+        const operadorError = document.getElementById('pmp-borra-operador-error');
+        if (operadorInfo) operadorInfo.classList.add('hidden');
+        if (operadorError) operadorError.classList.add('hidden');
+        
+        // Preencher select de máquinas
+        if (machineSelect && window.machineDatabase) {
+            machineSelect.innerHTML = '<option value="">Selecione uma máquina...</option>';
+            window.machineDatabase.forEach(machine => {
+                const option = document.createElement('option');
+                option.value = machine.id;
+                option.textContent = `${machine.id} - ${machine.model}`;
+                machineSelect.appendChild(option);
+            });
+        }
+        
+        openModal('pmp-borra-modal');
+        lucide.createIcons();
+    }
+
+    // Buscar operador pelo código
+    function searchOperadorByCode() {
+        const codeInput = document.getElementById('pmp-borra-operador');
+        const infoDiv = document.getElementById('pmp-borra-operador-info');
+        const nameSpan = document.getElementById('pmp-borra-operador-name');
+        const errorP = document.getElementById('pmp-borra-operador-error');
+        
+        if (!codeInput || !infoDiv || !nameSpan || !errorP) return;
+        
+        const code = parseInt(codeInput.value, 10);
+        
+        if (!code || code <= 0) {
+            infoDiv.classList.add('hidden');
+            errorP.classList.add('hidden');
+            return;
+        }
+        
+        // Buscar no userDatabase
+        if (window.userDatabase) {
+            const user = window.userDatabase.find(u => u.cod === code);
+            
+            if (user) {
+                nameSpan.textContent = user.nomeCompleto || user.nomeUsuario || 'N/A';
+                infoDiv.classList.remove('hidden');
+                errorP.classList.add('hidden');
+            } else {
+                infoDiv.classList.add('hidden');
+                errorP.classList.remove('hidden');
+            }
+        } else {
+            console.warn('[PMP-BORRA] userDatabase não disponível');
+            infoDiv.classList.add('hidden');
+            errorP.classList.add('hidden');
+        }
+    }
+
+    // Submeter form de borra PMP
+    async function handlePmpBorraSubmit(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const statusDiv = document.getElementById('pmp-borra-status');
+        const saveBtn = document.getElementById('pmp-borra-save');
+        
+        try {
+            // Coletar dados do form
+            const date = document.getElementById('pmp-borra-date')?.value;
+            const hour = document.getElementById('pmp-borra-hour')?.value;
+            const operadorCod = parseInt(document.getElementById('pmp-borra-operador')?.value, 10);
+            const machine = document.getElementById('pmp-borra-machine')?.value;
+            const quantity = parseFloat(document.getElementById('pmp-borra-quantity')?.value);
+            const observations = document.getElementById('pmp-borra-obs')?.value?.trim() || '';
+            
+            // Validações
+            if (!date || !hour) {
+                statusDiv.textContent = '⚠️ Informe data e hora';
+                statusDiv.className = 'text-sm font-semibold h-5 text-center mt-2 text-red-600';
+                return;
+            }
+            
+            if (!operadorCod || operadorCod <= 0) {
+                statusDiv.textContent = '⚠️ Informe o código do operador';
+                statusDiv.className = 'text-sm font-semibold h-5 text-center mt-2 text-red-600';
+                return;
+            }
+            
+            if (!machine) {
+                statusDiv.textContent = '⚠️ Selecione uma máquina';
+                statusDiv.className = 'text-sm font-semibold h-5 text-center mt-2 text-red-600';
+                return;
+            }
+            
+            if (!quantity || quantity <= 0) {
+                statusDiv.textContent = '⚠️ Informe a quantidade em Kg';
+                statusDiv.className = 'text-sm font-semibold h-5 text-center mt-2 text-red-600';
+                return;
+            }
+            
+            // Verificar se operador existe
+            let operadorName = 'Desconhecido';
+            if (window.userDatabase) {
+                const user = window.userDatabase.find(u => u.cod === operadorCod);
+                if (user) {
+                    operadorName = user.nomeCompleto || user.nomeUsuario || 'N/A';
+                } else {
+                    statusDiv.textContent = '⚠️ Operador não encontrado no banco de dados';
+                    statusDiv.className = 'text-sm font-semibold h-5 text-center mt-2 text-red-600';
+                    return;
+                }
+            }
+            
+            // Desabilitar botão
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-2"></i>Salvando...';
+            }
+            
+            statusDiv.textContent = '⏳ Salvando...';
+            statusDiv.className = 'text-sm font-semibold h-5 text-center mt-2 text-blue-600';
+            
+            // Buscar info da máquina
+            const machineInfo = window.machineDatabase?.find(m => m.id === machine);
+            
+            // Usuário logado
+            const activeUser = getActiveUser() || {};
+            
+            // Payload para Firebase
+            const borraData = {
+                type: 'pmp_borra',
+                date: date,
+                hour: hour,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                timestampLocal: new Date().toISOString(),
+                operadorCod: operadorCod,
+                operadorName: operadorName,
+                machine: machine,
+                machineModel: machineInfo?.model || '',
+                quantityKg: quantity,
+                observations: observations,
+                registeredBy: activeUser.name || 'Sistema',
+                registeredByEmail: activeUser.email || '',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            
+            console.log('[PMP-BORRA] Salvando borra:', borraData);
+            
+            // Salvar no Firebase
+            await db.collection('pmp_borra').add(borraData);
+            
+            console.log('[PMP-BORRA] Borra salva com sucesso!');
+            
+            statusDiv.textContent = '✅ Borra registrada com sucesso!';
+            statusDiv.className = 'text-sm font-semibold h-5 text-center mt-2 text-green-600';
+            
+            showNotification('✅ Borra registrada com sucesso!', 'success');
+            
+            // Fechar modal após 1.5s
+            setTimeout(() => {
+                closeModal('pmp-borra-modal');
+                // Recarregar histórico se estiver visível
+                if (document.getElementById('pmp-page') && !document.getElementById('pmp-page').classList.contains('hidden')) {
+                    loadPMPHistory();
+                }
+            }, 1500);
+            
+        } catch (error) {
+            console.error('[PMP-BORRA] Erro ao salvar borra:', error);
+            statusDiv.textContent = '❌ Erro ao salvar borra';
+            statusDiv.className = 'text-sm font-semibold h-5 text-center mt-2 text-red-600';
+            showNotification('Erro ao salvar borra', 'error');
+        } finally {
+            // Reabilitar botão
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = 'Registrar Borra';
+            }
+        }
+    }
+
+    // Expor funções globalmente
+    window.initPMPPage = initPMPPage;
+    window.openPmpBorraModal = openPmpBorraModal;
+    window.loadPMPHistory = loadPMPHistory;
     
     // Função para lançamento manual de parada passada
     async function handleManualDowntimeSubmit(e) {
@@ -21654,7 +22387,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             
             // Remover parada ativa do Firebase
             try {
-                await db.collection('active_downtimes').doc(currentDowntimeStart.machine).delete();
+                const normalizedMachineForDelete = normalizeMachineId(currentDowntimeStart.machine);
+                await db.collection('active_downtimes').doc(normalizedMachineForDelete).delete();
                 console.log('[TRACE] Parada ativa removida do Firebase');
             } catch (error) {
                 console.error('Erro ao remover parada ativa do Firebase:', error);
@@ -26246,7 +26980,81 @@ window.forceOpenModal = function(modalId) {
     window.downtimeStatusCache = downtimeStatusCache;
     window.downtimeTimers = downtimeTimers;
     
+    // ============================================================
+    // FUNÇÃO DE DEBUG/LIMPEZA DE PARADAS ÓRFÃS
+    // ============================================================
+    window.debugActiveDowntimes = async function() {
+        console.log('🔍 [DEBUG] Verificando active_downtimes...');
+        
+        // Lista de máquinas válidas
+        const validMachineIds = new Set(['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
+                                         'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                                         'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32']);
+        
+        const snapshot = await db.collection('active_downtimes').get();
+        const orphans = [];
+        const valid = [];
+        
+        console.log(`📊 Total de documentos em active_downtimes: ${snapshot.size}`);
+        
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const docId = doc.id;
+            const normalizedId = normalizeMachineId(docId);
+            
+            console.log(`  - Doc ID: "${docId}" → Normalizado: "${normalizedId}" | isActive: ${data.isActive} | Machine: ${data.machine}`);
+            
+            if (!validMachineIds.has(normalizedId)) {
+                orphans.push({ id: docId, data: data, reason: 'ID inválido' });
+            } else if (docId !== normalizedId) {
+                orphans.push({ id: docId, data: data, reason: `ID não normalizado (deveria ser ${normalizedId})` });
+            } else {
+                valid.push({ id: docId, data: data });
+            }
+        });
+        
+        console.log(`\n✅ Registros válidos: ${valid.length}`);
+        console.log(`⚠️ Registros órfãos/problemáticos: ${orphans.length}`);
+        
+        if (orphans.length > 0) {
+            console.log('\n🗑️ Registros órfãos encontrados:');
+            orphans.forEach(o => console.log(`  - "${o.id}" (${o.reason}):`, o.data));
+        }
+        
+        return { valid, orphans, total: snapshot.size };
+    };
+    
+    window.cleanOrphanDowntimes = async function(dryRun = true) {
+        const result = await window.debugActiveDowntimes();
+        
+        if (result.orphans.length === 0) {
+            console.log('✨ Nenhum registro órfão para limpar!');
+            return;
+        }
+        
+        if (dryRun) {
+            console.log(`\n⚠️ DRY RUN: ${result.orphans.length} registros seriam removidos.`);
+            console.log('Para remover de verdade, execute: cleanOrphanDowntimes(false)');
+            return;
+        }
+        
+        console.log(`\n🗑️ Removendo ${result.orphans.length} registros órfãos...`);
+        
+        for (const orphan of result.orphans) {
+            try {
+                await db.collection('active_downtimes').doc(orphan.id).delete();
+                console.log(`  ✅ Removido: "${orphan.id}"`);
+            } catch (error) {
+                console.error(`  ❌ Erro ao remover "${orphan.id}":`, error);
+            }
+        }
+        
+        console.log('🎉 Limpeza concluída! Recarregue a página para atualizar os dados.');
+    };
+    
     console.log('[GLOBAL-EXPOSURES] Funções de parada expostas no window global');
+    console.log('[DEBUG] Use debugActiveDowntimes() no console para diagnosticar paradas órfãs');
+    console.log('[DEBUG] Use cleanOrphanDowntimes(false) para remover paradas órfãs');
 });
 
 // Funções globais para navegação de subtabs Analytics IA

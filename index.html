@@ -304,9 +304,9 @@
                     </div>
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Matria-prima (MP)</label>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Matéria-prima (MP)</label>
                     <select id="edit-order-mp" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" required>
-                        <option value="">Selecione a matria-prima...</option>
+                        <option value="">Selecione a matéria-prima...</option>
                     </select>
                 </div>
                 <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
@@ -321,7 +321,7 @@
         <!-- Sidebar de Navegação -->
     <aside id="sidebar" class="w-64 bg-white flex flex-col no-print border-r border-gray-200 fixed inset-y-0 left-0 z-40 transform -translate-x-full transition-transform duration-300 md:relative md:z-30 md:translate-x-0 md:flex md:w-64 sidebar-expanded" data-state="expanded" aria-hidden="true">
             <div class="h-16 flex items-center justify-center border-b border-gray-200 px-4 relative">
-                <img id="sidebar-logo" src="https://i.postimg.cc/5jdHwhF9/hokkaido-logo-110.png" alt="Logo Hokkaido Plastics" class="h-10 transition-all duration-300">
+                <img id="sidebar-logo" src="https://i.postimg.cc/6p0zczpL/Gemini_Generated_Image_d13fecd13fecd13f.png" alt="Logo Hokkaido Plastics" class="h-10 transition-all duration-300">
                 <!-- Botão toggle para desktop -->
                 <button id="sidebar-toggle-btn" class="absolute -right-12 top-6 p-2 bg-white border border-gray-200 rounded-r-lg hover:bg-gray-100 block transition-colors" title="Retrair/Expandir menu">
                     <i data-lucide="chevron-left" class="w-5 h-5 text-gray-600"></i>
@@ -347,6 +347,10 @@
                 <a href="#" class="nav-btn group" data-page="analise" title="Análise">
                     <i data-lucide="area-chart" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Análise</span>
                     <span class="nav-tooltip">Análise</span>
+                </a>
+                <a href="#" class="nav-btn group" data-page="pmp" title="PMP - Gestão de Materiais">
+                    <i data-lucide="recycle" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">PMP</span>
+                    <span class="nav-tooltip">PMP</span>
                 </a>
                 <!-- Aba Relatórios removida - Otimização 02/12/2025 -->
                 <a href="#" class="nav-btn group" data-page="paradas-longas" title="Paradas Longas">
@@ -596,7 +600,7 @@
                                         </div>
                                     </div>
 
-                                    <!-- SEÇÃO 3: Matria-Prima e Quantidade Planejada -->
+                                    <!-- SEÇÃO 3: Matéria-Prima e Quantidade Planejada -->
                                     <div class="border border-amber-200 rounded-lg overflow-hidden">
                                         <div class="bg-amber-50 px-3 py-2 border-b border-amber-200">
                                             <h3 class="text-xs font-bold text-amber-700 uppercase tracking-wide flex items-center gap-1.5">
@@ -606,7 +610,7 @@
                                         </div>
                                         <div class="p-3 space-y-3 bg-white">
                                             <div>
-                                                <label for="planning-mp" class="block text-[10px] font-semibold text-gray-500 uppercase mb-1">Matria-prima (MP)</label>
+                                                <label for="planning-mp" class="block text-[10px] font-semibold text-gray-500 uppercase mb-1">Matéria-prima (MP)</label>
                                                 <select id="planning-mp" name="mp" required 
                                                     class="w-full p-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all">
                                                     <option value="">Selecione a MP...</option>
@@ -1441,6 +1445,82 @@
                     </div>
                 </div>
 
+                <!-- PÁGINA: PMP - Gestão de Materiais -->
+                <div id="pmp-page" class="page-content hidden space-y-4 p-2">
+                    <!-- Header -->
+                    <div class="bg-gradient-to-br from-emerald-700 via-emerald-800 to-teal-800 p-6 rounded-2xl shadow-xl text-white relative overflow-hidden">
+                        <div class="absolute inset-0 bg-grid-pattern opacity-5"></div>
+                        <div class="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl"></div>
+                        
+                        <div class="relative z-10 flex items-center gap-4">
+                            <div class="w-14 h-14 bg-white/10 rounded-xl flex items-center justify-center">
+                                <i data-lucide="recycle" class="w-7 h-7"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-2xl font-bold tracking-tight">PMP - Gestão de Materiais</h2>
+                                <p class="text-emerald-200 text-sm">Controle de Borras, Moído e Matéria Prima</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cards de Ações -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        
+                        <!-- Card Lançamento de Borra -->
+                        <div class="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+                            <div class="bg-gradient-to-r from-yellow-500 to-amber-500 px-5 py-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="p-2 bg-white/20 rounded-lg">
+                                        <i data-lucide="droplet" class="w-5 h-5 text-white"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="text-lg font-bold text-white">Lançamento de Borra</h3>
+                                        <p class="text-yellow-100 text-sm">Registre borras e perdas de material</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="p-5 space-y-4">
+                                <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                    <p class="text-sm text-amber-800">
+                                        <i data-lucide="info" class="w-4 h-4 inline mr-1"></i>
+                                        Informe o código do operador, a máquina e a quantidade em Kg para registrar a borra.
+                                    </p>
+                                </div>
+                                <button id="btn-pmp-borra" class="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-white font-semibold py-3 px-4 rounded-lg transition-all shadow-md hover:shadow-lg">
+                                    <i data-lucide="plus-circle" class="w-5 h-5"></i>
+                                    Lançar Borra
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Histórico de Lançamentos PMP -->
+                    <div class="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+                        <div class="bg-gradient-to-r from-gray-100 to-gray-200 px-5 py-4 border-b border-gray-200">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <i data-lucide="history" class="w-5 h-5 text-gray-600"></i>
+                                    <h3 class="text-lg font-semibold text-gray-800">Histórico de Lançamentos de Borra</h3>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input type="date" id="pmp-filter-date" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500">
+                                    <button id="btn-pmp-filter" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium transition-colors">
+                                        <i data-lucide="search" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="p-5">
+                            <div id="pmp-history-list" class="space-y-2 max-h-96 overflow-y-auto">
+                                <div class="text-center py-8 text-gray-400">
+                                    <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                                    <p>Selecione uma data para ver os lançamentos</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- PÁGINA: Lançamento -->
                 <div id="lancamento-page" class="page-content space-y-3 p-2">
 
@@ -1524,7 +1604,7 @@
                                     <div class="flex-1 min-w-0">
                                         <h3 class="text-lg font-bold text-gray-900 truncate" id="machine-name">Máquina H-01</h3>
                                         <p class="text-sm text-gray-600 truncate" id="product-name">Produto não selecionado</p>
-                                        <p class="text-xs text-gray-400" id="product-mp">Matria-prima não definida</p>
+                                        <p class="text-xs text-gray-400" id="product-mp">Matéria-prima não definida</p>
                                     </div>
                                 </div>
                                 
@@ -1656,11 +1736,7 @@
                             </div>
 
                             <!-- Ações Secundárias -->
-                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                <button id="btn-manual-borra" class="flex items-center justify-center gap-2 px-3 py-2.5 bg-yellow-50 hover:bg-yellow-100 text-yellow-700 rounded-lg border border-yellow-200 transition-colors text-sm font-medium">
-                                    <i data-lucide="droplet" class="w-4 h-4"></i>
-                                    <span>Borra</span>
-                                </button>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                 <button id="btn-rework" class="flex items-center justify-center gap-2 px-3 py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg border border-purple-200 transition-colors text-sm font-medium">
                                     <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                                     <span>Retrabalho</span>
@@ -2434,7 +2510,7 @@
                                 <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
                                     <div>
                                         <h2 class="text-lg font-semibold text-gray-800">Análise de Perdas & Borras</h2>
-                                        <p class="text-sm text-gray-500">Monitore refugos e perdas de matria-prima</p>
+                                        <p class="text-sm text-gray-500">Monitore refugos e perdas de matéria-prima</p>
                                     </div>
                                     <button onclick="openModal('quick-losses-modal')" class="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all">
                                         <i data-lucide="plus" class="w-5 h-5"></i>
@@ -2540,7 +2616,7 @@
                                                 <i data-lucide="flame" class="w-4 h-4 text-amber-600"></i>
                                             </div>
                                             <div>
-                                                <h3 class="font-semibold text-gray-800">Borra por Matria-Prima</h3>
+                                                <h3 class="font-semibold text-gray-800">Borra por Matéria-Prima</h3>
                                                 <p class="text-xs text-gray-500">Distribuição de borras</p>
                                             </div>
                                         </div>
@@ -4027,7 +4103,7 @@
                     <input type="number" step="1" id="manual-borra-weight" name="weight" min="1" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all" placeholder="Peso em gramas (ex: 1500)" required>
                 </div>
                 <div>
-                    <label for="manual-borra-mp-type" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Tipo de Matria-Prima *</label>
+                    <label for="manual-borra-mp-type" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Tipo de Matéria-Prima *</label>
                     <select id="manual-borra-mp-type" name="mp_type" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all" required>
                         <option value="">Selecione o tipo de MP...</option>
                         <option value="PE-NATURAL">PE-NATURAL</option>
@@ -4063,6 +4139,168 @@
                     </button>
                 </div>
                 <div id="manual-borra-status" class="text-sm font-semibold h-5 text-center mt-2"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de Lançamento de Moído (PMP) -->
+    <div id="moido-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg border border-gray-100">
+            <div class="flex justify-between items-center border-b border-gray-100 pb-4 mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-gradient-to-br from-teal-100 to-emerald-200 rounded-xl">
+                        <i data-lucide="scissors" class="w-5 h-5 text-teal-600"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-800">Lançamento de Moído</h3>
+                </div>
+                <button id="moido-modal-close" type="button" class="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                    <i data-lucide="x" class="w-5 h-5 text-gray-500"></i>
+                </button>
+            </div>
+            
+            <form id="moido-form" class="space-y-4">
+                <div class="bg-gradient-to-br from-teal-50 to-emerald-50 border border-teal-200 rounded-xl p-3">
+                    <p class="text-sm text-teal-800">
+                        <i data-lucide="info" class="w-4 h-4 inline mr-1"></i>
+                        Registre a quantidade de material moído derivado das perdas de produção.
+                    </p>
+                </div>
+
+                <!-- Data e Hora -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label for="moido-date" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Data <span class="text-red-500">*</span></label>
+                        <input type="date" id="moido-date" name="date" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all" required>
+                    </div>
+                    <div>
+                        <label for="moido-hour" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Hora <span class="text-red-500">*</span></label>
+                        <input type="time" id="moido-hour" name="hour" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all" required>
+                    </div>
+                </div>
+
+                <!-- Código do Produto -->
+                <div>
+                    <label for="moido-product-code" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Código do Produto <span class="text-red-500">*</span></label>
+                    <input type="number" id="moido-product-code" name="product_code" min="1" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all" placeholder="Digite o código do produto" required>
+                    <div id="moido-product-info" class="mt-2 p-2 bg-gray-100 rounded-lg hidden">
+                        <p class="text-xs text-gray-600"><span class="font-semibold">Produto:</span> <span id="moido-product-name">-</span></p>
+                        <p class="text-xs text-gray-600"><span class="font-semibold">Cliente:</span> <span id="moido-product-client">-</span></p>
+                    </div>
+                    <p id="moido-product-error" class="text-xs text-red-500 mt-1 hidden">Produto não encontrado no banco de dados</p>
+                </div>
+
+                <!-- Código da Matéria Prima -->
+                <div>
+                    <label for="moido-mp-code" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Código da Matéria Prima <span class="text-red-500">*</span></label>
+                    <input type="number" id="moido-mp-code" name="mp_code" min="1" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all" placeholder="Digite o código da matéria prima" required>
+                    <div id="moido-mp-info" class="mt-2 p-2 bg-gray-100 rounded-lg hidden">
+                        <p class="text-xs text-gray-600"><span class="font-semibold">Matéria Prima:</span> <span id="moido-mp-name">-</span></p>
+                    </div>
+                    <p id="moido-mp-error" class="text-xs text-red-500 mt-1 hidden">Matéria prima não encontrada no banco de dados</p>
+                </div>
+
+                <!-- Quantidade -->
+                <div>
+                    <label for="moido-quantity" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Quantidade (Kg) <span class="text-red-500">*</span></label>
+                    <input type="number" step="0.001" id="moido-quantity" name="quantity" min="0.001" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all" placeholder="Ex: 5.500" required>
+                </div>
+
+                <!-- Observações -->
+                <div>
+                    <label for="moido-obs" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Observações</label>
+                    <textarea id="moido-obs" name="observations" rows="2" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all" placeholder="Observações adicionais (opcional)"></textarea>
+                </div>
+
+                <!-- Botões -->
+                <div class="flex gap-3 pt-4 border-t border-gray-100 mt-4">
+                    <button type="button" id="moido-cancel" class="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium text-sm hover:bg-gray-200 transition-colors">
+                        Cancelar
+                    </button>
+                    <button type="submit" id="moido-save" class="flex-1 px-4 py-2.5 bg-gradient-to-r from-teal-500 to-emerald-600 text-white rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all">
+                        Registrar Moído
+                    </button>
+                </div>
+                <div id="moido-status" class="text-sm font-semibold h-5 text-center mt-2"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de Lançamento de Borra (PMP) -->
+    <div id="pmp-borra-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg border border-gray-100">
+            <div class="flex justify-between items-center border-b border-gray-100 pb-4 mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-gradient-to-br from-yellow-100 to-amber-200 rounded-xl">
+                        <i data-lucide="droplet" class="w-5 h-5 text-amber-600"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-800">Lançamento de Borra</h3>
+                </div>
+                <button id="pmp-borra-modal-close" type="button" class="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                    <i data-lucide="x" class="w-5 h-5 text-gray-500"></i>
+                </button>
+            </div>
+            
+            <form id="pmp-borra-form" class="space-y-4">
+                <div class="bg-gradient-to-br from-yellow-50 to-amber-50 border border-amber-200 rounded-xl p-3">
+                    <p class="text-sm text-amber-800">
+                        <i data-lucide="info" class="w-4 h-4 inline mr-1"></i>
+                        Registre as borras e perdas de material do processo produtivo.
+                    </p>
+                </div>
+
+                <!-- Data e Hora -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label for="pmp-borra-date" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Data <span class="text-red-500">*</span></label>
+                        <input type="date" id="pmp-borra-date" name="date" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all" required>
+                    </div>
+                    <div>
+                        <label for="pmp-borra-hour" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Hora <span class="text-red-500">*</span></label>
+                        <input type="time" id="pmp-borra-hour" name="hour" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all" required>
+                    </div>
+                </div>
+
+                <!-- Código do Operador -->
+                <div>
+                    <label for="pmp-borra-operador" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Código do Operador <span class="text-red-500">*</span></label>
+                    <input type="number" id="pmp-borra-operador" name="operador_cod" min="1" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all" placeholder="Digite o código do operador" required>
+                    <div id="pmp-borra-operador-info" class="mt-2 p-2 bg-gray-100 rounded-lg hidden">
+                        <p class="text-xs text-gray-600"><span class="font-semibold">Operador:</span> <span id="pmp-borra-operador-name">-</span></p>
+                    </div>
+                    <p id="pmp-borra-operador-error" class="text-xs text-red-500 mt-1 hidden">Operador não encontrado no banco de dados</p>
+                </div>
+
+                <!-- Máquina -->
+                <div>
+                    <label for="pmp-borra-machine" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Máquina <span class="text-red-500">*</span></label>
+                    <select id="pmp-borra-machine" name="machine" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all" required>
+                        <option value="">Selecione uma máquina...</option>
+                        <!-- Opções serão preenchidas via JavaScript -->
+                    </select>
+                </div>
+
+                <!-- Quantidade em Kg -->
+                <div>
+                    <label for="pmp-borra-quantity" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Quantidade (Kg) <span class="text-red-500">*</span></label>
+                    <input type="number" step="0.001" id="pmp-borra-quantity" name="quantity" min="0.001" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all" placeholder="Ex: 2.500" required>
+                </div>
+
+                <!-- Observações -->
+                <div>
+                    <label for="pmp-borra-obs" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Observações</label>
+                    <textarea id="pmp-borra-obs" name="observations" rows="2" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all" placeholder="Observações adicionais (opcional)"></textarea>
+                </div>
+
+                <!-- Botões -->
+                <div class="flex gap-3 pt-4 border-t border-gray-100 mt-4">
+                    <button type="button" id="pmp-borra-cancel" class="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium text-sm hover:bg-gray-200 transition-colors">
+                        Cancelar
+                    </button>
+                    <button type="submit" id="pmp-borra-save" class="flex-1 px-4 py-2.5 bg-gradient-to-r from-yellow-500 to-amber-600 text-white rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all">
+                        Registrar Borra
+                    </button>
+                </div>
+                <div id="pmp-borra-status" class="text-sm font-semibold h-5 text-center mt-2"></div>
             </form>
         </div>
     </div>
