@@ -620,6 +620,93 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // ================================
+    // FUNÇÕES DE USUÁRIOS
+    // ================================
+    
+    // Popular select de usuários ordenados por código (COD)
+    // Configura o campo de código do operador com validação em tempo real
+    function setupUserCodeInput(inputId) {
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        
+        // Verificar se já foi configurado para evitar duplicação de listeners
+        if (input.dataset.userCodeSetup === 'true') {
+            return;
+        }
+        input.dataset.userCodeSetup = 'true';
+        
+        // Adicionar event listener para mostrar o nome enquanto digita
+        input.addEventListener('input', function() {
+            updateUserNameDisplay(inputId, this.value);
+        });
+        
+        // Também atualizar ao perder o foco (blur)
+        input.addEventListener('blur', function() {
+            updateUserNameDisplay(inputId, this.value);
+        });
+        
+        console.log(`[USER] Input ${inputId} configurado para validação`);
+    }
+    
+    // Atualiza a exibição do nome do usuário baseado no código digitado
+    function updateUserNameDisplay(inputId, userCod) {
+        // Mapear o inputId para o elemento de exibição do nome
+        const displayIdMap = {
+            'quick-production-user': 'quick-production-user-name',
+            'quick-losses-user': 'quick-losses-user-name',
+            'quick-downtime-user': 'quick-downtime-user-name',
+            'manual-production-user': 'manual-production-user-name',
+            'manual-losses-user': 'manual-losses-user-name',
+            'manual-downtime-user': 'manual-downtime-user-name'
+        };
+        
+        const displayElement = document.getElementById(displayIdMap[inputId]);
+        if (!displayElement) return;
+        
+        if (!userCod || userCod === '') {
+            displayElement.textContent = 'Digite o código para ver o nome';
+            displayElement.className = 'text-xs text-gray-400 mt-1';
+            return;
+        }
+        
+        const user = window.getUserByCode ? window.getUserByCode(parseInt(userCod)) : null;
+        if (user) {
+            displayElement.textContent = `✅ ${user.nomeUsuario} - ${user.nomeCompleto}`;
+            displayElement.className = 'text-xs text-green-600 font-medium mt-1';
+        } else {
+            displayElement.textContent = '❌ Código não encontrado';
+            displayElement.className = 'text-xs text-red-500 mt-1';
+        }
+    }
+    
+    // Configura todos os campos de código de usuário nos modais
+    function setupAllUserCodeInputs() {
+        const userInputIds = [
+            'quick-production-user',
+            'quick-losses-user',
+            'quick-downtime-user',
+            'manual-production-user',
+            'manual-losses-user',
+            'manual-downtime-user'
+        ];
+        
+        userInputIds.forEach(inputId => {
+            setupUserCodeInput(inputId);
+        });
+        
+        console.log('[USER] Todos os inputs de código de usuário configurados');
+    }
+    
+    // Mantém compatibilidade - função antiga redirecionada
+    function populateUserSelect(selectId) {
+        setupUserCodeInput(selectId);
+    }
+    
+    function populateAllUserSelects() {
+        setupAllUserCodeInputs();
+    }
+    
     // Carregar estado persistente da tara para todos os formulários
     function loadTareStateForAllForms(machine) {
         if (!machine) return;
@@ -2446,6 +2533,21 @@ document.addEventListener('DOMContentLoaded', function() {
             "PCP": ["SEM PROGRAMAÇÃO"],
             "COMERCIAL": ["SEM PEDIDO"]
         };
+    }
+    
+    // Função para obter a categoria de um motivo de parada
+    function getDowntimeCategory(reason) {
+        if (!reason) return 'OUTROS';
+        const reasonUpper = reason.trim().toUpperCase();
+        const grouped = getGroupedDowntimeReasons();
+        
+        for (const [category, reasons] of Object.entries(grouped)) {
+            const reasonsUpper = reasons.map(r => r.toUpperCase());
+            if (reasonsUpper.includes(reasonUpper)) {
+                return category;
+            }
+        }
+        return 'OUTROS';
     }
 
     function populateLossOptions() {
@@ -5319,6 +5421,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         // ✅ Gerar gráficos com dados combinados (normais + longas)
         await generateDowntimeReasonsChart(allDowntimeData);
+        setupDowntimeChartToggle(); // Setup dos botões de toggle categoria/motivo
         await generateDowntimeByMachineChart(allDowntimeData);
         await generateDowntimeTimelineChart(downtimeData); // Timeline mantém só normais para não distorcer
 
@@ -5378,15 +5481,21 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
         
         // Guardar detalhes no cache com dados completos
-        cachedDowntimeDetails = rawSegments.map(seg => ({
-            date: seg.date || seg.data || '',
-            startTime: seg.startTime || seg.start_time || '--:--',
-            endTime: seg.endTime || seg.end_time || '--:--',
-            machine: seg.machine || seg.maquina || 'N/A',
-            reason: (seg.reason || seg.motivo || 'Sem motivo').trim(),
-            duration: seg.duration || 0,
-            observations: seg.observations || seg.observacoes || seg.obs || seg.notes || seg.raw?.observations || seg.raw?.observacoes || seg.raw?.obs || ''
-        }));
+        cachedDowntimeDetails = rawSegments.map(seg => {
+            const reason = (seg.reason || seg.motivo || 'Sem motivo').trim();
+            return {
+                date: seg.date || seg.data || '',
+                startTime: seg.startTime || seg.start_time || '--:--',
+                endTime: seg.endTime || seg.end_time || '--:--',
+                machine: seg.machine || seg.maquina || 'N/A',
+                reason: reason,
+                category: getDowntimeCategory(reason),
+                duration: seg.duration || 0,
+                observations: seg.observations || seg.observacoes || seg.obs || seg.notes || seg.raw?.observations || seg.raw?.observacoes || seg.raw?.obs || '',
+                nomeUsuario: seg.nomeUsuario || seg.raw?.nomeUsuario || '',
+                userCod: seg.userCod ?? seg.raw?.userCod ?? null
+            };
+        });
         
         // Ordenar por data e hora (mais recente primeiro)
         cachedDowntimeDetails.sort((a, b) => {
@@ -5478,7 +5587,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (pageData.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="7" class="text-center py-8 text-gray-500">
+                    <td colspan="9" class="text-center py-8 text-gray-500">
                         <i data-lucide="inbox" class="w-6 h-6 mx-auto mb-2 text-gray-400"></i>
                         <p>${(reasonFilter || machineFilter) ? 'Nenhuma ocorrência encontrada para os filtros selecionados' : 'Nenhuma parada registrada no período'}</p>
                     </td>
@@ -5487,6 +5596,22 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             if (typeof lucide !== 'undefined') lucide.createIcons();
             return;
         }
+        
+        // Cores para as categorias
+        const categoryColors = {
+            'FERRAMENTARIA': 'bg-indigo-100 text-indigo-800',
+            'PROCESSO': 'bg-purple-100 text-purple-800',
+            'COMPRAS': 'bg-pink-100 text-pink-800',
+            'PREPARAÇÃO': 'bg-amber-100 text-amber-800',
+            'QUALIDADE': 'bg-emerald-100 text-emerald-800',
+            'MANUTENÇÃO': 'bg-red-100 text-red-800',
+            'PRODUÇÃO': 'bg-blue-100 text-blue-800',
+            'SETUP': 'bg-teal-100 text-teal-800',
+            'ADMINISTRATIVO': 'bg-orange-100 text-orange-800',
+            'PCP': 'bg-lime-100 text-lime-800',
+            'COMERCIAL': 'bg-cyan-100 text-cyan-800',
+            'OUTROS': 'bg-gray-100 text-gray-800'
+        };
         
         tbody.innerHTML = pageData.map(item => {
             // Formatar data
@@ -5514,6 +5639,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const obsText = item.observations || '-';
             const obsDisplay = obsText.length > 50 ? obsText.substring(0, 47) + '...' : obsText;
             
+            // Operador
+            const operadorDisplay = item.nomeUsuario ? `<span class="text-indigo-600 font-medium" title="Cód: ${item.userCod}">${item.nomeUsuario}</span>` : '<span class="text-gray-400">-</span>';
+            
+            // Categoria com cor
+            const categoryClass = categoryColors[item.category] || categoryColors['OUTROS'];
+            
             return `
                 <tr class="hover:bg-gray-50 transition-colors">
                     <td class="py-2.5 px-3 text-gray-700">${dateFormatted}</td>
@@ -5524,8 +5655,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                             ${item.machine}
                         </span>
                     </td>
+                    <td class="py-2.5 px-3">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${categoryClass}">
+                            ${item.category}
+                        </span>
+                    </td>
                     <td class="py-2.5 px-3 text-gray-800 font-medium">${item.reason}</td>
                     <td class="py-2.5 px-3 text-center ${durationClass}">${durationStr}</td>
+                    <td class="py-2.5 px-3 text-xs">${operadorDisplay}</td>
                     <td class="py-2.5 px-3 text-gray-500 text-xs" title="${obsText}">${obsDisplay}</td>
                 </tr>
             `;
@@ -6561,15 +6698,26 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
      */
     function getShiftEnd(date, shift) {
         const d = new Date(date);
+        const hour = d.getHours();
+        
         switch (shift) {
-            case 1: d.setHours(14, 59, 59, 999); break;
-            case 2: d.setHours(23, 19, 59, 999); break;
+            case 1: 
+                d.setHours(14, 59, 59, 999); 
+                break;
+            case 2: 
+                d.setHours(23, 19, 59, 999); 
+                break;
             case 3: 
-                // Turno 3 vai até 06:59 do dia seguinte
-                d.setDate(d.getDate() + 1);
+                // Turno 3 vai até 06:59
+                // Se estamos entre 23:20-23:59, o fim é 06:59 do dia SEGUINTE
+                // Se estamos entre 00:00-06:59, o fim é 06:59 do MESMO dia
+                if (hour >= 23) {
+                    d.setDate(d.getDate() + 1);
+                }
                 d.setHours(6, 59, 59, 999); 
                 break;
-            default: d.setHours(14, 59, 59, 999);
+            default: 
+                d.setHours(14, 59, 59, 999);
         }
         return d;
     }
@@ -6604,13 +6752,73 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const startDateTime = parseDateTime(startDateStr, startTimeStr);
         const endDateTime = parseDateTime(endDateStr, endTimeStr);
         
+        console.log('[DOWNTIME] splitDowntimeIntoShiftSegments input:', {
+            startDateStr, startTimeStr, endDateStr, endTimeStr,
+            startDateTime: startDateTime?.toISOString(),
+            endDateTime: endDateTime?.toISOString()
+        });
+        
         if (!startDateTime || !endDateTime) {
             console.error('[DOWNTIME] Datas inválidas:', { startDateStr, startTimeStr, endDateStr, endTimeStr });
             return segments;
         }
         
-        if (endDateTime <= startDateTime) {
-            console.error('[DOWNTIME] Data fim anterior ou igual à data início');
+        // Calcular diferença em milissegundos
+        const diffMs = endDateTime.getTime() - startDateTime.getTime();
+        
+        // Se a diferença for negativa ou zero, criar segmento mínimo de 1 minuto
+        if (diffMs <= 0) {
+            console.warn('[DOWNTIME] Data fim anterior ou igual à data início - criando segmento mínimo', {
+                diffMs,
+                start: startDateTime.toISOString(),
+                end: endDateTime.toISOString()
+            });
+            const currentShift = getShiftForDateTime(startDateTime);
+            const workday = getWorkdayForDateTime(startDateTime);
+            segments.push({
+                date: workday,
+                startTime: formatTimeHM(startDateTime),
+                endTime: formatTimeHM(startDateTime), // Mesmo horário, duração mínima
+                duration: 1,
+                shift: currentShift,
+                _segmentStart: startDateTime.toISOString(),
+                _segmentEnd: startDateTime.toISOString()
+            });
+            return segments;
+        }
+        
+        // Se a parada for muito curta (menos de 1 minuto), criar segmento mínimo
+        if (diffMs < 60000) {
+            console.log('[DOWNTIME] Parada muito curta (' + Math.round(diffMs/1000) + 's), criando segmento mínimo de 1 min');
+            const currentShift = getShiftForDateTime(startDateTime);
+            const workday = getWorkdayForDateTime(startDateTime);
+            segments.push({
+                date: workday,
+                startTime: formatTimeHM(startDateTime),
+                endTime: formatTimeHM(endDateTime),
+                duration: 1,
+                shift: currentShift,
+                _segmentStart: startDateTime.toISOString(),
+                _segmentEnd: endDateTime.toISOString()
+            });
+            return segments;
+        }
+        
+        // Para paradas curtas (menos de 10 minutos), criar um único segmento sem divisão por turno
+        if (diffMs < 600000) {
+            console.log('[DOWNTIME] Parada curta (' + Math.round(diffMs/60000) + ' min), criando segmento único');
+            const currentShift = getShiftForDateTime(startDateTime);
+            const workday = getWorkdayForDateTime(startDateTime);
+            const durationMin = Math.max(1, Math.round(diffMs / 60000));
+            segments.push({
+                date: workday,
+                startTime: formatTimeHM(startDateTime),
+                endTime: formatTimeHM(endDateTime),
+                duration: durationMin,
+                shift: currentShift,
+                _segmentStart: startDateTime.toISOString(),
+                _segmentEnd: endDateTime.toISOString()
+            });
             return segments;
         }
         
@@ -6656,15 +6864,32 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 _segmentEnd: segmentEnd.toISOString()
             });
             
-            // Avançar cursor para o próximo ponto (1 minuto após o fim do segmento)
+            // Avançar cursor para o próximo ponto
+            // Para o último segmento, não adiciona 1 minuto extra
+            if (segmentEnd.getTime() >= endDateTime.getTime()) {
+                break;
+            }
             cursor = new Date(segmentEnd.getTime() + 60000);
-            
-            // Se o cursor passou do fim, parar
-            if (cursor >= endDateTime) break;
         }
         
         if (safetyCounter >= MAX_ITERATIONS) {
             console.error('[DOWNTIME] Loop de segmentação excedeu limite de segurança');
+        }
+        
+        // Se não gerou nenhum segmento, criar um mínimo
+        if (segments.length === 0) {
+            console.warn('[DOWNTIME] Nenhum segmento gerado, criando segmento mínimo');
+            const currentShift = getShiftForDateTime(startDateTime);
+            const workday = getWorkdayForDateTime(startDateTime);
+            segments.push({
+                date: workday,
+                startTime: formatTimeHM(startDateTime),
+                endTime: formatTimeHM(endDateTime),
+                duration: Math.max(1, Math.round(diffMs / 60000)),
+                shift: currentShift,
+                _segmentStart: startDateTime.toISOString(),
+                _segmentEnd: endDateTime.toISOString()
+            });
         }
         
         console.log('[DOWNTIME] Segmentos gerados:', segments.length, segments);
@@ -8508,37 +8733,95 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         });
     }
 
-    // Gerar gráfico de paradas por motivo
-    async function generateDowntimeReasonsChart(downtimeData) {
+    // Variável para armazenar dados de downtime e modo atual do gráfico
+    let cachedDowntimeDataForChart = [];
+    let downtimeChartMode = 'category'; // 'category' ou 'reason'
+
+    // Gerar gráfico de paradas por CATEGORIA ou MOTIVO
+    async function generateDowntimeReasonsChart(downtimeData, mode = null) {
         const ctx = document.getElementById('downtime-reasons-chart');
         if (!ctx) return;
 
+        // Se recebeu novos dados, armazenar no cache
+        if (downtimeData && downtimeData.length >= 0) {
+            cachedDowntimeDataForChart = downtimeData;
+        }
+        
+        // Usar modo passado ou o modo atual
+        if (mode) {
+            downtimeChartMode = mode;
+        }
+
         destroyChart('downtime-reasons-chart');
 
-        if (downtimeData.length === 0) {
+        if (cachedDowntimeDataForChart.length === 0) {
             showNoDataMessage('downtime-reasons-chart');
             return;
         }
         
         clearNoDataMessage('downtime-reasons-chart');
 
-        const reasonDurations = {};
-        downtimeData.forEach(item => {
-            const reason = item.reason || 'Sem motivo';
-            reasonDurations[reason] = (reasonDurations[reason] || 0) + (item.duration || 0);
-        });
-
-        const labels = Object.keys(reasonDurations);
-        const data = Object.values(reasonDurations).map(d => Number(((d || 0) / 60).toFixed(2))); // Converter para horas
-
+        let labels, data, colors;
         const isMobile = window.innerWidth < 768;
+        
+        // Cores para cada categoria
+        const categoryColors = {
+            'FERRAMENTARIA': '#6366F1',
+            'PROCESSO': '#8B5CF6',
+            'COMPRAS': '#EC4899',
+            'PREPARAÇÃO': '#F59E0B',
+            'QUALIDADE': '#10B981',
+            'MANUTENÇÃO': '#EF4444',
+            'PRODUÇÃO': '#3B82F6',
+            'SETUP': '#14B8A6',
+            'ADMINISTRATIVO': '#F97316',
+            'PCP': '#84CC16',
+            'COMERCIAL': '#06B6D4',
+            'OUTROS': '#6B7280'
+        };
+
+        if (downtimeChartMode === 'category') {
+            // Agrupar por CATEGORIA
+            const categoryDurations = {};
+            cachedDowntimeDataForChart.forEach(item => {
+                const reason = item.reason || 'Sem motivo';
+                const category = getDowntimeCategory(reason);
+                categoryDurations[category] = (categoryDurations[category] || 0) + (item.duration || 0);
+            });
+
+            labels = Object.keys(categoryDurations);
+            data = Object.values(categoryDurations).map(d => Number(((d || 0) / 60).toFixed(2)));
+            colors = labels.map(label => categoryColors[label] || '#6B7280');
+        } else {
+            // Agrupar por MOTIVO individual
+            const reasonDurations = {};
+            cachedDowntimeDataForChart.forEach(item => {
+                const reason = item.reason || 'Sem motivo';
+                reasonDurations[reason] = (reasonDurations[reason] || 0) + (item.duration || 0);
+            });
+
+            // Ordenar por duração (maior primeiro) e pegar os top 12
+            const sortedReasons = Object.entries(reasonDurations)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 12);
+            
+            labels = sortedReasons.map(([reason]) => reason);
+            data = sortedReasons.map(([, duration]) => Number(((duration || 0) / 60).toFixed(2)));
+            
+            // Atribuir cores baseadas na categoria de cada motivo
+            colors = labels.map(reason => {
+                const category = getDowntimeCategory(reason);
+                return categoryColors[category] || '#6B7280';
+            });
+        }
+
         const totalHours = data.reduce((sum, value) => sum + value, 0);
 
         renderModernDonutChart({
             canvasId: 'downtime-reasons-chart',
             labels,
             data,
-            colors: ['#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316'],
+            colors: colors,
             datasetLabel: 'Paradas (h)',
             legendPosition: isMobile ? 'bottom' : 'right',
             tooltipFormatter: (context) => {
@@ -8547,6 +8830,33 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 return `${context.label}: ${value.toFixed(1)} h (${percentage}%)`;
             }
         });
+    }
+
+    // Setup dos botões de toggle do gráfico de paradas
+    function setupDowntimeChartToggle() {
+        const btnCategory = document.getElementById('btn-chart-category');
+        const btnReason = document.getElementById('btn-chart-reason');
+        
+        if (!btnCategory || !btnReason) return;
+        
+        const updateToggleStyles = (activeBtn, inactiveBtn) => {
+            activeBtn.classList.remove('text-gray-500', 'hover:text-gray-700');
+            activeBtn.classList.add('bg-white', 'text-gray-800', 'shadow-sm');
+            inactiveBtn.classList.remove('bg-white', 'text-gray-800', 'shadow-sm');
+            inactiveBtn.classList.add('text-gray-500', 'hover:text-gray-700');
+        };
+        
+        btnCategory.onclick = () => {
+            if (downtimeChartMode === 'category') return;
+            updateToggleStyles(btnCategory, btnReason);
+            generateDowntimeReasonsChart(null, 'category');
+        };
+        
+        btnReason.onclick = () => {
+            if (downtimeChartMode === 'reason') return;
+            updateToggleStyles(btnReason, btnCategory);
+            generateDowntimeReasonsChart(null, 'reason');
+        };
     }
 
     // Gerar gráfico de paradas por máquina
@@ -15017,6 +15327,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     startTimestamp: startTimestamp,
                     startTimestampLocal: startTimestamp.toISOString(),
                     startShift: activeDowntime.startShift || getShiftForDateTime(startTimestamp),
+                    // Motivo e observações
+                    reason: activeDowntime.reason || null,
+                    observations: activeDowntime.observations || '',
+                    // Dados do operador
+                    userCod: activeDowntime.userCod ?? null,
+                    nomeUsuario: activeDowntime.nomeUsuario || null,
                     // Contexto de produção
                     product: activeDowntime.product || null,
                     productCod: activeDowntime.productCod || null,
@@ -17244,6 +17560,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             submitBtn.addEventListener('click', handleQuickProductionSubmit);
         }
         
+        // ✅ Configurar campo de código do operador
+        setupUserCodeInput('quick-production-user');
+        const userInput = document.getElementById('quick-production-user');
+        if (userInput) {
+            userInput.value = '';
+            updateUserNameDisplay('quick-production-user', '');
+        }
+        
         openModal('quick-production-modal');
     }
     
@@ -17669,6 +17993,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 console.log('[DEBUG] Evento de submit vinculado ao quick-downtime-form (openModal)');
             }
         }
+        
+        // Popular selects de usuários quando modal abre
+        if (['quick-production-modal', 'quick-losses-modal', 'quick-downtime-modal', 'manual-production-modal', 'manual-losses-modal', 'manual-downtime-modal'].includes(modalId)) {
+            populateAllUserSelects();
+        }
+        
         console.error('🔴🔴🔴 OPENMODAL START, modalId=' + modalId + ' 🔴🔴🔴');
 
         const modal = document.getElementById(modalId);
@@ -17810,8 +18140,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
      * Inicia uma parada de máquina com persistência robusta
      * @param {string} reason - Motivo da parada (informado no modal)
      * @param {string} observations - Observações adicionais
+     * @param {number} userCod - Código do operador responsável
+     * @param {string} nomeUsuario - Nome do operador responsável
      */
-    async function startMachineDowntime(reason, observations = '') {
+    async function startMachineDowntime(reason, observations = '', userCod = null, nomeUsuario = null) {
         if (!selectedMachineData) {
             console.error('[DOWNTIME] Tentativa de iniciar parada sem máquina selecionada');
             showNotification('Selecione uma máquina primeiro.', 'error');
@@ -17838,6 +18170,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             // Motivo e observações (informados no início)
             reason: reason,
             observations: observations,
+            // Dados do operador
+            userCod: userCod,
+            nomeUsuario: nomeUsuario,
             // Dados adicionais para rastreabilidade
             product: selectedMachineData.product || null,
             productCod: selectedMachineData.product_cod || null,
@@ -17863,6 +18198,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 // Motivo e observações (informados no início)
                 reason: reason,
                 observations: observations,
+                
+                // Dados do operador responsável
+                userCod: userCod,
+                nomeUsuario: nomeUsuario,
                 
                 // Contexto de produção
                 product: selectedMachineData.product || null,
@@ -17930,7 +18269,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         console.log('[DOWNTIME][FINALIZE] Finalizando parada', {
             selectedMachineData,
             currentDowntimeStart,
-            machineStatus
+            machineStatus,
+            timestamp: new Date().toISOString()
         });
 
         if (!currentDowntimeStart) {
@@ -17945,6 +18285,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             await refreshAnalysisIfActive();
             return;
         }
+        
+        // Bloquear múltiplos cliques
+        if (finalizeMachineDowntime._processing) {
+            console.warn('[DOWNTIME][FINALIZE] Já está processando, ignorando clique duplicado');
+            return;
+        }
+        finalizeMachineDowntime._processing = true;
         
         let erroFinal = null;
         let savedSegments = 0;
@@ -17971,6 +18318,23 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 return;
             }
             
+            // Verificar se a data de início é futura (erro de dados)
+            if (startDateTime > now) {
+                console.error('[DOWNTIME][FINALIZE] Data de início é futura! Corrigindo para agora menos 1 minuto.', {
+                    startDateTime: startDateTime.toISOString(),
+                    now: now.toISOString()
+                });
+                // Corrigir para 1 minuto antes de agora
+                startDateTime = new Date(now.getTime() - 60000);
+            }
+            
+            // Se a diferença for muito pequena (< 5 segundos), garantir pelo menos 1 minuto de duração
+            const diffMs = now.getTime() - startDateTime.getTime();
+            if (diffMs < 5000) {
+                console.warn('[DOWNTIME][FINALIZE] Parada muito curta (' + diffMs + 'ms), ajustando para 1 minuto');
+                startDateTime = new Date(now.getTime() - 60000);
+            }
+            
             const startDateStr = formatDateYMD(startDateTime);
             const startTimeStr = formatTimeHM(startDateTime);
             const endDateStr = formatDateYMD(now);
@@ -17978,14 +18342,17 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             
             // Calcular duração total para log
             const totalDurationMs = now.getTime() - startDateTime.getTime();
-            const totalDurationMin = Math.round(totalDurationMs / 60000);
+            const totalDurationMin = Math.max(1, Math.round(totalDurationMs / 60000));
             const totalDurationHours = (totalDurationMs / 3600000).toFixed(2);
             
             console.log('[DOWNTIME][FINALIZE] Calculando segmentos:', {
+                startDateTime: startDateTime.toISOString(),
+                now: now.toISOString(),
                 startDate: startDateStr,
                 startTime: startTimeStr,
                 endDate: endDateStr,
                 endTime: endTimeStr,
+                totalDurationMs,
                 totalDurationMin,
                 totalDurationHours: `${totalDurationHours}h`
             });
@@ -18005,8 +18372,15 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const batch = db.batch();
             
             // Usar o motivo que foi informado no início da parada
-            const reason = currentDowntimeStart.reason || 'NÃO INFORMADO';
+            const reason = currentDowntimeStart.reason;
             const obs = currentDowntimeStart.observations || '';
+            
+            // Validação: motivo é obrigatório
+            if (!reason || reason.trim() === '') {
+                console.error('[DOWNTIME][FINALIZE] Motivo não informado');
+                alert('⚠️ Erro: Motivo da parada não foi informado.\n\nEsta parada não pode ser finalizada sem um motivo válido.\nPor favor, registre a parada manualmente com o motivo correto.');
+                return;
+            }
             
             for (const seg of segments) {
                 const downtimeData = {
@@ -18023,6 +18397,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     // Motivo e observações (informados no início da parada)
                     reason: reason,
                     observations: obs,
+                    
+                    // Dados do operador que registrou a parada
+                    userCod: currentDowntimeStart.userCod ?? null,
+                    nomeUsuario: currentDowntimeStart.nomeUsuario || null,
                     
                     // Contexto de produção (se disponível)
                     product: currentDowntimeStart.product || null,
@@ -18069,7 +18447,21 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             // Remover parada ativa dessa máquina (evita restauração automática na troca de máquina/reload)
             const machineToClean = currentDowntimeStart?.machine;
             const reasonForLog = currentDowntimeStart?.reason;
-            const durationForLog = downtimeElapsedSeconds ? Math.round(downtimeElapsedSeconds / 60) + ' min' : '-';
+            
+            // Calcular duração para log
+            let durationForLog = '-';
+            if (currentDowntimeStart) {
+                let startDt;
+                if (currentDowntimeStart.startTimestamp instanceof Date) {
+                    startDt = currentDowntimeStart.startTimestamp;
+                } else if (currentDowntimeStart.startTimestampLocal) {
+                    startDt = new Date(currentDowntimeStart.startTimestampLocal);
+                }
+                if (startDt && !isNaN(startDt.getTime())) {
+                    const elapsedMin = Math.round((Date.now() - startDt.getTime()) / 60000);
+                    durationForLog = elapsedMin + ' min';
+                }
+            }
             
             try {
                 if (machineToClean) {
@@ -18101,6 +18493,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     duracao: durationForLog
                 });
             }
+            
+            // Liberar flag de processamento
+            finalizeMachineDowntime._processing = false;
         }
     }
 
@@ -20082,6 +20477,22 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const useTareCheckbox = document.getElementById('manual-production-use-tare');
         const obsInput = document.getElementById('manual-production-obs');
 
+        // ✅ POKA-YOKE: Operador obrigatório
+        const userInput = document.getElementById('manual-production-user');
+        const userCod = userInput ? parseInt(userInput.value, 10) : null;
+        if (userCod === null || isNaN(userCod) || userInput.value === '') {
+            alert('⚠️ Operador obrigatório!\n\nPor favor, digite o código do operador responsável.');
+            if (userInput) userInput.focus();
+            return;
+        }
+        const userData = getUserByCode ? getUserByCode(userCod) : null;
+        if (!userData) {
+            alert('⚠️ Código inválido!\n\nO código digitado não foi encontrado no sistema.\nVerifique e tente novamente.');
+            if (userInput) userInput.focus();
+            return;
+        }
+        const nomeUsuario = userData.nomeUsuario;
+
         const dateValue = dateInput?.value || '';
         const hourValue = hourInput?.value || '';
         const shiftRaw = shiftSelect?.value || '';
@@ -20154,7 +20565,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 manual: true,
                 horaInformada: hourValue || null,
                 registradoPor: currentUser?.username || null,
-                registradoPorNome: getCurrentUserName()
+                registradoPorNome: getCurrentUserName(),
+                userCod: userCod,
+                nomeUsuario: nomeUsuario
             };
             
             await db.collection('production_entries').add({
@@ -20287,6 +20700,22 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
 
+        // ✅ POKA-YOKE: Operador obrigatório
+        const userInput = document.getElementById('quick-production-user');
+        const userCod = userInput ? parseInt(userInput.value, 10) : null;
+        if (userCod === null || isNaN(userCod) || userInput.value === '') {
+            alert('⚠️ Operador obrigatório!\n\nPor favor, digite o código do operador responsável.');
+            if (userInput) userInput.focus();
+            return;
+        }
+        const userData = getUserByCode ? getUserByCode(userCod) : null;
+        if (!userData) {
+            alert('⚠️ Código inválido!\n\nO código digitado não foi encontrado no sistema.\nVerifique e tente novamente.');
+            if (userInput) userInput.focus();
+            return;
+        }
+        const nomeUsuario = userData.nomeUsuario;
+
         const qtyInput = document.getElementById('quick-production-qty');
         const weightInput = document.getElementById('quick-production-weight');
         const obsInput = document.getElementById('quick-production-obs');
@@ -20353,6 +20782,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 mp: selectedMachineData.mp || '',
                 orderId: selectedMachineData.order_id || null,
                 manual: false,
+                // Dados do operador responsável
+                userCod: userCod,
+                nomeUsuario: nomeUsuario,
                 registradoPor: currentUser?.username || null,
                 registradoPorNome: getCurrentUserName()
             };
@@ -20464,6 +20896,22 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const reasonSelect = document.getElementById('manual-losses-reason');
         const obsInput = document.getElementById('manual-losses-obs');
 
+        // ✅ POKA-YOKE: Operador obrigatório
+        const userInput = document.getElementById('manual-losses-user');
+        const userCod = userInput ? parseInt(userInput.value, 10) : null;
+        if (userCod === null || isNaN(userCod) || userInput.value === '') {
+            alert('⚠️ Operador obrigatório!\n\nPor favor, digite o código do operador responsável.');
+            if (userInput) userInput.focus();
+            return;
+        }
+        const userData = getUserByCode ? getUserByCode(userCod) : null;
+        if (!userData) {
+            alert('⚠️ Código inválido!\n\nO código digitado não foi encontrado no sistema.\nVerifique e tente novamente.');
+            if (userInput) userInput.focus();
+            return;
+        }
+        const nomeUsuario = userData.nomeUsuario;
+
         const dateValue = (dateInput?.value || '').trim();
         const shiftRaw = shiftSelect?.value || '';
         const hourValue = (hourInput?.value || '').trim();
@@ -20544,7 +20992,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 manual: true,
                 horaInformada: hourValue || null,
                 registradoPor: currentUser?.username || null,
-                registradoPorNome: getCurrentUserName()
+                registradoPorNome: getCurrentUserName(),
+                userCod: userCod,
+                nomeUsuario: nomeUsuario
             };
 
             await db.collection('production_entries').add({
@@ -20633,6 +21083,22 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const reason = document.getElementById('quick-losses-reason').value;
         const obs = (document.getElementById('quick-losses-obs').value || '').trim();
         
+        // ✅ POKA-YOKE: Operador obrigatório
+        const userInput = document.getElementById('quick-losses-user');
+        const userCod = userInput ? parseInt(userInput.value, 10) : null;
+        if (userCod === null || isNaN(userCod) || userInput.value === '') {
+            alert('⚠️ Operador obrigatório!\n\nPor favor, digite o código do operador responsável.');
+            if (userInput) userInput.focus();
+            return;
+        }
+        const userData = getUserByCode ? getUserByCode(userCod) : null;
+        if (!userData) {
+            alert('⚠️ Código inválido!\n\nO código digitado não foi encontrado no sistema.\nVerifique e tente novamente.');
+            if (userInput) userInput.focus();
+            return;
+        }
+        const nomeUsuario = userData.nomeUsuario;
+        
         // Verificar se deve aplicar tara da caixa plástica
         const useTare = document.getElementById('quick-losses-use-tare').checked;
         if (useTare && weightGrams > 0) {
@@ -20654,6 +21120,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         if (!reason) {
             alert('Por favor, selecione o motivo da perda.');
+            return;
+        }
+
+        // ✅ POKA-YOKE: Observação obrigatória
+        if (!obs || obs.length < 3) {
+            alert('⚠️ Observação obrigatória!\n\nPor favor, descreva detalhes sobre a perda para garantir rastreabilidade.');
+            document.getElementById('quick-losses-obs').focus();
             return;
         }
 
@@ -20718,7 +21191,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             machine: machineRef || null,
             mp: mpValue,
             orderId: selectedMachineData?.order_id || null,
-            orderNumber: selectedMachineData?.order_number || null
+            orderNumber: selectedMachineData?.order_number || null,
+            userCod: userCod,
+            nomeUsuario: nomeUsuario
         };
 
         console.log('[TRACE][handleLossesSubmit] payloadBase prepared', payloadBase);
@@ -20802,20 +21277,43 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const reason = document.getElementById('quick-downtime-reason').value;
         const obs = (document.getElementById('quick-downtime-obs').value || '').trim();
         
-        console.log('[DOWNTIME][SUBMIT] Valores do formulário:', { reason, obs });
+        // ✅ POKA-YOKE: Operador obrigatório
+        const userInput = document.getElementById('quick-downtime-user');
+        const userCod = userInput ? parseInt(userInput.value, 10) : null;
+        if (userCod === null || isNaN(userCod) || userInput.value === '') {
+            alert('⚠️ Operador obrigatório!\n\nPor favor, digite o código do operador responsável.');
+            if (userInput) userInput.focus();
+            return;
+        }
+        const userData = getUserByCode ? getUserByCode(userCod) : null;
+        if (!userData) {
+            alert('⚠️ Código inválido!\n\nO código digitado não foi encontrado no sistema.\nVerifique e tente novamente.');
+            if (userInput) userInput.focus();
+            return;
+        }
+        const nomeUsuario = userData.nomeUsuario;
+        
+        console.log('[DOWNTIME][SUBMIT] Valores do formulário:', { reason, obs, userCod, nomeUsuario });
 
         if (!reason) {
             alert('Por favor, selecione o motivo da parada.');
             return;
         }
 
+        // ✅ POKA-YOKE: Observação obrigatória
+        if (!obs || obs.length < 3) {
+            alert('⚠️ Observação obrigatória!\n\nPor favor, descreva detalhes sobre a parada para garantir rastreabilidade.');
+            document.getElementById('quick-downtime-obs').focus();
+            return;
+        }
+
         // Fechar o modal antes de iniciar a parada
         closeModal('quick-downtime-modal');
         
-        // Iniciar a parada com o motivo informado
-        await startMachineDowntime(reason, obs);
+        // Iniciar a parada com o motivo informado e dados do usuário
+        await startMachineDowntime(reason, obs, userCod, nomeUsuario);
         
-        console.log('[DOWNTIME][SUBMIT] Parada iniciada com motivo:', reason);
+        console.log('[DOWNTIME][SUBMIT] Parada iniciada com motivo:', reason, 'usuário:', nomeUsuario);
     }
 
     async function handleManualBorraSubmit(e) {
@@ -20995,6 +21493,22 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
 
+        // ✅ POKA-YOKE: Operador obrigatório
+        const userInput = document.getElementById('manual-downtime-user');
+        const userCod = userInput ? parseInt(userInput.value, 10) : null;
+        if (userCod === null || isNaN(userCod) || userInput.value === '') {
+            alert('⚠️ Operador obrigatório!\n\nPor favor, digite o código do operador responsável.');
+            if (userInput) userInput.focus();
+            return;
+        }
+        const userData = getUserByCode ? getUserByCode(userCod) : null;
+        if (!userData) {
+            alert('⚠️ Código inválido!\n\nO código digitado não foi encontrado no sistema.\nVerifique e tente novamente.');
+            if (userInput) userInput.focus();
+            return;
+        }
+        const nomeUsuario = userData.nomeUsuario;
+
         const dateStartInput = document.getElementById('manual-downtime-date-start');
         const dateEndInput = document.getElementById('manual-downtime-date-end');
         const startTimeInput = document.getElementById('manual-downtime-start');
@@ -21045,6 +21559,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     duration: seg.duration,
                     reason: reason,
                     observations: obs,
+                    // Dados do operador
+                    userCod: userCod,
+                    nomeUsuario: nomeUsuario,
                     registradoPor: currentUser?.username || null,
                     registradoPorNome: getCurrentUserName(),
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -21098,7 +21615,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             console.log('[TRACE][finishDowntime] segments', segments);
 
             if (!segments.length) {
-                // fallback simples
+                // fallback simples - validar motivo antes de salvar
+                if (!currentDowntimeStart.reason || currentDowntimeStart.reason.trim() === '') {
+                    console.error('[DOWNTIME][FINISH] Tentativa de salvar parada sem motivo');
+                    alert('⚠️ Erro: Motivo da parada não foi informado.\n\nEsta parada não pode ser finalizada sem um motivo válido.');
+                    return;
+                }
                 const downtimeData = {
                     ...currentDowntimeStart,
                     endTime,
@@ -21107,6 +21629,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 };
                 await db.collection('downtime_entries').add(downtimeData);
             } else {
+                // Validar motivo antes de salvar os segmentos
+                if (!currentDowntimeStart.reason || currentDowntimeStart.reason.trim() === '') {
+                    console.error('[DOWNTIME][FINISH] Tentativa de salvar parada sem motivo');
+                    alert('⚠️ Erro: Motivo da parada não foi informado.\n\nEsta parada não pode ser finalizada sem um motivo válido.');
+                    return;
+                }
                 for (const seg of segments) {
                     const downtimeData = {
                         machine: currentDowntimeStart.machine,
@@ -21114,6 +21642,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                         startTime: seg.startTime,
                         endTime: seg.endTime,
                         duration: seg.duration,
+                        reason: currentDowntimeStart.reason,
+                        observations: currentDowntimeStart.observations || '',
+                        userCod: currentDowntimeStart.userCod ?? null,
+                        nomeUsuario: currentDowntimeStart.nomeUsuario || null,
                         createdAt: firebase.firestore.FieldValue.serverTimestamp()
                     };
                     await db.collection('downtime_entries').add(downtimeData);
@@ -21849,7 +22381,9 @@ function sendDowntimeNotification() {
         const config = typeConfig[entry.type] || { label: 'Lançamento', badge: 'bg-gray-100 text-gray-600 border border-gray-200' };
         const turnoLabel = entry.data.turno ? `Turno ${entry.data.turno}` : null;
         const timeLabel = formatEntryTimestamp(entry.timestamp);
-        const registradoPorNome = entry.data.registradoPorNome || 'Desconhecido';
+        // Operador que fez o lançamento (código + nome)
+        const operadorNome = entry.data.nomeUsuario || null;
+        const operadorCod = entry.data.userCod !== undefined ? entry.data.userCod : null;
         const details = [];
         const parseNumber = (value) => {
             const parsed = parseOptionalNumber(value);
@@ -21957,6 +22491,12 @@ function sendDowntimeNotification() {
         const metaChips = [config.label];
         if (turnoLabel) metaChips.push(turnoLabel);
         if (timeLabel) metaChips.push(timeLabel);
+        
+        // Construir badge do operador (somente se tiver nome)
+        let operadorBadge = '';
+        if (operadorNome) {
+            operadorBadge = `<span class="px-2 py-1 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-200" title="Código: ${operadorCod}">👤 ${operadorNome}</span>`;
+        }
 
         return `
             <div class="border border-gray-200 rounded-lg p-4 bg-white shadow-sm">
@@ -21966,7 +22506,7 @@ function sendDowntimeNotification() {
                             <span class="px-2 py-1 rounded-full ${config.badge}">${config.label}</span>
                             ${turnoLabel ? `<span class="px-2 py-1 rounded-full bg-gray-100 text-gray-600 border border-gray-200">${turnoLabel}</span>` : ''}
                             ${timeLabel ? `<span>${timeLabel}</span>` : ''}
-                            <span class="px-2 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-200">👤 ${registradoPorNome}</span>
+                            ${operadorBadge}
                         </div>
                         <div class="text-sm text-gray-700 space-x-2">
                             ${details.join('<span class="text-gray-300">–</span>')}
@@ -25197,8 +25737,17 @@ function sendDowntimeNotification() {
             const mins = durationMinutes % 60;
             const durationText = hours > 0 ? `${hours}h ${mins}min` : `${mins}min`;
             
-            // Tipo/Motivo da parada
-            const reasonText = downtimeData.reason || downtimeData.type || 'Não informado';
+            // Tipo/Motivo da parada - VALIDAÇÃO OBRIGATÓRIA
+            const reasonText = downtimeData.reason || downtimeData.type || '';
+            
+            // Não permitir finalizar parada sem motivo válido
+            if (!reasonText || reasonText.trim() === '' || reasonText.toLowerCase() === 'não informado') {
+                console.error('[FINALIZAR-PARADA] Parada sem motivo válido');
+                alert('⚠️ Erro: Esta parada não possui um motivo válido registrado.\n\nNão é possível finalizá-la sem um motivo.\nPor favor, edite a parada para adicionar o motivo antes de finalizar.');
+                showNotification('Parada sem motivo válido', 'error');
+                return;
+            }
+            
             const startDateStr = isActiveDowttimeRecord 
                 ? (downtimeData.startDate || '?') 
                 : (downtimeData.start_date || '?');
