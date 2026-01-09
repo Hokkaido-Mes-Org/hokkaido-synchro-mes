@@ -239,24 +239,11 @@ class AuthSystem {
         // Controlar visibilidade do link externo do Dashboard TV (id nav-dashboard-tv)
         try {
             const tvLink = document.getElementById('nav-dashboard-tv');
-            // Lista de usuários autorizados a ver o Dashboard TV
-            const allowedDashboardUsers = [
-                'Leandro Camargo',
-                'Tiago Oliveira',
-                'Michelle Benjamin'
-            ];
-            const allowedDashboardEmails = [
-                'leandro@hokkaido.com.br',
-                'leandro.camargo@hokkaido.com',
-                'tiago.oliveira@hokkaido.com',
-                'tiago.oliveira@synchro.com',
-                'michelle.benjamin@hokkaido.com',
-                'michelle.benjamin@synchro.com'
-            ];
             
+            // Dashboard TV disponível para todos os gestores e suporte
             const canAccessDashboardTV = 
-                allowedDashboardUsers.includes(this.currentUser?.name) ||
-                allowedDashboardEmails.includes(this.currentUser?.email?.toLowerCase());
+                this.currentUser?.role === 'gestor' || 
+                this.currentUser?.role === 'suporte';
             
             if (tvLink) {
                 if (canAccessDashboardTV) {
