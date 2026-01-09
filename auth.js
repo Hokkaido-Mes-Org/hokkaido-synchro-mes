@@ -158,17 +158,17 @@ class AuthSystem {
             }
         }
 
-        // ⚙️ ACESSO EXCLUSIVO: Aba Histórico do Sistema apenas para Leandro e Michelle
+        // ⚙️ ACESSO EXCLUSIVO: Aba Histórico do Sistema apenas para Leandro, Michelle Benjamin e Tiago Oliveira
         if (tabName === 'historico-sistema') {
-            const allowedHistorico = ['Leandro Camargo', 'Michelle Benjamin'];
+            const allowedHistorico = ['Leandro Camargo', 'Michelle Benjamin', 'Tiago Oliveira'];
             if (!allowedHistorico.includes(this.currentUser.name)) {
                 return false;
             }
         }
 
-        // ⚙️ ACESSO EXCLUSIVO: Aba Admin Dados apenas para Leandro e Michelle
+        // ⚙️ ACESSO EXCLUSIVO: Aba Admin Dados apenas para Leandro, Michelle Benjamin e Tiago Oliveira
         if (tabName === 'admin-dados') {
-            const allowedAdminDados = ['Leandro Camargo', 'Michelle Benjamin'];
+            const allowedAdminDados = ['Leandro Camargo', 'Michelle Benjamin', 'Tiago Oliveira'];
             if (!allowedAdminDados.includes(this.currentUser.name)) {
                 return false;
             }
