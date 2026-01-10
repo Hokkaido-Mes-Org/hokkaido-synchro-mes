@@ -49,16 +49,24 @@ document.addEventListener('DOMContentLoaded', async function() {
                 btnNewProduct.style.display = 'none';
             }
             
-            // Mostrar/ocultar aba PMP apenas para Leandro Camargo
+            // Mostrar/ocultar aba PMP para Leandro Camargo e Manaus Silva
             const pmpNavBtn = document.querySelector('[data-page="pmp"]');
-            const isLeandroForPMP = user && (
-                user.name === 'Leandro Camargo' || user.username === 'leandro.camargo' ||
-                user.email === 'leandro@hokkaido.com.br'
-            );
+            const allowedPMPUsers = ['leandro camargo', 'manaus silva'];
+            const userNameLower = (user?.name || '').toLowerCase().trim();
+            const isAllowedForPMP = user && allowedPMPUsers.includes(userNameLower);
+            
+            // DEBUG: Log detalhado
+            console.log('[PMP-DEBUG] Verificando acesso PMP:', {
+                userName: user?.name,
+                userNameLower: userNameLower,
+                allowedPMPUsers: allowedPMPUsers,
+                isAllowedForPMP: isAllowedForPMP
+            });
+            
             if (pmpNavBtn) {
-                if (isLeandroForPMP) {
+                if (isAllowedForPMP) {
                     pmpNavBtn.style.display = '';  // Mostrar
-                    console.log('✅ Aba PMP visível para Leandro Camargo');
+                    console.log('✅ Aba PMP visível para ' + user.name);
                 } else {
                     pmpNavBtn.style.display = 'none';  // Ocultar
                     console.log('🔒 Aba PMP oculta para usuário: ' + (user?.name || 'desconhecido'));

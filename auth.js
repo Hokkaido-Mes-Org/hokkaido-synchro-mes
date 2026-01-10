@@ -174,12 +174,14 @@ class AuthSystem {
             }
         }
 
-        // ⚙️ ACESSO EXCLUSIVO: Aba PMP apenas para Leandro Camargo
+        // ⚙️ ACESSO EXCLUSIVO: Aba PMP para Leandro Camargo e Manaus Silva
         if (tabName === 'pmp') {
-            if (this.currentUser.name !== 'Leandro Camargo') {
+            const allowedPMP = ['leandro camargo', 'manaus silva'];
+            const userNameLower = (this.currentUser.name || '').toLowerCase().trim();
+            if (!allowedPMP.includes(userNameLower)) {
                 return false;
             }
-            // Se é Leandro Camargo, permite acesso direto
+            // Se é um usuário permitido, permite acesso direto
             return true;
         }
         
