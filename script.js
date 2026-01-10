@@ -48,8 +48,26 @@ document.addEventListener('DOMContentLoaded', async function() {
             if (btnNewProduct && !isGestorOrAdmin) {
                 btnNewProduct.style.display = 'none';
             }
+            
+            // Mostrar/ocultar aba PMP apenas para Leandro Camargo
+            const pmpNavBtn = document.querySelector('[data-page="pmp"]');
+            const isLeandroForPMP = user && (
+                user.name === 'Leandro Camargo' || user.username === 'leandro.camargo' ||
+                user.email === 'leandro@hokkaido.com.br'
+            );
+            if (pmpNavBtn) {
+                if (isLeandroForPMP) {
+                    pmpNavBtn.style.display = '';  // Mostrar
+                    console.log('✅ Aba PMP visível para Leandro Camargo');
+                } else {
+                    pmpNavBtn.style.display = 'none';  // Ocultar
+                    console.log('🔒 Aba PMP oculta para usuário: ' + (user?.name || 'desconhecido'));
+                }
+            } else {
+                console.warn('⚠️ Botão da aba PMP não encontrado no DOM');
+            }
         } catch (e) {
-            console.warn('Não foi possível aplicar restrição da subaba Analytics IA:', e);
+            console.warn('Erro ao aplicar restrição da aba PMP:', e);
         }
     }, 300);
     

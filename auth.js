@@ -173,6 +173,15 @@ class AuthSystem {
                 return false;
             }
         }
+
+        // ⚙️ ACESSO EXCLUSIVO: Aba PMP apenas para Leandro Camargo
+        if (tabName === 'pmp') {
+            if (this.currentUser.name !== 'Leandro Camargo') {
+                return false;
+            }
+            // Se é Leandro Camargo, permite acesso direto
+            return true;
+        }
         
         const tabPermissions = {
             planejamento: ['planejamento', 'lancamento'], // Operadores também acessam
@@ -186,7 +195,8 @@ class AuthSystem {
             'paradas-longas': ['lancamento', 'planejamento', 'analise'],
             'acompanhamento': ['lancamento', 'analise'],
             'historico-sistema': ['analise', 'planejamento'], // Gestores e admins
-            'admin-dados': ['planejamento', 'analise'] // Gestores e admins (verificado acima)
+            'admin-dados': ['planejamento', 'analise'], // Gestores e admins (verificado acima)
+            'pmp': [] // Controlado por restrição de usuário exclusiva acima
         };
         
         const requiredPermissions = tabPermissions[tabName];

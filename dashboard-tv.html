@@ -3166,9 +3166,32 @@
                 
                 console.log('[Dashboard TV] Paradas LIVE (active_downtimes):', liveActiveDowntimes.length, liveActiveDowntimes.map(d => d.machine));
                 
-                // Adicionar paradas longas e paradas live ao cache
-                cachedDowntimes = [...cachedDowntimes, ...extendedDowntimes, ...liveActiveDowntimes];
-                console.log('[Dashboard TV] Total de paradas (+ extended + live):', cachedDowntimes.length);
+                // Adicionar paradas longas e paradas live ao cache COM DEDUPLICAÇÃO
+                // Prioridade: liveActiveDowntimes > extendedDowntimes > cachedDowntimes (downtime_entries)
+                const allDowntimes = [...cachedDowntimes, ...extendedDowntimes, ...liveActiveDowntimes];
+                
+                // Deduplicar por máquina - manter apenas a parada mais recente/prioritária por máquina
+                const machineDowntimeMap = new Map();
+                allDowntimes.forEach(dt => {
+                    const machineId = (dt.machine || dt.machine_id || dt.maquina || '').toUpperCase();
+                    if (!machineId) return;
+                    
+                    const existing = machineDowntimeMap.get(machineId);
+                    
+                    // Prioridade: active_live > extended > normal
+                    const getPriority = (d) => {
+                        if (d.source === 'active_live') return 3;
+                        if (d.source === 'extended') return 2;
+                        return 1;
+                    };
+                    
+                    if (!existing || getPriority(dt) > getPriority(existing)) {
+                        machineDowntimeMap.set(machineId, dt);
+                    }
+                });
+                
+                cachedDowntimes = Array.from(machineDowntimeMap.values());
+                console.log('[Dashboard TV] Total de paradas DEDUPLICADAS:', cachedDowntimes.length);
                 
                 // Debug: amostras
                 if (cachedProductions.length > 0) {
@@ -4421,17 +4444,24 @@
             const tagEl = document.getElementById('stoppedMachinesTag');
             if (!listEl) return;
             
-            // Buscar paradas ativas do cache (extended_downtime_logs com status = 'active')
+            // Buscar paradas ativas do cache (já deduplicado)
             const activeDowntimes = cachedDowntimes.filter(dt => {
-                // Priorizar extended downtimes ativos
+                // Paradas LIVE (active_downtimes) - sempre ativas
+                if (dt.source === 'active_live' && dt.isActive === true) return true;
+                
+                // Extended downtimes ativos
                 if (dt.source === 'extended' && dt.status === 'active') return true;
                 
-                // Ou paradas do dia que não foram finalizadas
-                const reason = (dt.reason || dt.motivo || '').toLowerCase();
-                const isLongStop = reason.includes('parada') || reason.includes('manutencao') || 
-                                   reason.includes('manutenção') || reason.includes('ferramentaria') ||
-                                   reason.includes('setup') || reason.includes('comercial');
-                return isLongStop && !dt.endTime;
+                // Paradas do dia que não foram finalizadas (sem endTime)
+                if (!dt.endTime || dt.endTime === '' || dt.endTime === '--:--') {
+                    const reason = (dt.reason || dt.motivo || '').toLowerCase();
+                    const isLongStop = reason.includes('parada') || reason.includes('manutencao') || 
+                                       reason.includes('manutenção') || reason.includes('ferramentaria') ||
+                                       reason.includes('setup') || reason.includes('comercial');
+                    return isLongStop;
+                }
+                
+                return false;
             });
             
             if (tagEl) {
