@@ -5380,8 +5380,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         // Gerar gráficos específicos de borra
         await generateBorraByMPChart(borraData);
-        await generateBorraByReasonChart(borraData);
         await generateBorraByMachineChart(borraData);
+        
+        // Preencher tabela de apontamentos de borra
+        await populateBorraApontamentosTable(borraData);
     }
 
     // Função para carregar análise de paradas
@@ -9330,6 +9332,176 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         });
     }
 
+    // Variáveis globais para paginação da tabela de borra
+    let borraTableData = [];
+    let borraTableCurrentPage = 1;
+    const borraTablePageSize = 10;
+
+    // Função para preencher a tabela de apontamentos de borra
+    async function populateBorraApontamentosTable(borraData) {
+        const tableBody = document.getElementById('borra-apontamentos-table');
+        if (!tableBody) return;
+
+        // Preparar dados da tabela
+        borraTableData = borraData.map(item => {
+            const raw = item.raw || {};
+            
+            // Extrair data/hora
+            let dateTime = '---';
+            if (raw.date || raw.datetime) {
+                const dateStr = raw.date || raw.datetime;
+                if (dateStr?.toDate) {
+                    const d = dateStr.toDate();
+                    dateTime = `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+                } else if (typeof dateStr === 'string') {
+                    dateTime = dateStr;
+                }
+            } else if (raw.timestamp?.toDate) {
+                const d = raw.timestamp.toDate();
+                dateTime = `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+            }
+
+            // Extrair motivo (removendo prefixo BORRA)
+            let reason = item.reason || raw.perdas || raw.motivo || 'Não especificado';
+            reason = reason.replace(/^BORRA\s*-\s*/i, '');
+
+            return {
+                dateTime: dateTime,
+                machine: item.machine || raw.machine_id || raw.maquina || '---',
+                reason: reason,
+                material: item.material || raw.mp || raw.materia_prima || '---',
+                quantity: raw.refugo_kg || raw.quantityKg || item.scrapKg || item.quantity || 0,
+                operator: raw.operator || raw.operador || raw.user || '---',
+                shift: raw.turno || raw.shift || '---'
+            };
+        }).sort((a, b) => {
+            // Ordenar por data mais recente primeiro
+            if (a.dateTime === '---') return 1;
+            if (b.dateTime === '---') return -1;
+            return b.dateTime.localeCompare(a.dateTime);
+        });
+
+        borraTableCurrentPage = 1;
+        renderBorraTable();
+    }
+
+    // Função para renderizar a tabela de borra
+    function renderBorraTable() {
+        const tableBody = document.getElementById('borra-apontamentos-table');
+        if (!tableBody) return;
+
+        const totalItems = borraTableData.length;
+        const totalPages = Math.ceil(totalItems / borraTablePageSize);
+        const startIndex = (borraTableCurrentPage - 1) * borraTablePageSize;
+        const endIndex = Math.min(startIndex + borraTablePageSize, totalItems);
+        const pageData = borraTableData.slice(startIndex, endIndex);
+
+        if (totalItems === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="4" class="px-4 py-8 text-center text-gray-400">
+                        <i data-lucide="inbox" class="w-8 h-8 mx-auto mb-2"></i>
+                        <p>Nenhum apontamento de borra encontrado no período</p>
+                    </td>
+                </tr>
+            `;
+            lucide.createIcons();
+        } else {
+            tableBody.innerHTML = pageData.map((row, idx) => `
+                <tr class="hover:bg-amber-50/50 transition ${idx % 2 === 0 ? 'bg-white' : 'bg-amber-50/30'}">
+                    <td class="px-4 py-3 text-gray-700 text-xs">${row.dateTime}</td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">${row.machine}</span>
+                    </td>
+                    <td class="px-4 py-3 text-center">
+                        <span class="px-2 py-1 bg-amber-100 text-amber-700 rounded text-xs font-semibold">${parseFloat(row.quantity).toFixed(3)}</span>
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 ${getTurnoColor(row.shift)} rounded text-xs font-medium">${row.shift}</span>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Atualizar informações de paginação
+        const showingEl = document.getElementById('borra-table-showing');
+        const totalEl = document.getElementById('borra-table-total');
+        const pageEl = document.getElementById('borra-table-page');
+        const prevBtn = document.getElementById('borra-table-prev');
+        const nextBtn = document.getElementById('borra-table-next');
+
+        if (showingEl) showingEl.textContent = totalItems > 0 ? `${startIndex + 1}-${endIndex}` : '0';
+        if (totalEl) totalEl.textContent = totalItems;
+        if (pageEl) pageEl.textContent = `Página ${borraTableCurrentPage} de ${totalPages || 1}`;
+        if (prevBtn) prevBtn.disabled = borraTableCurrentPage <= 1;
+        if (nextBtn) nextBtn.disabled = borraTableCurrentPage >= totalPages;
+
+        // Reinicializar ícones Lucide
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+
+    // Função auxiliar para cor do turno
+    function getTurnoColor(turno) {
+        const turnoLower = (turno || '').toString().toLowerCase();
+        if (turnoLower.includes('a') || turnoLower.includes('1') || turnoLower.includes('manhã') || turnoLower.includes('manha')) {
+            return 'bg-green-100 text-green-700';
+        } else if (turnoLower.includes('b') || turnoLower.includes('2') || turnoLower.includes('tarde')) {
+            return 'bg-blue-100 text-blue-700';
+        } else if (turnoLower.includes('c') || turnoLower.includes('3') || turnoLower.includes('noite')) {
+            return 'bg-purple-100 text-purple-700';
+        }
+        return 'bg-gray-100 text-gray-700';
+    }
+
+    // Funções de navegação da tabela
+    function borraTableNextPage() {
+        const totalPages = Math.ceil(borraTableData.length / borraTablePageSize);
+        if (borraTableCurrentPage < totalPages) {
+            borraTableCurrentPage++;
+            renderBorraTable();
+        }
+    }
+
+    function borraTablePrevPage() {
+        if (borraTableCurrentPage > 1) {
+            borraTableCurrentPage--;
+            renderBorraTable();
+        }
+    }
+
+    // Função para exportar tabela de borra
+    function exportBorraTable() {
+        if (borraTableData.length === 0) {
+            showNotification('Não há dados para exportar', 'warning');
+            return;
+        }
+
+        const headers = ['Data/Hora', 'Máquina', 'Quantidade (kg)', 'Turno'];
+        const csvContent = [
+            headers.join(';'),
+            ...borraTableData.map(row => [
+                row.dateTime,
+                row.machine,
+                parseFloat(row.quantity).toFixed(3).replace('.', ','),
+                row.shift
+            ].join(';'))
+        ].join('\n');
+
+        const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `apontamentos_borra_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        showNotification('Exportação concluída!', 'success');
+    }
+
     // Função para calcular OEE detalhado
     async function calculateDetailedOEE(startDate, endDate, machine, shift) {
         try {
@@ -9906,6 +10078,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
     // Compatibilidade: garantir que outros módulos (Advanced KPIs, SPC, etc.) encontrem a versão completa
     window.getFilteredData = getFilteredData;
+    
+    // Expor funções da tabela de borra
+    window.borraTableNextPage = borraTableNextPage;
+    window.borraTablePrevPage = borraTablePrevPage;
+    window.exportBorraTable = exportBorraTable;
         
     // Final da inicialização  
     init();
@@ -22045,11 +22222,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const machineSelect = document.getElementById('pmp-borra-machine');
         const quantityInput = document.getElementById('pmp-borra-quantity');
         const obsInput = document.getElementById('pmp-borra-obs');
+        const shiftSelect = document.getElementById('pmp-borra-shift');
         const statusDiv = document.getElementById('pmp-borra-status');
         
         if (operadorInput) operadorInput.value = '';
         if (quantityInput) quantityInput.value = '';
         if (obsInput) obsInput.value = '';
+        if (shiftSelect) shiftSelect.value = '';
         if (statusDiv) statusDiv.textContent = '';
         
         // Esconder info do operador
@@ -22121,6 +22300,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             // Coletar dados do form
             const date = document.getElementById('pmp-borra-date')?.value;
             const hour = document.getElementById('pmp-borra-hour')?.value;
+            const shift = document.getElementById('pmp-borra-shift')?.value;
             const operadorCod = parseInt(document.getElementById('pmp-borra-operador')?.value, 10);
             const machine = document.getElementById('pmp-borra-machine')?.value;
             const quantity = parseFloat(document.getElementById('pmp-borra-quantity')?.value);
@@ -22129,6 +22309,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             // Validações
             if (!date || !hour) {
                 statusDiv.textContent = '⚠️ Informe data e hora';
+                statusDiv.className = 'text-sm font-semibold h-5 text-center mt-2 text-red-600';
+                return;
+            }
+            
+            if (!shift) {
+                statusDiv.textContent = '⚠️ Selecione um turno';
                 statusDiv.className = 'text-sm font-semibold h-5 text-center mt-2 text-red-600';
                 return;
             }
@@ -22184,6 +22370,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 type: 'pmp_borra',
                 date: date,
                 hour: hour,
+                shift: shift,
                 timestamp: firebase.firestore.FieldValue.serverTimestamp(),
                 timestampLocal: new Date().toISOString(),
                 operadorCod: operadorCod,

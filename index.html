@@ -2650,17 +2650,7 @@
                                         </div>
                                         <h3 class="font-semibold text-amber-900 text-base">Análise Detalhada de Borras</h3>
                                     </div>
-                                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                                        <!-- Borra por Motivo -->
-                                        <div class="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-amber-100 hover:border-amber-300 transition">
-                                            <h4 class="text-xs font-semibold text-amber-700 mb-3 flex items-center gap-2">
-                                                <i data-lucide="bar-chart-2" class="w-3 h-3"></i>
-                                                Borra por Motivo
-                                            </h4>
-                                            <div class="relative" style="height: 220px;">
-                                                <canvas id="borra-by-reason-chart" class="w-full h-full"></canvas>
-                                            </div>
-                                        </div>
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                         <!-- Borra por Máquina -->
                                         <div class="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-amber-100 hover:border-amber-300 transition">
                                             <h4 class="text-xs font-semibold text-amber-700 mb-3 flex items-center gap-2">
@@ -2685,6 +2675,61 @@
                                                 <p class="text-xs text-amber-700 font-medium">MP com Mais Borra</p>
                                                 <p id="top-borra-mp" class="text-sm font-bold text-amber-900 truncate">---</p>
                                             </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Tabela Detalhada de Apontamentos de Borra -->
+                                <div class="bg-white rounded-2xl shadow-sm border border-amber-200 p-5 hover:shadow-md transition mt-6">
+                                    <div class="flex items-center justify-between mb-5">
+                                        <div class="flex items-center gap-3">
+                                            <div class="p-2 bg-amber-100 rounded-lg">
+                                                <i data-lucide="clipboard-list" class="w-5 h-5 text-amber-700"></i>
+                                            </div>
+                                            <div>
+                                                <h3 class="font-semibold text-amber-900 text-base">Apontamentos de Borra</h3>
+                                                <p class="text-xs text-amber-600">Registro detalhado de todas as borras apontadas</p>
+                                            </div>
+                                        </div>
+                                        <button onclick="exportBorraTable()" class="flex items-center gap-2 px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-xs font-medium transition">
+                                            <i data-lucide="download" class="w-3 h-3"></i>
+                                            Exportar
+                                        </button>
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-sm">
+                                            <thead>
+                                                <tr class="bg-amber-50 text-amber-800">
+                                                    <th class="px-4 py-3 text-left font-semibold rounded-l-lg">Data/Hora</th>
+                                                    <th class="px-4 py-3 text-left font-semibold">Máquina</th>
+                                                    <th class="px-4 py-3 text-center font-semibold">Quantidade (kg)</th>
+                                                    <th class="px-4 py-3 text-left font-semibold rounded-r-lg">Turno</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="borra-apontamentos-table" class="divide-y divide-amber-100">
+                                                <!-- Dados serão preenchidos via JavaScript -->
+                                                <tr>
+                                                    <td colspan="4" class="px-4 py-8 text-center text-gray-400">
+                                                        <i data-lucide="loader" class="w-6 h-6 mx-auto mb-2 animate-spin"></i>
+                                                        Carregando apontamentos...
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <!-- Paginação -->
+                                    <div class="flex items-center justify-between mt-4 pt-4 border-t border-amber-100">
+                                        <p class="text-xs text-amber-600">
+                                            Mostrando <span id="borra-table-showing">0</span> de <span id="borra-table-total">0</span> registros
+                                        </p>
+                                        <div class="flex items-center gap-2">
+                                            <button id="borra-table-prev" onclick="borraTablePrevPage()" class="px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded text-xs font-medium transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                                <i data-lucide="chevron-left" class="w-3 h-3"></i>
+                                            </button>
+                                            <span id="borra-table-page" class="text-xs text-amber-700 font-medium">Página 1</span>
+                                            <button id="borra-table-next" onclick="borraTableNextPage()" class="px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded text-xs font-medium transition disabled:opacity-50 disabled:cursor-not-allowed">
+                                                <i data-lucide="chevron-right" class="w-3 h-3"></i>
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -4258,6 +4303,17 @@
                         <label for="pmp-borra-hour" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Hora <span class="text-red-500">*</span></label>
                         <input type="time" id="pmp-borra-hour" name="hour" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all" required>
                     </div>
+                </div>
+
+                <!-- Turno -->
+                <div>
+                    <label for="pmp-borra-shift" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Turno <span class="text-red-500">*</span></label>
+                    <select id="pmp-borra-shift" name="shift" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all" required>
+                        <option value="">Selecione um turno...</option>
+                        <option value="1º Turno">1º Turno (Manhã)</option>
+                        <option value="2º Turno">2º Turno (Tarde)</option>
+                        <option value="3º Turno">3º Turno (Noite)</option>
+                    </select>
                 </div>
 
                 <!-- Código do Operador -->
