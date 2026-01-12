@@ -378,8 +378,8 @@ var productDatabase = [
     { "cod": 5035, "client": "ÓRICA", "name": "CONECTOR,PLAST,MS-CONNECTOR,AMARILLO - (CONECT. AMAR. EXP.) - 10100166", "cavities": 4, "cycle": 30, "weight": 0.25, "pieces_per_hour_goal": 480, "mp": "" },
     { "cod": 5082, "client": "ÓRICA", "name": "\"SHELL", "cavities": 4, "cycle": 30, "weight": 0.25, "pieces_per_hour_goal": 480, "mp": "" },
     // --- PARKER ---
-    { "cod": 255, "client": "PARKER", "name": "TAMPA SUPERIOR PARA FILTRO - 285058449", "cavities": 4, "cycle": 34.38, "weight": 24.22, "pieces_per_hour_goal": 419, "mp": "" },
-    { "cod": 256, "client": "PARKER", "name": "TAMPA INFERIOR PARA FILTRO - 285058439", "cavities": 4, "cycle": 34.38, "weight": .33, "pieces_per_hour_goal": 419, "mp": "" },
+    { "cod": 255, "client": "PARKER", "name": "TAMPA SUPERIOR PARA FILTRO - 285058449", "cavities": 4, "cycle": 34.38, "weight": 0.85, "pieces_per_hour_goal": 419, "mp": "" },
+    { "cod": 256, "client": "PARKER", "name": "TAMPA INFERIOR PARA FILTRO - 285058439", "cavities": 4, "cycle": 34.38, "weight": 0.85, "pieces_per_hour_goal": 419, "mp": "" },
     { "cod": 257, "client": "PARKER", "name": "TAMPA PLASTICA SEM FURO", "cavities": 4, "cycle": 21, "weight": 0.45, "pieces_per_hour_goal": 686, "mp": "" },
     { "cod": 258, "client": "PARKER", "name": "TAMPA PLASTICA COM FURO", "cavities": 4, "cycle": 21, "weight": 0.45, "pieces_per_hour_goal": 686, "mp": "" },
     { "cod": 259, "client": "PARKER", "name": "BOCAL PARA FILTRO DE OLEO", "cavities": 4, "cycle": 23, "weight": 0.85, "pieces_per_hour_goal": 626, "mp": "" },
@@ -706,7 +706,7 @@ var tareBoxesDatabase = [
     { "machine": "H-30", "weight": 2.965 },
     { "machine": "H-31", "weight": 3.110 },
     { "machine": "H-32", "weight": 2.910 }
-};
+];
 
 // Motivos de perdas (agrupados)
 var groupedLossReasons = {
