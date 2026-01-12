@@ -5376,11 +5376,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         await generateLossesParetoChart(allLossesData);
         await generateLossesByMachineChart(allLossesData);
         await generateLossesByMaterialChart(allLossesData);
-        await generateLossesTrendChart(allLossesData, startDate, endDate);
         
         // Gerar gráficos específicos de borra
-        await generateBorraByMPChart(borraData);
         await generateBorraByMachineChart(borraData);
+        await generateBorraMonthlyChart(borraData);
         
         // Preencher tabela de apontamentos de borra
         await populateBorraApontamentosTable(borraData);
@@ -8749,84 +8748,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         });
     }
 
-    // Gerar gráfico de tendência de perdas
-    async function generateLossesTrendChart(lossesData, startDate, endDate) {
-        const ctx = document.getElementById('losses-trend-chart');
-        if (!ctx) return;
-
-        destroyChart('losses-trend-chart');
-
-        if (lossesData.length === 0) {
-            showNoDataMessage('losses-trend-chart');
-            return;
-        }
-        
-        clearNoDataMessage('losses-trend-chart');
-
-        // Agrupar perdas por data
-        const lossesByDate = {};
-        lossesData.forEach(item => {
-            const date = item.date || '';
-            lossesByDate[date] = (lossesByDate[date] || 0) + (item.quantity || 0);
-        });
-
-        // Ordenar datas
-        const sortedDates = Object.keys(lossesByDate).sort();
-        const labels = sortedDates.map(date => {
-            const [year, month, day] = date.split('-');
-            return `${day}/${month}`;
-        });
-        const data = sortedDates.map(date => lossesByDate[date]);
-
-        const isMobile = window.innerWidth < 768;
-
-        new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Perdas (kg)',
-                    data: data,
-                    borderColor: '#EF4444',
-                    backgroundColor: 'rgba(239, 68, 68, 0.2)',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: isMobile ? 2 : 4,
-                    pointHoverRadius: isMobile ? 4 : 6
-                }]
-            },
-            options: {
-                responsive: true,
-
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            font: {
-                                size: isMobile ? 10 : 12
-                            }
-                        }
-                    },
-                    x: {
-                        ticks: {
-                            maxRotation: isMobile ? 45 : 0,
-                            minRotation: isMobile ? 45 : 0,
-                            font: {
-                                size: isMobile ? 9 : 11
-                            }
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: false
-                    }
-                }
-            }
-        });
-    }
-
     // Variável para armazenar dados de downtime e modo atual do gráfico
     let cachedDowntimeDataForChart = [];
     let downtimeChartMode = 'category'; // 'category' ou 'reason'
@@ -9134,65 +9055,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
     }
 
-    // Gerar gráfico de borra por MP
-    async function generateBorraByMPChart(borraData) {
-        const ctx = document.getElementById('borra-by-mp-chart');
-        if (!ctx) return;
-
-        destroyChart('borra-by-mp-chart');
-
-        if (borraData.length === 0) {
-            showNoDataMessage('borra-by-mp-chart');
-            return;
-        }
-        
-        clearNoDataMessage('borra-by-mp-chart');
-
-        const mpCounts = {};
-        borraData.forEach(item => {
-            const mpType = item.mp_type || item.raw?.mp_type || 'Não especificado';
-            const weight = item.raw?.refugo_kg || item.raw?.quantityKg || item.scrapKg || item.quantity || 0;
-            mpCounts[mpType] = (mpCounts[mpType] || 0) + weight;
-        });
-
-        const labels = Object.keys(mpCounts);
-        const data = Object.values(mpCounts);
-        const colors = ['#FCD34D', '#F59E0B', '#D97706', '#B45309', '#92400E'];
-
-        new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels: labels,
-                datasets: [{
-                    data: data,
-                    backgroundColor: colors.slice(0, labels.length),
-                    borderWidth: 2,
-                    borderColor: '#fff'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            font: { size: window.innerWidth < 768 ? 10 : 12 },
-                            padding: 15
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return `${context.label}: ${context.parsed.toFixed(1)} kg`;
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    }
-
     // Gerar gráfico de borra por motivo
     async function generateBorraByReasonChart(borraData) {
         const ctx = document.getElementById('borra-by-reason-chart');
@@ -9324,6 +9186,162 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                         callbacks: {
                             label: function(context) {
                                 return `${context.parsed.y.toFixed(1)} kg`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Gerar gráfico de borra mensal com acumulado
+    async function generateBorraMonthlyChart(borraData) {
+        const ctx = document.getElementById('borra-monthly-chart');
+        if (!ctx) return;
+
+        destroyChart('borra-monthly-chart');
+
+        if (borraData.length === 0) {
+            showNoDataMessage('borra-monthly-chart');
+            return;
+        }
+        
+        clearNoDataMessage('borra-monthly-chart');
+
+        // Agrupar por mês
+        const monthlyData = {};
+        const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+        
+        borraData.forEach(item => {
+            const raw = item.raw || {};
+            let date = null;
+            
+            // Extrair data do registro
+            if (raw.date?.toDate) {
+                date = raw.date.toDate();
+            } else if (raw.datetime?.toDate) {
+                date = raw.datetime.toDate();
+            } else if (raw.timestamp?.toDate) {
+                date = raw.timestamp.toDate();
+            } else if (typeof raw.date === 'string') {
+                date = new Date(raw.date);
+            } else if (typeof raw.datetime === 'string') {
+                date = new Date(raw.datetime);
+            }
+            
+            if (!date || isNaN(date.getTime())) {
+                date = new Date(); // Fallback para data atual
+            }
+            
+            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            const weight = raw.refugo_kg || raw.quantityKg || item.scrapKg || item.quantity || 0;
+            
+            if (!monthlyData[monthKey]) {
+                monthlyData[monthKey] = {
+                    month: monthNames[date.getMonth()],
+                    year: date.getFullYear(),
+                    total: 0
+                };
+            }
+            monthlyData[monthKey].total += weight;
+        });
+
+        // Ordenar por data e pegar últimos 6 meses
+        const sortedMonths = Object.keys(monthlyData).sort().slice(-6);
+        const labels = sortedMonths.map(key => `${monthlyData[key].month}/${String(monthlyData[key].year).slice(-2)}`);
+        const monthlyTotals = sortedMonths.map(key => monthlyData[key].total);
+        
+        // Calcular acumulado
+        const accumulated = [];
+        let runningTotal = 0;
+        monthlyTotals.forEach(val => {
+            runningTotal += val;
+            accumulated.push(runningTotal);
+        });
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Mensal (kg)',
+                        data: monthlyTotals,
+                        backgroundColor: 'rgba(251, 191, 36, 0.8)',
+                        borderColor: '#F59E0B',
+                        borderWidth: 1,
+                        order: 2
+                    },
+                    {
+                        label: 'Acumulado (kg)',
+                        data: accumulated,
+                        type: 'line',
+                        borderColor: '#DC2626',
+                        backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                        borderWidth: 2,
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#DC2626',
+                        yAxisID: 'y1',
+                        order: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: 'Mensal (kg)',
+                            font: { size: 10 }
+                        },
+                        ticks: {
+                            font: { size: window.innerWidth < 768 ? 9 : 10 }
+                        }
+                    },
+                    y1: {
+                        beginAtZero: true,
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: 'Acumulado (kg)',
+                            font: { size: 10 }
+                        },
+                        grid: {
+                            drawOnChartArea: false
+                        },
+                        ticks: {
+                            font: { size: window.innerWidth < 768 ? 9 : 10 }
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            font: { size: window.innerWidth < 768 ? 9 : 10 }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            boxWidth: 12,
+                            font: { size: 10 }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.dataset.label}: ${context.parsed.y.toFixed(1)} kg`;
                             }
                         }
                     }
