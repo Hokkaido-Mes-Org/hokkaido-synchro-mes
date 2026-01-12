@@ -49,9 +49,9 @@ document.addEventListener('DOMContentLoaded', async function() {
                 btnNewProduct.style.display = 'none';
             }
             
-            // Mostrar/ocultar aba PMP para Leandro Camargo e Manaus Silva
+            // Mostrar/ocultar aba PMP para usuários autorizados
             const pmpNavBtn = document.querySelector('[data-page="pmp"]');
-            const allowedPMPUsers = ['leandro camargo', 'manaus silva'];
+            const allowedPMPUsers = ['leandro camargo', 'manaus silva', 'daniel rocha'];
             const userNameLower = (user?.name || '').toLowerCase().trim();
             const isAllowedForPMP = user && allowedPMPUsers.includes(userNameLower);
             
@@ -73,6 +73,30 @@ document.addEventListener('DOMContentLoaded', async function() {
                 }
             } else {
                 console.warn('⚠️ Botão da aba PMP não encontrado no DOM');
+            }
+            
+            // Mostrar/ocultar aba Dashboard TV para usuários autorizados
+            const dashboardTVNavBtn = document.querySelector('[data-page="dashboard-tv"]');
+            const allowedDashboardTVUsers = ['daniel rocha'];
+            const isAllowedForDashboardTV = user && allowedDashboardTVUsers.includes(userNameLower);
+            
+            console.log('[DASHBOARD-TV-DEBUG] Verificando acesso Dashboard TV:', {
+                userName: user?.name,
+                userNameLower: userNameLower,
+                allowedDashboardTVUsers: allowedDashboardTVUsers,
+                isAllowedForDashboardTV: isAllowedForDashboardTV
+            });
+            
+            if (dashboardTVNavBtn) {
+                if (isAllowedForDashboardTV) {
+                    dashboardTVNavBtn.style.display = '';  // Mostrar
+                    console.log('✅ Aba Dashboard TV visível para ' + user.name);
+                } else {
+                    dashboardTVNavBtn.style.display = 'none';  // Ocultar
+                    console.log('🔒 Aba Dashboard TV oculta para usuário: ' + (user?.name || 'desconhecido'));
+                }
+            } else {
+                console.warn('⚠️ Botão da aba Dashboard TV não encontrado no DOM');
             }
         } catch (e) {
             console.warn('Erro ao aplicar restrição da aba PMP:', e);
