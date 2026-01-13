@@ -340,13 +340,161 @@ document.addEventListener('DOMContentLoaded', function() {
             for (const name of this.listeners.keys()) {
                 this.unsubscribe(name);
             }
+        },
+        
+        // AÇÃO 3: Visibility API - pausar/retomar listeners
+        pauseAll() {
+            if (this._paused) return;
+            this._paused = true;
+            this._pausedListeners = new Map(this.listeners);
+            for (const [name, unsubscribe] of this.listeners) {
+                try {
+                    unsubscribe();
+                    console.log(`⏸️ Listener "${name}" pausado`);
+                } catch (e) {
+                    console.warn(`Erro ao pausar listener ${name}:`, e);
+                }
+            }
+            this.listeners.clear();
+        },
+        
+        resumeAll() {
+            if (!this._paused) return;
+            this._paused = false;
+            console.log('▶️ Retomando listeners...');
+            // Re-registrar listeners será feito ao recarregar a view atual
+            if (typeof window._currentListenerSetup === 'function') {
+                window._currentListenerSetup();
+            }
         }
     };
+    
+    // AÇÃO 3: Visibility API - pausar listeners quando aba não visível
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            console.log('👁️ Aba oculta - pausando listeners para economizar');
+            listenerManager.pauseAll();
+            // Pausar polling de downtimes ativos
+            if (window._activeDowntimesPolling) {
+                clearInterval(window._activeDowntimesPolling);
+                window._activeDowntimesPolling = null;
+            }
+        } else {
+            console.log('👁️ Aba visível - retomando listeners');
+            listenerManager.resumeAll();
+            // Retomar polling de downtimes ativos
+            if (typeof window._startActiveDowntimesPolling === 'function') {
+                window._startActiveDowntimesPolling();
+            }
+        }
+    });
     
     // Limpar listeners quando a página está se descarregando
     window.addEventListener('beforeunload', () => {
         listenerManager.unsubscribeAll();
+        if (window._activeDowntimesPolling) {
+            clearInterval(window._activeDowntimesPolling);
+        }
     });
+    
+    // AÇÃO 5: CacheManager para relatórios - evita consultas repetidas
+    const CacheManager = {
+        _cache: new Map(),
+        _ttl: 60000, // 60 segundos de TTL padrão
+        
+        // Gera chave única para o cache
+        _generateKey(collection, filters) {
+            return `${collection}:${JSON.stringify(filters)}`;
+        },
+        
+        // Verifica se cache é válido
+        isValid(key) {
+            const entry = this._cache.get(key);
+            if (!entry) return false;
+            return Date.now() - entry.timestamp < this._ttl;
+        },
+        
+        // Obtém dados do cache
+        get(key) {
+            const entry = this._cache.get(key);
+            if (!entry) return null;
+            if (Date.now() - entry.timestamp >= this._ttl) {
+                this._cache.delete(key);
+                return null;
+            }
+            console.log(`📦 Cache hit: ${key}`);
+            return entry.data;
+        },
+        
+        // Armazena dados no cache
+        set(key, data) {
+            this._cache.set(key, {
+                data: data,
+                timestamp: Date.now()
+            });
+            console.log(`💾 Cache set: ${key}`);
+        },
+        
+        // Consulta com cache automático
+        async fetchWithCache(collection, filters = {}, ttl = null) {
+            const key = this._generateKey(collection, filters);
+            
+            // Verificar cache
+            const cached = this.get(key);
+            if (cached !== null) {
+                return cached;
+            }
+            
+            // Buscar do Firestore
+            let query = db.collection(collection);
+            
+            // Aplicar filtros
+            if (filters.where) {
+                for (const [field, op, value] of filters.where) {
+                    query = query.where(field, op, value);
+                }
+            }
+            if (filters.orderBy) {
+                query = query.orderBy(filters.orderBy.field, filters.orderBy.direction || 'asc');
+            }
+            if (filters.limit) {
+                query = query.limit(filters.limit);
+            }
+            
+            const snapshot = await query.get();
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            // Armazenar no cache
+            const effectiveTtl = ttl || this._ttl;
+            this._cache.set(key, {
+                data: data,
+                timestamp: Date.now(),
+                ttl: effectiveTtl
+            });
+            
+            console.log(`🔥 Firestore fetch: ${collection} (${data.length} docs)`);
+            return data;
+        },
+        
+        // Invalida cache de uma collection
+        invalidate(collection) {
+            for (const key of this._cache.keys()) {
+                if (key.startsWith(`${collection}:`)) {
+                    this._cache.delete(key);
+                    console.log(`🗑️ Cache invalidado: ${key}`);
+                }
+            }
+        },
+        
+        // Limpa todo o cache
+        clear() {
+            this._cache.clear();
+            console.log('🗑️ Cache completamente limpo');
+        }
+    };
+    
+    // Expor CacheManager globalmente
+    window.CacheManager = CacheManager;
     
     try {
         if (!firebase.apps.length) {
@@ -3470,31 +3618,44 @@ document.addEventListener('DOMContentLoaded', function() {
             normalizedCode: String(order.part_code || order.product_cod || '').trim()
         }));
 
-        // Mapear produção por ID de ordem (só conta produção para ordens ativas)
+        // CORREÇÃO: Mapear produção por ID de ordem SEM filtro de data
+        // Isso garante que o progresso exibido seja o mesmo dos cards de máquinas
+        // Os valores são pegos diretamente do total_produzido armazenado na OP (atualizado a cada lançamento)
+        // ou calculados a partir de TODOS os lançamentos da ordem (sem filtro de data)
         const productionTotalsByOrderId = new Map();
 
         try {
-            const productionSnapshot = await db.collection('production_entries')
-                .where('data', '>=', startDateStr)
-                .where('data', '<=', endDateStr)
-                .get();
+            // Buscar TODOS os lançamentos de produção (sem filtro de data)
+            // para garantir consistência com os cards de máquinas
+            const orderIds = normalizedOrders.map(o => o.id).filter(id => id);
+            
+            if (orderIds.length > 0) {
+                // Buscar em lotes de 10 (limite do Firestore para 'in')
+                const batchSize = 10;
+                for (let i = 0; i < orderIds.length; i += batchSize) {
+                    const batchIds = orderIds.slice(i, i + batchSize);
+                    const productionSnapshot = await db.collection('production_entries')
+                        .where('orderId', 'in', batchIds)
+                        .get();
 
-            productionSnapshot.docs.forEach(doc => {
-                const data = doc.data();
-                const orderId = data.order_id || data.orderId;
-                
-                if (!orderId) return;
+                    productionSnapshot.docs.forEach(doc => {
+                        const data = doc.data();
+                        const orderId = data.orderId || data.order_id;
+                        
+                        if (!orderId) return;
 
-                const producedQty = coerceToNumber(data.produzido ?? data.quantity, 0);
-                if (!Number.isFinite(producedQty) || producedQty <= 0) {
-                    return;
+                        const producedQty = coerceToNumber(data.produzido ?? data.quantity, 0);
+                        if (!Number.isFinite(producedQty) || producedQty <= 0) {
+                            return;
+                        }
+
+                        productionTotalsByOrderId.set(
+                            orderId,
+                            (productionTotalsByOrderId.get(orderId) || 0) + producedQty
+                        );
+                    });
                 }
-
-                productionTotalsByOrderId.set(
-                    orderId,
-                    (productionTotalsByOrderId.get(orderId) || 0) + producedQty
-                );
-            });
+            }
         } catch (error) {
             console.error('Erro ao carregar lançamentos para análise de ordens:', error);
         }
@@ -5397,8 +5558,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (topBorraMachineElement) topBorraMachineElement.textContent = topBorraMachine;
 
         // Gerar gráficos (usando allLossesData que inclui pmp_borra)
-        await generateLossesParetoChart(allLossesData);
-        await generateLossesByMachineChart(allLossesData);
+        await generateLossesParetoChart(regularLossesData);
+        await generateLossesByMachineChart(regularLossesData);
         await generateLossesByMaterialChart(allLossesData);
         
         // Gerar gráficos específicos de borra
@@ -16257,6 +16418,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     function listenToPlanningChanges(date) {
         if (!date) return;
         
+        // AÇÃO 3: Salvar referência para Visibility API poder retomar
+        window._currentListenerSetup = () => listenToPlanningChanges(date);
+        
         detachActiveListener();
         showLoadingState('leader-panel', true);
         
@@ -16305,16 +16469,23 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             }
         };
 
-        // Chamar render de forma assíncrona quando necessário
+        // AÇÃO 2: Debounce para consolidar renders de múltiplos listeners
+        // Evita múltiplas chamadas render() quando vários listeners disparam quase simultaneamente
+        let renderDebounceTimer = null;
         const scheduleRender = () => {
-            requestAnimationFrame(() => render().catch(e => console.error('Erro em render:', e)));
+            if (renderDebounceTimer) {
+                clearTimeout(renderDebounceTimer);
+            }
+            renderDebounceTimer = setTimeout(() => {
+                requestAnimationFrame(() => render().catch(e => console.error('Erro em render:', e)));
+            }, 100); // 100ms de debounce
         };
 
         // Limpar listeners anteriores se existirem
         listenerManager.unsubscribe('planning');
         listenerManager.unsubscribe('productionEntries');
         listenerManager.unsubscribe('downtime');
-        listenerManager.unsubscribe('activeDowntimes');
+        // activeDowntimes agora usa polling (AÇÃO 4)
 
         // Filtrar planejamentos pela data selecionada (dia de trabalho inicia às 7h)
         // Busca planejamentos onde a data do planejamento é igual à data selecionada
@@ -16391,15 +16562,29 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             (error) => console.error('Erro ao carregar paradas:', error)
         );
 
-        // Listener para paradas ativas (cards vermelhos)
-        const activeDowntimesQuery = db.collection('active_downtimes');
-        listenerManager.subscribe('activeDowntimes', activeDowntimesQuery,
-            (snapshot) => {
+        // AÇÃO 4: Polling para paradas ativas (cards vermelhos) - substituído listener por polling 5s
+        // Função de polling para active_downtimes
+        const pollActiveDowntimes = async () => {
+            try {
+                const snapshot = await db.collection('active_downtimes').get();
                 activeDowntimeSet = new Set(snapshot.docs.map(doc => doc.id));
                 scheduleRender();
-            },
-            (error) => console.error('Erro ao carregar paradas ativas:', error)
-        );
+            } catch (error) {
+                console.error('Erro ao buscar paradas ativas:', error);
+            }
+        };
+        
+        // Executar imediatamente na primeira vez
+        pollActiveDowntimes();
+        
+        // Configurar polling a cada 5 segundos
+        window._startActiveDowntimesPolling = () => {
+            if (window._activeDowntimesPolling) {
+                clearInterval(window._activeDowntimesPolling);
+            }
+            window._activeDowntimesPolling = setInterval(pollActiveDowntimes, 5000);
+        };
+        window._startActiveDowntimesPolling();
     }
 
     function renderPlanningTable(items) {
@@ -16741,8 +16926,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         listenerManager.unsubscribe('launchPlanning');
         listenerManager.unsubscribe('launchProductions');
 
-        // NOVO: Buscar todos os planejamentos e filtrar os ATIVOS no cliente
-        const planningQuery = db.collection('planning');
+        // OTIMIZADO: Filtrar planejamentos dos últimos 30 dias (redução de custo Firebase)
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+        const planningQuery = db.collection('planning').where('date', '>=', thirtyDaysAgoStr);
         listenerManager.subscribe('launchPlanning', planningQuery,
             (snapshot) => {
                 // Filtrar apenas planejamentos ativos (não concluídos/finalizados/cancelados)
@@ -16914,6 +17102,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
     async function handleProductionEntrySubmit(e) {
         e.preventDefault();
+        
+        // ✅ POKA-YOKE: Bloquear lançamento se OP não estiver ativada
+        if (!validateOrderActivated()) {
+            return;
+        }
+        
         const statusMessage = document.getElementById('production-modal-status');
         const saveButton = document.getElementById('production-modal-save-btn');
         
@@ -22495,6 +22689,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         e.preventDefault();
         e.stopPropagation();
         
+        // ✅ POKA-YOKE: Bloquear lançamento se OP não estiver ativada
+        if (!validateOrderActivated()) {
+            return;
+        }
+        
         if (!window.authSystem || !window.authSystem.checkPermissionForAction) {
             showNotification('Erro de permissão', 'error');
             return;
@@ -24413,6 +24612,8 @@ function sendDowntimeNotification() {
         };
         
         // Calcular dados combinados de todos os planos
+        // CORREÇÃO: Usar total_produzido acumulado da OP (não apenas produção do dia)
+        // Isso garante consistência com a aba de Ordens
         let totalPlannedQty = 0;
         let totalProducedAllPlans = 0;
         const plansWithData = plans.map(p => {
@@ -24420,7 +24621,14 @@ function sendDowntimeNotification() {
             const plannedQtyPrimary = parseOptionalNumber(p.order_lot_size);
             const plannedQtyFallback = parseOptionalNumber(p.lot_size);
             const plannedQty = Math.round(plannedQtyPrimary ?? plannedQtyFallback ?? 0);
-            const produced = Math.round(planData.totalProduced ?? 0);
+            
+            // CORREÇÃO: Usar total_produzido do plano (acumulado da OP) para o progresso
+            // O planData.totalProduced é apenas a produção DO DIA, não o total da OP
+            const accumulatedFromOrder = coerceToNumber(p.total_produzido, 0);
+            const producedToday = Math.round(planData.totalProduced ?? 0);
+            // Para o progresso, usar o acumulado total da OP
+            const produced = accumulatedFromOrder > 0 ? Math.round(accumulatedFromOrder) : producedToday;
+            
             const lossKg = Math.round(planData.totalLossesKg ?? 0);
             const pieceWeight = coerceToNumber(p.piece_weight, 0);
             const scrapPcs = pieceWeight > 0 ? Math.round((lossKg * 1000) / pieceWeight) : 0;
@@ -24435,6 +24643,7 @@ function sendDowntimeNotification() {
                 displayName: resolveProductName(p),
                 plannedQty,
                 produced,
+                producedToday, // Produção apenas do dia (para referência)
                 goodProd,
                 lossKg,
                 progressPct,
