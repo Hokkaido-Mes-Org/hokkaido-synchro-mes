@@ -387,7 +387,7 @@ var productDatabase = [
     { "cod": 261, "client": "PARKER", "name": "TAMPA PLASTICA 5831", "cavities": 4, "cycle": 35, "weight": 0.55, "pieces_per_hour_goal": 411, "mp": "" },
     { "cod": 262, "client": "PARKER", "name": "COROA PARA FILTRO DE OLEO", "cavities": 2, "cycle": 18, "weight": 0.65, "pieces_per_hour_goal": 400, "mp": "" },
     { "cod": 263, "client": "PARKER", "name": "ADAPTADOR", "cavities": 2, "cycle": 18, "weight": 0.35, "pieces_per_hour_goal": 400, "mp": "" },
-    { "cod": 264, "client": "PARKER", "name": "SUPORTE PLASTICO SERIE 600 ESCAL (COM ABA)", "cavities": 4, "cycle": 50, "weight": 1.25, "pieces_per_hour_goal": 288, "mp": "" },
+    { "cod": 264, "client": "PARKER", "name": "SUPORTE PLASTICO SERIE 600 ESCAL (COM ABA)", "cavities": 4, "cycle": 50, "weight": 50, "pieces_per_hour_goal": 288, "mp": "" },
     { "cod": 265, "client": "PARKER", "name": "SUPORTE PLASTICO SERIE R260 (SEM ABA)", "cavities": 4, "cycle": 50, "weight": 1.25, "pieces_per_hour_goal": 288, "mp": "" },
     { "cod": 266, "client": "PARKER", "name": "PLUG 1/4 - 225 PARA FILTRO DE OLEO - 275410029", "cavities": 1, "cycle": 20, "weight": 0.15, "pieces_per_hour_goal": 180, "mp": "" },
     { "cod": 267, "client": "PARKER", "name": "TAMPA PLASTICA 4 CAVIDADES", "cavities": 4, "cycle": 50, "weight": 0.75, "pieces_per_hour_goal": 288, "mp": "" },
@@ -644,6 +644,7 @@ var productDatabase = [
     { "cod": 5803, "client": "SUNVISOR", "name": "FIXADOR FUNDO FECHADO 6M SEM FURO - KG 4A REC", "cavities": 1, "cycle": 60, "weight": 1.25, "pieces_per_hour_goal": 60, "mp": "" },
     { "cod": 5805, "client": "SUNVISOR", "name": "CORREDICA FUNDO VAZADO 6M SEM FURO - KG 4B REC", "cavities": 1, "cycle": 60, "weight": 1.25, "pieces_per_hour_goal": 60, "mp": "" },
     { "cod": 6289, "client": "APTAR", "name": "ATUADOR-POEMA-PP--5,85-PINK---LOT----GS -31328163", "cavities": 22, "cycle": 25.5, "weight": 2.15, "pieces_per_hour_goal": 3106, "mp": "" },
+    { "cod": 6311, "client": "APTAR", "name": "TAMPA-EM-28,20-PP-RED--SHNY-----ÁGATA II 31363869", "cavities": 29, "cycle": 12, "weight": 0.95, "pieces_per_hour_goal": 8700, "mp": "" },
     { "cod": 4808, "client": "PARKER", "name": "SUPORTE DO COPO 4 CAVIDADES - 283600249", "cavities": 4, "cycle": 50, "weight": 54.85, "pieces_per_hour_goal": 432, "mp": "" },
 ];
 
