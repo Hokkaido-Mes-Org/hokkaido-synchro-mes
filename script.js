@@ -5568,6 +5568,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         // Preencher tabela de apontamentos de borra
         await populateBorraApontamentosTable(borraData);
+        
+        // ✅ Carregar análise de sucata
+        if (typeof loadSucataAnalysis === 'function') {
+            await loadSucataAnalysis(startDate, endDate, machine, shift);
+        }
     }
 
     // Função para carregar análise de paradas
@@ -15920,20 +15925,24 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
             setProductionOrderStatus('Salvando ordem de produção...', 'info');
 
+            // CORREÇÃO: Validação de ordem duplicada considera agora apenas ordens ATIVAS
+            // Uma ordem pode ser reutilizada em datas diferentes ou após finalização
             const existingSnapshot = await db.collection('production_orders')
                 .where('order_number', '==', normalizedOrderNumber)
+                .where('status', 'in', ['planejada', 'ativa', 'em_andamento'])  // Apenas ordens ativas
                 .limit(1)
                 .get();
 
-            if (!existingSnapshot.empty && !productionOrderForm.dataset.editingOrderId) {
-                setProductionOrderStatus('Já existe uma ordem com este número.', 'error');
+            const editingOrderId = productionOrderForm.dataset.editingOrderId;
+
+            if (!existingSnapshot.empty && !editingOrderId) {
+                setProductionOrderStatus('Já existe uma ordem ATIVA com este número. Finalize-a ou use outro número.', 'error');
                 return;
             }
 
-            // Se estamos editando, deletar ordem antiga se o número mudou
-            const editingOrderId = productionOrderForm.dataset.editingOrderId;
+            // Se estamos editando, validar se outro documento já tem esse número
             if (editingOrderId && !existingSnapshot.empty && existingSnapshot.docs[0].id !== editingOrderId) {
-                setProductionOrderStatus('Já existe uma ordem com este número.', 'error');
+                setProductionOrderStatus('Já existe uma ordem ATIVA com este número.', 'error');
                 return;
             }
 
@@ -16218,7 +16227,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 }
             }
             
-            // ✅ POKA-YOKE: Verificar se já existe planejamento com mesma OP na mesma máquina e data
+            // ✅ POKA-YOKE: Verificar se já existe planejamento ATIVO com mesma OP na mesma máquina e data
+            // CORREÇÃO: Excluir planejamentos finalizados/cancelados da verificação
             if (docData.order_number) {
                 const duplicateCheck = await db.collection('planning')
                     .where('date', '==', docData.date)
@@ -16226,9 +16236,27 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     .where('order_number', '==', docData.order_number)
                     .get();
                 
-                if (!duplicateCheck.empty) {
-                    const existingPlan = duplicateCheck.docs[0].data();
-                    alert(`⚠️ DUPLICATA DETECTADA!\n\nJá existe um planejamento para a OP ${docData.order_number} na máquina ${docData.machine} nesta data.\n\nProduto existente: ${existingPlan.product || '-'}\n\nSe deseja adicionar outro produto do mesmo molde, use uma OP diferente.`);
+                // Filtrar apenas planejamentos ATIVOS (não finalizados/cancelados)
+                const activeduplicates = duplicateCheck.docs.filter(doc => {
+                    const planData = doc.data();
+                    const status = (planData.status || '').toLowerCase();
+                    // Se status não existe ou está vazio, considerar como ativo
+                    // Se status é 'concluida', 'finalizada', 'cancelada', ignorar
+                    return !['concluida', 'concluída', 'finalizada', 'cancelada', 'cancelado'].includes(status);
+                });
+                
+                console.log('[PLANNING-DEBUG] Verificação de duplicata OP:', {
+                    order_number: docData.order_number,
+                    date: docData.date,
+                    machine: docData.machine,
+                    total_encontrados: duplicateCheck.docs.length,
+                    ativos_encontrados: activeduplicates.length,
+                    docs: duplicateCheck.docs.map(d => ({ id: d.id, status: d.data().status, product: d.data().product }))
+                });
+                
+                if (activeduplicates.length > 0) {
+                    const existingPlan = activeduplicates[0].data();
+                    alert(`⚠️ DUPLICATA DETECTADA!\n\nJá existe um planejamento ATIVO para a OP ${docData.order_number} na máquina ${docData.machine} nesta data.\n\nProduto existente: ${existingPlan.product || '-'}\nStatus: ${existingPlan.status || 'ativo'}\n\nSe deseja adicionar outro produto do mesmo molde, use uma OP diferente.`);
                     submitButton.disabled = false;
                     submitButton.innerHTML = `<i data-lucide="plus"></i><span>Adicionar</span>`;
                     if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -16237,6 +16265,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             }
             
             // Verificar também por product_cod na mesma máquina/data (mesmo produto sem OP)
+            // CORREÇÃO: Excluir planejamentos finalizados/cancelados
             if (docData.product_cod) {
                 const productDuplicateCheck = await db.collection('planning')
                     .where('date', '==', docData.date)
@@ -16244,9 +16273,25 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     .where('product_cod', '==', docData.product_cod)
                     .get();
                 
-                if (!productDuplicateCheck.empty) {
-                    const existingPlan = productDuplicateCheck.docs[0].data();
-                    const confirmAdd = confirm(`⚠️ ATENÇÃO: Produto possivelmente duplicado!\n\nJá existe um planejamento para o produto ${docData.product_cod} na máquina ${docData.machine} nesta data.\n\nOP existente: ${existingPlan.order_number || 'Sem OP'}\nOP atual: ${docData.order_number || 'Sem OP'}\n\nDeseja adicionar mesmo assim?`);
+                // Filtrar apenas planejamentos ATIVOS
+                const activeProductDuplicates = productDuplicateCheck.docs.filter(doc => {
+                    const planData = doc.data();
+                    const status = (planData.status || '').toLowerCase();
+                    return !['concluida', 'concluída', 'finalizada', 'cancelada', 'cancelado'].includes(status);
+                });
+                
+                console.log('[PLANNING-DEBUG] Verificação de duplicata Produto:', {
+                    product_cod: docData.product_cod,
+                    date: docData.date,
+                    machine: docData.machine,
+                    total_encontrados: productDuplicateCheck.docs.length,
+                    ativos_encontrados: activeProductDuplicates.length,
+                    docs: productDuplicateCheck.docs.map(d => ({ id: d.id, status: d.data().status, order_number: d.data().order_number }))
+                });
+                
+                if (activeProductDuplicates.length > 0) {
+                    const existingPlan = activeProductDuplicates[0].data();
+                    const confirmAdd = confirm(`⚠️ ATENÇÃO: Produto possivelmente duplicado!\n\nJá existe um planejamento ATIVO para o produto ${docData.product_cod} na máquina ${docData.machine} nesta data.\n\nOP existente: ${existingPlan.order_number || 'Sem OP'}\nOP atual: ${docData.order_number || 'Sem OP'}\nStatus: ${existingPlan.status || 'ativo'}\n\nDeseja adicionar mesmo assim?`);
                     if (!confirmAdd) {
                         submitButton.disabled = false;
                         submitButton.innerHTML = `<i data-lucide="plus"></i><span>Adicionar</span>`;
@@ -22071,6 +22116,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (pmpFilterDate) {
             pmpFilterDate.value = new Date().toISOString().split('T')[0];
         }
+        
+        // =============================================
+        // INICIALIZAR MODAL DE SUCATA
+        // =============================================
+        if (typeof initSucataModal === 'function') {
+            initSucataModal();
+        }
     }
 
     // Abrir modal de moído
@@ -22339,7 +22391,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
     // Carregar histórico PMP
     async function loadPMPHistory() {
-        console.log('[TRACE][loadPMPHistory] Carregando histórico PMP (Borras)');
+        console.log('[TRACE][loadPMPHistory] Carregando histórico PMP (Borras e Sucatas)');
         
         const filterDate = document.getElementById('pmp-filter-date')?.value;
         const historyList = document.getElementById('pmp-history-list');
@@ -22371,6 +22423,15 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 records.push({ id: doc.id, ...doc.data(), tipo: 'borra' });
             });
             
+            // ✅ NOVO: Buscar sucatas do dia
+            const sucataSnapshot = await db.collection('pmp_sucata')
+                .where('date', '==', filterDate)
+                .get();
+
+            sucataSnapshot.forEach(doc => {
+                records.push({ id: doc.id, ...doc.data(), tipo: 'sucata' });
+            });
+            
             // Ordenar por hora localmente (mais recente primeiro)
             records.sort((a, b) => {
                 const hourA = a.hour || '00:00';
@@ -22382,42 +22443,82 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 historyList.innerHTML = `
                     <div class="text-center py-8 text-gray-400">
                         <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
-                        <p>Nenhum lançamento de borra encontrado para esta data</p>
+                        <p>Nenhum lançamento de borra ou sucata encontrado para esta data</p>
                     </div>
                 `;
                 lucide.createIcons();
                 return;
             }
 
-            historyList.innerHTML = records.map(record => `
-                <div class="flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors group">
-                    <div class="flex items-center gap-3 flex-1">
-                        <div class="p-2 rounded-lg bg-yellow-100">
-                            <i data-lucide="droplet" class="w-4 h-4 text-yellow-600"></i>
+            historyList.innerHTML = records.map(record => {
+                // Verificar se é borra ou sucata
+                if (record.tipo === 'sucata') {
+                    // Card de Sucata
+                    const tipoIcon = record.sucataType === 'galhos' ? '🌿' : 
+                                     record.sucataType === 'pecas' ? '🔩' : 
+                                     record.sucataType === 'moido' ? '⚙️' : '📦';
+                    return `
+                        <div class="flex items-center justify-between p-3 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 transition-colors group">
+                            <div class="flex items-center gap-3 flex-1">
+                                <div class="p-2 rounded-lg bg-red-100">
+                                    <i data-lucide="trash-2" class="w-4 h-4 text-red-600"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-semibold text-gray-800">
+                                        ${tipoIcon} Sucata - ${record.quantityKg?.toFixed(3) || '0.000'} Kg
+                                    </p>
+                                    <p class="text-xs text-gray-500">
+                                        Tipo: ${record.sucataTypeLabel || record.sucataType || '-'} | Máquina: ${record.machine || '-'}
+                                    </p>
+                                    <p class="text-xs text-gray-400">
+                                        Motivo: ${record.reason || '-'}
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="text-right">
+                                    <p class="text-xs text-gray-500">${record.hour || '-'}</p>
+                                    <p class="text-xs text-gray-400">${record.registeredBy || 'Sistema'}</p>
+                                </div>
+                                <button onclick="deletePMPSucataEntry('${record.id}')" class="p-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-600 transition-colors opacity-0 group-hover:opacity-100" title="Excluir lançamento">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
                         </div>
-                        <div>
-                            <p class="text-sm font-semibold text-gray-800">
-                                Borra - ${record.quantityKg?.toFixed(3) || '0.000'} Kg
-                            </p>
-                            <p class="text-xs text-gray-500">
-                                Máquina: ${record.machine || '-'} ${record.machineModel ? '(' + record.machineModel + ')' : ''}
-                            </p>
-                            <p class="text-xs text-gray-400">
-                                Operador: ${record.operadorName || ('Cod ' + record.operadorCod) || '-'}
-                            </p>
+                    `;
+                } else {
+                    // Card de Borra (original)
+                    return `
+                        <div class="flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors group">
+                            <div class="flex items-center gap-3 flex-1">
+                                <div class="p-2 rounded-lg bg-yellow-100">
+                                    <i data-lucide="droplet" class="w-4 h-4 text-yellow-600"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-semibold text-gray-800">
+                                        Borra - ${record.quantityKg?.toFixed(3) || '0.000'} Kg
+                                    </p>
+                                    <p class="text-xs text-gray-500">
+                                        Máquina: ${record.machine || '-'} ${record.machineModel ? '(' + record.machineModel + ')' : ''}
+                                    </p>
+                                    <p class="text-xs text-gray-400">
+                                        Operador: ${record.operadorName || ('Cod ' + record.operadorCod) || '-'}
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="text-right">
+                                    <p class="text-xs text-gray-500">${record.hour || '-'}</p>
+                                    <p class="text-xs text-gray-400">${record.registeredBy || 'Sistema'}</p>
+                                </div>
+                                <button onclick="deletePMPBorraEntry('${record.id}')" class="p-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-600 transition-colors opacity-0 group-hover:opacity-100" title="Excluir lançamento">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <div class="text-right">
-                            <p class="text-xs text-gray-500">${record.hour || '-'}</p>
-                            <p class="text-xs text-gray-400">${record.registeredBy || 'Sistema'}</p>
-                        </div>
-                        <button onclick="deletePMPBorraEntry('${record.id}')" class="p-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-600 transition-colors opacity-0 group-hover:opacity-100" title="Excluir lançamento">
-                            <i data-lucide="trash-2" class="w-4 h-4"></i>
-                        </button>
-                    </div>
-                </div>
-            `).join('');
+                    `;
+                }
+            }).join('');
 
             lucide.createIcons();
             
@@ -22683,6 +22784,759 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     window.openPmpBorraModal = openPmpBorraModal;
     window.loadPMPHistory = loadPMPHistory;
     window.deletePMPBorraEntry = deletePMPBorraEntry;
+
+    // =====================================================
+    // MÓDULO DE LANÇAMENTO DE SUCATA (PMP)
+    // =====================================================
+    
+    // Variáveis para paginação da tabela de sucata
+    let sucataTableData = [];
+    let sucataTablePage = 1;
+    const sucataTablePageSize = 10;
+    
+    // Gráficos de sucata
+    let sucataByTypeChart = null;
+    let sucataByMachineChart = null;
+    let sucataMonthlyChart = null;
+
+    // Abrir modal de sucata
+    function openPmpSucataModal() {
+        console.log('[PMP-SUCATA] Abrindo modal de sucata');
+        
+        const modal = document.getElementById('manual-sucata-modal');
+        if (!modal) {
+            console.error('[PMP-SUCATA] Modal não encontrado');
+            return;
+        }
+        
+        // Preencher data atual
+        const dateInput = document.getElementById('manual-sucata-date');
+        if (dateInput) {
+            dateInput.value = new Date().toISOString().split('T')[0];
+        }
+        
+        // Preencher turno atual
+        const shiftInput = document.getElementById('manual-sucata-shift');
+        if (shiftInput) {
+            const currentShift = getCurrentShift();
+            shiftInput.value = currentShift || '1';
+        }
+        
+        // Limpar formulário
+        document.getElementById('manual-sucata-form')?.reset();
+        if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+        if (shiftInput) shiftInput.value = getCurrentShift() || '1';
+        
+        // Limpar info do operador
+        const operadorInfo = document.getElementById('manual-sucata-operador-info');
+        const operadorError = document.getElementById('manual-sucata-operador-error');
+        if (operadorInfo) operadorInfo.classList.add('hidden');
+        if (operadorError) operadorError.classList.add('hidden');
+        
+        // Limpar status
+        const statusDiv = document.getElementById('manual-sucata-status');
+        if (statusDiv) {
+            statusDiv.textContent = '';
+            statusDiv.className = 'text-sm font-semibold h-5 text-center mt-2';
+        }
+        
+        modal.classList.remove('hidden');
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
+    }
+
+    // Salvar sucata
+    async function savePMPSucata(e) {
+        e.preventDefault();
+        
+        const statusDiv = document.getElementById('manual-sucata-status');
+        const saveBtn = document.getElementById('manual-sucata-save');
+        
+        try {
+            const date = document.getElementById('manual-sucata-date')?.value;
+            const hour = document.getElementById('manual-sucata-hour')?.value || '';
+            const shift = document.getElementById('manual-sucata-shift')?.value || '1';
+            const operadorCod = document.getElementById('manual-sucata-operador')?.value;
+            const sucataType = document.getElementById('manual-sucata-type')?.value;
+            const weightKg = parseFloat(document.getElementById('manual-sucata-weight')?.value) || 0;
+            const observations = document.getElementById('manual-sucata-obs')?.value?.trim() || '';
+            
+            // Validações
+            if (!date) {
+                statusDiv.textContent = '⚠️ Informe a data';
+                statusDiv.className = 'text-sm font-semibold h-5 text-center mt-2 text-red-600';
+                return;
+            }
+            
+            if (!operadorCod) {
+                statusDiv.textContent = '⚠️ Informe o código do operador';
+                statusDiv.className = 'text-sm font-semibold h-5 text-center mt-2 text-red-600';
+                return;
+            }
+            
+            // Buscar operador no userDatabase (igual ao modal de borra)
+            let operadorInfo = null;
+            const operadorCodInt = parseInt(operadorCod, 10);
+            if (window.userDatabase) {
+                operadorInfo = window.userDatabase.find(u => u.cod === operadorCodInt);
+            }
+            
+            if (!operadorInfo) {
+                statusDiv.textContent = '⚠️ Operador não encontrado';
+                statusDiv.className = 'text-sm font-semibold h-5 text-center mt-2 text-red-600';
+                return;
+            }
+            
+            if (!sucataType) {
+                statusDiv.textContent = '⚠️ Selecione o tipo de sucata';
+                statusDiv.className = 'text-sm font-semibold h-5 text-center mt-2 text-red-600';
+                return;
+            }
+            
+            if (!weightKg || weightKg <= 0) {
+                statusDiv.textContent = '⚠️ Informe o peso da sucata';
+                statusDiv.className = 'text-sm font-semibold h-5 text-center mt-2 text-red-600';
+                return;
+            }
+            
+            // Desabilitar botão
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-2"></i>Salvando...';
+            }
+            
+            statusDiv.textContent = '⏳ Salvando...';
+            statusDiv.className = 'text-sm font-semibold h-5 text-center mt-2 text-blue-600';
+            
+            // Usuário logado
+            const activeUser = getActiveUser() || {};
+            
+            // Labels dos tipos de sucata
+            const sucataTypeLabels = {
+                'galhos': 'Galhos',
+                'pecas': 'Peças Defeituosas',
+                'moido': 'Moído'
+            };
+            
+            // Payload para Firebase
+            const sucataData = {
+                type: 'pmp_sucata',
+                date: date,
+                hour: hour,
+                shift: shift,
+                operadorCod: operadorCodInt,
+                operadorName: operadorInfo?.nomeCompleto || operadorInfo?.nomeUsuario || '',
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                timestampLocal: new Date().toISOString(),
+                sucataType: sucataType,
+                sucataTypeLabel: sucataTypeLabels[sucataType] || sucataType,
+                quantityKg: weightKg,
+                observations: observations,
+                registeredBy: activeUser.name || 'Sistema',
+                registeredByEmail: activeUser.email || '',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            
+            console.log('[PMP-SUCATA] Salvando sucata:', sucataData);
+            
+            // Salvar no Firebase
+            await db.collection('pmp_sucata').add(sucataData);
+            
+            console.log('[PMP-SUCATA] Sucata salva com sucesso!');
+            
+            statusDiv.textContent = '✅ Sucata registrada com sucesso!';
+            statusDiv.className = 'text-sm font-semibold h-5 text-center mt-2 text-green-600';
+            
+            showNotification('✅ Sucata registrada com sucesso!', 'success');
+            
+            // Fechar modal após 1.5s
+            setTimeout(() => {
+                closeModal('manual-sucata-modal');
+                // Recarregar histórico se estiver visível
+                if (document.getElementById('pmp-page') && !document.getElementById('pmp-page').classList.contains('hidden')) {
+                    loadPMPHistory();
+                }
+            }, 1500);
+            
+        } catch (error) {
+            console.error('[PMP-SUCATA] Erro ao salvar sucata:', error);
+            statusDiv.textContent = '❌ Erro ao salvar sucata';
+            statusDiv.className = 'text-sm font-semibold h-5 text-center mt-2 text-red-600';
+            showNotification('Erro ao salvar sucata', 'error');
+        } finally {
+            // Reabilitar botão
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = 'Registrar Sucata';
+            }
+        }
+    }
+
+    // Deletar lançamento de sucata
+    async function deletePMPSucataEntry(docId) {
+        try {
+            const confirmed = confirm('Tem certeza que deseja excluir este lançamento de sucata?');
+            if (!confirmed) return;
+
+            await db.collection('pmp_sucata').doc(docId).delete();
+            
+            showNotification('Lançamento de sucata excluído com sucesso', 'success');
+            
+            // Recarregar o histórico
+            await loadPMPHistory();
+            
+            // Recarregar análise se estiver aberta
+            if (document.getElementById('analise-page').style.display !== 'none') {
+                await loadLossesAnalysis();
+            }
+        } catch (error) {
+            console.error('[ERROR][deletePMPSucataEntry]', error);
+            showNotification('Erro ao excluir lançamento: ' + error.message, 'error');
+        }
+    }
+
+    // Carregar e renderizar análise de sucata
+    async function loadSucataAnalysis(startDate, endDate, machine = 'all', shift = 'all') {
+        console.log('[SUCATA] Carregando análise de sucata...');
+        
+        try {
+            // Buscar dados de sucata do Firebase
+            let query = db.collection('pmp_sucata')
+                .where('date', '>=', startDate)
+                .where('date', '<=', endDate);
+            
+            const snapshot = await query.get();
+            
+            let sucataData = [];
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                const machineId = normalizeMachineId(data.machine || '');
+                
+                // Aplicar filtros
+                if (machine !== 'all' && machineId !== normalizeMachineId(machine)) {
+                    return;
+                }
+                
+                if (shift !== 'all' && data.shift !== shift) {
+                    return;
+                }
+                
+                sucataData.push({
+                    id: doc.id,
+                    ...data
+                });
+            });
+            
+            console.log('[SUCATA] Dados carregados:', sucataData.length);
+            
+            // Calcular totais por tipo
+            let totalGalhos = 0;
+            let totalPecas = 0;
+            let totalMoido = 0;
+            
+            const byMachine = {};
+            const byType = {};
+            
+            sucataData.forEach(item => {
+                const kg = item.quantityKg || 0;
+                const tipo = item.sucataType || 'outros';
+                const machine = item.machine || 'N/A';
+                
+                // Totais por tipo
+                if (tipo === 'galhos') totalGalhos += kg;
+                else if (tipo === 'pecas') totalPecas += kg;
+                else if (tipo === 'moido') totalMoido += kg;
+                
+                // Agrupamento por máquina
+                byMachine[machine] = (byMachine[machine] || 0) + kg;
+                
+                // Agrupamento por tipo
+                const typeLabel = item.sucataTypeLabel || tipo;
+                byType[typeLabel] = (byType[typeLabel] || 0) + kg;
+            });
+            
+            const totalSucata = totalGalhos + totalPecas + totalMoido;
+            
+            // Atualizar KPIs
+            const totalEl = document.getElementById('total-sucata');
+            const galhosEl = document.getElementById('total-sucata-galhos');
+            const pecasEl = document.getElementById('total-sucata-pecas');
+            const moidoEl = document.getElementById('total-sucata-moido');
+            
+            if (totalEl) totalEl.textContent = totalSucata.toFixed(3) + ' kg';
+            if (galhosEl) galhosEl.textContent = totalGalhos.toFixed(3) + ' kg';
+            if (pecasEl) pecasEl.textContent = totalPecas.toFixed(3) + ' kg';
+            if (moidoEl) moidoEl.textContent = totalMoido.toFixed(3) + ' kg';
+            
+            // Renderizar gráficos
+            renderSucataByTypeChart(byType);
+            renderSucataByMachineChart(byMachine);
+            renderSucataMonthlyChart(sucataData);
+            
+            // Atualizar tabela
+            sucataTableData = sucataData.sort((a, b) => {
+                const dateA = new Date(a.date + ' ' + (a.hour || '00:00'));
+                const dateB = new Date(b.date + ' ' + (b.hour || '00:00'));
+                return dateB - dateA;
+            });
+            sucataTablePage = 1;
+            renderSucataTable();
+            
+        } catch (error) {
+            console.error('[SUCATA] Erro ao carregar análise:', error);
+        }
+    }
+
+    // Gráfico de sucata por tipo (pizza)
+    function renderSucataByTypeChart(data) {
+        const ctx = document.getElementById('sucata-by-type-chart');
+        if (!ctx) return;
+        
+        // Destruir gráfico anterior se existir
+        if (sucataByTypeChart) {
+            sucataByTypeChart.destroy();
+        }
+        
+        const labels = Object.keys(data);
+        const values = Object.values(data);
+        
+        sucataByTypeChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: [
+                        'rgba(34, 197, 94, 0.8)',   // Verde - Galhos
+                        'rgba(239, 68, 68, 0.8)',   // Vermelho - Peças
+                        'rgba(59, 130, 246, 0.8)',  // Azul - Moído
+                        'rgba(156, 163, 175, 0.8)'  // Cinza - Outros
+                    ],
+                    borderColor: [
+                        'rgba(34, 197, 94, 1)',
+                        'rgba(239, 68, 68, 1)',
+                        'rgba(59, 130, 246, 1)',
+                        'rgba(156, 163, 175, 1)'
+                    ],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            font: { size: 10 }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.raw || 0;
+                                return context.label + ': ' + value.toFixed(3) + ' kg';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Gráfico de sucata por máquina (barras)
+    function renderSucataByMachineChart(data) {
+        const ctx = document.getElementById('sucata-by-machine-chart');
+        if (!ctx) return;
+        
+        // Destruir gráfico anterior se existir
+        if (sucataByMachineChart) {
+            sucataByMachineChart.destroy();
+        }
+        
+        // Ordenar por valor e pegar top 10
+        const sorted = Object.entries(data)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10);
+        
+        const labels = sorted.map(x => x[0]);
+        const values = sorted.map(x => x[1]);
+        
+        sucataByMachineChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Sucata (kg)',
+                    data: values,
+                    backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                    borderColor: 'rgba(239, 68, 68, 1)',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.raw.toFixed(3) + ' kg';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return value.toFixed(2) + ' kg';
+                            }
+                        }
+                    },
+                    y: {
+                        ticks: {
+                            font: { size: 10 }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Gráfico de sucata mensal + acumulado
+    function renderSucataMonthlyChart(data) {
+        const ctx = document.getElementById('sucata-monthly-chart');
+        if (!ctx) return;
+        
+        // Destruir gráfico anterior se existir
+        if (sucataMonthlyChart) {
+            sucataMonthlyChart.destroy();
+        }
+        
+        // Agrupar dados por mês
+        const byMonth = {};
+        const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+        
+        data.forEach(item => {
+            if (!item.date) return;
+            const dateParts = item.date.split('-');
+            if (dateParts.length < 2) return;
+            
+            const year = dateParts[0];
+            const month = parseInt(dateParts[1]) - 1;
+            const key = `${year}-${String(month + 1).padStart(2, '0')}`;
+            const label = `${monthNames[month]}/${year.slice(2)}`;
+            
+            if (!byMonth[key]) {
+                byMonth[key] = { label, value: 0 };
+            }
+            byMonth[key].value += item.quantityKg || 0;
+        });
+        
+        // Ordenar por data
+        const sortedKeys = Object.keys(byMonth).sort();
+        const labels = sortedKeys.map(k => byMonth[k].label);
+        const monthlyValues = sortedKeys.map(k => byMonth[k].value);
+        
+        // Calcular acumulado
+        let accumulated = 0;
+        const accumulatedValues = monthlyValues.map(v => {
+            accumulated += v;
+            return accumulated;
+        });
+        
+        sucataMonthlyChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Mensal (kg)',
+                        data: monthlyValues,
+                        backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                        borderColor: 'rgba(239, 68, 68, 1)',
+                        borderWidth: 1,
+                        borderRadius: 4,
+                        order: 2,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Acumulado (kg)',
+                        data: accumulatedValues,
+                        type: 'line',
+                        backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                        borderColor: 'rgba(220, 38, 38, 1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3,
+                        pointBackgroundColor: 'rgba(220, 38, 38, 1)',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 4,
+                        order: 1,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 15,
+                            font: { size: 11 }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ' + context.raw.toFixed(3) + ' kg';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { font: { size: 10 } }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Mensal (kg)',
+                            font: { size: 10 }
+                        },
+                        ticks: {
+                            font: { size: 10 },
+                            callback: function(value) {
+                                return value.toFixed(1);
+                            }
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Acumulado (kg)',
+                            font: { size: 10 }
+                        },
+                        grid: { drawOnChartArea: false },
+                        ticks: {
+                            font: { size: 10 },
+                            callback: function(value) {
+                                return value.toFixed(1);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Renderizar tabela de sucata
+    function renderSucataTable() {
+        const tbody = document.getElementById('sucata-apontamentos-table');
+        if (!tbody) return;
+        
+        const start = (sucataTablePage - 1) * sucataTablePageSize;
+        const end = start + sucataTablePageSize;
+        const pageData = sucataTableData.slice(start, end);
+        
+        if (pageData.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="4" class="px-4 py-8 text-center text-gray-400">
+                        <i data-lucide="inbox" class="w-6 h-6 mx-auto mb-2 opacity-50"></i>
+                        Nenhum registro de sucata encontrado
+                    </td>
+                </tr>
+            `;
+        } else {
+            tbody.innerHTML = pageData.map(item => {
+                const dateStr = item.date || '-';
+                const hourStr = item.hour || '-';
+                const tipo = item.sucataTypeLabel || item.sucataType || '-';
+                const kg = (item.quantityKg || 0).toFixed(3);
+                const shift = item.shift || '-';
+                
+                return `
+                    <tr class="hover:bg-red-50 transition">
+                        <td class="px-4 py-3 text-gray-700">${dateStr} ${hourStr}</td>
+                        <td class="px-4 py-3 text-center">
+                            <span class="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">
+                                ${tipo}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-center font-semibold text-red-600">${kg} kg</td>
+                        <td class="px-4 py-3 text-gray-600">T${shift}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        // Atualizar paginação
+        const showingEl = document.getElementById('sucata-table-showing');
+        const totalEl = document.getElementById('sucata-table-total');
+        const pageEl = document.getElementById('sucata-table-page');
+        const prevBtn = document.getElementById('sucata-table-prev');
+        const nextBtn = document.getElementById('sucata-table-next');
+        
+        const totalPages = Math.ceil(sucataTableData.length / sucataTablePageSize);
+        
+        if (showingEl) showingEl.textContent = Math.min(end, sucataTableData.length);
+        if (totalEl) totalEl.textContent = sucataTableData.length;
+        if (pageEl) pageEl.textContent = `Página ${sucataTablePage} de ${totalPages || 1}`;
+        
+        if (prevBtn) prevBtn.disabled = sucataTablePage <= 1;
+        if (nextBtn) nextBtn.disabled = sucataTablePage >= totalPages;
+        
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
+    }
+
+    // Paginação da tabela de sucata
+    function sucataTablePrevPage() {
+        if (sucataTablePage > 1) {
+            sucataTablePage--;
+            renderSucataTable();
+        }
+    }
+
+    function sucataTableNextPage() {
+        const totalPages = Math.ceil(sucataTableData.length / sucataTablePageSize);
+        if (sucataTablePage < totalPages) {
+            sucataTablePage++;
+            renderSucataTable();
+        }
+    }
+
+    // Exportar tabela de sucata
+    function exportSucataTable() {
+        if (sucataTableData.length === 0) {
+            showNotification('Nenhum dado para exportar', 'warning');
+            return;
+        }
+        
+        const csvContent = [
+            ['Data', 'Hora', 'Máquina', 'Tipo', 'Quantidade (kg)', 'Turno', 'MP', 'Motivo', 'Observações'].join(';'),
+            ...sucataTableData.map(item => [
+                item.date || '',
+                item.hour || '',
+                item.machine || '',
+                item.sucataTypeLabel || item.sucataType || '',
+                (item.quantityKg || 0).toFixed(3),
+                item.shift || '',
+                item.mpType || '',
+                item.reason || '',
+                (item.observations || '').replace(/;/g, ',')
+            ].join(';'))
+        ].join('\n');
+        
+        const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `sucata_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showNotification('Exportação concluída!', 'success');
+    }
+
+    // Inicializar eventos do modal de sucata
+    function initSucataModal() {
+        // Botão para abrir modal
+        const btnSucata = document.getElementById('btn-pmp-sucata');
+        if (btnSucata) {
+            btnSucata.addEventListener('click', openPmpSucataModal);
+        }
+        
+        // Fechar modal
+        const closeBtn = document.getElementById('manual-sucata-close');
+        const cancelBtn = document.getElementById('manual-sucata-cancel');
+        
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => closeModal('manual-sucata-modal'));
+        }
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => closeModal('manual-sucata-modal'));
+        }
+        
+        // Listener para validar operador
+        const operadorInput = document.getElementById('manual-sucata-operador');
+        if (operadorInput) {
+            operadorInput.addEventListener('input', function() {
+                const cod = parseInt(this.value, 10);
+                const infoDiv = document.getElementById('manual-sucata-operador-info');
+                const nameSpan = document.getElementById('manual-sucata-operador-name');
+                const errorP = document.getElementById('manual-sucata-operador-error');
+                
+                if (!cod || cod <= 0) {
+                    if (infoDiv) infoDiv.classList.add('hidden');
+                    if (errorP) errorP.classList.add('hidden');
+                    return;
+                }
+                
+                // Buscar operador no userDatabase (igual ao modal de borra)
+                let operador = null;
+                if (window.userDatabase) {
+                    operador = window.userDatabase.find(u => u.cod === cod);
+                }
+                
+                if (operador) {
+                    if (infoDiv) {
+                        infoDiv.classList.remove('hidden');
+                        if (nameSpan) nameSpan.textContent = operador.nomeCompleto || operador.nomeUsuario || '-';
+                    }
+                    if (errorP) errorP.classList.add('hidden');
+                } else {
+                    if (infoDiv) infoDiv.classList.add('hidden');
+                    if (errorP) errorP.classList.remove('hidden');
+                }
+            });
+        }
+        
+        // Submit do formulário
+        const form = document.getElementById('manual-sucata-form');
+        if (form) {
+            form.addEventListener('submit', savePMPSucata);
+        }
+        
+        console.log('[PMP-SUCATA] Modal inicializado');
+    }
+
+    // Expor funções de sucata globalmente
+    window.openPmpSucataModal = openPmpSucataModal;
+    window.deletePMPSucataEntry = deletePMPSucataEntry;
+    window.loadSucataAnalysis = loadSucataAnalysis;
+    window.sucataTablePrevPage = sucataTablePrevPage;
+    window.sucataTableNextPage = sucataTableNextPage;
+    window.exportSucataTable = exportSucataTable;
+    window.initSucataModal = initSucataModal;
     
     // Função para lançamento manual de parada passada
     async function handleManualDowntimeSubmit(e) {

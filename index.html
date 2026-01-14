@@ -1492,6 +1492,33 @@
                                 </button>
                             </div>
                         </div>
+
+                        <!-- Card Lançamento de Sucata -->
+                        <div class="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+                            <div class="bg-gradient-to-r from-red-500 to-rose-500 px-5 py-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="p-2 bg-white/20 rounded-lg">
+                                        <i data-lucide="trash-2" class="w-5 h-5 text-white"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="text-lg font-bold text-white">Lançamento de Sucata</h3>
+                                        <p class="text-red-100 text-sm">Registre galhos, peças e moído descartados</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="p-5 space-y-4">
+                                <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+                                    <p class="text-sm text-red-800">
+                                        <i data-lucide="info" class="w-4 h-4 inline mr-1"></i>
+                                        Informe o tipo de sucata (galhos, peças ou moído), a máquina e a quantidade em Kg.
+                                    </p>
+                                </div>
+                                <button id="btn-pmp-sucata" class="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 text-white font-semibold py-3 px-4 rounded-lg transition-all shadow-md hover:shadow-lg">
+                                    <i data-lucide="plus-circle" class="w-5 h-5"></i>
+                                    Lançar Sucata
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Histórico de Lançamentos PMP -->
@@ -1500,7 +1527,7 @@
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center gap-3">
                                     <i data-lucide="history" class="w-5 h-5 text-gray-600"></i>
-                                    <h3 class="text-lg font-semibold text-gray-800">Histórico de Lançamentos de Borra</h3>
+                                    <h3 class="text-lg font-semibold text-gray-800">Histórico de Lançamentos (Borra e Sucata)</h3>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <input type="date" id="pmp-filter-date" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500">
@@ -2701,7 +2728,98 @@
                                         </div>
                                     </div>
                                 </div>
+
+                                <!-- ========== SEÇÃO DE ANÁLISE DE SUCATA ========== -->
+                                <div class="bg-gradient-to-br from-red-50 to-rose-50 rounded-2xl border border-red-200 p-5 hover:shadow-md transition mt-6">
+                                    <div class="flex items-center gap-3 mb-5">
+                                        <div class="p-2 bg-red-200 rounded-lg">
+                                            <i data-lucide="trash-2" class="w-5 h-5 text-red-700"></i>
+                                        </div>
+                                        <h3 class="font-semibold text-red-900 text-base">Análise Detalhada de Sucata</h3>
+                                    </div>
+                                    
+                                    <!-- KPIs de Sucata -->
+                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+                                        <div class="bg-white/80 backdrop-blur-sm rounded-xl p-3 border border-red-100">
+                                            <p class="text-xs font-medium text-red-700">Total Sucata</p>
+                                            <p id="total-sucata" class="text-xl font-bold text-red-600">--- kg</p>
+                                        </div>
+                                        <div class="bg-white/80 backdrop-blur-sm rounded-xl p-3 border border-red-100">
+                                            <p class="text-xs font-medium text-red-700">Galhos</p>
+                                            <p id="total-sucata-galhos" class="text-xl font-bold text-red-600">--- kg</p>
+                                        </div>
+                                        <div class="bg-white/80 backdrop-blur-sm rounded-xl p-3 border border-red-100">
+                                            <p class="text-xs font-medium text-red-700">Peças</p>
+                                            <p id="total-sucata-pecas" class="text-xl font-bold text-red-600">--- kg</p>
+                                        </div>
+                                        <div class="bg-white/80 backdrop-blur-sm rounded-xl p-3 border border-red-100">
+                                            <p class="text-xs font-medium text-red-700">Moído</p>
+                                            <p id="total-sucata-moido" class="text-xl font-bold text-red-600">--- kg</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-red-100 hover:border-red-300 transition">
+                                        <h4 class="text-xs font-semibold text-red-700 mb-3 flex items-center gap-2">
+                                            <i data-lucide="pie-chart" class="w-3 h-3"></i>
+                                            Sucata por Tipo
+                                        </h4>
+                                        <div class="relative" style="height: 280px;">
+                                            <canvas id="sucata-by-type-chart" class="w-full h-full"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Tabela de Apontamentos de Sucata -->
+                                <div class="bg-white rounded-2xl shadow-sm border border-red-200 p-5 hover:shadow-md transition mt-6">
+                                    <div class="flex items-center justify-between mb-5">
+                                        <div class="flex items-center gap-3">
+                                            <div class="p-2 bg-red-100 rounded-lg">
+                                                <i data-lucide="clipboard-list" class="w-5 h-5 text-red-700"></i>
+                                            </div>
+                                            <div>
+                                                <h3 class="font-semibold text-red-900 text-base">Apontamentos de Sucata</h3>
+                                                <p class="text-xs text-red-600">Registro detalhado de todas as sucatas apontadas</p>
+                                            </div>
+                                        </div>
+                                        <button onclick="exportSucataTable()" class="flex items-center gap-2 px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-xs font-medium transition">
+                                            <i data-lucide="download" class="w-3 h-3"></i>
+                                            Exportar
+                                        </button>
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-sm">
+                                            <thead>
+                                                <tr class="bg-red-50 text-red-800">
+                                                    <th class="px-4 py-3 text-left font-semibold rounded-l-lg">Data/Hora</th>
+                                                    <th class="px-4 py-3 text-center font-semibold">Tipo</th>
+                                                    <th class="px-4 py-3 text-center font-semibold">Quantidade (kg)</th>
+                                                    <th class="px-4 py-3 text-left font-semibold rounded-r-lg">Turno</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="sucata-apontamentos-table" class="divide-y divide-red-100">
+                                                <tr>
+                                                    <td colspan="4" class="px-4 py-8 text-center text-gray-400">
+                                                        Carregando apontamentos...
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div class="flex items-center justify-between mt-4 pt-4 border-t border-red-100">
+                                        <p class="text-xs text-red-600">
+                                            Mostrando <span id="sucata-table-showing">0</span> de <span id="sucata-table-total">0</span> registros
+                                        </p>
+                                        <div class="flex items-center gap-2">
+                                            <button id="sucata-table-prev" onclick="sucataTablePrevPage()" class="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded text-xs font-medium transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>Anterior</button>
+                                            <span id="sucata-table-page" class="text-xs text-red-700 font-medium">Página 1</span>
+                                            <button id="sucata-table-next" onclick="sucataTableNextPage()" class="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded text-xs font-medium transition disabled:opacity-50 disabled:cursor-not-allowed">Próxima</button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
+
+
+
 
                             <!-- ========== ANLISE DE Paradas ========== -->
                             <div id="downtime-view" class="analysis-view hidden">
@@ -4156,6 +4274,92 @@
         </div>
     </div>
 
+    <!-- Modal de Lançamento de Sucata (PMP) -->
+    <div id="manual-sucata-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md border border-gray-100">
+            <div class="flex justify-between items-center border-b border-gray-100 pb-4 mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-gradient-to-br from-red-100 to-rose-200 rounded-xl">
+                        <i data-lucide="trash-2" class="w-5 h-5 text-red-600"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-800">Registrar Sucata de Produção</h3>
+                </div>
+                <button id="manual-sucata-close" type="button" class="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                    <i data-lucide="x" class="w-5 h-5 text-gray-500"></i>
+                </button>
+            </div>
+            <!-- Contexto Máquina/Produto -->
+            <div class="modal-context bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-xl p-3 mb-4 text-xs text-gray-700">
+                <div class="flex items-center justify-between gap-3">
+                    <span>Máquina: <b class="context-machine">-</b></span>
+                    <span>Produto: <b class="context-product">-</b></span>
+                </div>
+            </div>
+            <form id="manual-sucata-form" class="space-y-4">
+                <div class="bg-gradient-to-br from-red-50 to-rose-50 border border-red-200 rounded-xl p-3">
+                    <p class="text-sm text-red-800">
+                        <i data-lucide="info" class="w-4 h-4 inline mr-1"></i>
+                        Registre a sucata gerada durante o processo de Produção. Material será contabilizado nas perdas.
+                    </p>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label for="manual-sucata-date" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Data da Geração</label>
+                        <input type="date" id="manual-sucata-date" name="date" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all" required>
+                    </div>
+                    <div>
+                        <label for="manual-sucata-hour" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Horário (opcional)</label>
+                        <input type="time" id="manual-sucata-hour" name="hour" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all">
+                    </div>
+                </div>
+                <div>
+                    <label for="manual-sucata-shift" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Turno</label>
+                    <select id="manual-sucata-shift" name="shift" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all">
+                        <option value="1">1º Turno</option>
+                        <option value="2">2º Turno</option>
+                        <option value="3">3º Turno</option>
+                    </select>
+                </div>
+                <!-- Código do Operador -->
+                <div>
+                    <label for="manual-sucata-operador" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Código do Operador <span class="text-red-500">*</span></label>
+                    <input type="number" id="manual-sucata-operador" name="operador_cod" min="1" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all" placeholder="Digite o código do operador" required>
+                    <div id="manual-sucata-operador-info" class="mt-2 p-2 bg-gray-100 rounded-lg hidden">
+                        <p class="text-xs text-gray-600"><span class="font-semibold">Operador:</span> <span id="manual-sucata-operador-name">-</span></p>
+                    </div>
+                    <p id="manual-sucata-operador-error" class="text-xs text-red-500 mt-1 hidden">Operador não encontrado no banco de dados</p>
+                </div>
+                <div>
+                    <label for="manual-sucata-type" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Tipo de Sucata *</label>
+                    <select id="manual-sucata-type" name="sucata_type" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all" required>
+                        <option value="">Selecione o tipo...</option>
+                        <option value="galhos">Galhos</option>
+                        <option value="pecas">Peças Defeituosas</option>
+                        <option value="moido">Moído</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="manual-sucata-weight" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Peso da Sucata (kg) *</label>
+                    <input type="number" step="0.01" id="manual-sucata-weight" name="weight" min="0.01" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all" placeholder="Peso em kg (ex: 1.5)" required>
+                </div>
+
+                <div>
+                    <label for="manual-sucata-obs" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Observações</label>
+                    <textarea id="manual-sucata-obs" name="observations" rows="2" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all" placeholder="Detalhes adicionais sobre a geração da sucata (opcional)"></textarea>
+                </div>
+                <div class="flex gap-3 pt-4 border-t border-gray-100 mt-4">
+                    <button type="button" id="manual-sucata-cancel" class="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium text-sm hover:bg-gray-200 transition-colors">
+                        Cancelar
+                    </button>
+                    <button type="submit" id="manual-sucata-save" class="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all">
+                        Registrar Sucata
+                    </button>
+                </div>
+                <div id="manual-sucata-status" class="text-sm font-semibold h-5 text-center mt-2"></div>
+            </form>
+        </div>
+    </div>
+
     <!-- Modal de Lançamento de Moído (PMP) -->
     <div id="moido-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
         <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg border border-gray-100">
@@ -4791,3 +4995,4 @@
     </script>
 </body>
 </html>
+

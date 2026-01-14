@@ -1,0 +1,103 @@
+<!-- 
+    ============================================================================
+    SEÇÃO DE ANÁLISE DE SUCATA - COPIE ESTE CONTEÚDO PARA O index.html
+    ============================================================================
+    
+    INSTRUÇÕES:
+    1. Abra o arquivo index.html
+    2. Localize a linha que contém: <!-- ========== ANLISE DE Paradas ========== -->
+       (aproximadamente na linha 2733)
+    3. ANTES dessa linha, cole todo o conteúdo abaixo (apenas o HTML, não este comentário)
+    4. Salve o arquivo
+    5. Após confirmar que funciona, pode excluir este arquivo
+    
+    ============================================================================
+-->
+
+<!-- ========== SEÇÃO DE ANÁLISE DE SUCATA ========== -->
+<div class="bg-gradient-to-br from-red-50 to-rose-50 rounded-2xl border border-red-200 p-5 hover:shadow-md transition mt-6">
+    <div class="flex items-center gap-3 mb-5">
+        <div class="p-2 bg-red-200 rounded-lg">
+            <i data-lucide="trash-2" class="w-5 h-5 text-red-700"></i>
+        </div>
+        <h3 class="font-semibold text-red-900 text-base">Análise Detalhada de Sucata</h3>
+    </div>
+    
+    <!-- KPIs de Sucata -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+        <div class="bg-white/80 backdrop-blur-sm rounded-xl p-3 border border-red-100">
+            <p class="text-xs font-medium text-red-700">Total Sucata</p>
+            <p id="total-sucata" class="text-xl font-bold text-red-600">--- kg</p>
+        </div>
+        <div class="bg-white/80 backdrop-blur-sm rounded-xl p-3 border border-red-100">
+            <p class="text-xs font-medium text-red-700">Galhos</p>
+            <p id="total-sucata-galhos" class="text-xl font-bold text-red-600">--- kg</p>
+        </div>
+        <div class="bg-white/80 backdrop-blur-sm rounded-xl p-3 border border-red-100">
+            <p class="text-xs font-medium text-red-700">Peças</p>
+            <p id="total-sucata-pecas" class="text-xl font-bold text-red-600">--- kg</p>
+        </div>
+        <div class="bg-white/80 backdrop-blur-sm rounded-xl p-3 border border-red-100">
+            <p class="text-xs font-medium text-red-700">Moído</p>
+            <p id="total-sucata-moido" class="text-xl font-bold text-red-600">--- kg</p>
+        </div>
+    </div>
+    
+    <div class="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-red-100 hover:border-red-300 transition">
+        <h4 class="text-xs font-semibold text-red-700 mb-3 flex items-center gap-2">
+            <i data-lucide="pie-chart" class="w-3 h-3"></i>
+            Sucata por Tipo
+        </h4>
+        <div class="relative" style="height: 280px;">
+            <canvas id="sucata-by-type-chart" class="w-full h-full"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Tabela de Apontamentos de Sucata -->
+<div class="bg-white rounded-2xl shadow-sm border border-red-200 p-5 hover:shadow-md transition mt-6">
+    <div class="flex items-center justify-between mb-5">
+        <div class="flex items-center gap-3">
+            <div class="p-2 bg-red-100 rounded-lg">
+                <i data-lucide="clipboard-list" class="w-5 h-5 text-red-700"></i>
+            </div>
+            <div>
+                <h3 class="font-semibold text-red-900 text-base">Apontamentos de Sucata</h3>
+                <p class="text-xs text-red-600">Registro detalhado de todas as sucatas apontadas</p>
+            </div>
+        </div>
+        <button onclick="exportSucataTable()" class="flex items-center gap-2 px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-xs font-medium transition">
+            <i data-lucide="download" class="w-3 h-3"></i>
+            Exportar
+        </button>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="bg-red-50 text-red-800">
+                    <th class="px-4 py-3 text-left font-semibold rounded-l-lg">Data/Hora</th>
+                    <th class="px-4 py-3 text-center font-semibold">Tipo</th>
+                    <th class="px-4 py-3 text-center font-semibold">Quantidade (kg)</th>
+                    <th class="px-4 py-3 text-left font-semibold rounded-r-lg">Turno</th>
+                </tr>
+            </thead>
+            <tbody id="sucata-apontamentos-table" class="divide-y divide-red-100">
+                <tr>
+                    <td colspan="4" class="px-4 py-8 text-center text-gray-400">
+                        Carregando apontamentos...
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="flex items-center justify-between mt-4 pt-4 border-t border-red-100">
+        <p class="text-xs text-red-600">
+            Mostrando <span id="sucata-table-showing">0</span> de <span id="sucata-table-total">0</span> registros
+        </p>
+        <div class="flex items-center gap-2">
+            <button id="sucata-table-prev" onclick="sucataTablePrevPage()" class="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded text-xs font-medium transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>Anterior</button>
+            <span id="sucata-table-page" class="text-xs text-red-700 font-medium">Página 1</span>
+            <button id="sucata-table-next" onclick="sucataTableNextPage()" class="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded text-xs font-medium transition disabled:opacity-50 disabled:cursor-not-allowed">Próxima</button>
+        </div>
+    </div>
+</div>
