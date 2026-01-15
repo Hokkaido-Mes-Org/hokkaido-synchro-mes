@@ -276,7 +276,7 @@ var productDatabase = [
     { "cod": 4267, "client": "APTAR", "name": "FIXAÇÃO-GS-28/410CUST---THREAD-HDPE-LILA - 31285150", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
     { "cod": 4268, "client": "APTAR", "name": "FIXAÇÃO-GS-28/410CUST-28--THREAD-HDPE-NATURAL-", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
     { "cod": 4269, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-LIL - 31285116", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
-    { "cod": 4271, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-RED - 31285212", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
+    { "cod": 4271, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-RED - 31285212", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
     { "cod": 4272, "client": "APTAR", "name": "FIXAÇÃO-GS-28/410CUST---THREAD-HDPE-PINK - 31285219", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
     { "cod": 4273, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-GRE - 31285242", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 4274, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-ORA - 31285244", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },

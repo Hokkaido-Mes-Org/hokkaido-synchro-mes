@@ -11420,6 +11420,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             setupAdminDadosPage();
         }
 
+        if (page === 'lideranca-producao') {
+            setupLiderancaProducaoPage();
+        }
+
         if (page === 'pmp') {
             // Inicializar aba PMP - Gestão de Materiais
             if (typeof initPMPPage === 'function') {
@@ -31674,6 +31678,687 @@ window.cleanMachineDuplicates = async function(machines) {
 };
 
 console.log('🛠️ Ferramentas de admin carregadas. Use window.cleanTodayDuplicates() ou window.cleanMachineDuplicates([...]) no console.');
+
+// ================================
+// MÓDULO: LIDERANÇA PRODUÇÃO
+// Escala de máquinas por operador
+// ================================
+
+let liderancaProducaoInitialized = false;
+let escalaEmEdicao = null; // Armazena o ID da escala sendo editada
+
+// Função auxiliar para obter data de produção (considera turno noturno)
+function getLiderancaDateString(date = new Date()) {
+    const dateObj = date instanceof Date ? date : new Date(date);
+    const hour = dateObj.getHours();
+    
+    // Se for antes das 7h, pertence ao dia de trabalho anterior
+    if (hour < 7) {
+        const prevDay = new Date(dateObj);
+        prevDay.setDate(prevDay.getDate() - 1);
+        return new Date(prevDay.getTime() - (prevDay.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+    }
+    
+    return new Date(dateObj.getTime() - (dateObj.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+}
+
+// Função auxiliar de debounce para o módulo
+function liderancaDebounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// Função auxiliar para obter nome do usuário atual
+function getLiderancaCurrentUserName() {
+    if (window.authSystem && window.authSystem.getCurrentUser()) {
+        return window.authSystem.getCurrentUser().name || 'Sistema';
+    }
+    return 'Sistema';
+}
+
+// Função auxiliar para mostrar notificações/toast
+function liderancaShowToast(message, type = 'info') {
+    // Tentar usar a função global showNotification
+    if (typeof showNotification === 'function') {
+        showNotification(message, type);
+    } else if (typeof window.showNotification === 'function') {
+        window.showNotification(message, type);
+    } else {
+        // Criar toast visual simples
+        const toast = document.createElement('div');
+        const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500';
+        toast.className = `fixed bottom-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg z-50 transition-all transform translate-y-0 opacity-100`;
+        toast.innerHTML = `<div class="flex items-center gap-2"><span>${message}</span></div>`;
+        document.body.appendChild(toast);
+        
+        // Remover após 4 segundos
+        setTimeout(() => {
+            toast.classList.add('opacity-0', 'translate-y-4');
+            setTimeout(() => toast.remove(), 300);
+        }, 4000);
+        
+        console.log(`[Liderança ${type.toUpperCase()}] ${message}`);
+    }
+}
+
+function setupLiderancaProducaoPage() {
+    if (liderancaProducaoInitialized) {
+        console.log('[Liderança] Página já inicializada');
+        loadEscalas();
+        return;
+    }
+
+    console.log('[Liderança] Inicializando página...');
+
+    // Definir data padrão como hoje
+    const escalaDataInput = document.getElementById('escala-data');
+    if (escalaDataInput) {
+        escalaDataInput.value = getLiderancaDateString();
+    }
+
+    // Botão Nova Escala
+    const btnNovaEscala = document.getElementById('btn-nova-escala');
+    if (btnNovaEscala) {
+        btnNovaEscala.addEventListener('click', openNovaEscalaModal);
+    }
+
+    // Botão Buscar
+    const btnBuscarEscalas = document.getElementById('btn-buscar-escalas');
+    if (btnBuscarEscalas) {
+        btnBuscarEscalas.addEventListener('click', loadEscalas);
+    }
+
+    // Modal Nova Escala
+    setupNovaEscalaModal();
+
+    // Carregar escalas do dia
+    loadEscalas();
+
+    liderancaProducaoInitialized = true;
+    
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+
+    console.log('[Liderança] Página inicializada com sucesso');
+}
+
+function setupNovaEscalaModal() {
+    const modal = document.getElementById('nova-escala-modal');
+    const form = document.getElementById('nova-escala-form');
+    const closeBtn = document.getElementById('nova-escala-close');
+    const cancelBtn = document.getElementById('nova-escala-cancel');
+    const saveBtn = document.getElementById('nova-escala-save');
+    const codOperadorInput = document.getElementById('nova-escala-cod-operador');
+    const selectAllBtn = document.getElementById('nova-escala-select-all');
+    const clearAllBtn = document.getElementById('nova-escala-clear-all');
+
+    // Popular grid de máquinas
+    populateNovaEscalaMaquinasGrid();
+
+    // Buscar operador ao digitar código
+    if (codOperadorInput) {
+        codOperadorInput.addEventListener('input', liderancaDebounce(buscarOperadorEscala, 300));
+        codOperadorInput.addEventListener('change', buscarOperadorEscala);
+    }
+
+    // Fechar modal
+    if (closeBtn) closeBtn.addEventListener('click', closeNovaEscalaModal);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeNovaEscalaModal);
+
+    // Salvar escala
+    if (saveBtn) saveBtn.addEventListener('click', salvarNovaEscala);
+
+    // Selecionar/Limpar todas
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', () => {
+            const checkboxes = document.querySelectorAll('#nova-escala-maquinas-grid input[type="checkbox"]');
+            checkboxes.forEach(cb => cb.checked = true);
+            updateMaquinasCount();
+        });
+    }
+    if (clearAllBtn) {
+        clearAllBtn.addEventListener('click', () => {
+            const checkboxes = document.querySelectorAll('#nova-escala-maquinas-grid input[type="checkbox"]');
+            checkboxes.forEach(cb => cb.checked = false);
+            updateMaquinasCount();
+        });
+    }
+
+    // Fechar ao clicar fora
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeNovaEscalaModal();
+        });
+    }
+}
+
+function populateNovaEscalaMaquinasGrid() {
+    const grid = document.getElementById('nova-escala-maquinas-grid');
+    if (!grid) return;
+
+    // Usar machineDatabase do database.js
+    const machines = window.machineDatabase || [];
+    
+    grid.innerHTML = machines.map(machine => `
+        <label class="flex items-center gap-2 p-2 bg-white rounded-lg border border-gray-200 hover:border-violet-400 hover:bg-violet-50 cursor-pointer transition-all">
+            <input type="checkbox" name="escala-maquina" value="${machine.id}" 
+                   class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"
+                   onchange="updateMaquinasCount()">
+            <span class="text-sm font-medium text-gray-700">${machine.id}</span>
+        </label>
+    `).join('');
+}
+
+function updateMaquinasCount() {
+    const countEl = document.getElementById('nova-escala-count');
+    if (!countEl) return;
+    
+    const checkboxes = document.querySelectorAll('#nova-escala-maquinas-grid input[type="checkbox"]:checked');
+    countEl.textContent = `${checkboxes.length} máquinas selecionadas`;
+}
+
+function buscarOperadorEscala() {
+    const codInput = document.getElementById('nova-escala-cod-operador');
+    const nomeInput = document.getElementById('nova-escala-nome-operador');
+    const infoEl = document.getElementById('nova-escala-operador-info');
+    const erroEl = document.getElementById('nova-escala-operador-erro');
+
+    if (!codInput || !nomeInput || !infoEl || !erroEl) return;
+
+    const codigo = parseInt(codInput.value);
+    
+    if (isNaN(codigo)) {
+        nomeInput.value = '';
+        infoEl.classList.add('hidden');
+        erroEl.classList.add('hidden');
+        return;
+    }
+
+    // Buscar no userDatabase
+    const users = window.userDatabase || [];
+    const operador = users.find(u => u.cod === codigo);
+
+    if (operador) {
+        nomeInput.value = operador.nomeCompleto || operador.nomeUsuario;
+        infoEl.classList.remove('hidden');
+        erroEl.classList.add('hidden');
+    } else {
+        nomeInput.value = '';
+        infoEl.classList.add('hidden');
+        erroEl.classList.remove('hidden');
+    }
+}
+
+function openNovaEscalaModal() {
+    const modal = document.getElementById('nova-escala-modal');
+    if (!modal) return;
+
+    // Limpar modo de edição
+    escalaEmEdicao = null;
+    
+    // Atualizar título do modal
+    const modalTitle = modal.querySelector('h3');
+    if (modalTitle) modalTitle.textContent = 'Nova Escala de Operador';
+
+    // Definir data padrão
+    const dataInput = document.getElementById('nova-escala-data');
+    const escalaDataInput = document.getElementById('escala-data');
+    if (dataInput) {
+        dataInput.value = escalaDataInput?.value || getLiderancaDateString();
+    }
+
+    // Limpar form
+    const form = document.getElementById('nova-escala-form');
+    if (form) form.reset();
+    
+    // Limpar seleção de máquinas
+    const checkboxes = document.querySelectorAll('#nova-escala-maquinas-grid input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = false);
+    updateMaquinasCount();
+
+    // Limpar info do operador
+    const nomeInput = document.getElementById('nova-escala-nome-operador');
+    const infoEl = document.getElementById('nova-escala-operador-info');
+    const erroEl = document.getElementById('nova-escala-operador-erro');
+    if (nomeInput) nomeInput.value = '';
+    if (infoEl) infoEl.classList.add('hidden');
+    if (erroEl) erroEl.classList.add('hidden');
+
+    // Re-setar data após reset
+    if (dataInput) {
+        dataInput.value = escalaDataInput?.value || getLiderancaDateString();
+    }
+
+    modal.classList.remove('hidden');
+    
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+// Função para editar uma escala existente
+async function editarEscala(escalaId) {
+    const modal = document.getElementById('nova-escala-modal');
+    if (!modal) return;
+
+    try {
+        // Buscar dados da escala no Firestore
+        const db = firebase.firestore();
+        const doc = await db.collection('escalas_operadores').doc(escalaId).get();
+        
+        if (!doc.exists) {
+            liderancaShowToast('Escala não encontrada', 'error');
+            return;
+        }
+
+        const escala = doc.data();
+        escalaEmEdicao = escalaId;
+
+        // Atualizar título do modal
+        const modalTitle = modal.querySelector('h3');
+        if (modalTitle) modalTitle.textContent = 'Editar Escala de Operador';
+
+        // Preencher campos do formulário
+        const dataInput = document.getElementById('nova-escala-data');
+        const turnoInput = document.getElementById('nova-escala-turno');
+        const codOperadorInput = document.getElementById('nova-escala-cod-operador');
+        const nomeOperadorInput = document.getElementById('nova-escala-nome-operador');
+        const obsInput = document.getElementById('nova-escala-obs');
+
+        if (dataInput) dataInput.value = escala.data;
+        if (turnoInput) turnoInput.value = escala.turno;
+        if (codOperadorInput) codOperadorInput.value = escala.operadorCod;
+        if (nomeOperadorInput) nomeOperadorInput.value = escala.operadorNome || escala.operadorUser;
+        if (obsInput) obsInput.value = escala.observacoes || '';
+
+        // Mostrar info do operador
+        const infoEl = document.getElementById('nova-escala-operador-info');
+        const erroEl = document.getElementById('nova-escala-operador-erro');
+        if (infoEl) infoEl.classList.remove('hidden');
+        if (erroEl) erroEl.classList.add('hidden');
+
+        // Marcar máquinas selecionadas
+        const checkboxes = document.querySelectorAll('#nova-escala-maquinas-grid input[type="checkbox"]');
+        checkboxes.forEach(cb => {
+            cb.checked = (escala.maquinas || []).includes(cb.value);
+        });
+        updateMaquinasCount();
+
+        modal.classList.remove('hidden');
+        
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+
+    } catch (error) {
+        console.error('[Liderança] Erro ao carregar escala para edição:', error);
+        liderancaShowToast('Erro ao carregar escala', 'error');
+    }
+}
+
+// Expor função globalmente para onclick
+window.editarEscala = editarEscala;
+
+function closeNovaEscalaModal() {
+    const modal = document.getElementById('nova-escala-modal');
+    if (modal) modal.classList.add('hidden');
+    escalaEmEdicao = null; // Limpar modo de edição ao fechar
+}
+
+async function salvarNovaEscala() {
+    const dataInput = document.getElementById('nova-escala-data');
+    const turnoInput = document.getElementById('nova-escala-turno');
+    const codOperadorInput = document.getElementById('nova-escala-cod-operador');
+    const nomeOperadorInput = document.getElementById('nova-escala-nome-operador');
+    const obsInput = document.getElementById('nova-escala-obs');
+
+    // Validações
+    if (!dataInput?.value) {
+        liderancaShowToast('Selecione a data da escala', 'error');
+        return;
+    }
+    if (!turnoInput?.value) {
+        liderancaShowToast('Selecione o turno', 'error');
+        return;
+    }
+    if (!codOperadorInput?.value) {
+        liderancaShowToast('Informe o código do operador', 'error');
+        return;
+    }
+
+    const codigo = parseInt(codOperadorInput.value);
+    const users = window.userDatabase || [];
+    const operador = users.find(u => u.cod === codigo);
+
+    if (!operador) {
+        liderancaShowToast('Operador não encontrado no sistema', 'error');
+        return;
+    }
+
+    // Pegar máquinas selecionadas
+    const maquinasSelecionadas = Array.from(
+        document.querySelectorAll('#nova-escala-maquinas-grid input[type="checkbox"]:checked')
+    ).map(cb => cb.value);
+
+    if (maquinasSelecionadas.length === 0) {
+        liderancaShowToast('Selecione pelo menos uma máquina', 'error');
+        return;
+    }
+
+    // Preparar dados
+    const escalaData = {
+        data: dataInput.value,
+        turno: parseInt(turnoInput.value),
+        operadorCod: operador.cod,
+        operadorNome: operador.nomeCompleto || operador.nomeUsuario,
+        operadorUser: operador.nomeUsuario,
+        maquinas: maquinasSelecionadas,
+        observacoes: obsInput?.value || '',
+        atualizadoEm: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    // Se não é edição, adicionar campos de criação
+    if (!escalaEmEdicao) {
+        escalaData.criadoPor = getLiderancaCurrentUserName();
+        escalaData.criadoEm = firebase.firestore.FieldValue.serverTimestamp();
+    } else {
+        escalaData.editadoPor = getLiderancaCurrentUserName();
+    }
+
+    try {
+        const db = firebase.firestore();
+        
+        if (escalaEmEdicao) {
+            // Modo edição - atualizar documento existente
+            await db.collection('escalas_operadores').doc(escalaEmEdicao).update(escalaData);
+            liderancaShowToast(`Escala atualizada com sucesso! ${operador.nomeUsuario} → ${maquinasSelecionadas.join(', ')}`, 'success');
+            
+            // Registrar no histórico
+            if (typeof registrarHistorico === 'function') {
+                registrarHistorico({
+                    tipo: 'escala',
+                    acao: 'Edição de Escala',
+                    detalhes: `Escala do operador ${operador.nomeUsuario} (${operador.cod}) atualizada. Máquinas: ${maquinasSelecionadas.join(', ')} - Turno ${turnoInput.value}`,
+                    usuario: getLiderancaCurrentUserName(),
+                    data: dataInput.value
+                });
+            }
+        } else {
+            // Modo criação - adicionar novo documento
+            await db.collection('escalas_operadores').add(escalaData);
+            liderancaShowToast(`Escala salva com sucesso! ${operador.nomeUsuario} → ${maquinasSelecionadas.join(', ')}`, 'success');
+            
+            // Registrar no histórico
+            if (typeof registrarHistorico === 'function') {
+                registrarHistorico({
+                    tipo: 'escala',
+                    acao: 'Cadastro de Escala',
+                    detalhes: `Operador ${operador.nomeUsuario} (${operador.cod}) atribuído às máquinas: ${maquinasSelecionadas.join(', ')} - Turno ${turnoInput.value}`,
+                    usuario: getLiderancaCurrentUserName(),
+                    data: dataInput.value
+                });
+            }
+        }
+        
+        closeNovaEscalaModal();
+        loadEscalas();
+
+    } catch (error) {
+        console.error('[Liderança] Erro ao salvar escala:', error);
+        liderancaShowToast('Erro ao salvar escala: ' + error.message, 'error');
+    }
+}
+
+async function loadEscalas() {
+    const dataInput = document.getElementById('escala-data');
+    const turnoSelect = document.getElementById('escala-turno');
+    const fluxogramaEl = document.getElementById('escala-fluxograma');
+    const listaEl = document.getElementById('escala-lista');
+
+    const data = dataInput?.value || getLiderancaDateString();
+    const turnoFiltro = turnoSelect?.value || '';
+
+    console.log('[Liderança] Carregando escalas:', { data, turno: turnoFiltro });
+
+    try {
+        const db = firebase.firestore();
+        let query = db.collection('escalas_operadores').where('data', '==', data);
+
+        if (turnoFiltro) {
+            query = query.where('turno', '==', parseInt(turnoFiltro));
+        }
+
+        const snapshot = await query.get();
+        const escalas = [];
+        
+        snapshot.forEach(doc => {
+            escalas.push({ id: doc.id, ...doc.data() });
+        });
+
+        console.log('[Liderança] Escalas encontradas:', escalas.length);
+
+        // Atualizar estatísticas
+        updateEscalaStats(escalas);
+
+        // Renderizar fluxograma
+        renderEscalaFluxograma(escalas);
+
+        // Renderizar lista
+        renderEscalaLista(escalas);
+
+    } catch (error) {
+        console.error('[Liderança] Erro ao carregar escalas:', error);
+        liderancaShowToast('Erro ao carregar escalas', 'error');
+    }
+}
+
+function updateEscalaStats(escalas) {
+    const totalOperadores = document.getElementById('escala-total-operadores');
+    const totalMaquinas = document.getElementById('escala-total-maquinas');
+
+    // Operadores únicos
+    const operadoresUnicos = new Set(escalas.map(e => e.operadorCod));
+    if (totalOperadores) totalOperadores.textContent = operadoresUnicos.size;
+
+    // Máquinas cobertas
+    const maquinasCobertas = new Set();
+    escalas.forEach(e => {
+        if (e.maquinas && Array.isArray(e.maquinas)) {
+            e.maquinas.forEach(m => maquinasCobertas.add(m));
+        }
+    });
+    if (totalMaquinas) totalMaquinas.textContent = maquinasCobertas.size;
+}
+
+function renderEscalaFluxograma(escalas) {
+    const container = document.getElementById('escala-fluxograma');
+    if (!container) return;
+
+    if (escalas.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-12 text-gray-400 col-span-full">
+                <i data-lucide="calendar-search" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                <p>Nenhuma escala cadastrada para esta data</p>
+            </div>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        return;
+    }
+
+    const turnoColors = {
+        1: { bg: 'bg-amber-50', border: 'border-amber-300', badge: 'bg-amber-500', text: 'text-amber-700' },
+        2: { bg: 'bg-sky-50', border: 'border-sky-300', badge: 'bg-sky-500', text: 'text-sky-700' },
+        3: { bg: 'bg-violet-50', border: 'border-violet-300', badge: 'bg-violet-500', text: 'text-violet-700' }
+    };
+
+    const turnoLabels = { 1: '1º Turno', 2: '2º Turno', 3: '3º Turno' };
+
+    // Agrupar por operador
+    const operadoresMap = {};
+    escalas.forEach(escala => {
+        const key = `${escala.operadorCod}-${escala.turno}`;
+        if (!operadoresMap[key]) {
+            operadoresMap[key] = {
+                cod: escala.operadorCod,
+                nome: escala.operadorNome || escala.operadorUser,
+                user: escala.operadorUser,
+                turno: escala.turno,
+                maquinas: []
+            };
+        }
+        operadoresMap[key].maquinas.push(...(escala.maquinas || []));
+    });
+
+    // Remover duplicatas de máquinas e ordenar
+    Object.values(operadoresMap).forEach(op => {
+        op.maquinas = [...new Set(op.maquinas)].sort((a, b) => {
+            const numA = parseInt(a.replace(/\D/g, ''));
+            const numB = parseInt(b.replace(/\D/g, ''));
+            return numA - numB;
+        });
+    });
+
+    // Ordenar por turno e depois por nome
+    const operadoresOrdenados = Object.values(operadoresMap).sort((a, b) => {
+        if (a.turno !== b.turno) return a.turno - b.turno;
+        return a.nome.localeCompare(b.nome);
+    });
+
+    container.innerHTML = operadoresOrdenados.map(op => {
+        const colors = turnoColors[op.turno] || turnoColors[1];
+        
+        return `
+            <div class="p-4 rounded-2xl border-2 ${colors.bg} ${colors.border} transition-all hover:shadow-lg hover:-translate-y-1">
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="w-12 h-12 rounded-xl ${colors.badge} flex items-center justify-center shadow-md">
+                        <i data-lucide="user" class="w-6 h-6 text-white"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="font-bold text-gray-800 text-base truncate">${op.nome}</div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-gray-500">Cód: ${op.cod}</span>
+                            <span class="px-2 py-0.5 text-[10px] font-bold rounded-full ${colors.badge} text-white">${turnoLabels[op.turno]}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    ${op.maquinas.map(maq => `
+                        <div class="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-lg border border-gray-200 shadow-sm">
+                            <div class="w-5 h-5 rounded bg-emerald-500 flex items-center justify-center">
+                                <i data-lucide="cpu" class="w-3 h-3 text-white"></i>
+                            </div>
+                            <span class="font-semibold text-gray-700 text-sm">${maq}</span>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="mt-3 pt-2 border-t ${colors.border} border-opacity-50 text-xs ${colors.text} font-medium flex items-center gap-1">
+                    <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+                    ${op.maquinas.length} máquina${op.maquinas.length > 1 ? 's' : ''} atribuída${op.maquinas.length > 1 ? 's' : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function renderEscalaLista(escalas) {
+    const container = document.getElementById('escala-lista');
+    if (!container) return;
+
+    if (escalas.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-8 text-gray-400">
+                <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                <p>Nenhuma escala cadastrada para esta data</p>
+            </div>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        return;
+    }
+
+    const turnoLabels = {
+        1: '1º Turno',
+        2: '2º Turno',
+        3: '3º Turno'
+    };
+
+    const turnoColors = {
+        1: 'bg-yellow-100 text-yellow-800',
+        2: 'bg-blue-100 text-blue-800',
+        3: 'bg-purple-100 text-purple-800'
+    };
+
+    container.innerHTML = escalas.map(escala => `
+        <div class="p-4 bg-white rounded-xl border border-gray-200 hover:shadow-md transition-all">
+            <div class="flex items-start justify-between gap-4">
+                <div class="flex-1">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center">
+                            <i data-lucide="user" class="w-5 h-5 text-violet-600"></i>
+                        </div>
+                        <div>
+                            <div class="font-semibold text-gray-800">${escala.operadorNome || escala.operadorUser}</div>
+                            <div class="text-xs text-gray-500">Código: ${escala.operadorCod}</div>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap gap-2 mt-3">
+                        <span class="px-2 py-1 text-xs font-medium rounded-full ${turnoColors[escala.turno] || 'bg-gray-100 text-gray-700'}">
+                            ${turnoLabels[escala.turno] || 'Turno ' + escala.turno}
+                        </span>
+                        ${(escala.maquinas || []).map(m => `
+                            <span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full">${m}</span>
+                        `).join('')}
+                    </div>
+                    ${escala.observacoes ? `
+                        <div class="mt-2 text-xs text-gray-500 italic">${escala.observacoes}</div>
+                    ` : ''}
+                </div>
+                <div class="flex flex-col gap-2">
+                    <button onclick="editarEscala('${escala.id}')" class="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar escala">
+                        <i data-lucide="pencil" class="w-4 h-4"></i>
+                    </button>
+                    <button onclick="excluirEscala('${escala.id}')" class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Excluir escala">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+async function excluirEscala(escalaId) {
+    if (!confirm('Tem certeza que deseja excluir esta escala?')) return;
+
+    try {
+        const db = firebase.firestore();
+        await db.collection('escalas_operadores').doc(escalaId).delete();
+        
+        liderancaShowToast('Escala excluída com sucesso', 'success');
+        loadEscalas();
+
+    } catch (error) {
+        console.error('[Liderança] Erro ao excluir escala:', error);
+        liderancaShowToast('Erro ao excluir escala', 'error');
+    }
+}
+
+// Expor função globalmente para onclick
+window.excluirEscala = excluirEscala;
+
+// ================================
+// FIM DO MÓDULO LIDERANÇA PRODUÇÃO
+// ================================
 
 // Inicializar módulo de ordens quando página carregar
 document.addEventListener('DOMContentLoaded', function() {

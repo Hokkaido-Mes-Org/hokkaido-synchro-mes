@@ -128,7 +128,7 @@ class AuthSystem {
         const isAuthorizedAdmin = 
             this.currentUser.name === 'Leandro Camargo' || this.currentUser.email === 'leandro@hokkaido.com.br' ||
             this.currentUser.role === 'suporte';
-        const isGestor = this.currentUser.role === 'gestor' || this.currentUser.role === 'suporte';
+        const isGestor = this.currentUser.role === 'gestor' || this.currentUser.role === 'suporte' || this.currentUser.role === 'lider';
         
         // ⚙️ ACESSO EXCLUSIVO: Aba Qualidade apenas para usuários autorizados
         if (tabName === 'qualidade' && !isAuthorizedAdmin) {
@@ -184,6 +184,16 @@ class AuthSystem {
             // Se é um usuário permitido, permite acesso direto
             return true;
         }
+
+        // ⚙️ ACESSO EXCLUSIVO: Aba Liderança Produção para Leandro Camargo, Michelle Benjamin e Líderes (em teste)
+        if (tabName === 'lideranca-producao') {
+            const allowedLideranca = ['Leandro Camargo', 'Michelle Benjamin', 'Luciano', 'Davi Batista', 'Linaldo'];
+            const isLider = this.currentUser.role === 'lider';
+            if (!allowedLideranca.includes(this.currentUser.name) && !isLider) {
+                return false;
+            }
+            return true;
+        }
         
         const tabPermissions = {
             planejamento: ['planejamento', 'lancamento'], // Operadores também acessam
@@ -198,6 +208,7 @@ class AuthSystem {
             'acompanhamento': ['lancamento', 'analise'],
             'historico-sistema': ['analise', 'planejamento'], // Gestores e admins
             'admin-dados': ['planejamento', 'analise'], // Gestores e admins (verificado acima)
+            'lideranca-producao': ['planejamento', 'analise'], // Liderança - gestores
             'pmp': [] // Controlado por restrição de usuário exclusiva acima
         };
         
