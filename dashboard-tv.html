@@ -2702,6 +2702,22 @@
             // Auto-update intervals
             setInterval(updateDateTime, 1000);
             setInterval(loadRealTimeData, 60000); // Atualiza a cada 1 minuto
+            
+            // ✅ NOVO: Listener em tempo real para paradas ativas (active_downtimes)
+            // Isso garante que mudanças em paradas ativas sejam refletidas quase instantaneamente
+            db.collection('active_downtimes').onSnapshot(snapshot => {
+                try {
+                    console.log('[Dashboard TV] Snapshot em tempo real de active_downtimes:', snapshot.size);
+                    // Atualizar paradas ativas em tempo real
+                    updateRealTimeActiveDowntimes();
+                } catch (error) {
+                    console.error('[Dashboard TV] Erro ao processar snapshot de active_downtimes:', error);
+                }
+            }, error => {
+                console.warn('[Dashboard TV] Erro ao ouvir active_downtimes:', error.message);
+                // Falha silenciosa - o polling de 10 segundos ainda funcionará
+            });
+            
             console.log('[Dashboard TV] Inicialização completa!');
         });
 
@@ -3166,32 +3182,38 @@
                 
                 console.log('[Dashboard TV] Paradas LIVE (active_downtimes):', liveActiveDowntimes.length, liveActiveDowntimes.map(d => d.machine));
                 
-                // Adicionar paradas longas e paradas live ao cache COM DEDUPLICAÇÃO
-                // Prioridade: liveActiveDowntimes > extendedDowntimes > cachedDowntimes (downtime_entries)
-                const allDowntimes = [...cachedDowntimes, ...extendedDowntimes, ...liveActiveDowntimes];
+                // Adicionar paradas longas e paradas live ao cache
+                // IMPORTANTE: Manter TODAS as paradas sem deduplicar para permitir análise completa
+                // A deduplicação será feita nas funções específicas (updateMachinesGrid, updateStoppedMachinesList)
+                cachedDowntimes = [...cachedDowntimes, ...extendedDowntimes, ...liveActiveDowntimes];
                 
-                // Deduplicar por máquina - manter apenas a parada mais recente/prioritária por máquina
-                const machineDowntimeMap = new Map();
-                allDowntimes.forEach(dt => {
-                    const machineId = (dt.machine || dt.machine_id || dt.maquina || '').toUpperCase();
-                    if (!machineId) return;
-                    
-                    const existing = machineDowntimeMap.get(machineId);
-                    
-                    // Prioridade: active_live > extended > normal
-                    const getPriority = (d) => {
-                        if (d.source === 'active_live') return 3;
-                        if (d.source === 'extended') return 2;
-                        return 1;
-                    };
-                    
-                    if (!existing || getPriority(dt) > getPriority(existing)) {
-                        machineDowntimeMap.set(machineId, dt);
-                    }
+                console.log('[Dashboard TV] Total de paradas (todas as fontes):', cachedDowntimes.length);
+                console.log('[Dashboard TV] Paradas por fonte:', {
+                    downtime_entries: cachedDowntimes.filter(d => !d.source).length,
+                    extended: cachedDowntimes.filter(d => d.source === 'extended').length,
+                    active_live: cachedDowntimes.filter(d => d.source === 'active_live').length
                 });
                 
-                cachedDowntimes = Array.from(machineDowntimeMap.values());
-                console.log('[Dashboard TV] Total de paradas DEDUPLICADAS:', cachedDowntimes.length);
+                // DEBUG: Log específico para H03
+                const h03Downtimes = cachedDowntimes.filter(d => 
+                    (d.machine || d.machine_id || d.maquina || '').toUpperCase() === 'H03'
+                );
+                if (h03Downtimes.length > 0) {
+                    console.log('[Dashboard TV] 🔍 H03 - Paradas encontradas:', h03Downtimes.length);
+                    h03Downtimes.forEach((dt, idx) => {
+                        console.log(`[Dashboard TV] H03 Parada #${idx + 1}:`, {
+                            source: dt.source || 'downtime_entries',
+                            status: dt.status,
+                            isActive: dt.isActive,
+                            reason: dt.reason || dt.motivo,
+                            startTime: dt.startTime || dt.start_time,
+                            endTime: dt.endTime || dt.end_time,
+                            date: dt.date || dt.start_date
+                        });
+                    });
+                } else {
+                    console.log('[Dashboard TV] 🔍 H03 - NENHUMA parada encontrada no cache');
+                }
                 
                 // Debug: amostras
                 if (cachedProductions.length > 0) {
@@ -3307,6 +3329,68 @@
                 alertText.title = `Máquinas: ${machines}`;
             } else {
                 alertEl.style.display = 'none';
+            }
+        }
+
+        // ✅ NOVO: Função para atualizar paradas ativas em tempo real (listener)
+        async function updateRealTimeActiveDowntimes() {
+            try {
+                console.log('[Dashboard TV] Atualizando paradas ativas em tempo real...');
+                const today = getFilteredDateForData();
+                
+                // Buscar paradas LIVE ativas (active_downtimes)
+                const activeDowntimesSnapshot = await db.collection('active_downtimes').get();
+                const liveActiveDowntimes = activeDowntimesSnapshot.docs
+                    .filter(doc => {
+                        const data = doc.data();
+                        return data && data.isActive === true;
+                    })
+                    .map(doc => {
+                        const data = doc.data();
+                        const machineId = doc.id;
+                        let duration = data.durationMinutes || 0;
+                        
+                        if (data.startDate) {
+                            const startTime = data.startDate?.toDate?.() || new Date(data.startDate);
+                            duration = Math.floor((new Date() - startTime) / (1000 * 60));
+                        }
+                        
+                        return {
+                            id: machineId,
+                            source: 'active_live',
+                            status: 'active',
+                            isActive: true,
+                            date: today,
+                            machine: machineId,
+                            machine_id: machineId,
+                            reason: data.reason || 'Parada ativa',
+                            type: data.type || 'parada',
+                            duration: duration,
+                            startDate: data.startDate
+                        };
+                    });
+                
+                console.log('[Dashboard TV] Paradas LIVE atualizadas:', liveActiveDowntimes.length);
+                
+                // DEBUG: Verificar se H03 está nas paradas LIVE
+                const h03Live = liveActiveDowntimes.find(d => d.machine === 'H03');
+                if (h03Live) {
+                    console.log('[Dashboard TV] 🔍 H03 encontrada em active_downtimes:', h03Live);
+                }
+                
+                // Atualizar apenas as paradas LIVE no cachedDowntimes (remover antigas, adicionar novas)
+                // Manter as outras paradas (extended e normal) intactas
+                cachedDowntimes = cachedDowntimes.filter(dt => dt.source !== 'active_live');
+                cachedDowntimes.push(...liveActiveDowntimes);
+                
+                // Atualizar TODAS as funções que dependem de paradas
+                updateActiveDowntimeAlert();
+                updateMachinesGrid();
+                updateStoppedMachinesList();
+                updateMachineStatusGrid();
+                
+            } catch (error) {
+                console.error('[Dashboard TV] Erro ao atualizar paradas em tempo real:', error);
             }
         }
 
@@ -4571,6 +4655,17 @@
                 if (downtimes && downtimes.length > 0) {
                     // Filtrar apenas paradas ativas (não finalizadas)
                     const activeDowntimes = downtimes.filter(dt => {
+                        // PRIORIDADE 1: Parada LIVE (active_downtimes) - SEMPRE ativa
+                        if (dt.source === 'active_live' && dt.isActive === true) {
+                            return true;
+                        }
+                        
+                        // PRIORIDADE 2: Extended downtimes com status = 'active'
+                        if (dt.source === 'extended' && dt.status === 'active') {
+                            return true;
+                        }
+                        
+                        // PRIORIDADE 3: Paradas normais (downtime_entries)
                         // Se tem status, verificar se é ativo
                         if (dt.status && dt.status !== 'active' && dt.status !== 'registered') {
                             return false;

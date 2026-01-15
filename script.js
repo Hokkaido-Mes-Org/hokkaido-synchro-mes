@@ -5560,7 +5560,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         // Gerar gráficos (usando allLossesData que inclui pmp_borra)
         await generateLossesParetoChart(regularLossesData);
         await generateLossesByMachineChart(regularLossesData);
-        await generateLossesByMaterialChart(allLossesData);
+        await generateLossesByMaterialChart(regularLossesData); // ✅ CORRIGIDO: Usar apenas regularLossesData (sem borra)
         
         // Gerar gráficos específicos de borra
         await generateBorraByMachineChart(borraData);
