@@ -187,9 +187,19 @@ class AuthSystem {
 
         // ⚙️ ACESSO EXCLUSIVO: Aba Liderança Produção para Leandro Camargo, Michelle Benjamin e Líderes (em teste)
         if (tabName === 'lideranca-producao') {
-            const allowedLideranca = ['Leandro Camargo', 'Michelle Benjamin', 'Luciano', 'Davi Batista', 'Linaldo'];
+            const allowedLideranca = ['Leandro Camargo', 'Michelle Benjamin', 'Manaus Silva', 'Luciano', 'Davi Batista', 'Linaldo'];
             const isLider = this.currentUser.role === 'lider';
             if (!allowedLideranca.includes(this.currentUser.name) && !isLider) {
+                return false;
+            }
+            return true;
+        }
+
+        // ⚙️ ACESSO: Aba Setup - apenas Leandro, Michelle e Líderes
+        if (tabName === 'setup-maquinas') {
+            const allowedSetup = ['Leandro Camargo', 'Michelle Benjamin'];
+            const isLider = this.currentUser.role === 'lider';
+            if (!allowedSetup.includes(this.currentUser.name) && !isLider) {
                 return false;
             }
             return true;
