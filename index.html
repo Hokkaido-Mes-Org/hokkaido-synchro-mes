@@ -373,6 +373,10 @@
                     <i data-lucide="users" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Liderança</span>
                     <span class="nav-tooltip">Liderança Produção</span>
                 </a>
+                <a href="#" class="nav-btn group" data-page="setup-maquinas" title="Setup de Máquinas">
+                    <i data-lucide="wrench" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Setup</span>
+                    <span class="nav-tooltip">Setup de Máquinas</span>
+                </a>
                 <a href="dashboard-tv.html" target="_blank" rel="noopener" id="nav-dashboard-tv" class="nav-btn group" title="Dashboard TV">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 flex-shrink-0"><rect width="20" height="15" x="2" y="7" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg><span class="nav-text transition-opacity duration-300">Dashboard TV</span>
                     <span class="nav-tooltip">Dashboard TV</span>
@@ -1444,6 +1448,123 @@
                                         <p>Selecione uma data e clique em "Buscar Registros"</p>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PÁGINA: Setup de Máquinas -->
+                <div id="setup-maquinas-page" class="page-content hidden space-y-4 p-2">
+                    <div class="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+                        <!-- Header -->
+                        <div class="bg-gradient-to-r from-orange-600 to-amber-600 px-6 py-4">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="p-2 bg-white/10 rounded-xl">
+                                        <i data-lucide="wrench" class="w-6 h-6 text-white"></i>
+                                    </div>
+                                    <div>
+                                        <h2 class="text-xl font-bold text-white">Setup de Máquinas</h2>
+                                        <p class="text-orange-100 text-sm">Registro de atividades de setup e troca de moldes</p>
+                                    </div>
+                                </div>
+                                <button id="btn-novo-setup" class="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition flex items-center gap-2 font-semibold">
+                                    <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                                    Novo Setup
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Filtros -->
+                        <div class="border-b border-gray-200 p-4 bg-gray-50">
+                            <div class="flex flex-wrap items-end gap-4">
+                                <div class="flex-1 min-w-[150px]">
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                                        <i data-lucide="calendar" class="w-3 h-3 inline mr-1"></i> Data Início
+                                    </label>
+                                    <input type="date" id="setup-data-inicio" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500">
+                                </div>
+                                <div class="flex-1 min-w-[150px]">
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                                        <i data-lucide="calendar" class="w-3 h-3 inline mr-1"></i> Data Fim
+                                    </label>
+                                    <input type="date" id="setup-data-fim" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500">
+                                </div>
+                                <div class="flex-1 min-w-[150px]">
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                                        <i data-lucide="cpu" class="w-3 h-3 inline mr-1"></i> Máquina
+                                    </label>
+                                    <select id="setup-filtro-maquina" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500">
+                                        <option value="">Todas as máquinas</option>
+                                    </select>
+                                </div>
+                                <div class="flex-1 min-w-[150px]">
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                                        <i data-lucide="tag" class="w-3 h-3 inline mr-1"></i> Tipo
+                                    </label>
+                                    <select id="setup-filtro-tipo" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500">
+                                        <option value="">Todos os tipos</option>
+                                        <option value="planejado">Planejado</option>
+                                        <option value="nao_planejado">Não Planejado</option>
+                                    </select>
+                                </div>
+                                <button id="btn-buscar-setups" class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 rounded-lg font-semibold transition flex items-center gap-2">
+                                    <i data-lucide="search" class="w-4 h-4"></i>
+                                    Buscar
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Estatísticas -->
+                        <div class="p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div class="bg-orange-50 rounded-xl p-3 text-center border border-orange-100">
+                                <p class="text-2xl font-bold text-orange-600" id="setup-total">0</p>
+                                <p class="text-xs text-orange-700">Total de Setups</p>
+                            </div>
+                            <div class="bg-green-50 rounded-xl p-3 text-center border border-green-100">
+                                <p class="text-2xl font-bold text-green-600" id="setup-planejados">0</p>
+                                <p class="text-xs text-green-700">Planejados</p>
+                            </div>
+                            <div class="bg-red-50 rounded-xl p-3 text-center border border-red-100">
+                                <p class="text-2xl font-bold text-red-600" id="setup-nao-planejados">0</p>
+                                <p class="text-xs text-red-700">Não Planejados</p>
+                            </div>
+                            <div class="bg-blue-50 rounded-xl p-3 text-center border border-blue-100">
+                                <p class="text-2xl font-bold text-blue-600" id="setup-tempo-medio">0min</p>
+                                <p class="text-xs text-blue-700">Tempo Médio</p>
+                            </div>
+                        </div>
+
+                        <!-- Tabela de Setups -->
+                        <div class="p-4">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                <i data-lucide="table" class="w-5 h-5 text-orange-600"></i>
+                                Registros de Setup
+                            </h3>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm" id="setup-tabela">
+                                    <thead class="bg-gray-100 text-gray-700">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left font-semibold rounded-tl-lg">Data</th>
+                                            <th class="px-4 py-3 text-left font-semibold">Máquina</th>
+                                            <th class="px-4 py-3 text-left font-semibold">Descrição do Molde</th>
+                                            <th class="px-4 py-3 text-center font-semibold">Tipo</th>
+                                            <th class="px-4 py-3 text-center font-semibold">Início</th>
+                                            <th class="px-4 py-3 text-center font-semibold">Fim</th>
+                                            <th class="px-4 py-3 text-center font-semibold">Duração</th>
+                                            <th class="px-4 py-3 text-left font-semibold">Observação</th>
+                                            <th class="px-4 py-3 text-center font-semibold rounded-tr-lg">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="setup-tabela-body" class="divide-y divide-gray-100">
+                                        <tr>
+                                            <td colspan="9" class="text-center py-12 text-gray-400">
+                                                <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                                                <p>Nenhum registro de setup encontrado</p>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -5188,6 +5309,140 @@
                 <button type="button" id="nova-escala-save" class="px-4 py-2.5 bg-gradient-to-r from-violet-600 to-purple-700 hover:shadow-lg text-white rounded-lg font-semibold text-sm shadow-md transition-all flex items-center gap-2">
                     <i data-lucide="save" class="w-4 h-4"></i>
                     Salvar Escala
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Novo Setup -->
+    <div id="novo-setup-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+            <!-- Header -->
+            <div class="bg-gradient-to-r from-orange-600 to-amber-600 px-6 py-4">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 bg-white/20 rounded-lg">
+                            <i data-lucide="wrench" class="w-6 h-6 text-white"></i>
+                        </div>
+                        <div>
+                            <h3 id="setup-modal-titulo" class="text-xl font-bold text-white">Novo Registro de Setup</h3>
+                            <p class="text-orange-100 text-sm">Registre as atividades de troca de molde</p>
+                        </div>
+                    </div>
+                    <button id="novo-setup-close" class="p-2 hover:bg-white/20 rounded-lg transition">
+                        <i data-lucide="x" class="w-5 h-5 text-white"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Body -->
+            <div class="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+                <form id="novo-setup-form" class="space-y-4">
+                    <!-- Seção 1: Data e Máquina -->
+                    <div class="border border-orange-200 rounded-lg overflow-hidden">
+                        <div class="bg-orange-50 px-3 py-2 border-b border-orange-200">
+                            <h4 class="text-sm font-semibold text-orange-800 flex items-center gap-2">
+                                <i data-lucide="calendar" class="w-4 h-4"></i>
+                                Data e Máquina
+                            </h4>
+                        </div>
+                        <div class="p-3 bg-white grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Data *</label>
+                                <input type="date" id="novo-setup-data" required class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Máquina *</label>
+                                <select id="novo-setup-maquina" required class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all">
+                                    <option value="">Selecione a máquina</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Seção 2: Molde e Tipo -->
+                    <div class="border border-amber-200 rounded-lg overflow-hidden">
+                        <div class="bg-amber-50 px-3 py-2 border-b border-amber-200">
+                            <h4 class="text-sm font-semibold text-amber-800 flex items-center gap-2">
+                                <i data-lucide="package" class="w-4 h-4"></i>
+                                Molde e Classificação
+                            </h4>
+                        </div>
+                        <div class="p-3 bg-white grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Descrição do Molde *</label>
+                                <input type="text" id="novo-setup-molde" required placeholder="Ex: Molde XYZ-123" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Tipo *</label>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <label class="relative flex items-center justify-center p-3 bg-gray-50 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-green-300 transition-all setup-tipo-option">
+                                        <input type="radio" name="setup-tipo" value="planejado" required class="sr-only peer">
+                                        <div class="text-center peer-checked:[&_svg]:text-green-600 peer-checked:[&_span]:text-green-700">
+                                            <i data-lucide="calendar-check" class="w-6 h-6 mx-auto mb-1 text-gray-400"></i>
+                                            <span class="text-sm font-semibold text-gray-600">Planejado</span>
+                                        </div>
+                                        <div class="absolute inset-0 rounded-lg border-2 border-transparent peer-checked:border-green-500 peer-checked:bg-green-50 -z-10"></div>
+                                    </label>
+                                    <label class="relative flex items-center justify-center p-3 bg-gray-50 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-red-300 transition-all setup-tipo-option">
+                                        <input type="radio" name="setup-tipo" value="nao_planejado" required class="sr-only peer">
+                                        <div class="text-center peer-checked:[&_svg]:text-red-600 peer-checked:[&_span]:text-red-700">
+                                            <i data-lucide="alert-triangle" class="w-6 h-6 mx-auto mb-1 text-gray-400"></i>
+                                            <span class="text-sm font-semibold text-gray-600">Não Planejado</span>
+                                        </div>
+                                        <div class="absolute inset-0 rounded-lg border-2 border-transparent peer-checked:border-red-500 peer-checked:bg-red-50 -z-10"></div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Seção 3: Horários -->
+                    <div class="border border-blue-200 rounded-lg overflow-hidden">
+                        <div class="bg-blue-50 px-3 py-2 border-b border-blue-200">
+                            <h4 class="text-sm font-semibold text-blue-800 flex items-center gap-2">
+                                <i data-lucide="clock" class="w-4 h-4"></i>
+                                Horários
+                            </h4>
+                        </div>
+                        <div class="p-3 bg-white grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Hora Início *</label>
+                                <input type="time" id="novo-setup-hora-inicio" required class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Hora Fim *</label>
+                                <input type="time" id="novo-setup-hora-fim" required class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all">
+                            </div>
+                            <div class="col-span-2 text-center">
+                                <span id="novo-setup-duracao" class="text-sm font-semibold text-blue-600"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Seção 4: Observações -->
+                    <div class="border border-gray-200 rounded-lg overflow-hidden">
+                        <div class="bg-gray-50 px-3 py-2 border-b border-gray-200">
+                            <h4 class="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                                <i data-lucide="file-text" class="w-4 h-4"></i>
+                                Observações
+                            </h4>
+                        </div>
+                        <div class="p-3 bg-white">
+                            <textarea id="novo-setup-obs" rows="2" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all" placeholder="Observações adicionais (opcional)"></textarea>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Footer -->
+            <div class="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                <button type="button" id="novo-setup-cancel" class="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium text-sm transition-colors">
+                    Cancelar
+                </button>
+                <button type="button" id="novo-setup-save" class="px-4 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:shadow-lg text-white rounded-lg font-semibold text-sm shadow-md transition-all flex items-center gap-2">
+                    <i data-lucide="save" class="w-4 h-4"></i>
+                    Salvar Setup
                 </button>
             </div>
         </div>

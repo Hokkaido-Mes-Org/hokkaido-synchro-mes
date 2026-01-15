@@ -11424,6 +11424,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             setupLiderancaProducaoPage();
         }
 
+        if (page === 'setup-maquinas') {
+            setupSetupMaquinasPage();
+        }
+
         if (page === 'pmp') {
             // Inicializar aba PMP - Gestão de Materiais
             if (typeof initPMPPage === 'function') {
@@ -32360,6 +32364,436 @@ window.excluirEscala = excluirEscala;
 // FIM DO MÓDULO LIDERANÇA PRODUÇÃO
 // ================================
 
+// =========================================
+// INÍCIO DO MÓDULO SETUP DE MÁQUINAS
+// =========================================
+
+let setupEmEdicao = null;
+
+// Função auxiliar para mostrar toast
+function setupShowToast(message, type = 'info') {
+    if (typeof showToast === 'function') {
+        showToast(message, type);
+    } else if (window.authSystem && typeof window.authSystem.showToast === 'function') {
+        window.authSystem.showToast(message, type);
+    } else {
+        const toast = document.createElement('div');
+        toast.className = `fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg z-[9999] text-white font-medium ${
+            type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+        }`;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+}
+
+// Função para obter data no formato ISO
+function getSetupDateString(date) {
+    const d = date || new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+// Função para obter usuário atual
+function getSetupCurrentUserName() {
+    if (window.authSystem && window.authSystem.currentUser) {
+        return window.authSystem.currentUser.nome || window.authSystem.currentUser.usuario || 'Sistema';
+    }
+    const userData = localStorage.getItem('userSession');
+    if (userData) {
+        try {
+            const user = JSON.parse(userData);
+            return user.nome || user.usuario || 'Sistema';
+        } catch (e) {}
+    }
+    return 'Sistema';
+}
+
+// Inicializar página de Setup
+function setupSetupMaquinasPage() {
+    console.log('[Setup] Inicializando módulo de Setup de Máquinas');
+    
+    const page = document.getElementById('setup-maquinas-page');
+    if (!page) return;
+
+    // Definir data padrão nos filtros (últimos 7 dias)
+    const dataInicio = document.getElementById('setup-data-inicio');
+    const dataFim = document.getElementById('setup-data-fim');
+    
+    if (dataInicio && dataFim) {
+        const hoje = new Date();
+        const seteDiasAtras = new Date();
+        seteDiasAtras.setDate(hoje.getDate() - 7);
+        
+        dataFim.value = getSetupDateString(hoje);
+        dataInicio.value = getSetupDateString(seteDiasAtras);
+    }
+
+    // Popular select de máquinas
+    popularSelectMaquinas();
+
+    // Configurar modal
+    setupNovoSetupModal();
+
+    // Configurar botão buscar
+    const btnBuscar = document.getElementById('btn-buscar-setups');
+    if (btnBuscar) {
+        btnBuscar.addEventListener('click', loadSetups);
+    }
+
+    // Carregar setups iniciais
+    loadSetups();
+}
+
+// Popular select de máquinas
+function popularSelectMaquinas() {
+    const selectModal = document.getElementById('novo-setup-maquina');
+    const selectFiltro = document.getElementById('setup-filtro-maquina');
+    const machines = window.machineDatabase || [];
+
+    const options = machines.map(m => `<option value="${m.id}">${m.id} - ${m.model}</option>`).join('');
+
+    if (selectModal) {
+        selectModal.innerHTML = '<option value="">Selecione a máquina</option>' + options;
+    }
+    if (selectFiltro) {
+        selectFiltro.innerHTML = '<option value="">Todas as máquinas</option>' + options;
+    }
+}
+
+// Configurar modal de novo setup
+function setupNovoSetupModal() {
+    const modal = document.getElementById('novo-setup-modal');
+    const btnNovo = document.getElementById('btn-novo-setup');
+    const btnClose = document.getElementById('novo-setup-close');
+    const btnCancel = document.getElementById('novo-setup-cancel');
+    const btnSave = document.getElementById('novo-setup-save');
+    const horaInicio = document.getElementById('novo-setup-hora-inicio');
+    const horaFim = document.getElementById('novo-setup-hora-fim');
+
+    if (!modal) return;
+
+    // Abrir modal
+    if (btnNovo) {
+        btnNovo.addEventListener('click', () => {
+            setupEmEdicao = null;
+            document.getElementById('setup-modal-titulo').textContent = 'Novo Registro de Setup';
+            document.getElementById('novo-setup-form').reset();
+            document.getElementById('novo-setup-data').value = getSetupDateString();
+            document.getElementById('novo-setup-duracao').textContent = '';
+            modal.classList.remove('hidden');
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        });
+    }
+
+    // Fechar modal
+    const fecharModal = () => {
+        modal.classList.add('hidden');
+        setupEmEdicao = null;
+    };
+
+    if (btnClose) btnClose.addEventListener('click', fecharModal);
+    if (btnCancel) btnCancel.addEventListener('click', fecharModal);
+    
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) fecharModal();
+    });
+
+    // Calcular duração
+    const calcularDuracao = () => {
+        const inicio = horaInicio?.value;
+        const fim = horaFim?.value;
+        const duracaoSpan = document.getElementById('novo-setup-duracao');
+        
+        if (inicio && fim && duracaoSpan) {
+            const [hI, mI] = inicio.split(':').map(Number);
+            const [hF, mF] = fim.split(':').map(Number);
+            
+            let minutos = (hF * 60 + mF) - (hI * 60 + mI);
+            if (minutos < 0) minutos += 24 * 60; // Passou da meia-noite
+            
+            const horas = Math.floor(minutos / 60);
+            const mins = minutos % 60;
+            
+            if (horas > 0) {
+                duracaoSpan.textContent = `Duração: ${horas}h ${mins}min`;
+            } else {
+                duracaoSpan.textContent = `Duração: ${mins} minutos`;
+            }
+        }
+    };
+
+    if (horaInicio) horaInicio.addEventListener('change', calcularDuracao);
+    if (horaFim) horaFim.addEventListener('change', calcularDuracao);
+
+    // Salvar
+    if (btnSave) {
+        btnSave.addEventListener('click', salvarSetup);
+    }
+}
+
+// Salvar setup
+async function salvarSetup() {
+    const data = document.getElementById('novo-setup-data')?.value;
+    const maquina = document.getElementById('novo-setup-maquina')?.value;
+    const molde = document.getElementById('novo-setup-molde')?.value?.trim();
+    const tipo = document.querySelector('input[name="setup-tipo"]:checked')?.value;
+    const horaInicio = document.getElementById('novo-setup-hora-inicio')?.value;
+    const horaFim = document.getElementById('novo-setup-hora-fim')?.value;
+    const observacao = document.getElementById('novo-setup-obs')?.value?.trim() || '';
+
+    // Validações
+    if (!data || !maquina || !molde || !tipo || !horaInicio || !horaFim) {
+        setupShowToast('Preencha todos os campos obrigatórios', 'error');
+        return;
+    }
+
+    // Calcular duração em minutos
+    const [hI, mI] = horaInicio.split(':').map(Number);
+    const [hF, mF] = horaFim.split(':').map(Number);
+    let duracaoMinutos = (hF * 60 + mF) - (hI * 60 + mI);
+    if (duracaoMinutos < 0) duracaoMinutos += 24 * 60;
+
+    try {
+        const db = firebase.firestore();
+        const dadosSetup = {
+            data,
+            maquina,
+            molde,
+            tipo,
+            horaInicio,
+            horaFim,
+            duracaoMinutos,
+            observacao,
+            criadoPor: getSetupCurrentUserName(),
+            atualizadoEm: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        if (setupEmEdicao) {
+            // Atualizar
+            await db.collection('setups_maquinas').doc(setupEmEdicao).update(dadosSetup);
+            setupShowToast('Setup atualizado com sucesso!', 'success');
+        } else {
+            // Criar novo
+            dadosSetup.criadoEm = firebase.firestore.FieldValue.serverTimestamp();
+            await db.collection('setups_maquinas').add(dadosSetup);
+            setupShowToast('Setup registrado com sucesso!', 'success');
+        }
+
+        document.getElementById('novo-setup-modal').classList.add('hidden');
+        setupEmEdicao = null;
+        loadSetups();
+
+    } catch (error) {
+        console.error('[Setup] Erro ao salvar:', error);
+        setupShowToast('Erro ao salvar setup', 'error');
+    }
+}
+
+// Carregar setups
+async function loadSetups() {
+    const dataInicio = document.getElementById('setup-data-inicio')?.value;
+    const dataFim = document.getElementById('setup-data-fim')?.value;
+    const filtroMaquina = document.getElementById('setup-filtro-maquina')?.value;
+    const filtroTipo = document.getElementById('setup-filtro-tipo')?.value;
+
+    if (!dataInicio || !dataFim) {
+        setupShowToast('Selecione o período para buscar', 'error');
+        return;
+    }
+
+    try {
+        const db = firebase.firestore();
+        let query = db.collection('setups_maquinas')
+            .where('data', '>=', dataInicio)
+            .where('data', '<=', dataFim)
+            .orderBy('data', 'desc');
+
+        const snapshot = await query.get();
+        let setups = [];
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            // Aplicar filtros adicionais
+            if (filtroMaquina && data.maquina !== filtroMaquina) return;
+            if (filtroTipo && data.tipo !== filtroTipo) return;
+            
+            setups.push({ id: doc.id, ...data });
+        });
+
+        // Ordenar por data e hora
+        setups.sort((a, b) => {
+            if (a.data !== b.data) return b.data.localeCompare(a.data);
+            return b.horaInicio.localeCompare(a.horaInicio);
+        });
+
+        renderSetupStats(setups);
+        renderSetupTabela(setups);
+
+    } catch (error) {
+        console.error('[Setup] Erro ao carregar:', error);
+        setupShowToast('Erro ao carregar setups', 'error');
+    }
+}
+
+// Renderizar estatísticas
+function renderSetupStats(setups) {
+    const totalEl = document.getElementById('setup-total');
+    const planejadosEl = document.getElementById('setup-planejados');
+    const naoPlanejadosEl = document.getElementById('setup-nao-planejados');
+    const tempoMedioEl = document.getElementById('setup-tempo-medio');
+
+    const planejados = setups.filter(s => s.tipo === 'planejado');
+    const naoPlanejados = setups.filter(s => s.tipo === 'nao_planejado');
+    
+    const tempoTotal = setups.reduce((acc, s) => acc + (s.duracaoMinutos || 0), 0);
+    const tempoMedio = setups.length > 0 ? Math.round(tempoTotal / setups.length) : 0;
+
+    if (totalEl) totalEl.textContent = setups.length;
+    if (planejadosEl) planejadosEl.textContent = planejados.length;
+    if (naoPlanejadosEl) naoPlanejadosEl.textContent = naoPlanejados.length;
+    if (tempoMedioEl) tempoMedioEl.textContent = `${tempoMedio}min`;
+}
+
+// Renderizar tabela
+function renderSetupTabela(setups) {
+    const tbody = document.getElementById('setup-tabela-body');
+    if (!tbody) return;
+
+    if (setups.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="9" class="text-center py-12 text-gray-400">
+                    <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                    <p>Nenhum registro de setup encontrado</p>
+                </td>
+            </tr>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        return;
+    }
+
+    tbody.innerHTML = setups.map(setup => {
+        const dataFormatada = setup.data ? setup.data.split('-').reverse().join('/') : '';
+        const tipoLabel = setup.tipo === 'planejado' ? 'Planejado' : 'Não Planejado';
+        const tipoClass = setup.tipo === 'planejado' 
+            ? 'bg-green-100 text-green-800' 
+            : 'bg-red-100 text-red-800';
+        
+        // Formatar duração
+        const horas = Math.floor((setup.duracaoMinutos || 0) / 60);
+        const mins = (setup.duracaoMinutos || 0) % 60;
+        const duracaoFormatada = horas > 0 ? `${horas}h ${mins}min` : `${mins}min`;
+
+        return `
+            <tr class="hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-3 text-sm font-medium text-gray-800">${dataFormatada}</td>
+                <td class="px-4 py-3">
+                    <span class="inline-flex items-center gap-1.5 px-2 py-1 bg-blue-100 text-blue-800 rounded-lg text-xs font-bold">
+                        <i data-lucide="cpu" class="w-3 h-3"></i>
+                        ${setup.maquina}
+                    </span>
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-700">${setup.molde || '-'}</td>
+                <td class="px-4 py-3 text-center">
+                    <span class="px-2 py-1 rounded-full text-xs font-semibold ${tipoClass}">${tipoLabel}</span>
+                </td>
+                <td class="px-4 py-3 text-center text-sm font-medium text-gray-700">${setup.horaInicio || '-'}</td>
+                <td class="px-4 py-3 text-center text-sm font-medium text-gray-700">${setup.horaFim || '-'}</td>
+                <td class="px-4 py-3 text-center">
+                    <span class="px-2 py-1 bg-orange-100 text-orange-700 rounded-lg text-xs font-bold">${duracaoFormatada}</span>
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-600 max-w-xs truncate" title="${setup.observacao || ''}">${setup.observacao || '-'}</td>
+                <td class="px-4 py-3 text-center">
+                    <div class="flex items-center justify-center gap-1">
+                        <button onclick="editarSetup('${setup.id}')" class="p-1.5 text-blue-600 hover:bg-blue-100 rounded-lg transition" title="Editar">
+                            <i data-lucide="pencil" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="excluirSetup('${setup.id}')" class="p-1.5 text-red-600 hover:bg-red-100 rounded-lg transition" title="Excluir">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// Editar setup
+async function editarSetup(setupId) {
+    try {
+        const db = firebase.firestore();
+        const doc = await db.collection('setups_maquinas').doc(setupId).get();
+        
+        if (!doc.exists) {
+            setupShowToast('Setup não encontrado', 'error');
+            return;
+        }
+
+        const setup = doc.data();
+        setupEmEdicao = setupId;
+
+        // Preencher formulário
+        document.getElementById('setup-modal-titulo').textContent = 'Editar Registro de Setup';
+        document.getElementById('novo-setup-data').value = setup.data || '';
+        document.getElementById('novo-setup-maquina').value = setup.maquina || '';
+        document.getElementById('novo-setup-molde').value = setup.molde || '';
+        document.getElementById('novo-setup-hora-inicio').value = setup.horaInicio || '';
+        document.getElementById('novo-setup-hora-fim').value = setup.horaFim || '';
+        document.getElementById('novo-setup-obs').value = setup.observacao || '';
+
+        // Selecionar tipo
+        const tipoRadio = document.querySelector(`input[name="setup-tipo"][value="${setup.tipo}"]`);
+        if (tipoRadio) tipoRadio.checked = true;
+
+        // Calcular duração
+        const horas = Math.floor((setup.duracaoMinutos || 0) / 60);
+        const mins = (setup.duracaoMinutos || 0) % 60;
+        const duracaoSpan = document.getElementById('novo-setup-duracao');
+        if (duracaoSpan) {
+            duracaoSpan.textContent = horas > 0 ? `Duração: ${horas}h ${mins}min` : `Duração: ${mins} minutos`;
+        }
+
+        // Abrir modal
+        document.getElementById('novo-setup-modal').classList.remove('hidden');
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+
+    } catch (error) {
+        console.error('[Setup] Erro ao carregar para edição:', error);
+        setupShowToast('Erro ao carregar setup', 'error');
+    }
+}
+
+// Excluir setup
+async function excluirSetup(setupId) {
+    if (!confirm('Tem certeza que deseja excluir este registro de setup?')) return;
+
+    try {
+        const db = firebase.firestore();
+        await db.collection('setups_maquinas').doc(setupId).delete();
+        
+        setupShowToast('Setup excluído com sucesso', 'success');
+        loadSetups();
+
+    } catch (error) {
+        console.error('[Setup] Erro ao excluir:', error);
+        setupShowToast('Erro ao excluir setup', 'error');
+    }
+}
+
+// Expor funções globalmente
+window.editarSetup = editarSetup;
+window.excluirSetup = excluirSetup;
+window.setupSetupMaquinasPage = setupSetupMaquinasPage;
+
+// =========================================
+// FIM DO MÓDULO SETUP DE MÁQUINAS
+// =========================================
+
 // Inicializar módulo de ordens quando página carregar
 document.addEventListener('DOMContentLoaded', function() {
     // Pré-carregar ordens em background para ter dados prontos quando abrir a aba
@@ -32370,3 +32804,4 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }, 2000);
 });
+
