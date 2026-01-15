@@ -269,6 +269,7 @@ var productDatabase = [
     { "cod": 4160, "client": "APTAR", "name": "ATUADOR-SENTIDOS-PP--5,75-NATU---LOT-XX0 - 31149108", "cavities": 22, "cycle": 25.5, "weight": 7.30, "pieces_per_hour_goal": 3106, "mp": "" },
     { "cod": 4161, "client": "APTAR", "name": "ATUADOR-POEMA-PP--5,75-NATU---LOT-XX04 - 31194670", "cavities": 22, "cycle": 25.5, "weight": 2.15, "pieces_per_hour_goal": 3106, "mp": "" },
     { "cod": 4164, "client": "APTAR", "name": "FIXAÇÃO-GS-24/410--2N-THREAD-PP-GOLD--DS (LISO COM DEGRAU) - 29029452", "cavities": 16, "cycle": 18, "weight": 2.30, "pieces_per_hour_goal": 4800, "mp": "" },
+    { "cod": 4166, "client": "APTAR", "name": "FIXAÇÃO-GS-24/410--2N-THREAD-PP-NATU--XX", "cavities": 16, "cycle": 18, "weight": 2.30, "pieces_per_hour_goal": 4800, "mp": "" },
     { "cod": 4196, "client": "APTAR", "name": "FIXAÇÃO-GS-24/410--2N-THREA-PP-BEIG--- (LISO COM DEGRAU) - 31246287", "cavities": 16, "cycle": 18, "weight": 2.30, "pieces_per_hour_goal": 4800, "mp": "" },
     { "cod": 4219, "client": "APTAR", "name": "FIXAÇÃO-GS-24/410--2N-THREAD-PP-GOLD---- (LISO COM DEGRAU) - 31219743", "cavities": 16, "cycle": 18, "weight": 2.30, "pieces_per_hour_goal": 4800, "mp": "" },
     { "cod": 4246, "client": "APTAR", "name": "FIXAÇÃO-GS-24/410--2N-THREAD-PP-YELL--DS (LISO COM DEGRAU) - 29032402", "cavities": 16, "cycle": 18, "weight": 2.30, "pieces_per_hour_goal": 4800, "mp": "" },
