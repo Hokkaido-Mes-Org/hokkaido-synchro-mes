@@ -203,6 +203,7 @@ var productDatabase = [
     { "cod": 5643, "client": "SILGAN", "name": "ATUADOR P2000 SATIN AZUL CB300 PP DPB037 - 1.01.03.005.945", "cavities": 23, "cycle": 19, "weight": 1.45, "pieces_per_hour_goal": 4358, "mp": "" },
     { "cod": 5645, "client": "SILGAN", "name": "ROSCA ALTA P2000 28 410 TEXT AZUL CB300 PP DPB063 - 1.01.03.005.947", "cavities": 23, "cycle": 21.15, "weight": 2.09, "pieces_per_hour_goal": 3915, "mp": "" },
     { "cod": 5646, "client": "SILGAN", "name": "ANEL TRAVA P2000 STD TEXT AZUL CB300 PP DPB038 - 1.01.03.005.948", "cavities": 16, "cycle": 13.4, "weight": 0.85, "pieces_per_hour_goal": 4299, "mp": "" },
+    { "cod": 5807, "client": "SILGAN", "name": "SUPORTE PLASTICO SERIE R260 (SEM ABA) - 283600939 REC", "cavities": 4, "cycle": 50, "weight": 50, "pieces_per_hour_goal": 288, "mp": "" },
     { "cod": 5855, "client": "SILGAN", "name": "ROSCA MKIV MD 22 415 ESTRIADA OURO CB112 PP 09PD06007 -1.01.01.005.039", "cavities": 44, "cycle": 40, "weight": 2.35, "pieces_per_hour_goal": 3366, "mp": "" },
     // --- APTAR ---
     { "cod": 226, "client": "APTAR", "name": "FIXACAO-GS-28/410CUST-28--THREAD-HDPE-WH - 29032088", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
@@ -727,13 +728,13 @@ var groupedLossReasons = {
 
 // Motivos de parada (agrupados)
 var groupedDowntimeReasons = {
-    "FERRAMENTARIA": ["CORRETIVA DE MOLDE", "PREVENTIVA DE MOLDE", "TROCA DE VERSÃO", "VAZAMENTO DE ÓLEO MOLDE"],
-    "PROCESSO": ["ABERTURA DE CAVIDADE", "AJUSTE DE PROCESSO", "FECHAMENTO DE CAVIDADE", "TRY OUT", "INICIO/REINICIO", "F.O REVEZAMENTO ALMOÇO", "F.O REVEZAMENTO JANTA"],
-    "COMPRAS": ["FALTA DE INSUMO PLANEJADA", "FALTA DE INSUMO NÃO PLANEJADA"],
-    "PREPARAÇÃO": ["AGUARDANDO PREPARAÇÃO DE MATERIAL", "ESTUFAGEM DE M.P", "FORA DE COR", "TESTE DE COR"],
-    "QUALIDADE": ["AGUARDANDO CLIENTE/FORNECEDOR", "LIBERAÇÃO"],
-    "MANUTENÇÃO": ["MANUTENÇÃO CORRETIVA", "MANUTENÇÃO PREVENTIVA", "VAZAMENTO DE ÓLEO MÁQUINA"],
-    "PRODUÇÃO": ["FALTA DE OPERADOR", "TROCA DE COR", "PRENDENDO GALHO", "PRENDENDO PEÇAS"],
+    "FERRAMENTARIA": ["CORRETIVA DE MOLDE", "PREVENTIVA DE MOLDE", "TROCA DE VERSÃO"],
+    "PROCESSO": ["ABERTURA DE CAVIDADE", "AJUSTE DE PROCESSO", "FECHAMENTO DE CAVIDADE", "TRY OUT","PRENDENDO GALHO", "PRENDENDO PEÇAS"],
+    "COMPRAS": ["FALTA DE MATÉRIA PRIMA","FALTA DE SACO PLÁSTICO", "FALTA DE CAIXA DE PAPELÃO","FALTA DE MASTER"],
+    "PREPARAÇÃO": ["AGUARDANDO PREPARAÇÃO DE MATERIAL", "AGUARDANDO ESTUFAGEM DE M.P", "FORA DE COR", "TESTE DE COR"],
+    "QUALIDADE": ["AGUARDANDO CLIENTE/FORNECEDOR", "LIBERAÇÃO INÍCIAL","AGUARDANDO DISPOSIÇÃO DA QUALIDADE"],
+    "MANUTENÇÃO": ["MANUTENÇÃO CORRETIVA", "MANUTENÇÃO PREVENTIVA"],
+    "PRODUÇÃO": ["FALTA DE OPERADOR", "TROCA DE COR", "F.O REVEZAMENTO ALMOÇO", "F.O REVEZAMENTO JANTA","INICIO/REINICIO"],
     "SETUP": ["INSTALAÇÃO DE MOLDE", "RETIRADA DE MOLDE", "INSTALAÇÃO DE PERÍFÉRICOS"],
     "ADMINISTRATIVO": ["FALTA DE ENERGIA"],
     "PCP": ["SEM PROGRAMAÇÃO", "SEM PROGRAMAÇÃO-FIM DE SEMANA", "ESTRATÉGIA PCP" ],
@@ -1092,6 +1093,643 @@ tareBoxesDatabase.forEach(tare => {
     tareByMachine.set(tare.machine, tare.weight);
 });
 
+// ========================================
+// DATABASE DE FERRAMENTARIA - CONTROLE DE MOLDES
+// ========================================
+var ferramentariaDatabase = [
+    // --- APTAR ---
+    { "client": "Aptar", "molde": "Atuador A03LV1", "batidas_preventiva": 100000 },
+    { "client": "Aptar", "molde": "Atuador A46V1", "batidas_preventiva": 100000 },
+    { "client": "Aptar", "molde": "Atuador Classic", "batidas_preventiva": 100000 },
+    { "client": "Aptar", "molde": "Atuador K2", "batidas_preventiva": 100000 },
+    { "client": "Aptar", "molde": "Atuador Poema/ Sentidos", "batidas_preventiva": 50000 },
+    { "client": "Aptar", "molde": "Clip Plástico K2", "batidas_preventiva": 100000 },
+    { "client": "Aptar", "molde": "Clip Plástico Q3", "batidas_preventiva": 100000 },
+    { "client": "Aptar", "molde": "Rosca GS 24/410 2N/3N", "batidas_preventiva": 100000 },
+    { "client": "Aptar", "molde": "Rosca GS 28/410 - A", "batidas_preventiva": 60000 },
+    { "client": "Aptar", "molde": "Rosca GS 28/410 - D", "batidas_preventiva": 60000 },
+    { "client": "Aptar", "molde": "Tampa Euromist", "batidas_preventiva": 120000 },
+
+    // --- AS TECHNOLOGY ---
+    { "client": "AS Technology", "molde": "Tubo Externo", "batidas_preventiva": 75000 },
+    { "client": "AS Technology", "molde": "Tampa para Tubo Externo", "batidas_preventiva": 75000 },
+    { "client": "AS Technology", "molde": "Suporte Fliptop", "batidas_preventiva": 75000 },
+
+    // --- CABLETECH ---
+    { "client": "Cabletech", "molde": "Flange", "batidas_preventiva": 30000 },
+    { "client": "Cabletech", "molde": "Dispositivo para Encaixe de Carretel (Pitoco)", "batidas_preventiva": 30000 },
+    { "client": "Cabletech", "molde": "Mancal", "batidas_preventiva": 30000 },
+
+    // --- CSI ---
+    { "client": "CSI", "molde": "Face Externa-Face Interna- Tampão", "batidas_preventiva": 30000 },
+
+    // --- GERDAU ---
+    { "client": "Gerdau", "molde": "Trava do Carretel", "batidas_preventiva": 30000 },
+    { "client": "Gerdau/ OVD", "molde": "Carretel", "batidas_preventiva": 30000 },
+
+    // --- INDUSMACK ---
+    { "client": "Indusmack", "molde": "Suporte Redondo 1'", "batidas_preventiva": 40000 },
+    { "client": "Indusmack", "molde": "Suporte Redondo 3/4", "batidas_preventiva": 40000 },
+
+    // --- JORNADA TECNOLÓGICA ---
+    { "client": "Jornada Tecnológica", "molde": "Conector Modelo I", "batidas_preventiva": 25000 },
+    { "client": "Jornada Tecnológica", "molde": "Conector Modelo L", "batidas_preventiva": 25000 },
+    { "client": "Jornada Tecnológica", "molde": "Conector Modelo R", "batidas_preventiva": 25000 },
+    { "client": "Jornada Tecnológica", "molde": "Conector Modelo T", "batidas_preventiva": 25000 },
+    { "client": "Jornada Tecnológica", "molde": "Conector Modelo V", "batidas_preventiva": 25000 },
+    { "client": "Jornada Tecnológica", "molde": "Conector Modelo X", "batidas_preventiva": 25000 },
+
+    // --- LHCOLLUS ---
+    { "client": "LHCollus", "molde": "Shin Support Litter", "batidas_preventiva": 10000 },
+    { "client": "LHCollus", "molde": "Slide Three Bar", "batidas_preventiva": 10000 },
+    { "client": "LHCollus", "molde": "Celling Ring", "batidas_preventiva": 10000 },
+    { "client": "LHCollus", "molde": "Handlle", "batidas_preventiva": 10000 },
+
+    // --- ÓRICA ---
+    { "client": "Órica", "molde": "J-Hook Long (Clip Azul)", "batidas_preventiva": 75000 },
+    { "client": "Órica", "molde": "Shell Plastic Exel (Conector)", "batidas_preventiva": 75000 },
+
+    // --- PARKER ---
+    { "client": "Parker", "molde": "Adaptador", "batidas_preventiva": 25000 },
+    { "client": "Parker", "molde": "Bocal/Pistão", "batidas_preventiva": 25000 },
+    { "client": "Parker", "molde": "Cônico/ Turbina 1 e 2", "batidas_preventiva": 25000 },
+    { "client": "Parker", "molde": "Coroa", "batidas_preventiva": 25000 },
+    { "client": "Parker", "molde": "Corpo do dreno", "batidas_preventiva": 25000 },
+    { "client": "Parker", "molde": "Plug 1/2", "batidas_preventiva": 25000 },
+    { "client": "Parker", "molde": "Plug 1/4", "batidas_preventiva": 25000 },
+    { "client": "Parker", "molde": "Plug do Dreno", "batidas_preventiva": 25000 },
+    { "client": "Parker", "molde": "Puxador com bomba", "batidas_preventiva": 25000 },
+    { "client": "Parker", "molde": "Suporte do copo 4 Cavidades", "batidas_preventiva": 75000 },
+    { "client": "Parker", "molde": "Suporte do copo 6 Cavidades", "batidas_preventiva": 75000 },
+    { "client": "Parker", "molde": "Suporte Plástico R260", "batidas_preventiva": 30000 },
+    { "client": "Parker", "molde": "Suporte Plástico", "batidas_preventiva": 30000 },
+    { "client": "Parker", "molde": "Suporte Plástico Série 600 Escal", "batidas_preventiva": 30000 },
+    { "client": "Parker", "molde": "Tampa Plástica Com furo", "batidas_preventiva": 30000 },
+    { "client": "Parker", "molde": "Tampa Inferior/ Superior", "batidas_preventiva": 30000 },
+    { "client": "Parker", "molde": "Tampa Plástica 04 Cavidades", "batidas_preventiva": 30000 },
+    { "client": "Parker", "molde": "Tampa Plástica 5831", "batidas_preventiva": 30000 },
+    { "client": "Parker", "molde": "Tampa Plástica 5923", "batidas_preventiva": 30000 },
+    { "client": "Parker", "molde": "Tampa Plástica Sem furo", "batidas_preventiva": 30000 },
+    { "client": "Parker", "molde": "Tampão", "batidas_preventiva": 30000 },
+
+    // --- ROSENBERGER ---
+    { "client": "Rosenberger", "molde": "Molde Cassete", "batidas_preventiva": 15000 },
+    { "client": "Rosenberger", "molde": "Guia Plástica Central", "batidas_preventiva": 15000 },
+
+    // --- SILGAN ---
+    { "client": "Silgan", "molde": "Acumulador M300", "batidas_preventiva": 150000 },
+    { "client": "Silgan", "molde": "Acumulador P2000 24mm/28mm", "batidas_preventiva": 150000 },
+    { "client": "Silgan", "molde": "Anel trava P2000 Brilhante/ Texturizado", "batidas_preventiva": 150000 },
+    { "client": "Silgan", "molde": "Atuador MD STD", "batidas_preventiva": 100000 },
+    { "client": "Silgan", "molde": "Atuador MKIV STD", "batidas_preventiva": 100000 },
+    { "client": "Silgan", "molde": "Atuador P2000", "batidas_preventiva": 120000 },
+    { "client": "Silgan", "molde": "Bucha P2000", "batidas_preventiva": 150000 },
+    { "client": "Silgan", "molde": "Cápsula Clikit 17/18", "batidas_preventiva": 75000 },
+    { "client": "Silgan", "molde": "Retentor da mola 64 Cavidades", "batidas_preventiva": 75000 },
+    { "client": "Silgan", "molde": "Retentor da mola 24 Cavidades", "batidas_preventiva": 75000 },
+    { "client": "Silgan", "molde": "Rosca P2000 24/410 Lisa/", "batidas_preventiva": 150000 },
+    { "client": "Silgan", "molde": "Rosca Alta P2000 28/410 Lisa/ Estriada", "batidas_preventiva": 150000 },
+    { "client": "Silgan", "molde": "Rosca Baixa P2000 28/400", "batidas_preventiva": 150000 },
+    { "client": "Silgan", "molde": "Rosca M300", "batidas_preventiva": 100000 },
+    { "client": "Silgan", "molde": "Rosca MKIV MD (20/10, 22/415, 24/410)", "batidas_preventiva": 120000 },
+    { "client": "Silgan", "molde": "Tampa MKIV MD STD", "batidas_preventiva": 150000 },
+
+    // --- SORVETES ---
+    { "client": "Sorvetes", "molde": "Porte do Sorvete", "batidas_preventiva": 50000 },
+    { "client": "Sorvetes", "molde": "Tampa do Pote de Sorvete", "batidas_preventiva": 50000 },
+
+    // --- STECK ---
+    { "client": "Steck", "molde": "Conj. Disp. De Segurança", "batidas_preventiva": 50000 },
+
+    // --- TENDAS KAGE ---
+    { "client": "Tendas Kage", "molde": "Tendas Kage (Base, Corrediça, Fixador, Junção)", "batidas_preventiva": 10000 }
+];
+
+// ========================================
+// MAPEAMENTO PRODUTO -> MOLDE (para rastreamento automático de batidas)
+// Código do produto => Nome do molde no ferramentariaDatabase
+// ========================================
+var moldePorProduto = {
+    // ===== SILGAN - Rosca Baixa P2000 28/400 =====
+    3: "Rosca Baixa P2000 28/400",
+    4: "Rosca Baixa P2000 28/400",
+    5: "Rosca Baixa P2000 28/400",
+    
+    // ===== SILGAN - Rosca Alta P2000 28/410 Lisa/ Estriada =====
+    6: "Rosca Alta P2000 28/410 Lisa/ Estriada",
+    7: "Rosca Alta P2000 28/410 Lisa/ Estriada",
+    8: "Rosca Alta P2000 28/410 Lisa/ Estriada",
+    9: "Rosca Alta P2000 28/410 Lisa/ Estriada",
+    10: "Rosca Alta P2000 28/410 Lisa/ Estriada",
+    11: "Rosca Alta P2000 28/410 Lisa/ Estriada",
+    12: "Rosca Alta P2000 28/410 Lisa/ Estriada",
+    13: "Rosca Alta P2000 28/410 Lisa/ Estriada",
+    5598: "Rosca Alta P2000 28/410 Lisa/ Estriada",
+    5599: "Rosca Alta P2000 28/410 Lisa/ Estriada",
+    5600: "Rosca Alta P2000 28/410 Lisa/ Estriada",
+    5855: "Rosca Alta P2000 28/410 Lisa/ Estriada",
+    
+    // ===== SILGAN - Anel trava P2000 Brilhante/ Texturizado =====
+    14: "Anel trava P2000 Brilhante/ Texturizado",
+    15: "Anel trava P2000 Brilhante/ Texturizado",
+    16: "Anel trava P2000 Brilhante/ Texturizado",
+    17: "Anel trava P2000 Brilhante/ Texturizado",
+    
+    // ===== SILGAN - Atuador P2000 =====
+    18: "Atuador P2000",
+    19: "Atuador P2000",
+    20: "Atuador P2000",
+    21: "Atuador P2000",
+    22: "Atuador P2000",
+    23: "Atuador P2000",
+    24: "Atuador P2000",
+    25: "Atuador P2000",
+    26: "Atuador P2000",
+    27: "Atuador P2000",
+    28: "Atuador P2000",
+    29: "Atuador P2000",
+    30: "Atuador P2000",
+    31: "Atuador P2000",
+    32: "Atuador P2000",
+    33: "Atuador P2000",
+    34: "Atuador P2000",
+    
+    // ===== SILGAN - Bucha P2000 =====
+    35: "Bucha P2000",
+    36: "Bucha P2000",
+    37: "Bucha P2000",
+    38: "Bucha P2000",
+    39: "Bucha P2000",
+    40: "Bucha P2000",
+    41: "Bucha P2000",
+    42: "Bucha P2000",
+    43: "Bucha P2000",
+    44: "Bucha P2000",
+    45: "Bucha P2000",
+    46: "Bucha P2000",
+    47: "Bucha P2000",
+    48: "Bucha P2000",
+    49: "Bucha P2000",
+    50: "Bucha P2000",
+    51: "Bucha P2000",
+    52: "Bucha P2000",
+    53: "Bucha P2000",
+    54: "Bucha P2000",
+    55: "Bucha P2000",
+    
+    // ===== SILGAN - Acumulador P2000 24mm/28mm =====
+    56: "Acumulador P2000 24mm/28mm",
+    57: "Acumulador P2000 24mm/28mm",
+    58: "Acumulador P2000 24mm/28mm",
+    59: "Acumulador P2000 24mm/28mm",
+    60: "Acumulador P2000 24mm/28mm",
+    61: "Acumulador P2000 24mm/28mm",
+    62: "Acumulador P2000 24mm/28mm",
+    63: "Acumulador P2000 24mm/28mm",
+    64: "Acumulador P2000 24mm/28mm",
+    65: "Acumulador P2000 24mm/28mm",
+    66: "Acumulador P2000 24mm/28mm",
+    67: "Acumulador P2000 24mm/28mm",
+    68: "Acumulador P2000 24mm/28mm",
+    
+    // ===== SILGAN - Tampa MKIV MD STD =====
+    69: "Tampa MKIV MD STD",
+    70: "Tampa MKIV MD STD",
+    71: "Tampa MKIV MD STD",
+    72: "Tampa MKIV MD STD",
+    73: "Tampa MKIV MD STD",
+    74: "Tampa MKIV MD STD",
+    75: "Tampa MKIV MD STD",
+    76: "Tampa MKIV MD STD",
+    77: "Tampa MKIV MD STD",
+    78: "Tampa MKIV MD STD",
+    79: "Tampa MKIV MD STD",
+    80: "Tampa MKIV MD STD",
+    
+    // ===== SILGAN - Atuador MKIV STD =====
+    81: "Atuador MKIV STD",
+    82: "Atuador MKIV STD",
+    83: "Atuador MKIV STD",
+    84: "Atuador MKIV STD",
+    85: "Atuador MKIV STD",
+    86: "Atuador MKIV STD",
+    87: "Atuador MKIV STD",
+    88: "Atuador MKIV STD",
+    89: "Atuador MKIV STD",
+    90: "Atuador MKIV STD",
+    91: "Atuador MKIV STD",
+    92: "Atuador MKIV STD",
+    93: "Atuador MKIV STD",
+    94: "Atuador MKIV STD",
+    95: "Atuador MKIV STD",
+    96: "Atuador MKIV STD",
+    97: "Atuador MKIV STD",
+    98: "Atuador MKIV STD",
+    99: "Atuador MKIV STD",
+    100: "Atuador MKIV STD",
+    101: "Atuador MKIV STD",
+    102: "Atuador MKIV STD",
+    103: "Atuador MKIV STD",
+    104: "Atuador MKIV STD",
+    105: "Atuador MKIV STD",
+    
+    // ===== SILGAN - Atuador MD STD =====
+    106: "Atuador MD STD",
+    107: "Atuador MD STD",
+    108: "Atuador MD STD",
+    109: "Atuador MD STD",
+    110: "Atuador MD STD",
+    111: "Atuador MD STD",
+    112: "Atuador MD STD",
+    113: "Atuador MD STD",
+    114: "Atuador MD STD",
+    115: "Atuador MD STD",
+    116: "Atuador MD STD",
+    117: "Atuador MD STD",
+    118: "Atuador MD STD",
+    119: "Atuador MD STD",
+    120: "Atuador MD STD",
+    4666: "Atuador MD STD",
+    
+    // ===== SILGAN - Rosca MKIV MD (20/10, 22/415, 24/410) =====
+    121: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    122: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    123: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    124: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    125: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    126: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    127: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    128: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    129: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    130: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    131: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    132: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    133: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    134: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    135: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    136: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    137: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    138: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    139: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    140: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    141: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    142: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    143: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    144: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    145: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    146: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    147: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    148: "Rosca MKIV MD (20/10, 22/415, 24/410)",
+    
+    // ===== SILGAN - Rosca M300 =====
+    149: "Rosca M300",
+    150: "Rosca M300",
+    151: "Rosca M300",
+    152: "Rosca M300",
+    153: "Rosca M300",
+    154: "Rosca M300",
+    155: "Rosca M300",
+    156: "Rosca M300",
+    157: "Rosca M300",
+    158: "Rosca M300",
+    159: "Rosca M300",
+    160: "Rosca M300",
+    161: "Rosca M300",
+    162: "Rosca M300",
+    163: "Rosca M300",
+    164: "Rosca M300",
+    165: "Rosca M300",
+    166: "Rosca M300",
+    167: "Rosca M300",
+    168: "Rosca M300",
+    169: "Rosca M300",
+    170: "Rosca M300",
+    171: "Rosca M300",
+    172: "Rosca M300",
+    173: "Rosca M300",
+    174: "Rosca M300",
+    175: "Rosca M300",
+    
+    // ===== SILGAN - Acumulador M300 =====
+    176: "Acumulador M300",
+    177: "Acumulador M300",
+    178: "Acumulador M300",
+    179: "Acumulador M300",
+    180: "Acumulador M300",
+    181: "Acumulador M300",
+    182: "Acumulador M300",
+    183: "Acumulador M300",
+    184: "Acumulador M300",
+    185: "Acumulador M300",
+    186: "Acumulador M300",
+    187: "Acumulador M300",
+    188: "Acumulador M300",
+    189: "Acumulador M300",
+    190: "Acumulador M300",
+    191: "Acumulador M300",
+    
+    // ===== SILGAN - Cápsula Clikit 17/18 =====
+    192: "Cápsula Clikit 17/18",
+    193: "Cápsula Clikit 17/18",
+    194: "Cápsula Clikit 17/18",
+    195: "Cápsula Clikit 17/18",
+    196: "Cápsula Clikit 17/18",
+    197: "Cápsula Clikit 17/18",
+    198: "Cápsula Clikit 17/18",
+    199: "Cápsula Clikit 17/18",
+    
+    // ===== SILGAN - Retentor da mola =====
+    200: "Retentor da mola 64 Cavidades",
+    201: "Retentor da mola 64 Cavidades",
+    202: "Retentor da mola 64 Cavidades",
+    203: "Retentor da mola 64 Cavidades",
+    204: "Retentor da mola 24 Cavidades",
+    205: "Retentor da mola 24 Cavidades",
+    206: "Retentor da mola 24 Cavidades",
+    207: "Retentor da mola 24 Cavidades",
+    208: "Retentor da mola 24 Cavidades",
+    209: "Retentor da mola 64 Cavidades",
+    
+    // ===== APTAR - Atuador Classic (EMII) =====
+    226: "Atuador Classic",
+    227: "Atuador Classic",
+    228: "Atuador Classic",
+    4691: "Atuador Classic",
+    4693: "Atuador Classic",
+    5026: "Atuador Classic",
+    5382: "Atuador Classic",
+    5709: "Atuador Classic",
+    5729: "Atuador Classic",
+    5858: "Atuador Classic",
+    5859: "Atuador Classic",
+    5860: "Atuador Classic",
+    5879: "Atuador Classic",
+    5999: "Atuador Classic",
+    6005: "Atuador Classic",
+    6140: "Atuador Classic",
+    6142: "Atuador Classic",
+    
+    // ===== APTAR - Tampa Euromist =====
+    229: "Tampa Euromist",
+    4512: "Tampa Euromist",
+    4690: "Tampa Euromist",
+    4692: "Tampa Euromist",
+    5025: "Tampa Euromist",
+    5708: "Tampa Euromist",
+    5861: "Tampa Euromist",
+    5862: "Tampa Euromist",
+    5863: "Tampa Euromist",
+    5880: "Tampa Euromist",
+    6001: "Tampa Euromist",
+    6006: "Tampa Euromist",
+    6139: "Tampa Euromist",
+    6141: "Tampa Euromist",
+    6311: "Tampa Euromist",
+    
+    // ===== APTAR - Atuador Poema/ Sentidos =====
+    230: "Atuador Poema/ Sentidos",
+    231: "Atuador Poema/ Sentidos",
+    4688: "Atuador Poema/ Sentidos",
+    4689: "Atuador Poema/ Sentidos",
+    5083: "Atuador Poema/ Sentidos",
+    5710: "Atuador Poema/ Sentidos",
+    6083: "Atuador Poema/ Sentidos",
+    6095: "Atuador Poema/ Sentidos",
+    6097: "Atuador Poema/ Sentidos",
+    6289: "Atuador Poema/ Sentidos",
+    
+    // ===== APTAR - Rosca GS 28/410 =====
+    232: "Rosca GS 28/410 - A",
+    4559: "Rosca GS 28/410 - A",
+    4686: "Rosca GS 28/410 - A",
+    4687: "Rosca GS 28/410 - A",
+    5193: "Rosca GS 28/410 - A",
+    5194: "Rosca GS 28/410 - A",
+    5339: "Rosca GS 28/410 - A",
+    5728: "Rosca GS 28/410 - A",
+    5846: "Rosca GS 28/410 - A",
+    5974: "Rosca GS 28/410 - A",
+    6100: "Rosca GS 28/410 - A",
+    6102: "Rosca GS 28/410 - A",
+    6227: "Rosca GS 28/410 - A",
+    
+    // ===== APTAR - Clip K2 =====
+    4477: "Clip Plástico K2",
+    
+    // ===== APTAR - Clip Q3 =====
+    4478: "Clip Plástico Q3",
+    
+    // ===== APTAR - Rosca GS 24/410 2N/3N =====
+    4166: "Rosca GS 24/410 2N/3N",
+    4749: "Rosca GS 24/410 2N/3N",
+    4911: "Rosca GS 24/410 2N/3N",
+    6164: "Rosca GS 24/410 2N/3N",
+    
+    // ===== APTAR - Atuador K2 =====
+    5302: "Atuador K2",
+    5412: "Atuador K2",
+    5414: "Atuador K2",
+    5416: "Atuador K2",
+    5647: "Atuador K2",
+    5741: "Atuador K2",
+    
+    // ===== APTAR - Atuador A03LV1 =====
+    5313: "Atuador A03LV1",
+    5332: "Atuador A03LV1",
+    5419: "Atuador A03LV1",
+    5463: "Atuador A03LV1",
+    5537: "Atuador A03LV1",
+    5684: "Atuador A03LV1",
+    
+    // ===== APTAR - Atuador A46V1 =====
+    5328: "Atuador A46V1",
+    
+    // ===== ÓRICA - J-Hook Long (Clip Azul) =====
+    236: "J-Hook Long (Clip Azul)",
+    
+    // ===== ÓRICA - Shell Plastic Exel (Conector) =====
+    237: "Shell Plastic Exel (Conector)",
+    238: "Shell Plastic Exel (Conector)",
+    239: "Shell Plastic Exel (Conector)",
+    240: "Shell Plastic Exel (Conector)",
+    242: "Shell Plastic Exel (Conector)",
+    243: "Shell Plastic Exel (Conector)",
+    244: "Shell Plastic Exel (Conector)",
+    3582: "Shell Plastic Exel (Conector)",
+    3939: "Shell Plastic Exel (Conector)",
+    3940: "Shell Plastic Exel (Conector)",
+    3941: "Shell Plastic Exel (Conector)",
+    3942: "Shell Plastic Exel (Conector)",
+    3943: "Shell Plastic Exel (Conector)",
+    3944: "Shell Plastic Exel (Conector)",
+    5034: "Shell Plastic Exel (Conector)",
+    5035: "Shell Plastic Exel (Conector)",
+    5082: "Shell Plastic Exel (Conector)",
+    
+    // ===== PARKER - Tampa Superior/Inferior =====
+    255: "Tampa Inferior/ Superior",
+    256: "Tampa Inferior/ Superior",
+    3503: "Tampa Inferior/ Superior",
+    3504: "Tampa Inferior/ Superior",
+    3817: "Tampa Inferior/ Superior",
+    3818: "Tampa Inferior/ Superior",
+    4935: "Tampa Inferior/ Superior",
+    4936: "Tampa Inferior/ Superior",
+    
+    // ===== PARKER - Tampa Plástica Sem furo =====
+    257: "Tampa Plástica Sem furo",
+    3725: "Tampa Plástica Sem furo",
+    4048: "Tampa Plástica Sem furo",
+    4050: "Tampa Plástica Sem furo",
+    4154: "Tampa Plástica Sem furo",
+    4155: "Tampa Plástica Sem furo",
+    
+    // ===== PARKER - Tampa Plástica Com furo =====
+    258: "Tampa Plástica Com furo",
+    4049: "Tampa Plástica Com furo",
+    4156: "Tampa Plástica Com furo",
+    
+    // ===== PARKER - Bocal/Pistão =====
+    259: "Bocal/Pistão",
+    260: "Bocal/Pistão",
+    4017: "Bocal/Pistão",
+    4046: "Bocal/Pistão",
+    4152: "Bocal/Pistão",
+    4153: "Bocal/Pistão",
+    
+    // ===== PARKER - Tampa Plástica 5831 =====
+    261: "Tampa Plástica 5831",
+    3983: "Tampa Plástica 5831",
+    4158: "Tampa Plástica 5831",
+    
+    // ===== PARKER - Coroa =====
+    262: "Coroa",
+    
+    // ===== PARKER - Adaptador =====
+    263: "Adaptador",
+    
+    // ===== PARKER - Suporte Plástico Série 600 Escal =====
+    264: "Suporte Plástico Série 600 Escal",
+    4010: "Suporte Plástico Série 600 Escal",
+    4150: "Suporte Plástico Série 600 Escal",
+    
+    // ===== PARKER - Suporte Plástico R260 =====
+    265: "Suporte Plástico R260",
+    4151: "Suporte Plástico R260",
+    
+    // ===== PARKER - Plug 1/4 =====
+    266: "Plug 1/4",
+    
+    // ===== PARKER - Tampa Plástica 04 Cavidades =====
+    267: "Tampa Plástica 04 Cavidades",
+    4047: "Tampa Plástica 04 Cavidades",
+    4157: "Tampa Plástica 04 Cavidades",
+    
+    // ===== PARKER - Tampa Plástica 5923 =====
+    268: "Tampa Plástica 5923",
+    3457: "Tampa Plástica 5923",
+    4996: "Tampa Plástica 5923",
+    
+    // ===== PARKER - Cônico/ Turbina 1 e 2 =====
+    277: "Cônico/ Turbina 1 e 2",
+    278: "Cônico/ Turbina 1 e 2",
+    
+    // ===== PARKER - Suporte Plástico (2 cavidades) =====
+    1912: "Suporte Plástico",
+    
+    // ===== PARKER - Suporte do copo 6 Cavidades =====
+    2294: "Suporte do copo 6 Cavidades",
+    
+    // ===== PARKER - Suporte do copo 4 Cavidades =====
+    4808: "Suporte do copo 4 Cavidades",
+    
+    // ===== GERDAU - Trava do Carretel =====
+    233: "Trava do Carretel",
+    
+    // ===== GERDAU/OVD - Carretel =====
+    234: "Carretel",
+    235: "Carretel",
+    3555: "Carretel",
+    4180: "Carretel",
+    
+    // ===== CSI - Face Externa-Face Interna- Tampão =====
+    4006: "Face Externa-Face Interna- Tampão",
+    4007: "Face Externa-Face Interna- Tampão",
+    4008: "Face Externa-Face Interna- Tampão",
+    
+    // ===== JORNADA - Conector Modelo V =====
+    3442: "Conector Modelo V",
+    
+    // ===== JORNADA - Conector Modelo R =====
+    3443: "Conector Modelo R",
+    
+    // ===== JORNADA - Conector Modelo L =====
+    3444: "Conector Modelo L",
+    
+    // ===== JORNADA - Conector Modelo X =====
+    3445: "Conector Modelo X",
+    
+    // ===== JORNADA - Conector Modelo T =====
+    3446: "Conector Modelo T",
+    
+    // ===== JORNADA - Conector Modelo I =====
+    3447: "Conector Modelo I",
+    
+    // ===== LH COLUS - Handlle (Manopla Maca) =====
+    574: "Handlle",
+    
+    // ===== LH COLUS - Slide Three Bar =====
+    575: "Slide Three Bar",
+    
+    // ===== ROSENBERGER - Molde Cassete =====
+    5048: "Molde Cassete",
+    5050: "Molde Cassete",
+    
+    // ===== HOKKAIDO/SORVETES - Pote do Sorvete =====
+    3858: "Porte do Sorvete",
+    3860: "Porte do Sorvete",
+    
+    // ===== HOKKAIDO/SORVETES - Tampa do Pote de Sorvete =====
+    3859: "Tampa do Pote de Sorvete",
+    3861: "Tampa do Pote de Sorvete",
+    4193: "Tampa do Pote de Sorvete",
+    4194: "Tampa do Pote de Sorvete",
+    4195: "Tampa do Pote de Sorvete",
+    4198: "Tampa do Pote de Sorvete",
+    4199: "Tampa do Pote de Sorvete",
+    4754: "Tampa do Pote de Sorvete",
+    
+    // ===== TENDAS KAGE =====
+    4647: "Tendas Kage (Base, Corrediça, Fixador, Junção)",
+    4732: "Tendas Kage (Base, Corrediça, Fixador, Junção)",
+    4763: "Tendas Kage (Base, Corrediça, Fixador, Junção)",
+    4764: "Tendas Kage (Base, Corrediça, Fixador, Junção)",
+    4766: "Tendas Kage (Base, Corrediça, Fixador, Junção)",
+    4769: "Tendas Kage (Base, Corrediça, Fixador, Junção)",
+    5800: "Tendas Kage (Base, Corrediça, Fixador, Junção)",
+    5802: "Tendas Kage (Base, Corrediça, Fixador, Junção)",
+    5803: "Tendas Kage (Base, Corrediça, Fixador, Junção)",
+    5805: "Tendas Kage (Base, Corrediça, Fixador, Junção)",
+    
+    // ===== AS TECHNOLOGY - Suporte Fliptop =====
+    5290: "Suporte Fliptop",
+    
+    // ===== AS TECHNOLOGY - Tampa para Tubo Externo =====
+    5568: "Tampa para Tubo Externo",
+    
+    // ===== CABLETECH - Flange =====
+    5718: "Flange",
+    5870: "Flange",
+    
+    // ===== CABLETECH - Dispositivo para Encaixe de Carretel (Pitoco) =====
+    5823: "Dispositivo para Encaixe de Carretel (Pitoco)",
+    5872: "Dispositivo para Encaixe de Carretel (Pitoco)",
+    
+    // ===== CABLETECH - Mancal =====
+    5719: "Mancal",
+    5871: "Mancal"
+};
+
 // Expor variáveis globais IMEDIATAMENTE para acesso direto
 // Isso garante que estejam disponíveis mesmo antes do DOMContentLoaded
 if (typeof window !== 'undefined') {
@@ -1106,10 +1744,14 @@ if (typeof window !== 'undefined') {
     window.userByCode = userByCode;
     window.getUserByCode = getUserByCode;
     window.getUserByNomeUsuario = getUserByNomeUsuario;
+    window.ferramentariaDatabase = ferramentariaDatabase;
+    window.moldePorProduto = moldePorProduto;
     console.log('[database.js] Variáveis globais expostas:', {
         productDatabase: productDatabase?.length || 0,
         productByCode: productByCode?.size || 0,
-        userDatabase: userDatabase?.length || 0
+        userDatabase: userDatabase?.length || 0,
+        ferramentariaDatabase: ferramentariaDatabase?.length || 0,
+        moldePorProduto: Object.keys(moldePorProduto)?.length || 0
     });
 }
 
@@ -1139,7 +1781,9 @@ if (typeof window !== 'undefined') {
         userDatabase,
         userByCode,
         getUserByCode,
-        getUserByNomeUsuario
+        getUserByNomeUsuario,
+        // Expor dados de ferramentaria
+        ferramentariaDatabase,
+        moldePorProduto
     };
-
 }));

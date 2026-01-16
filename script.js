@@ -11410,6 +11410,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         if (page === 'acompanhamento') {
             setupAcompanhamentoTurno();
+            setupAcompanhamentoPerdas();
         }
 
         if (page === 'historico-sistema') {
@@ -11426,6 +11427,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         if (page === 'setup-maquinas') {
             setupSetupMaquinasPage();
+        }
+
+        if (page === 'ferramentaria') {
+            setupFerramentariaPage();
         }
 
         if (page === 'pmp') {
@@ -17248,6 +17253,32 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 });
             }
 
+            // =====================================================
+            // INTEGRAÇÃO FERRAMENTARIA - Atualizar batidas do molde
+            // =====================================================
+            if (produzido > 0 && typeof window.atualizarBatidasPorProducao === 'function') {
+                try {
+                    // Já temos planData disponível aqui, então usar diretamente
+                    const productCod = planData?.product_cod || planData?.productCod || planData?.part_code || 
+                                       selectedMachineData?.product_cod || selectedMachineData?.productCod;
+                    
+                    console.log('[SYNC-FERRAMENTARIA] Modal - Dados para integração:', { productCod, produzido, planId });
+                    
+                    if (productCod) {
+                        const resultadoBatidas = await window.atualizarBatidasPorProducao(productCod, produzido);
+                        if (resultadoBatidas.success) {
+                            console.log(`[SYNC-FERRAMENTARIA] ✅ Modal Produção - Batidas atualizadas: molde "${resultadoBatidas.molde}", +${resultadoBatidas.batidasAdicionadas} batidas`);
+                        } else {
+                            console.log(`[SYNC-FERRAMENTARIA] ⚠️ Modal - Batidas não atualizadas:`, resultadoBatidas.reason);
+                        }
+                    } else {
+                        console.log('[SYNC-FERRAMENTARIA] ⚠️ Modal - product_cod não encontrado');
+                    }
+                } catch (ferramentariaErr) {
+                    console.warn('[SYNC-FERRAMENTARIA] Falha ao atualizar batidas (modal):', ferramentariaErr);
+                }
+            }
+
             if (statusMessage) {
                 statusMessage.textContent = 'Lançamentos salvos com sucesso!';
                 statusMessage.className = 'text-green-600 text-sm font-semibold h-5 text-center';
@@ -19178,6 +19209,42 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         console.log('[ACOMPANHAMENTO] Inicializando aba de acompanhamento de turno...');
 
+        // Setup das tabs de acompanhamento (Produção vs Perdas)
+        document.querySelectorAll('.acompanhamento-tab-btn').forEach(btn => {
+            if (btn.dataset.tabListenerAttached) return;
+            btn.dataset.tabListenerAttached = 'true';
+            
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const tab = e.currentTarget.dataset.acompanhamentoTab;
+                console.log('[ACOMPANHAMENTO] Alternando para aba:', tab);
+                
+                // Atualizar visual das tabs
+                document.querySelectorAll('.acompanhamento-tab-btn').forEach(b => {
+                    b.classList.remove('border-blue-600', 'border-red-600', 'bg-blue-50', 'bg-red-50', 'text-blue-700', 'text-red-700');
+                    b.classList.add('border-transparent', 'text-gray-500');
+                });
+                
+                if (tab === 'producao') {
+                    e.currentTarget.classList.add('border-blue-600', 'bg-blue-50', 'text-blue-700');
+                } else {
+                    e.currentTarget.classList.add('border-red-600', 'bg-red-50', 'text-red-700');
+                }
+                e.currentTarget.classList.remove('border-transparent', 'text-gray-500');
+                
+                // Mostrar/esconder conteúdo
+                document.querySelectorAll('.acompanhamento-tab-content').forEach(content => {
+                    content.classList.add('hidden');
+                });
+                const tabContent = document.getElementById(`acompanhamento-tab-${tab}`);
+                if (tabContent) {
+                    tabContent.classList.remove('hidden');
+                }
+                
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            });
+        });
+
         // Definir data padrão = hoje
         const dataInput = document.getElementById('acompanhamento-data');
         if (dataInput && !dataInput.value) {
@@ -19532,6 +19599,451 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
     }
     // ==================== FIM ACOMPANHAMENTO DE TURNO ====================
+
+    // ==================== ACOMPANHAMENTO DE PERDAS (PERDAS/OP) ====================
+    let acompanhamentoPerdasSetupDone = false;
+    let acompanhamentoPerdasDataAtual = {};
+
+    function setupAcompanhamentoPerdas() {
+        if (acompanhamentoPerdasSetupDone) {
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            return;
+        }
+        acompanhamentoPerdasSetupDone = true;
+
+        console.log('[ACOMPANHAMENTO-PERDAS] Inicializando módulo de perdas...');
+
+        // Data padrão = hoje
+        const today = new Date().toISOString().split('T')[0];
+        const dataInput = document.getElementById('acompanhamento-perdas-data');
+        if (dataInput) {
+            dataInput.value = today;
+        }
+
+        // Eventos dos botões
+        const btnCarregar = document.getElementById('acompanhamento-perdas-carregar');
+        const btnLimpar = document.getElementById('acompanhamento-perdas-limpar');
+        const btnSalvar = document.getElementById('acompanhamento-perdas-salvar');
+        const btnImprimir = document.getElementById('acompanhamento-perdas-imprimir');
+
+        if (btnCarregar) {
+            btnCarregar.addEventListener('click', carregarDadosAcompanhamentoPerdas);
+        }
+
+        if (btnLimpar) {
+            btnLimpar.addEventListener('click', limparOpAcompanhamentoPerdas);
+        }
+
+        if (btnSalvar) {
+            btnSalvar.addEventListener('click', salvarDadosAcompanhamentoPerdas);
+        }
+
+        if (btnImprimir) {
+            btnImprimir.addEventListener('click', imprimirAcompanhamentoPerdas);
+        }
+
+        // Atualizar status
+        const status = document.getElementById('acompanhamento-perdas-status');
+        if (status) {
+            status.textContent = '✅ Pronto';
+            status.classList.remove('text-red-600', 'bg-red-100');
+            status.classList.add('text-green-600', 'bg-green-100');
+        }
+
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        console.log('[ACOMPANHAMENTO-PERDAS] Setup concluído!');
+    }
+
+    async function carregarDadosAcompanhamentoPerdas() {
+        const data = document.getElementById('acompanhamento-perdas-data')?.value;
+
+        if (!data) {
+            showNotification('⚠️ Selecione a data!', 'warning');
+            return;
+        }
+
+        const tbody = document.getElementById('acompanhamento-perdas-tbody');
+        if (!tbody) return;
+
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="10" class="px-4 py-10 text-center text-gray-400">
+                    <i data-lucide="loader-2" class="w-10 h-10 mx-auto mb-3 animate-spin opacity-50"></i>
+                    <p>Carregando dados de perdas do Hokkaido Mes...</p>
+                </td>
+            </tr>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+
+        try {
+            // Buscar todos os 3 turnos - igual ao acompanhamento de produção
+            const turnosParaBuscar = [1, 2, 3];
+            
+            // Estrutura: { maquina: { t1: perdasMes, t2: perdasMes, t3: perdasMes } }
+            const perdasPorMaquina = new Map();
+
+            for (const t of turnosParaBuscar) {
+                // Buscar por 'turno'
+                const snapshot = await db.collection('production_entries')
+                    .where('data', '==', data)
+                    .where('turno', '==', t)
+                    .get();
+
+                snapshot.docs.forEach(doc => {
+                    const d = doc.data();
+                    const machine = d.machine || d.machine_id || d.maquina || 'N/A';
+                    const refugo = parseFloat(d.refugo_kg || d.refugo || 0);
+
+                    if (refugo <= 0) return; // Ignorar se não tiver perda
+
+                    if (!perdasPorMaquina.has(machine)) {
+                        perdasPorMaquina.set(machine, { t1: 0, t2: 0, t3: 0 });
+                    }
+                    perdasPorMaquina.get(machine)[`t${t}`] += refugo;
+                });
+
+                // Buscar por 'shift' também
+                const snapshotShift = await db.collection('production_entries')
+                    .where('data', '==', data)
+                    .where('shift', '==', t)
+                    .get();
+
+                snapshotShift.docs.forEach(doc => {
+                    const d = doc.data();
+                    const machine = d.machine || d.machine_id || d.maquina || 'N/A';
+                    const refugo = parseFloat(d.refugo_kg || d.refugo || 0);
+
+                    if (refugo <= 0) return; // Ignorar se não tiver perda
+
+                    if (!perdasPorMaquina.has(machine)) {
+                        perdasPorMaquina.set(machine, { t1: 0, t2: 0, t3: 0 });
+                    }
+                    perdasPorMaquina.get(machine)[`t${t}`] += refugo;
+                });
+            }
+
+            // Renderizar tabela
+            tbody.innerHTML = '';
+
+            if (perdasPorMaquina.size === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="10" class="px-4 py-10 text-center text-gray-400">
+                            <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
+                            <p>Nenhum lançamento de perdas encontrado para esta data</p>
+                        </td>
+                    </tr>
+                `;
+                document.getElementById('acompanhamento-perdas-resumo')?.classList.add('hidden');
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+                return;
+            }
+
+            // Ordenar por máquina (igual ao acompanhamento de produção)
+            const maquinasOrdenadas = Array.from(perdasPorMaquina.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+            // Carregar dados salvos dos 3 turnos (OP manual)
+            let dadosSalvos = {};
+            try {
+                for (const t of ['1', '2', '3']) {
+                    const docId = `${data}_T${t}`;
+                    const docSalvo = await db.collection('acompanhamento_perdas').doc(docId).get();
+                    if (docSalvo.exists) {
+                        const saved = docSalvo.data();
+                        if (saved.registros) {
+                            saved.registros.forEach(r => {
+                                const key = `${r.maquina}_T${t}`;
+                                dadosSalvos[key] = { op: r.op };
+                            });
+                        }
+                    }
+                }
+                console.log('[ACOMPANHAMENTO-PERDAS] Dados salvos carregados:', Object.keys(dadosSalvos).length, 'registros');
+            } catch (e) {
+                console.warn('[ACOMPANHAMENTO-PERDAS] Não foi possível carregar dados salvos:', e);
+            }
+
+            // Armazenar dados atuais
+            acompanhamentoPerdasDataAtual = { data: data, maquinas: {} };
+
+            maquinasOrdenadas.forEach(([maquina, perdasMes]) => {
+                const salvoT1 = dadosSalvos[`${maquina}_T1`] || {};
+                const salvoT2 = dadosSalvos[`${maquina}_T2`] || {};
+                const salvoT3 = dadosSalvos[`${maquina}_T3`] || {};
+
+                // Armazenar dados para calcular diferenças
+                acompanhamentoPerdasDataAtual.maquinas[maquina] = {
+                    mes: perdasMes,
+                    op: { t1: salvoT1.op || 0, t2: salvoT2.op || 0, t3: salvoT3.op || 0 }
+                };
+                
+                const linha = document.createElement('tr');
+                linha.className = 'hover:bg-gray-50 transition-colors';
+                linha.dataset.maquina = maquina;
+                linha.innerHTML = `
+                    <td class="px-3 py-2 border-r border-gray-200"><strong class="text-red-600 text-sm">${maquina}</strong></td>
+                    
+                    <!-- T1 -->
+                    <td class="px-1 py-2 text-center bg-red-50/30">
+                        <input type="number" step="0.01" class="acompanhamento-op-perdas w-20 p-1.5 border border-gray-200 rounded text-center text-xs focus:ring-1 focus:ring-red-500" 
+                               data-maquina="${maquina}" data-turno="1" placeholder="0" value="${salvoT1.op || ''}">
+                    </td>
+                    <td class="px-1 py-2 text-center bg-red-50/30">
+                        <span class="text-xs font-semibold acompanhamento-mes-perdas" data-turno="1">${perdasMes.t1.toFixed(2)}</span>
+                    </td>
+                    <td class="px-1 py-2 text-center border-r border-gray-200 bg-red-50/30">
+                        <span class="acompanhamento-diferenca-perdas text-xs font-bold" data-maquina="${maquina}" data-turno="1">0</span>
+                    </td>
+                    
+                    <!-- T2 -->
+                    <td class="px-1 py-2 text-center bg-purple-50/30">
+                        <input type="number" step="0.01" class="acompanhamento-op-perdas w-20 p-1.5 border border-gray-200 rounded text-center text-xs focus:ring-1 focus:ring-purple-500" 
+                               data-maquina="${maquina}" data-turno="2" placeholder="0" value="${salvoT2.op || ''}">
+                    </td>
+                    <td class="px-1 py-2 text-center bg-purple-50/30">
+                        <span class="text-xs font-semibold acompanhamento-mes-perdas" data-turno="2">${perdasMes.t2.toFixed(2)}</span>
+                    </td>
+                    <td class="px-1 py-2 text-center border-r border-gray-200 bg-purple-50/30">
+                        <span class="acompanhamento-diferenca-perdas text-xs font-bold" data-maquina="${maquina}" data-turno="2">0</span>
+                    </td>
+                    
+                    <!-- T3 -->
+                    <td class="px-1 py-2 text-center bg-orange-50/30">
+                        <input type="number" step="0.01" class="acompanhamento-op-perdas w-20 p-1.5 border border-gray-200 rounded text-center text-xs focus:ring-1 focus:ring-orange-500" 
+                               data-maquina="${maquina}" data-turno="3" placeholder="0" value="${salvoT3.op || ''}">
+                    </td>
+                    <td class="px-1 py-2 text-center bg-orange-50/30">
+                        <span class="text-xs font-semibold acompanhamento-mes-perdas" data-turno="3">${perdasMes.t3.toFixed(2)}</span>
+                    </td>
+                    <td class="px-1 py-2 text-center bg-orange-50/30">
+                        <span class="acompanhamento-diferenca-perdas text-xs font-bold" data-maquina="${maquina}" data-turno="3">0</span>
+                    </td>
+                `;
+
+                // Adicionar listeners para calcular diferenças
+                linha.querySelectorAll('.acompanhamento-op-perdas').forEach(input => {
+                    input.addEventListener('input', calcularDiferencasPerdas);
+                });
+
+                tbody.appendChild(linha);
+            });
+
+            // Calcular diferenças iniciais
+            calcularDiferencasPerdas();
+
+            // Mostrar resumo
+            document.getElementById('acompanhamento-perdas-resumo')?.classList.remove('hidden');
+
+            showNotification(`✅ Dados de perdas carregados: ${maquinasOrdenadas.length} máquinas`, 'success');
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+        } catch (error) {
+            console.error('[ACOMPANHAMENTO-PERDAS] Erro ao carregar:', error);
+            showNotification('❌ Erro ao carregar dados de perdas: ' + error.message, 'error');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="10" class="px-4 py-10 text-center text-red-500">
+                        <i data-lucide="alert-circle" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
+                        <p>Erro ao carregar dados. Tente novamente.</p>
+                    </td>
+                </tr>
+            `;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+    }
+
+    function calcularDiferencasPerdas() {
+        const tbody = document.getElementById('acompanhamento-perdas-tbody');
+        if (!tbody) return;
+
+        let totalOp = 0;
+        let totalMes = 0;
+        let maquinasComDiferenca = 0;
+
+        tbody.querySelectorAll('tr[data-maquina]').forEach(row => {
+            const maquina = row.dataset.maquina;
+            const dados = acompanhamentoPerdasDataAtual.maquinas?.[maquina];
+            if (!dados) return;
+
+            const mes = dados.mes;
+
+            // Pegar valores dos inputs
+            const inputs = row.querySelectorAll('.acompanhamento-op-perdas');
+            const diferencas = row.querySelectorAll('.acompanhamento-diferenca-perdas');
+
+            let temDiferenca = false;
+
+            inputs.forEach((input, idx) => {
+                const turno = input.dataset.turno;
+                const opValue = parseFloat(input.value) || 0;
+                const mesValue = mes[`t${turno}`] || 0;
+                const diff = opValue - mesValue;
+
+                // Atualizar diferença visual
+                const diffSpan = diferencas[idx];
+                if (diffSpan) {
+                    if (Math.abs(diff) < 0.01) {
+                        diffSpan.innerHTML = '<span class="text-green-600">0</span>';
+                    } else if (diff > 0) {
+                        diffSpan.innerHTML = `<span class="text-orange-600">+${diff.toFixed(2)}</span>`;
+                        temDiferenca = true;
+                    } else {
+                        diffSpan.innerHTML = `<span class="text-red-600">${diff.toFixed(2)}</span>`;
+                        temDiferenca = true;
+                    }
+                }
+
+                // Acumular totais
+                totalOp += opValue;
+                totalMes += mesValue;
+
+                // Atualizar dados armazenados
+                dados.op[`t${turno}`] = opValue;
+            });
+
+            // Destacar linha com diferença
+            if (temDiferenca) {
+                row.classList.add('bg-red-50');
+                maquinasComDiferenca++;
+            } else {
+                row.classList.remove('bg-red-50');
+            }
+        });
+
+        // Atualizar resumo
+        const maqDiffEl = document.getElementById('acompanhamento-perdas-maquinas-diff');
+        const totalOpEl = document.getElementById('acompanhamento-perdas-total-op');
+        const totalMesEl = document.getElementById('acompanhamento-perdas-total-mes');
+
+        if (maqDiffEl) maqDiffEl.textContent = maquinasComDiferenca;
+        if (totalOpEl) totalOpEl.textContent = totalOp.toFixed(2);
+        if (totalMesEl) totalMesEl.textContent = totalMes.toFixed(2);
+    }
+
+    function limparOpAcompanhamentoPerdas() {
+        if (!confirm('Limpar todos os valores de OP? Esta ação não pode ser desfeita.')) return;
+
+        document.querySelectorAll('.acompanhamento-op-perdas').forEach(input => {
+            input.value = '';
+        });
+
+        // Resetar dados armazenados
+        if (acompanhamentoPerdasDataAtual.maquinas) {
+            Object.keys(acompanhamentoPerdasDataAtual.maquinas).forEach(maquina => {
+                acompanhamentoPerdasDataAtual.maquinas[maquina].op = { t1: 0, t2: 0, t3: 0 };
+            });
+        }
+
+        calcularDiferencasPerdas();
+        showNotification('🗑️ Valores de OP limpos', 'info');
+    }
+
+    async function salvarDadosAcompanhamentoPerdas() {
+        if (!acompanhamentoPerdasDataAtual.data) {
+            showNotification('⚠️ Carregue os dados primeiro', 'warning');
+            return;
+        }
+
+        try {
+            const data = acompanhamentoPerdasDataAtual.data;
+            const usuario = window.authSystem?.getCurrentUser();
+            
+            // Salvar por turno (igual ao acompanhamento de produção)
+            for (const t of ['1', '2', '3']) {
+                const registros = [];
+                
+                document.querySelectorAll(`.acompanhamento-op-perdas[data-turno="${t}"]`).forEach(input => {
+                    const maquina = input.dataset.maquina;
+                    const opValue = parseFloat(input.value) || 0;
+                    const mesValue = acompanhamentoPerdasDataAtual.maquinas?.[maquina]?.mes?.[`t${t}`] || 0;
+                    
+                    registros.push({
+                        maquina: maquina,
+                        op: opValue,
+                        mes: mesValue,
+                        diferenca: opValue - mesValue
+                    });
+                });
+
+                const docId = `${data}_T${t}`;
+                await db.collection('acompanhamento_perdas').doc(docId).set({
+                    data: data,
+                    turno: parseInt(t),
+                    registros: registros,
+                    atualizadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+                    atualizadoPor: usuario?.name || 'Desconhecido'
+                });
+            }
+
+            showNotification('✅ Dados de perdas salvos com sucesso!', 'success');
+            console.log('[ACOMPANHAMENTO-PERDAS] Dados salvos:', data);
+
+        } catch (error) {
+            console.error('[ACOMPANHAMENTO-PERDAS] Erro ao salvar:', error);
+            showNotification('❌ Erro ao salvar: ' + error.message, 'error');
+        }
+    }
+
+    function imprimirAcompanhamentoPerdas() {
+        const tabela = document.getElementById('acompanhamento-perdas-tabela');
+        const data = acompanhamentoPerdasDataAtual.data || 'Não selecionada';
+        const totalOp = document.getElementById('acompanhamento-perdas-total-op')?.textContent || '0';
+        const totalMes = document.getElementById('acompanhamento-perdas-total-mes')?.textContent || '0';
+        const maquinasDiff = document.getElementById('acompanhamento-perdas-maquinas-diff')?.textContent || '0';
+
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Acompanhamento de Perdas - ${data}</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; }
+                    h1 { text-align: center; color: #dc2626; margin-bottom: 5px; }
+                    .subtitle { text-align: center; color: #666; margin-bottom: 20px; }
+                    .resumo { display: flex; justify-content: space-around; margin-bottom: 20px; padding: 15px; background: #fef2f2; border-radius: 8px; }
+                    .resumo-item { text-align: center; }
+                    .resumo-item label { display: block; font-size: 12px; color: #666; }
+                    .resumo-item span { font-size: 24px; font-weight: bold; color: #dc2626; }
+                    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+                    th { background: #dc2626; color: white; padding: 8px 4px; border: 1px solid #b91c1c; }
+                    td { padding: 6px 4px; border: 1px solid #ddd; text-align: center; }
+                    tr:nth-child(even) { background: #f9f9f9; }
+                    .diff-positive { color: #ea580c; font-weight: bold; }
+                    .diff-negative { color: #dc2626; font-weight: bold; }
+                    .diff-zero { color: #16a34a; }
+                    @media print { body { padding: 0; } }
+                </style>
+            </head>
+            <body>
+                <h1>📊 Acompanhamento de Perdas</h1>
+                <p class="subtitle">Data: ${data} | Validação Perdas vs OP</p>
+                <div class="resumo">
+                    <div class="resumo-item">
+                        <label>Máquinas c/ Diferença</label>
+                        <span>${maquinasDiff}</span>
+                    </div>
+                    <div class="resumo-item">
+                        <label>Total OP (kg)</label>
+                        <span>${totalOp}</span>
+                    </div>
+                    <div class="resumo-item">
+                        <label>Total MES (kg)</label>
+                        <span>${totalMes}</span>
+                    </div>
+                </div>
+                ${tabela.outerHTML.replace(/class="[^"]*"/g, '').replace(/<input[^>]*value="([^"]*)"[^>]*>/g, '$1').replace(/<input[^>]*>/g, '0')}
+                <p style="text-align: center; margin-top: 20px; color: #888; font-size: 11px;">
+                    Impresso em: ${new Date().toLocaleString('pt-BR')} | Hokkaido MES
+                </p>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+    }
+    // ==================== FIM ACOMPANHAMENTO DE PERDAS ====================
 
     // ==================== HISTÓRICO DO SISTEMA ====================
     
@@ -21190,6 +21702,44 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 }
             }
 
+            // =====================================================
+            // INTEGRAÇÃO FERRAMENTARIA - Atualizar batidas do molde
+            // =====================================================
+            if (resolvedQuantity > 0 && typeof window.atualizarBatidasPorProducao === 'function') {
+                try {
+                    // Tentar obter product_cod de várias fontes
+                    let productCod = selectedMachineData?.product_cod || selectedMachineData?.productCod;
+                    
+                    // Se não encontrou, buscar do planning
+                    if (!productCod && planId) {
+                        try {
+                            const planDoc = await db.collection('planning').doc(planId).get();
+                            if (planDoc.exists) {
+                                const planData = planDoc.data();
+                                productCod = planData.product_cod || planData.productCod || planData.part_code;
+                            }
+                        } catch (e) {
+                            console.warn('[SYNC-FERRAMENTARIA] Erro ao buscar planning:', e);
+                        }
+                    }
+                    
+                    console.log('[SYNC-FERRAMENTARIA] Manual - Dados para integração:', { productCod, resolvedQuantity, planId });
+                    
+                    if (productCod) {
+                        const resultadoBatidas = await window.atualizarBatidasPorProducao(productCod, resolvedQuantity);
+                        if (resultadoBatidas.success) {
+                            console.log(`[SYNC-FERRAMENTARIA] ✅ Produção Manual - Batidas atualizadas: molde "${resultadoBatidas.molde}", +${resultadoBatidas.batidasAdicionadas} batidas`);
+                        } else {
+                            console.log(`[SYNC-FERRAMENTARIA] ⚠️ Manual - Batidas não atualizadas:`, resultadoBatidas.reason);
+                        }
+                    } else {
+                        console.log('[SYNC-FERRAMENTARIA] ⚠️ Manual - product_cod não encontrado');
+                    }
+                } catch (ferramentariaErr) {
+                    console.warn('[SYNC-FERRAMENTARIA] Falha ao atualizar batidas (manual):', ferramentariaErr);
+                }
+            }
+
             // Registrar no histórico do sistema
             if (typeof logSystemAction === 'function') {
                 logSystemAction('producao', `Produção manual: ${resolvedQuantity} peças`, {
@@ -21406,6 +21956,44 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     }
                 } catch (planErr) {
                     console.warn('[SYNC-PLAN] Falha ao atualizar total do plano:', planErr);
+                }
+            }
+
+            // =====================================================
+            // INTEGRAÇÃO FERRAMENTARIA - Atualizar batidas do molde
+            // =====================================================
+            if (resolvedQuantity > 0 && typeof window.atualizarBatidasPorProducao === 'function') {
+                try {
+                    // Tentar obter product_cod de várias fontes
+                    let productCod = selectedMachineData?.product_cod || selectedMachineData?.productCod;
+                    
+                    // Se não encontrou, buscar do planning
+                    if (!productCod && planId) {
+                        try {
+                            const planDoc = await db.collection('planning').doc(planId).get();
+                            if (planDoc.exists) {
+                                const planData = planDoc.data();
+                                productCod = planData.product_cod || planData.productCod || planData.part_code;
+                            }
+                        } catch (e) {
+                            console.warn('[SYNC-FERRAMENTARIA] Erro ao buscar planning:', e);
+                        }
+                    }
+                    
+                    console.log('[SYNC-FERRAMENTARIA] Dados para integração:', { productCod, resolvedQuantity, planId });
+                    
+                    if (productCod) {
+                        const resultadoBatidas = await window.atualizarBatidasPorProducao(productCod, resolvedQuantity);
+                        if (resultadoBatidas.success) {
+                            console.log(`[SYNC-FERRAMENTARIA] ✅ Batidas atualizadas: molde "${resultadoBatidas.molde}", +${resultadoBatidas.batidasAdicionadas} batidas`);
+                        } else {
+                            console.log(`[SYNC-FERRAMENTARIA] ⚠️ Batidas não atualizadas:`, resultadoBatidas.reason);
+                        }
+                    } else {
+                        console.log('[SYNC-FERRAMENTARIA] ⚠️ product_cod não encontrado - batidas não atualizadas');
+                    }
+                } catch (ferramentariaErr) {
+                    console.warn('[SYNC-FERRAMENTARIA] Falha ao atualizar batidas:', ferramentariaErr);
                 }
             }
 
@@ -32792,6 +33380,796 @@ window.setupSetupMaquinasPage = setupSetupMaquinasPage;
 
 // =========================================
 // FIM DO MÓDULO SETUP DE MÁQUINAS
+// =========================================
+
+// =========================================
+// MÓDULO FERRAMENTARIA - CONTROLE DE MOLDES
+// =========================================
+
+// Estado do módulo
+let ferramentariaState = {
+    moldes: [],
+    manutencoes: [],
+    filtros: {
+        cliente: '',
+        status: '',
+        busca: ''
+    },
+    initialized: false
+};
+
+// Inicializar página de Ferramentaria
+function setupFerramentariaPage() {
+    console.log('[Ferramentaria] Inicializando módulo...');
+    
+    // Carregar moldes do Firebase e combinar com database local
+    carregarMoldesFerramentaria();
+    
+    // Configurar filtros
+    const filtroCliente = document.getElementById('ferram-filtro-cliente');
+    const filtroStatus = document.getElementById('ferram-filtro-status');
+    const buscaMolde = document.getElementById('ferram-busca-molde');
+    const btnBuscar = document.getElementById('btn-buscar-moldes');
+    
+    if (filtroCliente) {
+        // Popular dropdown de clientes
+        popularClientesFerramentaria();
+        filtroCliente.addEventListener('change', () => {
+            ferramentariaState.filtros.cliente = filtroCliente.value;
+        });
+    }
+    
+    if (filtroStatus) {
+        filtroStatus.addEventListener('change', () => {
+            ferramentariaState.filtros.status = filtroStatus.value;
+        });
+    }
+    
+    if (buscaMolde) {
+        buscaMolde.addEventListener('input', () => {
+            ferramentariaState.filtros.busca = buscaMolde.value;
+        });
+    }
+    
+    if (btnBuscar) {
+        btnBuscar.addEventListener('click', () => {
+            renderizarTabelaMoldes();
+        });
+    }
+    
+    // Configurar botões
+    const btnNovoMolde = document.getElementById('btn-novo-molde');
+    const btnRegistrarManutencao = document.getElementById('btn-registrar-manutencao');
+    
+    if (btnNovoMolde) {
+        btnNovoMolde.addEventListener('click', abrirModalNovoMolde);
+    }
+    
+    if (btnRegistrarManutencao) {
+        btnRegistrarManutencao.addEventListener('click', abrirModalManutencao);
+    }
+    
+    // Configurar modais
+    setupModalNovoMolde();
+    setupModalManutencao();
+    
+    ferramentariaState.initialized = true;
+    console.log('[Ferramentaria] Módulo inicializado com sucesso!');
+}
+
+// Popular dropdown de clientes
+function popularClientesFerramentaria() {
+    const select = document.getElementById('ferram-filtro-cliente');
+    if (!select || !window.ferramentariaDatabase) return;
+    
+    // Obter clientes únicos
+    const clientes = [...new Set(window.ferramentariaDatabase.map(m => m.client))].sort();
+    
+    select.innerHTML = '<option value="">Todos os clientes</option>';
+    clientes.forEach(cliente => {
+        const opt = document.createElement('option');
+        opt.value = cliente;
+        opt.textContent = cliente;
+        select.appendChild(opt);
+    });
+}
+
+// Carregar moldes do Firebase combinando com database local
+async function carregarMoldesFerramentaria() {
+    console.log('[Ferramentaria] Carregando moldes...');
+    
+    try {
+        // Inicializar array de moldes a partir do ferramentariaDatabase
+        if (!window.ferramentariaDatabase) {
+            console.warn('[Ferramentaria] ferramentariaDatabase não encontrado!');
+            return;
+        }
+        
+        // Mapear moldes locais
+        ferramentariaState.moldes = window.ferramentariaDatabase.map((m, index) => ({
+            id: `local_${index}`,
+            client: m.client,
+            molde: m.molde,
+            batidas_preventiva: m.batidas_preventiva,
+            batidas_atuais: 0,
+            ultima_manutencao: null
+        }));
+        
+        // Carregar dados de batidas e manutenções do Firebase
+        if (typeof db !== 'undefined') {
+            // Carregar estado dos moldes (batidas atuais)
+            const moldesSnapshot = await db.collection('ferramentaria_moldes').get();
+            
+            moldesSnapshot.forEach(doc => {
+                const data = doc.data();
+                // Encontrar molde correspondente pelo nome
+                const moldeLocal = ferramentariaState.moldes.find(m => 
+                    m.molde.toLowerCase() === data.molde?.toLowerCase()
+                );
+                
+                if (moldeLocal) {
+                    moldeLocal.id = doc.id;
+                    moldeLocal.batidas_atuais = data.batidas_atuais || 0;
+                    moldeLocal.ultima_manutencao = data.ultima_manutencao || null;
+                }
+            });
+            
+            // Carregar histórico de manutenções
+            const manutencoesSnapshot = await db.collection('ferramentaria_manutencoes')
+                .orderBy('data', 'desc')
+                .limit(20)
+                .get();
+            
+            ferramentariaState.manutencoes = manutencoesSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+        }
+        
+        // Renderizar tabela
+        renderizarTabelaMoldes();
+        renderizarHistoricoManutencoes();
+        
+    } catch (error) {
+        console.error('[Ferramentaria] Erro ao carregar moldes:', error);
+        showNotification('Erro ao carregar moldes', 'error');
+    }
+}
+
+// Renderizar tabela de moldes
+function renderizarTabelaMoldes() {
+    const tbody = document.getElementById('ferram-tabela-body');
+    if (!tbody) return;
+    
+    let moldesFiltrados = [...ferramentariaState.moldes];
+    
+    // Aplicar filtros
+    if (ferramentariaState.filtros.cliente) {
+        moldesFiltrados = moldesFiltrados.filter(m => m.client === ferramentariaState.filtros.cliente);
+    }
+    
+    if (ferramentariaState.filtros.busca) {
+        const busca = ferramentariaState.filtros.busca.toLowerCase();
+        moldesFiltrados = moldesFiltrados.filter(m => 
+            m.molde.toLowerCase().includes(busca) || 
+            m.client.toLowerCase().includes(busca)
+        );
+    }
+    
+    // Calcular status de cada molde
+    moldesFiltrados = moldesFiltrados.map(m => {
+        const progresso = (m.batidas_atuais / m.batidas_preventiva) * 100;
+        let status = 'ok';
+        if (progresso >= 90) status = 'critico';
+        else if (progresso >= 70) status = 'atencao';
+        return { ...m, progresso, status };
+    });
+    
+    // Filtrar por status
+    if (ferramentariaState.filtros.status) {
+        moldesFiltrados = moldesFiltrados.filter(m => m.status === ferramentariaState.filtros.status);
+    }
+    
+    // Ordenar por progresso (críticos primeiro)
+    moldesFiltrados.sort((a, b) => b.progresso - a.progresso);
+    
+    // Atualizar estatísticas
+    const totalMoldes = ferramentariaState.moldes.length;
+    const criticos = ferramentariaState.moldes.filter(m => (m.batidas_atuais / m.batidas_preventiva) >= 0.9).length;
+    const atencao = ferramentariaState.moldes.filter(m => {
+        const p = m.batidas_atuais / m.batidas_preventiva;
+        return p >= 0.7 && p < 0.9;
+    }).length;
+    const normais = totalMoldes - criticos - atencao;
+    
+    document.getElementById('ferram-total-moldes').textContent = totalMoldes;
+    document.getElementById('ferram-moldes-criticos').textContent = criticos;
+    document.getElementById('ferram-moldes-atencao').textContent = atencao;
+    document.getElementById('ferram-moldes-ok').textContent = normais;
+    
+    // Renderizar linhas
+    if (moldesFiltrados.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center py-12 text-gray-400">
+                    <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                    <p>Nenhum molde encontrado com os filtros aplicados</p>
+                </td>
+            </tr>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        return;
+    }
+    
+    tbody.innerHTML = moldesFiltrados.map(m => {
+        // Determinar cor do status
+        let statusClass = 'bg-green-100 text-green-700';
+        let statusText = 'Normal';
+        let statusIcon = 'check-circle';
+        let progressColor = 'bg-green-500';
+        
+        if (m.status === 'critico') {
+            statusClass = 'bg-red-100 text-red-700';
+            statusText = 'Crítico';
+            statusIcon = 'alert-triangle';
+            progressColor = 'bg-red-500';
+        } else if (m.status === 'atencao') {
+            statusClass = 'bg-yellow-100 text-yellow-700';
+            statusText = 'Atenção';
+            statusIcon = 'alert-circle';
+            progressColor = 'bg-yellow-500';
+        }
+        
+        const ultimaManutencao = m.ultima_manutencao 
+            ? new Date(m.ultima_manutencao).toLocaleDateString('pt-BR')
+            : '-';
+        
+        return `
+            <tr class="hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-3 text-gray-700 font-medium">${m.client}</td>
+                <td class="px-4 py-3 text-gray-900 font-semibold">${m.molde}</td>
+                <td class="px-4 py-3 text-center font-mono text-gray-700">${m.batidas_atuais.toLocaleString('pt-BR')}</td>
+                <td class="px-4 py-3 text-center font-mono text-gray-500">${m.batidas_preventiva.toLocaleString('pt-BR')}</td>
+                <td class="px-4 py-3">
+                    <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                        <div class="${progressColor} h-4 rounded-full transition-all flex items-center justify-end pr-1" style="width: ${Math.min(m.progresso, 100).toFixed(1)}%">
+                            <span class="text-[10px] text-white font-bold">${m.progresso.toFixed(1)}%</span>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-4 py-3 text-center">
+                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${statusClass}">
+                        <i data-lucide="${statusIcon}" class="w-3 h-3"></i>
+                        ${statusText}
+                    </span>
+                </td>
+                <td class="px-4 py-3 text-center text-gray-600 text-sm">${ultimaManutencao}</td>
+                <td class="px-4 py-3 text-center">
+                    <div class="flex justify-center gap-1">
+                        <button onclick="registrarManutencaoMolde('${m.molde}')" class="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition" title="Registrar Manutenção">
+                            <i data-lucide="check-circle" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="editarMolde('${m.id}')" class="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Editar">
+                            <i data-lucide="edit-2" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="adicionarBatidasManual('${m.molde}')" class="p-1.5 text-orange-600 hover:bg-orange-50 rounded-lg transition" title="Adicionar Batidas">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// Renderizar histórico de manutenções
+function renderizarHistoricoManutencoes() {
+    const container = document.getElementById('ferram-historico');
+    if (!container) return;
+    
+    if (ferramentariaState.manutencoes.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-6 text-gray-400">
+                <i data-lucide="clipboard-list" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+                <p class="text-sm">Nenhuma manutenção registrada</p>
+            </div>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        return;
+    }
+    
+    container.innerHTML = ferramentariaState.manutencoes.map(m => {
+        const data = m.data ? new Date(m.data).toLocaleDateString('pt-BR') : '-';
+        const tipoClass = m.tipo === 'preventiva' ? 'bg-blue-100 text-blue-700' : 
+                          m.tipo === 'corretiva' ? 'bg-orange-100 text-orange-700' : 
+                          'bg-purple-100 text-purple-700';
+        
+        return `
+            <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                <div class="p-2 bg-green-100 rounded-full">
+                    <i data-lucide="check" class="w-4 h-4 text-green-600"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="font-semibold text-gray-800 truncate">${m.molde || '-'}</p>
+                    <p class="text-xs text-gray-500">${m.responsavel || '-'} • ${data}</p>
+                </div>
+                <span class="px-2 py-1 rounded text-xs font-semibold ${tipoClass}">${(m.tipo || 'preventiva').toUpperCase()}</span>
+            </div>
+        `;
+    }).join('');
+    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// Setup Modal Novo Molde
+function setupModalNovoMolde() {
+    const modal = document.getElementById('novo-molde-modal');
+    const btnClose = document.getElementById('novo-molde-close');
+    const btnCancel = document.getElementById('novo-molde-cancel');
+    const btnSave = document.getElementById('novo-molde-save');
+    
+    if (btnClose) btnClose.addEventListener('click', fecharModalNovoMolde);
+    if (btnCancel) btnCancel.addEventListener('click', fecharModalNovoMolde);
+    if (btnSave) btnSave.addEventListener('click', salvarMolde);
+    
+    // Fechar ao clicar fora
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) fecharModalNovoMolde();
+        });
+    }
+}
+
+// Setup Modal Manutenção
+function setupModalManutencao() {
+    const modal = document.getElementById('manutencao-molde-modal');
+    const btnClose = document.getElementById('manutencao-molde-close');
+    const btnCancel = document.getElementById('manutencao-molde-cancel');
+    const btnSave = document.getElementById('manutencao-molde-save');
+    const selectMolde = document.getElementById('manutencao-molde-select');
+    
+    if (btnClose) btnClose.addEventListener('click', fecharModalManutencao);
+    if (btnCancel) btnCancel.addEventListener('click', fecharModalManutencao);
+    if (btnSave) btnSave.addEventListener('click', salvarManutencao);
+    
+    if (selectMolde) {
+        selectMolde.addEventListener('change', () => {
+            atualizarInfoMoldeManutencao(selectMolde.value);
+        });
+    }
+    
+    // Fechar ao clicar fora
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) fecharModalManutencao();
+        });
+    }
+}
+
+// Abrir modal de novo molde
+function abrirModalNovoMolde() {
+    const modal = document.getElementById('novo-molde-modal');
+    const titulo = document.getElementById('novo-molde-titulo');
+    const form = document.getElementById('novo-molde-form');
+    
+    if (titulo) titulo.textContent = 'Cadastrar Novo Molde';
+    if (form) form.reset();
+    document.getElementById('edit-molde-id').value = '';
+    
+    if (modal) {
+        modal.classList.remove('hidden');
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+}
+
+// Fechar modal de novo molde
+function fecharModalNovoMolde() {
+    const modal = document.getElementById('novo-molde-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+// Abrir modal de manutenção
+function abrirModalManutencao(moldeNome = null) {
+    const modal = document.getElementById('manutencao-molde-modal');
+    const form = document.getElementById('manutencao-molde-form');
+    const selectMolde = document.getElementById('manutencao-molde-select');
+    const dataInput = document.getElementById('manutencao-data');
+    
+    if (form) form.reset();
+    
+    // Popular dropdown de moldes
+    if (selectMolde) {
+        selectMolde.innerHTML = '<option value="">Selecione o molde</option>';
+        ferramentariaState.moldes.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.molde;
+            opt.textContent = `${m.client} - ${m.molde}`;
+            selectMolde.appendChild(opt);
+        });
+        
+        if (moldeNome) {
+            selectMolde.value = moldeNome;
+            atualizarInfoMoldeManutencao(moldeNome);
+        }
+    }
+    
+    // Data padrão: hoje
+    if (dataInput) {
+        dataInput.value = new Date().toISOString().split('T')[0];
+    }
+    
+    if (modal) {
+        modal.classList.remove('hidden');
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+}
+
+// Fechar modal de manutenção
+function fecharModalManutencao() {
+    const modal = document.getElementById('manutencao-molde-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+// Atualizar info do molde no modal de manutenção
+function atualizarInfoMoldeManutencao(moldeNome) {
+    const infoContainer = document.getElementById('manutencao-info-molde');
+    const molde = ferramentariaState.moldes.find(m => m.molde === moldeNome);
+    
+    if (!molde || !infoContainer) {
+        if (infoContainer) infoContainer.classList.add('hidden');
+        return;
+    }
+    
+    const progresso = (molde.batidas_atuais / molde.batidas_preventiva) * 100;
+    let progressoClass = 'text-green-600';
+    if (progresso >= 90) progressoClass = 'text-red-600 font-bold';
+    else if (progresso >= 70) progressoClass = 'text-yellow-600';
+    
+    document.getElementById('manutencao-info-cliente').textContent = molde.client;
+    document.getElementById('manutencao-info-batidas').textContent = molde.batidas_atuais.toLocaleString('pt-BR');
+    document.getElementById('manutencao-info-limite').textContent = molde.batidas_preventiva.toLocaleString('pt-BR');
+    
+    const progressoEl = document.getElementById('manutencao-info-progresso');
+    progressoEl.textContent = `${progresso.toFixed(1)}%`;
+    progressoEl.className = `font-semibold ml-1 ${progressoClass}`;
+    
+    infoContainer.classList.remove('hidden');
+}
+
+// Salvar novo molde
+async function salvarMolde() {
+    const cliente = document.getElementById('novo-molde-cliente').value.trim();
+    const nome = document.getElementById('novo-molde-nome').value.trim();
+    const batidasLimite = parseInt(document.getElementById('novo-molde-batidas-limite').value) || 0;
+    const batidasAtuais = parseInt(document.getElementById('novo-molde-batidas-atuais').value) || 0;
+    const editId = document.getElementById('edit-molde-id').value;
+    
+    if (!cliente || !nome || batidasLimite < 1000) {
+        showNotification('Preencha todos os campos obrigatórios', 'warning');
+        return;
+    }
+    
+    try {
+        const dados = {
+            client: cliente,
+            molde: nome,
+            batidas_preventiva: batidasLimite,
+            batidas_atuais: batidasAtuais,
+            atualizado_em: new Date().toISOString()
+        };
+        
+        if (typeof db !== 'undefined') {
+            if (editId && !editId.startsWith('local_')) {
+                await db.collection('ferramentaria_moldes').doc(editId).update(dados);
+                showNotification('Molde atualizado com sucesso!', 'success');
+            } else {
+                await db.collection('ferramentaria_moldes').add(dados);
+                showNotification('Molde cadastrado com sucesso!', 'success');
+            }
+        }
+        
+        fecharModalNovoMolde();
+        carregarMoldesFerramentaria();
+        
+    } catch (error) {
+        console.error('[Ferramentaria] Erro ao salvar molde:', error);
+        showNotification('Erro ao salvar molde', 'error');
+    }
+}
+
+// Salvar manutenção
+async function salvarManutencao() {
+    const moldeNome = document.getElementById('manutencao-molde-select').value;
+    const data = document.getElementById('manutencao-data').value;
+    const tipo = document.getElementById('manutencao-tipo').value;
+    const responsavel = document.getElementById('manutencao-responsavel').value.trim();
+    const obs = document.getElementById('manutencao-obs').value.trim();
+    
+    if (!moldeNome || !data || !responsavel) {
+        showNotification('Preencha todos os campos obrigatórios', 'warning');
+        return;
+    }
+    
+    const molde = ferramentariaState.moldes.find(m => m.molde === moldeNome);
+    if (!molde) {
+        showNotification('Molde não encontrado', 'error');
+        return;
+    }
+    
+    try {
+        if (typeof db !== 'undefined') {
+            // Registrar manutenção
+            await db.collection('ferramentaria_manutencoes').add({
+                molde: moldeNome,
+                cliente: molde.client,
+                data: data,
+                tipo: tipo,
+                responsavel: responsavel,
+                observacao: obs,
+                batidas_zeradas: molde.batidas_atuais,
+                registrado_em: new Date().toISOString()
+            });
+            
+            // Zerar contador do molde
+            const moldesRef = db.collection('ferramentaria_moldes');
+            const query = await moldesRef.where('molde', '==', moldeNome).get();
+            
+            if (query.empty) {
+                // Criar documento se não existir
+                await moldesRef.add({
+                    client: molde.client,
+                    molde: moldeNome,
+                    batidas_preventiva: molde.batidas_preventiva,
+                    batidas_atuais: 0,
+                    ultima_manutencao: data
+                });
+            } else {
+                // Atualizar documento existente
+                query.forEach(async (doc) => {
+                    await doc.ref.update({
+                        batidas_atuais: 0,
+                        ultima_manutencao: data
+                    });
+                });
+            }
+            
+            showNotification('Manutenção registrada! Contador zerado.', 'success');
+        }
+        
+        fecharModalManutencao();
+        carregarMoldesFerramentaria();
+        
+    } catch (error) {
+        console.error('[Ferramentaria] Erro ao salvar manutenção:', error);
+        showNotification('Erro ao registrar manutenção', 'error');
+    }
+}
+
+// Função para registrar manutenção via botão da tabela
+function registrarManutencaoMolde(moldeNome) {
+    abrirModalManutencao(moldeNome);
+}
+
+// Editar molde
+function editarMolde(moldeId) {
+    const molde = ferramentariaState.moldes.find(m => m.id === moldeId);
+    if (!molde) return;
+    
+    document.getElementById('edit-molde-id').value = moldeId;
+    document.getElementById('novo-molde-cliente').value = molde.client;
+    document.getElementById('novo-molde-nome').value = molde.molde;
+    document.getElementById('novo-molde-batidas-limite').value = molde.batidas_preventiva;
+    document.getElementById('novo-molde-batidas-atuais').value = molde.batidas_atuais;
+    
+    const titulo = document.getElementById('novo-molde-titulo');
+    if (titulo) titulo.textContent = 'Editar Molde';
+    
+    const modal = document.getElementById('novo-molde-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+}
+
+// Adicionar batidas manualmente
+async function adicionarBatidasManual(moldeNome) {
+    const quantidade = prompt(`Quantas batidas deseja adicionar ao molde "${moldeNome}"?`, '1000');
+    
+    if (!quantidade || isNaN(parseInt(quantidade))) return;
+    
+    const batidas = parseInt(quantidade);
+    if (batidas <= 0) {
+        showNotification('Quantidade deve ser maior que zero', 'warning');
+        return;
+    }
+    
+    try {
+        const molde = ferramentariaState.moldes.find(m => m.molde === moldeNome);
+        if (!molde) return;
+        
+        const novasBatidas = molde.batidas_atuais + batidas;
+        
+        if (typeof db !== 'undefined') {
+            const moldesRef = db.collection('ferramentaria_moldes');
+            const query = await moldesRef.where('molde', '==', moldeNome).get();
+            
+            if (query.empty) {
+                await moldesRef.add({
+                    client: molde.client,
+                    molde: moldeNome,
+                    batidas_preventiva: molde.batidas_preventiva,
+                    batidas_atuais: novasBatidas,
+                    ultima_manutencao: null
+                });
+            } else {
+                query.forEach(async (doc) => {
+                    await doc.ref.update({ batidas_atuais: novasBatidas });
+                });
+            }
+        }
+        
+        showNotification(`${batidas.toLocaleString('pt-BR')} batidas adicionadas!`, 'success');
+        carregarMoldesFerramentaria();
+        
+    } catch (error) {
+        console.error('[Ferramentaria] Erro ao adicionar batidas:', error);
+        showNotification('Erro ao adicionar batidas', 'error');
+    }
+}
+
+/**
+ * =====================================================
+ * INTEGRAÇÃO AUTOMÁTICA - BATIDAS POR PRODUÇÃO
+ * =====================================================
+ * Quando uma produção é registrada, esta função calcula
+ * automaticamente as batidas e atualiza o molde no Firebase.
+ * 
+ * Fórmula: batidas = quantidade_produzida / cavidades_molde
+ */
+async function atualizarBatidasPorProducao(productCod, quantidadeProduzida) {
+    try {
+        // 1. Verificar se temos o código do produto
+        if (!productCod || !quantidadeProduzida || quantidadeProduzida <= 0) {
+            console.log('[Ferramentaria] Código do produto ou quantidade inválidos');
+            return { success: false, reason: 'dados_invalidos' };
+        }
+        
+        // 2. Verificar se o produto está mapeado para um molde
+        if (!window.moldePorProduto) {
+            console.warn('[Ferramentaria] moldePorProduto não carregado');
+            return { success: false, reason: 'mapeamento_nao_carregado' };
+        }
+        
+        const nomeMolde = window.moldePorProduto[productCod];
+        if (!nomeMolde) {
+            console.log(`[Ferramentaria] Produto ${productCod} não está mapeado para nenhum molde`);
+            return { success: false, reason: 'produto_nao_mapeado' };
+        }
+        
+        // 3. Obter cavidades do produto no productDatabase
+        let cavidades = 1; // Padrão se não encontrar
+        if (window.productDatabase) {
+            const produto = window.productDatabase.find(p => p.cod == productCod);
+            if (produto && produto.cavities && produto.cavities > 0) {
+                cavidades = produto.cavities;
+            } else {
+                console.warn(`[Ferramentaria] Produto ${productCod} sem cavidades definidas, usando 1`);
+            }
+        }
+        
+        // 4. Calcular batidas
+        const batidasNovas = Math.round(quantidadeProduzida / cavidades);
+        
+        if (batidasNovas <= 0) {
+            console.log('[Ferramentaria] Nenhuma batida calculada');
+            return { success: false, reason: 'batidas_zero' };
+        }
+        
+        console.log(`[Ferramentaria] Calculando batidas: ${quantidadeProduzida} peças / ${cavidades} cavidades = ${batidasNovas} batidas para molde "${nomeMolde}"`);
+        
+        // 5. Buscar/Atualizar molde no Firebase
+        if (typeof db === 'undefined') {
+            console.warn('[Ferramentaria] Firebase não disponível');
+            return { success: false, reason: 'firebase_indisponivel' };
+        }
+        
+        // Buscar molde existente
+        const moldesRef = db.collection('ferramentaria_moldes');
+        const query = await moldesRef.where('molde', '==', nomeMolde).get();
+        
+        if (!query.empty) {
+            // Molde existe - atualizar batidas
+            const doc = query.docs[0];
+            const dadosMolde = doc.data();
+            const batidasAtuais = dadosMolde.batidas_atuais || 0;
+            const novoTotalBatidas = batidasAtuais + batidasNovas;
+            
+            await doc.ref.update({
+                batidas_atuais: novoTotalBatidas,
+                ultima_atualizacao: firebase.firestore.FieldValue.serverTimestamp(),
+                ultima_producao: {
+                    product_cod: productCod,
+                    quantidade: quantidadeProduzida,
+                    batidas: batidasNovas,
+                    data: new Date().toISOString()
+                }
+            });
+            
+            console.log(`[Ferramentaria] ✅ Molde "${nomeMolde}" atualizado: ${batidasAtuais} → ${novoTotalBatidas} batidas (+${batidasNovas})`);
+            
+            // Verificar se atingiu limite para alerta
+            const moldeLocal = window.ferramentariaDatabase?.find(m => m.molde === nomeMolde);
+            if (moldeLocal) {
+                const percentual = (novoTotalBatidas / moldeLocal.batidas_preventiva) * 100;
+                if (percentual >= 90) {
+                    console.warn(`[Ferramentaria] ⚠️ ALERTA CRÍTICO: Molde "${nomeMolde}" em ${percentual.toFixed(1)}% do limite!`);
+                } else if (percentual >= 70) {
+                    console.warn(`[Ferramentaria] ⚠️ ATENÇÃO: Molde "${nomeMolde}" em ${percentual.toFixed(1)}% do limite`);
+                }
+            }
+            
+            return { 
+                success: true, 
+                molde: nomeMolde, 
+                batidasAdicionadas: batidasNovas, 
+                totalBatidas: novoTotalBatidas,
+                cavidades: cavidades
+            };
+            
+        } else {
+            // Molde não existe no Firebase - criar com os dados locais
+            const moldeLocal = window.ferramentariaDatabase?.find(m => m.molde === nomeMolde);
+            
+            if (moldeLocal) {
+                await moldesRef.add({
+                    client: moldeLocal.client,
+                    molde: nomeMolde,
+                    batidas_preventiva: moldeLocal.batidas_preventiva,
+                    batidas_atuais: batidasNovas,
+                    ultima_manutencao: null,
+                    criado_em: firebase.firestore.FieldValue.serverTimestamp(),
+                    ultima_atualizacao: firebase.firestore.FieldValue.serverTimestamp(),
+                    ultima_producao: {
+                        product_cod: productCod,
+                        quantidade: quantidadeProduzida,
+                        batidas: batidasNovas,
+                        data: new Date().toISOString()
+                    }
+                });
+                
+                console.log(`[Ferramentaria] ✅ Molde "${nomeMolde}" criado no Firebase com ${batidasNovas} batidas iniciais`);
+                
+                return { 
+                    success: true, 
+                    molde: nomeMolde, 
+                    batidasAdicionadas: batidasNovas, 
+                    totalBatidas: batidasNovas,
+                    cavidades: cavidades,
+                    novo: true
+                };
+            } else {
+                console.warn(`[Ferramentaria] Molde "${nomeMolde}" não encontrado no ferramentariaDatabase`);
+                return { success: false, reason: 'molde_nao_encontrado' };
+            }
+        }
+        
+    } catch (error) {
+        console.error('[Ferramentaria] Erro ao atualizar batidas:', error);
+        return { success: false, reason: 'erro', error: error.message };
+    }
+}
+
+// Expor funções globalmente
+window.setupFerramentariaPage = setupFerramentariaPage;
+window.registrarManutencaoMolde = registrarManutencaoMolde;
+window.editarMolde = editarMolde;
+window.adicionarBatidasManual = adicionarBatidasManual;
+window.atualizarBatidasPorProducao = atualizarBatidasPorProducao;
+
+// =========================================
+// FIM DO MÓDULO FERRAMENTARIA
 // =========================================
 
 // Inicializar módulo de ordens quando página carregar

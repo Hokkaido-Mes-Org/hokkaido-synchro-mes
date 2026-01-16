@@ -377,6 +377,10 @@
                     <i data-lucide="wrench" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Setup</span>
                     <span class="nav-tooltip">Setup de Máquinas</span>
                 </a>
+                <a href="#" class="nav-btn group" data-page="ferramentaria" title="Ferramentaria">
+                    <i data-lucide="settings-2" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Ferramentaria</span>
+                    <span class="nav-tooltip">Controle de Moldes</span>
+                </a>
                 <a href="dashboard-tv.html" target="_blank" rel="noopener" id="nav-dashboard-tv" class="nav-btn group" title="Dashboard TV">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 flex-shrink-0"><rect width="20" height="15" x="2" y="7" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg><span class="nav-text transition-opacity duration-300">Dashboard TV</span>
                     <span class="nav-tooltip">Dashboard TV</span>
@@ -1021,96 +1025,227 @@
                 <!-- PÁGINA: Acompanhamento de Turno -->
                 <div id="acompanhamento-page" class="page-content hidden space-y-3 p-2">
                     <div class="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100">
-                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-                            <div class="flex items-center gap-3">
-                                <div class="p-2.5 bg-blue-100 rounded-xl">
-                                    <i data-lucide="clipboard-check" class="w-6 h-6 text-blue-600"></i>
-                                </div>
-                                <div>
-                                    <h2 class="text-xl font-semibold text-gray-800">Acompanhamento de Turno</h2>
-                                    <p class="text-sm text-gray-500">Validação CEDOC vs Hokkaido Mes</p>
-                                </div>
-                            </div>
-                            <div id="acompanhamento-status" class="text-xs font-semibold text-blue-600 bg-blue-100 px-3 py-1.5 rounded-full">
-                                🔄 Conectando...
-                            </div>
-                        </div>
-
-                        <!-- Filtros -->
-                        <div class="flex flex-wrap items-end gap-4 mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
-                            <div class="flex-1 min-w-[150px]">
-                                <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                                    <i data-lucide="calendar" class="w-3 h-3 inline mr-1"></i> Data
-                                </label>
-                                <input type="date" id="acompanhamento-data" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
-                            </div>
-                            <button id="acompanhamento-carregar" class="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold py-2.5 px-6 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2">
-                                <i data-lucide="search" class="w-4 h-4"></i>
-                                Carregar Dados
+                        
+                        <!-- Tabs para alternar entre Produção e Perdas -->
+                        <div class="flex gap-2 mb-6 border-b border-gray-200">
+                            <button class="acompanhamento-tab-btn px-6 py-3 text-sm font-semibold rounded-t-xl transition-all border-b-2 border-blue-600 bg-blue-50 text-blue-700" data-acompanhamento-tab="producao">
+                                <i data-lucide="package" class="w-4 h-4 inline mr-2"></i>
+                                Produção (CEDOC/MES)
+                            </button>
+                            <button class="acompanhamento-tab-btn px-6 py-3 text-sm font-semibold rounded-t-xl transition-all border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50" data-acompanhamento-tab="perdas">
+                                <i data-lucide="alert-triangle" class="w-4 h-4 inline mr-2"></i>
+                                Perdas (Perdas/OP)
                             </button>
                         </div>
 
-                        <!-- Card Resumo -->
-                        <div id="acompanhamento-resumo" class="hidden mb-6">
-                            <div class="bg-gradient-to-br from-red-50 to-red-100 border border-red-200 rounded-xl p-4 flex items-center gap-4">
-                                <div class="w-12 h-12 bg-red-500 rounded-xl flex items-center justify-center shadow-lg">
-                                    <i data-lucide="alert-triangle" class="w-6 h-6 text-white"></i>
+                        <!-- ========== ABA: PRODUÇÃO CEDOC/MES ========== -->
+                        <div id="acompanhamento-tab-producao" class="acompanhamento-tab-content">
+                            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+                                <div class="flex items-center gap-3">
+                                    <div class="p-2.5 bg-blue-100 rounded-xl">
+                                        <i data-lucide="clipboard-check" class="w-6 h-6 text-blue-600"></i>
+                                    </div>
+                                    <div>
+                                        <h2 class="text-xl font-semibold text-gray-800">Acompanhamento de Turno</h2>
+                                        <p class="text-sm text-gray-500">Validação CEDOC vs Hokkaido Mes</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p class="text-xs text-red-600 font-semibold uppercase tracking-wider">Máquinas com Diferença</p>
-                                    <p id="acompanhamento-maquinas-diff" class="text-3xl font-bold text-red-700">0</p>
+                                <div id="acompanhamento-status" class="text-xs font-semibold text-blue-600 bg-blue-100 px-3 py-1.5 rounded-full">
+                                    🔄 Conectando...
                                 </div>
+                            </div>
+
+                            <!-- Filtros -->
+                            <div class="flex flex-wrap items-end gap-4 mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                                <div class="flex-1 min-w-[150px]">
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                                        <i data-lucide="calendar" class="w-3 h-3 inline mr-1"></i> Data
+                                    </label>
+                                    <input type="date" id="acompanhamento-data" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                                </div>
+                                <button id="acompanhamento-carregar" class="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold py-2.5 px-6 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2">
+                                    <i data-lucide="search" class="w-4 h-4"></i>
+                                    Carregar Dados
+                                </button>
+                            </div>
+
+                            <!-- Card Resumo -->
+                            <div id="acompanhamento-resumo" class="hidden mb-6">
+                                <div class="bg-gradient-to-br from-red-50 to-red-100 border border-red-200 rounded-xl p-4 flex items-center gap-4">
+                                    <div class="w-12 h-12 bg-red-500 rounded-xl flex items-center justify-center shadow-lg">
+                                        <i data-lucide="alert-triangle" class="w-6 h-6 text-white"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-xs text-red-600 font-semibold uppercase tracking-wider">Máquinas com Diferença</p>
+                                        <p id="acompanhamento-maquinas-diff" class="text-3xl font-bold text-red-700">0</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tabela -->
+                            <div class="overflow-x-auto rounded-xl border border-gray-200">
+                                <table class="w-full" id="acompanhamento-tabela">
+                                    <thead>
+                                        <tr class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+                                            <th rowspan="2" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider border-r border-blue-500">Máquina</th>
+                                            <th colspan="3" class="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wider border-r border-blue-500 bg-blue-700">T1 (07h-15h)</th>
+                                            <th colspan="3" class="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wider border-r border-blue-500 bg-purple-700">T2 (15h-23h)</th>
+                                            <th colspan="3" class="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wider bg-orange-600">T3 (23h-07h)</th>
+                                        </tr>
+                                        <tr class="bg-gray-100 text-gray-700">
+                                            <th class="px-2 py-2 text-center text-xs font-semibold">CEDOC</th>
+                                            <th class="px-2 py-2 text-center text-xs font-semibold">Hokkaido Mes</th>
+                                            <th class="px-2 py-2 text-center text-xs font-semibold border-r border-gray-300">Dif.</th>
+                                            <th class="px-2 py-2 text-center text-xs font-semibold">CEDOC</th>
+                                            <th class="px-2 py-2 text-center text-xs font-semibold">Hokkaido Mes</th>
+                                            <th class="px-2 py-2 text-center text-xs font-semibold border-r border-gray-300">Dif.</th>
+                                            <th class="px-2 py-2 text-center text-xs font-semibold">CEDOC</th>
+                                            <th class="px-2 py-2 text-center text-xs font-semibold">Hokkaido Mes</th>
+                                            <th class="px-2 py-2 text-center text-xs font-semibold">Dif.</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="acompanhamento-tbody" class="divide-y divide-gray-200">
+                                        <tr>
+                                            <td colspan="10" class="px-4 py-10 text-center text-gray-400">
+                                                <i data-lucide="database" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
+                                                <p>Selecione a data e clique em <strong>"Carregar Dados"</strong></p>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Ações -->
+                            <div class="flex justify-end gap-3 mt-6">
+                                <button id="acompanhamento-imprimir" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2.5 px-5 rounded-lg transition-all flex items-center gap-2 border border-gray-200">
+                                    <i data-lucide="printer" class="w-4 h-4"></i>
+                                    Imprimir
+                                </button>
+                                <button id="acompanhamento-limpar" class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold py-2.5 px-5 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                    Limpar CEDOC
+                                </button>
+                                <button id="acompanhamento-salvar" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-2.5 px-5 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2">
+                                    <i data-lucide="save" class="w-4 h-4"></i>
+                                    Salvar
+                                </button>
                             </div>
                         </div>
 
-                        <!-- Tabela -->
-                        <div class="overflow-x-auto rounded-xl border border-gray-200">
-                            <table class="w-full" id="acompanhamento-tabela">
-                                <thead>
-                                    <tr class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
-                                        <th rowspan="2" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider border-r border-blue-500">Máquina</th>
-                                        <th colspan="3" class="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wider border-r border-blue-500 bg-blue-700">T1 (07h-15h)</th>
-                                        <th colspan="3" class="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wider border-r border-blue-500 bg-purple-700">T2 (15h-23h)</th>
-                                        <th colspan="3" class="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wider bg-orange-600">T3 (23h-07h)</th>
-                                    </tr>
-                                    <tr class="bg-gray-100 text-gray-700">
-                                        <th class="px-2 py-2 text-center text-xs font-semibold">CEDOC</th>
-                                        <th class="px-2 py-2 text-center text-xs font-semibold">Hokkaido Mes</th>
-                                        <th class="px-2 py-2 text-center text-xs font-semibold border-r border-gray-300">Dif.</th>
-                                        <th class="px-2 py-2 text-center text-xs font-semibold">CEDOC</th>
-                                        <th class="px-2 py-2 text-center text-xs font-semibold">Hokkaido Mes</th>
-                                        <th class="px-2 py-2 text-center text-xs font-semibold border-r border-gray-300">Dif.</th>
-                                        <th class="px-2 py-2 text-center text-xs font-semibold">CEDOC</th>
-                                        <th class="px-2 py-2 text-center text-xs font-semibold">Hokkaido Mes</th>
-                                        <th class="px-2 py-2 text-center text-xs font-semibold">Dif.</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="acompanhamento-tbody" class="divide-y divide-gray-200">
-                                    <tr>
-                                        <td colspan="10" class="px-4 py-10 text-center text-gray-400">
-                                            <i data-lucide="database" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
-                                            <p>Selecione a data e clique em <strong>"Carregar Dados"</strong></p>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                        <!-- ========== ABA: PERDAS/OP ========== -->
+                        <div id="acompanhamento-tab-perdas" class="acompanhamento-tab-content hidden">
+                            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+                                <div class="flex items-center gap-3">
+                                    <div class="p-2.5 bg-red-100 rounded-xl">
+                                        <i data-lucide="trash" class="w-6 h-6 text-red-600"></i>
+                                    </div>
+                                    <div>
+                                        <h2 class="text-xl font-semibold text-gray-800">Acompanhamento de Perdas</h2>
+                                        <p class="text-sm text-gray-500">Validação Perdas vs OP (Ordem de Produção)</p>
+                                    </div>
+                                </div>
+                                <div id="acompanhamento-perdas-status" class="text-xs font-semibold text-red-600 bg-red-100 px-3 py-1.5 rounded-full">
+                                    🔄 Conectando...
+                                </div>
+                            </div>
+
+                            <!-- Filtros Perdas -->
+                            <div class="flex flex-wrap items-end gap-4 mb-6 p-4 bg-red-50 rounded-xl border border-red-200">
+                                <div class="flex-1 min-w-[150px]">
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                                        <i data-lucide="calendar" class="w-3 h-3 inline mr-1"></i> Data
+                                    </label>
+                                    <input type="date" id="acompanhamento-perdas-data" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition">
+                                </div>
+                                <button id="acompanhamento-perdas-carregar" class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold py-2.5 px-6 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2">
+                                    <i data-lucide="search" class="w-4 h-4"></i>
+                                    Carregar Dados
+                                </button>
+                            </div>
+
+                            <!-- Card Resumo Perdas -->
+                            <div id="acompanhamento-perdas-resumo" class="hidden mb-6">
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div class="bg-gradient-to-br from-red-50 to-red-100 border border-red-200 rounded-xl p-4 flex items-center gap-4">
+                                        <div class="w-12 h-12 bg-red-500 rounded-xl flex items-center justify-center shadow-lg">
+                                            <i data-lucide="alert-circle" class="w-6 h-6 text-white"></i>
+                                        </div>
+                                        <div>
+                                            <p class="text-xs text-red-600 font-semibold uppercase tracking-wider">Máquinas c/ Diferença</p>
+                                            <p id="acompanhamento-perdas-maquinas-diff" class="text-3xl font-bold text-red-700">0</p>
+                                        </div>
+                                    </div>
+                                    <div class="bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 rounded-xl p-4 flex items-center gap-4">
+                                        <div class="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center shadow-lg">
+                                            <i data-lucide="scale" class="w-6 h-6 text-white"></i>
+                                        </div>
+                                        <div>
+                                            <p class="text-xs text-orange-600 font-semibold uppercase tracking-wider">Total OP (kg)</p>
+                                            <p id="acompanhamento-perdas-total-op" class="text-3xl font-bold text-orange-700">0</p>
+                                        </div>
+                                    </div>
+                                    <div class="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-xl p-4 flex items-center gap-4">
+                                        <div class="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center shadow-lg">
+                                            <i data-lucide="database" class="w-6 h-6 text-white"></i>
+                                        </div>
+                                        <div>
+                                            <p class="text-xs text-purple-600 font-semibold uppercase tracking-wider">Total MES (kg)</p>
+                                            <p id="acompanhamento-perdas-total-mes" class="text-3xl font-bold text-purple-700">0</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tabela Perdas -->
+                            <div class="overflow-x-auto rounded-xl border border-gray-200">
+                                <table class="w-full" id="acompanhamento-perdas-tabela">
+                                    <thead>
+                                        <tr class="bg-gradient-to-r from-red-600 to-red-700 text-white">
+                                            <th rowspan="2" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider border-r border-red-500">Máquina</th>
+                                            <th colspan="3" class="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wider border-r border-red-500 bg-red-700">T1 (07h-15h)</th>
+                                            <th colspan="3" class="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wider border-r border-red-500 bg-purple-700">T2 (15h-23h)</th>
+                                            <th colspan="3" class="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wider bg-orange-600">T3 (23h-07h)</th>
+                                        </tr>
+                                        <tr class="bg-gray-100 text-gray-700">
+                                            <th class="px-2 py-2 text-center text-xs font-semibold">OP (kg)</th>
+                                            <th class="px-2 py-2 text-center text-xs font-semibold">MES (kg)</th>
+                                            <th class="px-2 py-2 text-center text-xs font-semibold border-r border-gray-300">Dif.</th>
+                                            <th class="px-2 py-2 text-center text-xs font-semibold">OP (kg)</th>
+                                            <th class="px-2 py-2 text-center text-xs font-semibold">MES (kg)</th>
+                                            <th class="px-2 py-2 text-center text-xs font-semibold border-r border-gray-300">Dif.</th>
+                                            <th class="px-2 py-2 text-center text-xs font-semibold">OP (kg)</th>
+                                            <th class="px-2 py-2 text-center text-xs font-semibold">MES (kg)</th>
+                                            <th class="px-2 py-2 text-center text-xs font-semibold">Dif.</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="acompanhamento-perdas-tbody" class="divide-y divide-gray-200">
+                                        <tr>
+                                            <td colspan="10" class="px-4 py-10 text-center text-gray-400">
+                                                <i data-lucide="trash" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
+                                                <p>Selecione a data e clique em <strong>"Carregar Dados"</strong></p>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Ações Perdas -->
+                            <div class="flex justify-end gap-3 mt-6">
+                                <button id="acompanhamento-perdas-imprimir" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2.5 px-5 rounded-lg transition-all flex items-center gap-2 border border-gray-200">
+                                    <i data-lucide="printer" class="w-4 h-4"></i>
+                                    Imprimir
+                                </button>
+                                <button id="acompanhamento-perdas-limpar" class="bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white font-semibold py-2.5 px-5 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                    Limpar OP
+                                </button>
+                                <button id="acompanhamento-perdas-salvar" class="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold py-2.5 px-5 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2">
+                                    <i data-lucide="save" class="w-4 h-4"></i>
+                                    Salvar
+                                </button>
+                            </div>
                         </div>
 
-                        <!-- Ações -->
-                        <div class="flex justify-end gap-3 mt-6">
-                            <button id="acompanhamento-imprimir" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2.5 px-5 rounded-lg transition-all flex items-center gap-2 border border-gray-200">
-                                <i data-lucide="printer" class="w-4 h-4"></i>
-                                Imprimir
-                            </button>
-                            <button id="acompanhamento-limpar" class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold py-2.5 px-5 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2">
-                                <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                Limpar CEDOC
-                            </button>
-                            <button id="acompanhamento-salvar" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-2.5 px-5 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2">
-                                <i data-lucide="save" class="w-4 h-4"></i>
-                                Salvar
-                            </button>
-                        </div>
                     </div>
                 </div>
 
@@ -1565,6 +1700,133 @@
                                         </tr>
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PÁGINA: Ferramentaria - Controle de Moldes -->
+                <div id="ferramentaria-page" class="page-content hidden space-y-4 p-2">
+                    <div class="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+                        <!-- Header -->
+                        <div class="bg-gradient-to-r from-slate-700 to-zinc-800 px-6 py-4">
+                            <div class="flex items-center justify-between flex-wrap gap-3">
+                                <div class="flex items-center gap-3">
+                                    <div class="p-2 bg-white/10 rounded-xl">
+                                        <i data-lucide="settings-2" class="w-6 h-6 text-white"></i>
+                                    </div>
+                                    <div>
+                                        <h2 class="text-xl font-bold text-white">Ferramentaria</h2>
+                                        <p class="text-slate-300 text-sm">Controle de moldes e manutenção preventiva</p>
+                                    </div>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button id="btn-registrar-manutencao" class="bg-green-500/80 hover:bg-green-500 text-white px-4 py-2 rounded-lg transition flex items-center gap-2 font-semibold">
+                                        <i data-lucide="check-circle" class="w-4 h-4"></i>
+                                        Registrar Manutenção
+                                    </button>
+                                    <button id="btn-novo-molde" class="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition flex items-center gap-2 font-semibold">
+                                        <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                                        Novo Molde
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Filtros -->
+                        <div class="border-b border-gray-200 p-4 bg-gray-50">
+                            <div class="flex flex-wrap items-end gap-4">
+                                <div class="flex-1 min-w-[150px]">
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                                        <i data-lucide="building-2" class="w-3 h-3 inline mr-1"></i> Cliente
+                                    </label>
+                                    <select id="ferram-filtro-cliente" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-500">
+                                        <option value="">Todos os clientes</option>
+                                    </select>
+                                </div>
+                                <div class="flex-1 min-w-[150px]">
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                                        <i data-lucide="alert-triangle" class="w-3 h-3 inline mr-1"></i> Status
+                                    </label>
+                                    <select id="ferram-filtro-status" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-500">
+                                        <option value="">Todos</option>
+                                        <option value="critico">Crítico (≥90%)</option>
+                                        <option value="atencao">Atenção (≥70%)</option>
+                                        <option value="ok">Normal (&lt;70%)</option>
+                                    </select>
+                                </div>
+                                <div class="flex-1 min-w-[200px]">
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                                        <i data-lucide="search" class="w-3 h-3 inline mr-1"></i> Buscar Molde
+                                    </label>
+                                    <input type="text" id="ferram-busca-molde" placeholder="Digite o nome do molde..." class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-500">
+                                </div>
+                                <button id="btn-buscar-moldes" class="bg-slate-700 hover:bg-slate-800 text-white px-4 py-2.5 rounded-lg font-semibold transition flex items-center gap-2">
+                                    <i data-lucide="filter" class="w-4 h-4"></i>
+                                    Filtrar
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Estatísticas -->
+                        <div class="p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div class="bg-slate-50 rounded-xl p-3 text-center border border-slate-200">
+                                <p class="text-2xl font-bold text-slate-700" id="ferram-total-moldes">0</p>
+                                <p class="text-xs text-slate-600">Total de Moldes</p>
+                            </div>
+                            <div class="bg-red-50 rounded-xl p-3 text-center border border-red-200">
+                                <p class="text-2xl font-bold text-red-600" id="ferram-moldes-criticos">0</p>
+                                <p class="text-xs text-red-700">Críticos (≥90%)</p>
+                            </div>
+                            <div class="bg-yellow-50 rounded-xl p-3 text-center border border-yellow-200">
+                                <p class="text-2xl font-bold text-yellow-600" id="ferram-moldes-atencao">0</p>
+                                <p class="text-xs text-yellow-700">Atenção (≥70%)</p>
+                            </div>
+                            <div class="bg-green-50 rounded-xl p-3 text-center border border-green-200">
+                                <p class="text-2xl font-bold text-green-600" id="ferram-moldes-ok">0</p>
+                                <p class="text-xs text-green-700">Normais (&lt;70%)</p>
+                            </div>
+                        </div>
+
+                        <!-- Tabela de Moldes -->
+                        <div class="p-4">
+                            <div class="overflow-x-auto rounded-xl border border-gray-200">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-gray-100 text-gray-700">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left font-semibold rounded-tl-lg">Cliente</th>
+                                            <th class="px-4 py-3 text-left font-semibold">Molde</th>
+                                            <th class="px-4 py-3 text-center font-semibold">Batidas Atuais</th>
+                                            <th class="px-4 py-3 text-center font-semibold">Limite Preventiva</th>
+                                            <th class="px-4 py-3 text-center font-semibold">Progresso</th>
+                                            <th class="px-4 py-3 text-center font-semibold">Status</th>
+                                            <th class="px-4 py-3 text-center font-semibold">Última Manutenção</th>
+                                            <th class="px-4 py-3 text-center font-semibold rounded-tr-lg">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ferram-tabela-body" class="divide-y divide-gray-100">
+                                        <tr>
+                                            <td colspan="8" class="text-center py-12 text-gray-400">
+                                                <i data-lucide="loader-2" class="w-12 h-12 mx-auto mb-2 opacity-50 animate-spin"></i>
+                                                <p>Carregando moldes...</p>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Histórico de Manutenções -->
+                        <div class="p-4 border-t border-gray-200">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                <i data-lucide="history" class="w-5 h-5 text-slate-600"></i>
+                                Últimas Manutenções Registradas
+                            </h3>
+                            <div id="ferram-historico" class="space-y-2 max-h-64 overflow-y-auto">
+                                <div class="text-center py-6 text-gray-400">
+                                    <i data-lucide="clipboard-list" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+                                    <p class="text-sm">Nenhuma manutenção registrada</p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -5443,6 +5705,171 @@
                 <button type="button" id="novo-setup-save" class="px-4 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:shadow-lg text-white rounded-lg font-semibold text-sm shadow-md transition-all flex items-center gap-2">
                     <i data-lucide="save" class="w-4 h-4"></i>
                     Salvar Setup
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Registrar Manutenção de Molde -->
+    <div id="manutencao-molde-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-hidden">
+            <!-- Header -->
+            <div class="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 bg-white/20 rounded-lg">
+                            <i data-lucide="check-circle" class="w-6 h-6 text-white"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold text-white">Registrar Manutenção</h3>
+                            <p class="text-green-100 text-sm">Zerar contador de batidas do molde</p>
+                        </div>
+                    </div>
+                    <button id="manutencao-molde-close" class="p-2 hover:bg-white/20 rounded-lg transition">
+                        <i data-lucide="x" class="w-5 h-5 text-white"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Body -->
+            <div class="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+                <form id="manutencao-molde-form" class="space-y-4">
+                    <input type="hidden" id="manutencao-molde-id">
+                    
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Molde *</label>
+                        <select id="manutencao-molde-select" required class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all">
+                            <option value="">Selecione o molde</option>
+                        </select>
+                    </div>
+
+                    <div id="manutencao-info-molde" class="hidden bg-slate-50 rounded-lg p-4 border border-slate-200">
+                        <div class="grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                                <span class="text-gray-500">Cliente:</span>
+                                <span id="manutencao-info-cliente" class="font-semibold text-gray-800 ml-1">-</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">Batidas Atuais:</span>
+                                <span id="manutencao-info-batidas" class="font-semibold text-gray-800 ml-1">-</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">Limite Preventiva:</span>
+                                <span id="manutencao-info-limite" class="font-semibold text-gray-800 ml-1">-</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">Progresso:</span>
+                                <span id="manutencao-info-progresso" class="font-semibold ml-1">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Data da Manutenção *</label>
+                        <input type="date" id="manutencao-data" required class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Tipo de Manutenção *</label>
+                        <select id="manutencao-tipo" required class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all">
+                            <option value="preventiva">Preventiva</option>
+                            <option value="corretiva">Corretiva</option>
+                            <option value="reforma">Reforma</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Responsável *</label>
+                        <input type="text" id="manutencao-responsavel" required placeholder="Nome do responsável pela manutenção" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Observações</label>
+                        <textarea id="manutencao-obs" rows="2" placeholder="Serviços realizados, peças trocadas, etc." class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"></textarea>
+                    </div>
+
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                        <div class="flex items-start gap-2">
+                            <i data-lucide="alert-circle" class="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0"></i>
+                            <p class="text-sm text-yellow-800">
+                                <strong>Atenção:</strong> Ao registrar esta manutenção, o contador de batidas do molde será zerado.
+                            </p>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Footer -->
+            <div class="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                <button type="button" id="manutencao-molde-cancel" class="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium text-sm transition-colors">
+                    Cancelar
+                </button>
+                <button type="button" id="manutencao-molde-save" class="px-4 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:shadow-lg text-white rounded-lg font-semibold text-sm shadow-md transition-all flex items-center gap-2">
+                    <i data-lucide="check" class="w-4 h-4"></i>
+                    Confirmar Manutenção
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Novo Molde -->
+    <div id="novo-molde-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-hidden">
+            <!-- Header -->
+            <div class="bg-gradient-to-r from-slate-700 to-zinc-800 px-6 py-4">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 bg-white/20 rounded-lg">
+                            <i data-lucide="plus-circle" class="w-6 h-6 text-white"></i>
+                        </div>
+                        <div>
+                            <h3 id="novo-molde-titulo" class="text-xl font-bold text-white">Cadastrar Novo Molde</h3>
+                            <p class="text-slate-300 text-sm">Adicione um molde ao controle de ferramentaria</p>
+                        </div>
+                    </div>
+                    <button id="novo-molde-close" class="p-2 hover:bg-white/20 rounded-lg transition">
+                        <i data-lucide="x" class="w-5 h-5 text-white"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Body -->
+            <div class="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+                <form id="novo-molde-form" class="space-y-4">
+                    <input type="hidden" id="edit-molde-id">
+                    
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Cliente *</label>
+                        <input type="text" id="novo-molde-cliente" required placeholder="Nome do cliente" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-slate-500 focus:border-slate-500 transition-all">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Nome do Molde *</label>
+                        <input type="text" id="novo-molde-nome" required placeholder="Ex: Tampa MKIV MD STD" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-slate-500 focus:border-slate-500 transition-all">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Limite de Batidas para Preventiva *</label>
+                        <input type="number" id="novo-molde-batidas-limite" required min="1000" step="1000" placeholder="Ex: 100000" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-slate-500 focus:border-slate-500 transition-all">
+                        <p class="text-xs text-gray-400 mt-1">Quantidade de batidas até a próxima manutenção preventiva</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Batidas Atuais</label>
+                        <input type="number" id="novo-molde-batidas-atuais" min="0" value="0" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-slate-500 focus:border-slate-500 transition-all">
+                        <p class="text-xs text-gray-400 mt-1">Deixe 0 para moldes novos ou recém-reformados</p>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Footer -->
+            <div class="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                <button type="button" id="novo-molde-cancel" class="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium text-sm transition-colors">
+                    Cancelar
+                </button>
+                <button type="button" id="novo-molde-save" class="px-4 py-2.5 bg-gradient-to-r from-slate-700 to-zinc-800 hover:shadow-lg text-white rounded-lg font-semibold text-sm shadow-md transition-all flex items-center gap-2">
+                    <i data-lucide="save" class="w-4 h-4"></i>
+                    Salvar Molde
                 </button>
             </div>
         </div>
