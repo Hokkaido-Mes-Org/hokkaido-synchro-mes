@@ -2810,10 +2810,25 @@
 
         // ==================== FUNÇÕES DE NORMALIZAÇÃO (IDÊNTICO AO SYNCHRO) ====================
         
-        // Normalizar ID de máquina (ex: "INJ-01" -> "INJ-01")
-        function normalizeMachineId(machine) {
-            if (!machine) return null;
-            return String(machine).trim().toUpperCase();
+        // Normalizar ID de máquina (ex: "H-01", "h01", "H01" -> "H01")
+        function normalizeMachineId(id) {
+            if (!id) return null;
+            const s = String(id).toUpperCase().replace(/\s+/g, '');
+            // Aceita H-01, H01, h01 etc.; mantém dois dígitos
+            const match = s.match(/^H[-_]?(\d{1,2})$/);
+            if (match) {
+                return `H${match[1].padStart(2, '0')}`;
+            }
+            // Se vier apenas dígitos (ex.: 1, 01), prefixa H
+            const n = s.match(/^(\d{1,2})$/);
+            if (n) {
+                return `H${n[1].padStart(2, '0')}`;
+            }
+            // Fallback: remove hífens e tenta novamente
+            const cleaned = s.replace(/-/g, '');
+            const m2 = cleaned.match(/^H(\d{1,2})$/);
+            if (m2) return `H${m2[1].padStart(2, '0')}`;
+            return s; // devolve como veio se não reconhecer
         }
         
         // Calcular o dia de trabalho baseado no turno (turno 3 -> dia anterior)
@@ -3109,10 +3124,37 @@
                     plan: planData.length
                 });
                 
+                // Lista de máquinas válidas do sistema (27 máquinas conforme machineDatabase)
+                const validMachineIdsForData = new Set(['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
+                                                         'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                                                         'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32']);
+                
                 // Converter para formato do cache (compatível com funções existentes)
+                // IMPORTANTE: Filtrar apenas máquinas válidas do machineDatabase
                 cachedProductions = productionData.map(p => ({ ...p.raw, id: p.id, _normalized: p }));
-                cachedPlanning = planData.filter(p => isPlanActive(p.raw)).map(p => ({ ...p.raw, id: p.id, _normalized: p }));
-                cachedDowntimes = downtimeData.map(d => ({ ...d.raw, id: d.id, _normalized: d }));
+                cachedPlanning = planData
+                    .filter(p => isPlanActive(p.raw))
+                    .filter(p => {
+                        const machineId = normalizeMachineId(p.raw?.machine || p.raw?.machineId || p.raw?.maquina);
+                        if (!validMachineIdsForData.has(machineId)) {
+                            console.warn(`[Dashboard TV] Máquina "${machineId}" do planejamento não existe no sistema (ignorada)`);
+                            return false;
+                        }
+                        return true;
+                    })
+                    .map(p => ({ ...p.raw, id: p.id, _normalized: p }));
+                
+                // IMPORTANTE: Filtrar paradas apenas de máquinas válidas do machineDatabase
+                cachedDowntimes = downtimeData
+                    .filter(d => {
+                        const machineId = normalizeMachineId(d.raw?.machine || d.raw?.machineId || d.raw?.maquina);
+                        if (!validMachineIdsForData.has(machineId)) {
+                            console.warn(`[Dashboard TV] Máquina "${machineId}" em downtime_entries não existe no sistema (ignorada)`);
+                            return false;
+                        }
+                        return true;
+                    })
+                    .map(d => ({ ...d.raw, id: d.id, _normalized: d }));
                 
                 // Guardar dados normalizados para cálculos OEE
                 window._tvNormalizedData = {
@@ -3122,11 +3164,23 @@
                     plan: planData.filter(p => isPlanActive(p.raw))
                 };
                 
-                // Buscar paradas longas ativas (extended_downtime_logs)
+                // Lista de máquinas válidas do sistema (27 máquinas conforme machineDatabase)
+                const validMachineIdsForDowntimes = new Set(['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
+                                                             'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                                                             'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32']);
+                
+                // Buscar paradas longas ativas (extended_downtime_logs) - FILTRAR APENAS MÁQUINAS VÁLIDAS
                 const extendedSnapshot = await db.collection('extended_downtime_logs').get();
                 const extendedDowntimes = extendedSnapshot.docs
                     .map(doc => ({ id: doc.id, source: 'extended', ...doc.data() }))
                     .filter(dt => {
+                        // VALIDAÇÃO: Verificar se a máquina existe no sistema
+                        const machineId = normalizeMachineId(dt.machine_id || dt.machine);
+                        if (!validMachineIdsForDowntimes.has(machineId)) {
+                            console.warn(`[Dashboard TV] Máquina "${dt.machine_id || dt.machine}" em extended_downtime_logs não existe no sistema (ignorada)`);
+                            return false;
+                        }
+                        
                         const dtDate = dt.start_date || dt.date || '';
                         const isActive = dt.status === 'active';
                         const isToday = dtDate === today;
@@ -3141,22 +3195,29 @@
                         return {
                             ...dt,
                             date: dt.start_date || dt.date,
-                            machine: dt.machine_id || dt.machine,
+                            machine: normalizeMachineId(dt.machine_id || dt.machine),
                             reason: dt.reason || dt.type || 'Parada Longa',
                             duration: duration
                         };
                     });
                 
                 // NOVO: Buscar paradas ativas em tempo real (active_downtimes) - PRIORIDADE MÁXIMA
+                // FILTRAR APENAS MÁQUINAS VÁLIDAS DO MACHINEDB
                 const activeDowntimesSnapshot = await db.collection('active_downtimes').get();
                 const liveActiveDowntimes = activeDowntimesSnapshot.docs
                     .filter(doc => {
                         const data = doc.data();
+                        const machineId = normalizeMachineId(doc.id);
+                        // VALIDAÇÃO: Verificar se a máquina existe no machineDatabase
+                        if (!validMachineIdsForDowntimes.has(machineId)) {
+                            console.warn(`[Dashboard TV] Máquina "${doc.id}" em active_downtimes não existe no sistema (ignorada)`);
+                            return false;
+                        }
                         return data && data.isActive === true;
                     })
                     .map(doc => {
                         const data = doc.data();
-                        const machineId = doc.id; // O ID do documento é o ID da máquina
+                        const machineId = normalizeMachineId(doc.id); // O ID do documento é o ID da máquina
                         let duration = data.durationMinutes || 0;
                         
                         // Calcular duração se tiver startDate
@@ -3181,6 +3242,11 @@
                     });
                 
                 console.log('[Dashboard TV] Paradas LIVE (active_downtimes):', liveActiveDowntimes.length, liveActiveDowntimes.map(d => d.machine));
+                
+                // DEBUG: Log das paradas ATIVAS antes de juntar ao cache
+                console.log('[Dashboard TV] 🔴 PARADAS ATIVAS para contagem no header:');
+                console.log('  - Extended (status=active):', extendedDowntimes.filter(d => d.status === 'active').map(d => normalizeMachineId(d.machine || d.machine_id)));
+                console.log('  - Active Live:', liveActiveDowntimes.map(d => d.machine));
                 
                 // Adicionar paradas longas e paradas live ao cache
                 // IMPORTANTE: Manter TODAS as paradas sem deduplicar para permitir análise completa
@@ -3312,11 +3378,37 @@
             
             if (!alertEl || !alertText) return;
             
+            // Lista de máquinas válidas do sistema (27 máquinas conforme machineDatabase)
+            const validMachineIds = new Set(['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
+                                             'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                                             'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32']);
+            
             // Contar paradas ativas (extended downtimes com status = 'active' OU active_downtimes live)
-            const activeDowntimes = cachedDowntimes.filter(dt => 
-                (dt.source === 'extended' && dt.status === 'active') ||
-                (dt.source === 'active_live' && dt.isActive === true)
-            );
+            // IMPORTANTE: Filtrar apenas máquinas válidas E DEDUPLICAR por máquina
+            const seenMachines = new Set();
+            const activeDowntimes = cachedDowntimes.filter(dt => {
+                // Verificar se a máquina existe no sistema
+                const machineId = normalizeMachineId(dt.machine || dt.machine_id || dt.maquina);
+                if (!validMachineIds.has(machineId)) {
+                    return false; // Ignorar máquinas que não existem
+                }
+                
+                // Verificar se é parada ativa
+                const isActive = (dt.source === 'extended' && dt.status === 'active') ||
+                                 (dt.source === 'active_live' && dt.isActive === true);
+                
+                if (!isActive) return false;
+                
+                // DEDUPLICAR: Cada máquina conta apenas uma vez
+                if (seenMachines.has(machineId)) {
+                    return false; // Já contamos essa máquina
+                }
+                seenMachines.add(machineId);
+                return true;
+            });
+            
+            // DEBUG: Log para identificar máquinas contadas
+            console.log('[Dashboard TV] Paradas ativas contadas:', activeDowntimes.length, 'máquinas:', [...seenMachines]);
             
             if (activeDowntimes.length > 0) {
                 alertEl.style.display = 'flex';
@@ -3338,16 +3430,27 @@
                 console.log('[Dashboard TV] Atualizando paradas ativas em tempo real...');
                 const today = getFilteredDateForData();
                 
+                // Lista de máquinas válidas do sistema (27 máquinas conforme machineDatabase)
+                const validMachineIds = new Set(['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
+                                                 'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                                                 'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32']);
+                
                 // Buscar paradas LIVE ativas (active_downtimes)
                 const activeDowntimesSnapshot = await db.collection('active_downtimes').get();
                 const liveActiveDowntimes = activeDowntimesSnapshot.docs
                     .filter(doc => {
                         const data = doc.data();
+                        const machineId = normalizeMachineId(doc.id);
+                        // VALIDAÇÃO: Verificar se a máquina existe no machineDatabase
+                        if (!validMachineIds.has(machineId)) {
+                            console.warn(`[Dashboard TV] Máquina "${doc.id}" em active_downtimes não existe no sistema (ignorada)`);
+                            return false;
+                        }
                         return data && data.isActive === true;
                     })
                     .map(doc => {
                         const data = doc.data();
-                        const machineId = doc.id;
+                        const machineId = normalizeMachineId(doc.id);
                         let duration = data.durationMinutes || 0;
                         
                         if (data.startDate) {
@@ -3460,12 +3563,22 @@
             console.log('[Dashboard TV] Paradas ativas encontradas:', Object.keys(activeDowntimesMap));
             console.log('[Dashboard TV] Detalhes das paradas:', activeDowntimesMap);
             
-            // Agrupar produção por máquina (do planejamento)
+            // Lista de máquinas VÁLIDAS do sistema (27 máquinas conforme machineDatabase)
+            const validMachineIds = new Set(['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
+                                             'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                                             'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32']);
+            
+            // Agrupar produção por máquina (do planejamento) - APENAS máquinas válidas
             const machineData = {};
             
             cachedPlanning.forEach(plan => {
                 const rawMachineId = plan.machine || plan.machineId || plan.maquina || 'N/A';
                 const machineId = normalizeMachineId(rawMachineId) || rawMachineId;
+                // VALIDAÇÃO: Só adicionar se a máquina existir no machineDatabase
+                if (!validMachineIds.has(machineId)) {
+                    console.warn(`[Dashboard TV] Máquina "${machineId}" do planejamento não existe no sistema (ignorada)`);
+                    return;
+                }
                 if (!machineData[machineId]) {
                     machineData[machineId] = {
                         id: machineId,
@@ -3481,7 +3594,13 @@
             });
             
             // IMPORTANTE: Adicionar máquinas com paradas ativas que NÃO estão no planejamento
+            // SOMENTE se a máquina existir no machineDatabase
             Object.keys(activeDowntimesMap).forEach(machineId => {
+                // VALIDAÇÃO: Só adicionar se a máquina existir no machineDatabase
+                if (!validMachineIds.has(machineId)) {
+                    console.warn(`[Dashboard TV] Máquina "${machineId}" com parada ativa não existe no sistema (ignorada)`);
+                    return;
+                }
                 if (!machineData[machineId]) {
                     machineData[machineId] = {
                         id: machineId,
@@ -4528,8 +4647,19 @@
             const tagEl = document.getElementById('stoppedMachinesTag');
             if (!listEl) return;
             
-            // Buscar paradas ativas do cache (já deduplicado)
+            // Lista de máquinas válidas do sistema (27 máquinas conforme machineDatabase)
+            const validMachineIds = new Set(['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
+                                             'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                                             'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32']);
+            
+            // Buscar paradas ativas do cache (já deduplicado) - FILTRAR APENAS MÁQUINAS VÁLIDAS
             const activeDowntimes = cachedDowntimes.filter(dt => {
+                // VALIDAÇÃO: Verificar se a máquina existe no machineDatabase
+                const machineId = normalizeMachineId(dt.machine || dt.machine_id || dt.maquina);
+                if (!validMachineIds.has(machineId)) {
+                    return false; // Ignorar máquinas que não existem no sistema
+                }
+                
                 // Paradas LIVE (active_downtimes) - sempre ativas
                 if (dt.source === 'active_live' && dt.isActive === true) return true;
                 
@@ -4932,8 +5062,15 @@
             });
             
             // Encontrar máquinas paradas AGORA
-            const activeMachines = cachedMachines.filter(m => m.status === 'running' || m.status === 'producao');
-            const stoppedMachines = cachedMachines.filter(m => m.status === 'parada' || m.status === 'stopped' || m.status === 'setup');
+            // Lista de máquinas válidas para contagem (27 máquinas do sistema)
+            const validMachineIdsSet = new Set(['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
+                                                 'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                                                 'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32']);
+            
+            // Filtrar cachedMachines para apenas máquinas válidas
+            const validMachines = cachedMachines.filter(m => validMachineIdsSet.has(normalizeMachineId(m.id || m.name)));
+            const activeMachines = validMachines.filter(m => m.status === 'running' || m.status === 'producao');
+            const stoppedMachines = validMachines.filter(m => m.status === 'parada' || m.status === 'stopped' || m.status === 'setup');
             
             // Classes de destaque
             const completionClass = completion >= 80 ? 'highlight-good' : (completion >= 50 ? 'highlight-warning' : 'highlight-critical');

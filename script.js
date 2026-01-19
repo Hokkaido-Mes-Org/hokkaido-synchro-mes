@@ -16808,10 +16808,22 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         // AÇÃO 4: Polling para paradas ativas (cards vermelhos) - substituído listener por polling 5s
         // Função de polling para active_downtimes
+        // IMPORTANTE: Filtrar apenas máquinas válidas do machineDatabase para evitar contagem incorreta
+        const validMachineIdsSet = new Set(machineDatabase.map(m => normalizeMachineId(m.id)));
         const pollActiveDowntimes = async () => {
             try {
                 const snapshot = await db.collection('active_downtimes').get();
-                activeDowntimeSet = new Set(snapshot.docs.map(doc => doc.id));
+                // Filtrar apenas máquinas que existem no machineDatabase
+                const allDowntimeIds = snapshot.docs.map(doc => doc.id);
+                const validDowntimeIds = allDowntimeIds.filter(id => {
+                    const normalizedId = normalizeMachineId(id);
+                    const isValid = validMachineIdsSet.has(normalizedId);
+                    if (!isValid) {
+                        console.warn(`[pollActiveDowntimes] Máquina "${id}" em active_downtimes não existe no machineDatabase`);
+                    }
+                    return isValid;
+                });
+                activeDowntimeSet = new Set(validDowntimeIds);
                 scheduleRender();
             } catch (error) {
                 console.error('Erro ao buscar paradas ativas:', error);
@@ -27113,23 +27125,36 @@ function sendDowntimeNotification() {
         // NOVO: Renderizar barra de status das máquinas (estilo Excel)
         renderMachineStatusBar(activePlans, activeDowntimeSet, machinesDowntime);
 
+        // NOVO: Criar set de máquinas válidas do banco de dados
+        const validMachineIds = new Set(machineDatabase.map(m => normalizeMachineId(m.id)));
+
         // NOVO: Mostrar TODAS as máquinas (planejadas + paradas + inativas)
-        // Em vez de apenas as planejadas
+        // Filtrar APENAS máquinas que existem no machineDatabase (evita contagem incorreta)
         const allMachineIds = new Set();
         
-        // Adicionar máquinas com planejamento
+        // Adicionar máquinas com planejamento (somente se existir no machineDatabase)
         activePlans.forEach(plan => {
             if (plan && plan.machine) {
-                allMachineIds.add(normalizeMachineId(plan.machine));
+                const mid = normalizeMachineId(plan.machine);
+                if (validMachineIds.has(mid)) {
+                    allMachineIds.add(mid);
+                } else {
+                    console.warn(`[renderMachineCards] Máquina "${plan.machine}" do planejamento não existe no machineDatabase`);
+                }
             }
         });
         
-        // Adicionar máquinas com parada longa ativa
+        // Adicionar máquinas com parada longa ativa (somente se existir no machineDatabase)
         Object.keys(machinesDowntime).forEach(machineId => {
-            allMachineIds.add(machineId);
+            const mid = normalizeMachineId(machineId);
+            if (validMachineIds.has(mid)) {
+                allMachineIds.add(mid);
+            } else {
+                console.warn(`[renderMachineCards] Máquina "${machineId}" com parada não existe no machineDatabase`);
+            }
         });
         
-        // Se nenhuma máquina, mostrar todas (painel vazio mas existem)
+        // Se nenhuma máquina, mostrar todas do machineDatabase
         if (allMachineIds.size === 0) {
             machineDatabase.forEach(m => {
                 allMachineIds.add(normalizeMachineId(m.id));
@@ -27861,10 +27886,23 @@ function sendDowntimeNotification() {
             }
 
             // Buscar paradas ativas para colorir cards de vermelho
+            // IMPORTANTE: Filtrar apenas máquinas válidas do machineDatabase
+            const validMachineIdsSet = new Set(machineDatabase.map(m => normalizeMachineId(m.id)));
             let activeDowntimeSet = new Set();
             try {
                 const activeSnapshot = await db.collection('active_downtimes').get();
-                activeDowntimeSet = new Set(activeSnapshot.docs.map(doc => doc.id));
+                // Filtrar apenas máquinas que existem no machineDatabase
+                const validDowntimeIds = activeSnapshot.docs
+                    .map(doc => doc.id)
+                    .filter(id => {
+                        const normalizedId = normalizeMachineId(id);
+                        const isValid = validMachineIdsSet.has(normalizedId);
+                        if (!isValid) {
+                            console.warn(`[loadMachineCards] Máquina "${id}" em active_downtimes não existe no machineDatabase`);
+                        }
+                        return isValid;
+                    });
+                activeDowntimeSet = new Set(validDowntimeIds);
             } catch (e) {
                 console.warn('Erro ao buscar paradas ativas:', e);
             }
