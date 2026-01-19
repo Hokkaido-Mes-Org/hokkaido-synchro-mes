@@ -133,7 +133,7 @@ var productDatabase = [
     { "cod": 1623, "client": "SILGAN", "name": "TAMPA MKIV MD STD PRETA PP PD060 - 1.01.01.005.325", "cavities": 14, "cycle": 10.5, "weight": 0.95, "pieces_per_hour_goal": 4800, "mp": "" },
     { "cod": 2563, "client": "SILGAN", "name": "ROSCA BAIXA P2000 28 400 ESTRIADA NATURAL DPB064", "cavities": 46, "cycle": 33, "weight": 2.09, "pieces_per_hour_goal": 5018, "mp": "" },
     { "cod": 2564, "client": "SILGAN", "name": "ATUADOR MD STD ROSA METALIZADO CB203 PE 01PD060 - 1.01.01.005.401", "cavities": 30, "cycle": 30.4, "weight": 1.92, "pieces_per_hour_goal": 3553, "mp": "" },
-    { "cod": 2704, "client": "SILGAN", "name": "ROSCA P2000 24 410 LISA BRANCA 767 PP DPB601 - 1.01.01.005.443", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
+    { "cod": 2704, "client": "SILGAN", "name": "ROSCA P2000 24 410 LISA BRANCA 767 PP DPB601 - 1.01.01.005.443", "cavities": 23, "cycle": 23, "weight": 2.28, "pieces_per_hour_goal": 3600, "mp": "" },
     { "cod": 2895, "client": "SILGAN", "name": "ATUADOR MKIV STD OURO CB233 PP 01PD06002 - 1.01.01.005.486", "cavities": 30, "cycle": 30.2, "weight": 1.85, "pieces_per_hour_goal": 3576, "mp": "" },
     { "cod": 2897, "client": "SILGAN", "name": "ANEL TRAVA P2000 STD ROXO TEXT CB231 PP DPB038 - 1.01.01.005.477", "cavities": 16, "cycle": 13.4, "weight": 0.85, "pieces_per_hour_goal": 4299, "mp": "" },
     { "cod": 2898, "client": "SILGAN", "name": "ROSCA ALTA P2000 28 410 FOSCA ROXO CB231 PP - 1.01.01.005.476", "cavities": 23, "cycle": 21.15, "weight": 3.18, "pieces_per_hour_goal": 3915, "mp": "" },
