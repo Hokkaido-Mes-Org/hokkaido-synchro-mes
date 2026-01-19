@@ -11411,6 +11411,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (page === 'acompanhamento') {
             setupAcompanhamentoTurno();
             setupAcompanhamentoPerdas();
+            setupAcompanhamentoParadas();
         }
 
         if (page === 'historico-sistema') {
@@ -17165,6 +17166,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (!validateOrderActivated()) {
             return;
         }
+
+        // ✅ POKA-YOKE: Bloquear lançamento se ciclo/cavidades não foram informados
+        if (!validateCycleCavityLaunched()) {
+            return;
+        }
         
         const statusMessage = document.getElementById('production-modal-status');
         const saveButton = document.getElementById('production-modal-save-btn');
@@ -19209,7 +19215,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         console.log('[ACOMPANHAMENTO] Inicializando aba de acompanhamento de turno...');
 
-        // Setup das tabs de acompanhamento (Produção vs Perdas)
+        // Setup das tabs de acompanhamento (Produção vs Perdas vs Paradas)
         document.querySelectorAll('.acompanhamento-tab-btn').forEach(btn => {
             if (btn.dataset.tabListenerAttached) return;
             btn.dataset.tabListenerAttached = 'true';
@@ -19221,14 +19227,16 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 
                 // Atualizar visual das tabs
                 document.querySelectorAll('.acompanhamento-tab-btn').forEach(b => {
-                    b.classList.remove('border-blue-600', 'border-red-600', 'bg-blue-50', 'bg-red-50', 'text-blue-700', 'text-red-700');
+                    b.classList.remove('border-blue-600', 'border-red-600', 'border-amber-600', 'bg-blue-50', 'bg-red-50', 'bg-amber-50', 'text-blue-700', 'text-red-700', 'text-amber-700');
                     b.classList.add('border-transparent', 'text-gray-500');
                 });
                 
                 if (tab === 'producao') {
                     e.currentTarget.classList.add('border-blue-600', 'bg-blue-50', 'text-blue-700');
-                } else {
+                } else if (tab === 'perdas') {
                     e.currentTarget.classList.add('border-red-600', 'bg-red-50', 'text-red-700');
+                } else if (tab === 'paradas') {
+                    e.currentTarget.classList.add('border-amber-600', 'bg-amber-50', 'text-amber-700');
                 }
                 e.currentTarget.classList.remove('border-transparent', 'text-gray-500');
                 
@@ -20045,6 +20053,423 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     }
     // ==================== FIM ACOMPANHAMENTO DE PERDAS ====================
 
+    // ==================== ACOMPANHAMENTO DE PARADAS (TIMELINE) ====================
+    let acompanhamentoParadasSetupDone = false;
+    let acompanhamentoParadasDataAtual = {};
+
+    function setupAcompanhamentoParadas() {
+        if (acompanhamentoParadasSetupDone) {
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            return;
+        }
+        acompanhamentoParadasSetupDone = true;
+
+        console.log('[ACOMPANHAMENTO-PARADAS] Inicializando módulo de paradas...');
+
+        // Data padrão = hoje
+        const today = new Date().toISOString().split('T')[0];
+        const dataInput = document.getElementById('acompanhamento-paradas-data');
+        if (dataInput) {
+            dataInput.value = today;
+        }
+
+        // Eventos dos botões
+        const btnCarregar = document.getElementById('acompanhamento-paradas-carregar');
+        const btnImprimir = document.getElementById('acompanhamento-paradas-imprimir');
+        const btnExportar = document.getElementById('acompanhamento-paradas-exportar');
+
+        if (btnCarregar) {
+            btnCarregar.addEventListener('click', carregarTimelineParadas);
+        }
+
+        if (btnImprimir) {
+            btnImprimir.addEventListener('click', imprimirTimelineParadas);
+        }
+
+        if (btnExportar) {
+            btnExportar.addEventListener('click', exportarTimelineParadas);
+        }
+
+        // Atualizar status
+        const status = document.getElementById('acompanhamento-paradas-status');
+        if (status) {
+            status.textContent = '✅ Pronto';
+            status.classList.remove('text-amber-600', 'bg-amber-100');
+            status.classList.add('text-green-600', 'bg-green-100');
+        }
+
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        console.log('[ACOMPANHAMENTO-PARADAS] Setup concluído!');
+    }
+
+    async function carregarTimelineParadas() {
+        const data = document.getElementById('acompanhamento-paradas-data')?.value;
+        const turnoFiltro = document.getElementById('acompanhamento-paradas-turno')?.value || 'all';
+        const container = document.getElementById('acompanhamento-paradas-timeline');
+        const escalaEl = document.getElementById('paradas-escala-tempo');
+
+        if (!data) {
+            showNotification('⚠️ Selecione uma data!', 'warning');
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="text-center py-10 text-gray-400">
+                <div class="animate-spin w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full mx-auto mb-3"></div>
+                <p>Carregando timeline de paradas...</p>
+            </div>
+        `;
+
+        try {
+            // Definir horários do turno
+            let horaInicio, horaFim, escalaMarcas;
+            if (turnoFiltro === '1') {
+                horaInicio = 7; horaFim = 15;
+                escalaMarcas = ['07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00'];
+            } else if (turnoFiltro === '2') {
+                horaInicio = 15; horaFim = 23;
+                escalaMarcas = ['15:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00', '22:00', '23:00'];
+            } else if (turnoFiltro === '3') {
+                horaInicio = 23; horaFim = 31; // 31 = 07:00 do dia seguinte
+                escalaMarcas = ['23:00', '00:00', '01:00', '02:00', '03:00', '04:00', '05:00', '06:00', '07:00'];
+            } else {
+                horaInicio = 7; horaFim = 31; // Dia completo (07h às 07h)
+                escalaMarcas = ['07:00', '10:00', '13:00', '16:00', '19:00', '22:00', '01:00', '04:00', '07:00'];
+            }
+
+            // Renderizar escala de tempo
+            escalaEl.innerHTML = escalaMarcas.map(h => `<span>${h}</span>`).join('');
+
+            // Buscar máquinas do planejamento para a data
+            const maquinasPlanejamento = new Set();
+            
+            // Primeiro, buscar do planejamento
+            const planejamentoSnapshot = await db.collection('planejamento')
+                .where('data', '==', data)
+                .get();
+            
+            planejamentoSnapshot.forEach(doc => {
+                const d = doc.data();
+                if (d.maquina || d.machine) {
+                    maquinasPlanejamento.add(d.maquina || d.machine);
+                }
+            });
+
+            // Se não houver planejamento, buscar máquinas da produção
+            if (maquinasPlanejamento.size === 0) {
+                const producaoSnapshot = await db.collection('production_entries')
+                    .where('data', '==', data)
+                    .get();
+                
+                producaoSnapshot.forEach(doc => {
+                    const d = doc.data();
+                    if (d.machine) {
+                        maquinasPlanejamento.add(d.machine);
+                    }
+                });
+            }
+
+            // Se ainda não houver máquinas, usar lista padrão
+            if (maquinasPlanejamento.size === 0) {
+                ['H31', 'H32', 'H33', 'H34', 'H35', 'H36', 'H37', 'H38', 'H39', 'H40'].forEach(m => maquinasPlanejamento.add(m));
+            }
+
+            // Ordenar máquinas
+            const maquinasOrdenadas = Array.from(maquinasPlanejamento).sort((a, b) => {
+                const numA = parseInt(a.replace(/\D/g, '')) || 0;
+                const numB = parseInt(b.replace(/\D/g, '')) || 0;
+                return numA - numB;
+            });
+
+            // Buscar paradas para todas as máquinas
+            const paradasPorMaquina = new Map();
+            
+            const paradasSnapshot = await db.collection('downtime_entries')
+                .where('data', '==', data)
+                .get();
+
+            paradasSnapshot.forEach(doc => {
+                const d = doc.data();
+                const machine = d.machine || d.maquina;
+                if (!machine || !maquinasPlanejamento.has(machine)) return;
+
+                // Filtrar por turno se necessário
+                if (turnoFiltro !== 'all') {
+                    const turnoParada = d.turno || d.shift;
+                    if (String(turnoParada) !== turnoFiltro) return;
+                }
+
+                if (!paradasPorMaquina.has(machine)) {
+                    paradasPorMaquina.set(machine, []);
+                }
+
+                const inicio = d.horaInicio || d.startTime || d.hora_inicio;
+                const fim = d.horaFim || d.endTime || d.hora_fim;
+                const duracao = parseFloat(d.duracao || d.duration || 0);
+                const motivo = d.motivo || d.reason || d.observacao || 'Não informado';
+                const tipo = (d.tipo || d.type || '').toLowerCase();
+
+                paradasPorMaquina.get(machine).push({
+                    inicio: inicio,
+                    fim: fim,
+                    duracao: duracao,
+                    motivo: motivo,
+                    tipo: tipo
+                });
+            });
+
+            // Calcular estatísticas
+            let tempoTotalParado = 0;
+            let totalParadas = 0;
+
+            paradasPorMaquina.forEach(paradas => {
+                paradas.forEach(p => {
+                    tempoTotalParado += p.duracao;
+                    totalParadas++;
+                });
+            });
+
+            const tempoTurno = turnoFiltro === 'all' ? 24 * maquinasOrdenadas.length : 8 * maquinasOrdenadas.length;
+            const tempoProducao = tempoTurno - tempoTotalParado;
+            const disponibilidade = tempoTurno > 0 ? ((tempoProducao / tempoTurno) * 100) : 0;
+
+            // Atualizar resumo
+            const resumoEl = document.getElementById('acompanhamento-paradas-resumo');
+            if (resumoEl) {
+                resumoEl.classList.remove('hidden');
+                document.getElementById('acompanhamento-paradas-tempo-prod').textContent = `${tempoProducao.toFixed(1)}h`;
+                document.getElementById('acompanhamento-paradas-tempo-parado').textContent = `${tempoTotalParado.toFixed(1)}h`;
+                document.getElementById('acompanhamento-paradas-total').textContent = totalParadas;
+                document.getElementById('acompanhamento-paradas-disponibilidade').textContent = `${disponibilidade.toFixed(1)}%`;
+            }
+
+            // Armazenar dados
+            acompanhamentoParadasDataAtual = {
+                data: data,
+                turno: turnoFiltro,
+                maquinas: maquinasOrdenadas,
+                paradas: paradasPorMaquina,
+                horaInicio: horaInicio,
+                horaFim: horaFim
+            };
+
+            // Renderizar timeline
+            container.innerHTML = '';
+            
+            maquinasOrdenadas.forEach(maquina => {
+                const paradas = paradasPorMaquina.get(maquina) || [];
+                const row = criarLinhaTimelineParadas(maquina, paradas, horaInicio, horaFim);
+                container.appendChild(row);
+            });
+
+            showNotification(`✅ Timeline carregada: ${maquinasOrdenadas.length} máquinas, ${totalParadas} paradas`, 'success');
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+        } catch (error) {
+            console.error('[ACOMPANHAMENTO-PARADAS] Erro:', error);
+            showNotification('❌ Erro ao carregar timeline: ' + error.message, 'error');
+            container.innerHTML = `
+                <div class="text-center py-10 text-red-500">
+                    <i data-lucide="alert-circle" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
+                    <p>Erro ao carregar dados. Tente novamente.</p>
+                </div>
+            `;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+    }
+
+    function criarLinhaTimelineParadas(maquina, paradas, horaInicio, horaFim) {
+        const row = document.createElement('div');
+        row.className = 'flex items-center gap-2 py-2 border-b border-gray-100 hover:bg-gray-50 transition-colors';
+
+        // Nome da máquina
+        const labelDiv = document.createElement('div');
+        labelDiv.className = 'w-24 flex-shrink-0 font-bold text-sm text-gray-700';
+        labelDiv.textContent = maquina;
+        row.appendChild(labelDiv);
+
+        // Container da timeline
+        const timelineDiv = document.createElement('div');
+        timelineDiv.className = 'flex-1 h-8 bg-green-400 rounded-lg relative overflow-hidden';
+        timelineDiv.title = `${maquina} - Clique para ver detalhes`;
+
+        // Calcular duração total do período
+        const duracaoTotal = horaFim - horaInicio; // em horas
+
+        // Renderizar paradas como blocos vermelhos/amarelos
+        paradas.forEach((parada, idx) => {
+            // Converter hora de início para posição
+            let horaInicioParada = 0;
+            if (parada.inicio) {
+                const parts = parada.inicio.split(':');
+                horaInicioParada = parseInt(parts[0]) + (parseInt(parts[1] || 0) / 60);
+                // Ajustar para T3 (atravessa meia-noite)
+                if (horaInicioParada < 7 && horaInicio >= 23) {
+                    horaInicioParada += 24;
+                }
+            }
+
+            const duracao = parada.duracao || 1; // duração em horas
+            
+            // Calcular posição e largura percentual
+            const posicaoInicio = ((horaInicioParada - horaInicio) / duracaoTotal) * 100;
+            const largura = (duracao / duracaoTotal) * 100;
+
+            // Criar bloco de parada
+            const blocoParada = document.createElement('div');
+            const isSetup = parada.tipo && (parada.tipo.includes('setup') || parada.tipo.includes('troca'));
+            blocoParada.className = `absolute top-0 h-full ${isSetup ? 'bg-yellow-500' : 'bg-red-500'} cursor-pointer hover:opacity-80 transition-opacity`;
+            blocoParada.style.left = `${Math.max(0, Math.min(posicaoInicio, 100))}%`;
+            blocoParada.style.width = `${Math.max(0.5, Math.min(largura, 100 - posicaoInicio))}%`;
+            blocoParada.title = `${parada.inicio || '?'} - ${parada.fim || '?'}\n${parada.motivo}\nDuração: ${duracao.toFixed(1)}h`;
+
+            // Adicionar texto se o bloco for grande o suficiente
+            if (largura > 8) {
+                blocoParada.innerHTML = `<span class="text-white text-xs font-semibold truncate px-1 leading-8">${parada.motivo.substring(0, 15)}</span>`;
+            }
+
+            timelineDiv.appendChild(blocoParada);
+        });
+
+        // Se não houver paradas, mostrar como totalmente verde
+        if (paradas.length === 0) {
+            timelineDiv.title = `${maquina} - Sem paradas registradas`;
+        }
+
+        row.appendChild(timelineDiv);
+
+        // Estatísticas rápidas
+        const statsDiv = document.createElement('div');
+        statsDiv.className = 'w-20 flex-shrink-0 text-right';
+        const tempoParado = paradas.reduce((acc, p) => acc + (p.duracao || 0), 0);
+        statsDiv.innerHTML = `<span class="text-xs font-semibold ${tempoParado > 0 ? 'text-red-600' : 'text-green-600'}">${tempoParado.toFixed(1)}h</span>`;
+        row.appendChild(statsDiv);
+
+        return row;
+    }
+
+    function imprimirTimelineParadas() {
+        const data = acompanhamentoParadasDataAtual.data || 'Não selecionada';
+        const turno = acompanhamentoParadasDataAtual.turno || 'all';
+        const turnoLabel = turno === 'all' ? 'Todos' : `T${turno}`;
+
+        const tempoProd = document.getElementById('acompanhamento-paradas-tempo-prod')?.textContent || '0h';
+        const tempoParado = document.getElementById('acompanhamento-paradas-tempo-parado')?.textContent || '0h';
+        const totalParadas = document.getElementById('acompanhamento-paradas-total')?.textContent || '0';
+        const disponibilidade = document.getElementById('acompanhamento-paradas-disponibilidade')?.textContent || '0%';
+
+        // Gerar HTML das linhas
+        let linhasHtml = '';
+        acompanhamentoParadasDataAtual.maquinas?.forEach(maquina => {
+            const paradas = acompanhamentoParadasDataAtual.paradas?.get(maquina) || [];
+            const tempoParadoMaq = paradas.reduce((acc, p) => acc + (p.duracao || 0), 0);
+            
+            linhasHtml += `
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">${maquina}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${paradas.length}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; color: ${tempoParadoMaq > 0 ? '#dc2626' : '#16a34a'};">${tempoParadoMaq.toFixed(1)}h</td>
+                    <td style="padding: 8px; border: 1px solid #ddd; font-size: 11px;">${paradas.map(p => p.motivo).join(', ') || '-'}</td>
+                </tr>
+            `;
+        });
+
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Timeline de Paradas - ${data}</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; }
+                    h1 { text-align: center; color: #d97706; margin-bottom: 5px; }
+                    .subtitle { text-align: center; color: #666; margin-bottom: 20px; }
+                    .resumo { display: flex; justify-content: space-around; margin-bottom: 20px; padding: 15px; background: #fffbeb; border-radius: 8px; }
+                    .resumo-item { text-align: center; }
+                    .resumo-item label { display: block; font-size: 12px; color: #666; }
+                    .resumo-item span { font-size: 20px; font-weight: bold; }
+                    .resumo-item.green span { color: #16a34a; }
+                    .resumo-item.red span { color: #dc2626; }
+                    .resumo-item.amber span { color: #d97706; }
+                    .resumo-item.blue span { color: #2563eb; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                    th { background: #d97706; color: white; padding: 10px; border: 1px solid #b45309; }
+                    td { padding: 8px; border: 1px solid #ddd; }
+                    tr:nth-child(even) { background: #f9f9f9; }
+                    @media print { body { padding: 0; } }
+                </style>
+            </head>
+            <body>
+                <h1>⏱️ Timeline de Paradas</h1>
+                <p class="subtitle">Data: ${data} | Turno: ${turnoLabel}</p>
+                <div class="resumo">
+                    <div class="resumo-item green">
+                        <label>Tempo Produzindo</label>
+                        <span>${tempoProd}</span>
+                    </div>
+                    <div class="resumo-item red">
+                        <label>Tempo Parado</label>
+                        <span>${tempoParado}</span>
+                    </div>
+                    <div class="resumo-item amber">
+                        <label>Total Paradas</label>
+                        <span>${totalParadas}</span>
+                    </div>
+                    <div class="resumo-item blue">
+                        <label>Disponibilidade</label>
+                        <span>${disponibilidade}</span>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Máquina</th>
+                            <th>Qtd Paradas</th>
+                            <th>Tempo Parado</th>
+                            <th>Motivos</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${linhasHtml}
+                    </tbody>
+                </table>
+                <p style="text-align: center; margin-top: 20px; color: #888; font-size: 11px;">
+                    Impresso em: ${new Date().toLocaleString('pt-BR')} | Hokkaido MES
+                </p>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+    }
+
+    function exportarTimelineParadas() {
+        if (!acompanhamentoParadasDataAtual.maquinas) {
+            showNotification('⚠️ Carregue os dados primeiro', 'warning');
+            return;
+        }
+
+        let csv = 'Máquina;Qtd Paradas;Tempo Parado (h);Motivos\n';
+        
+        acompanhamentoParadasDataAtual.maquinas.forEach(maquina => {
+            const paradas = acompanhamentoParadasDataAtual.paradas?.get(maquina) || [];
+            const tempoParado = paradas.reduce((acc, p) => acc + (p.duracao || 0), 0);
+            const motivos = paradas.map(p => p.motivo).join(' | ');
+            
+            csv += `${maquina};${paradas.length};${tempoParado.toFixed(2)};"${motivos}"\n`;
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `timeline-paradas-${acompanhamentoParadasDataAtual.data}.csv`;
+        link.click();
+
+        showNotification('✅ Arquivo CSV exportado!', 'success');
+    }
+    // ==================== FIM ACOMPANHAMENTO DE PARADAS ====================
+
     // ==================== HISTÓRICO DO SISTEMA ====================
     
     // Função global para registrar ações no sistema
@@ -20101,6 +20526,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     // ==================== ADMINISTRAÇÃO DE DADOS ====================
     let adminDadosSetupDone = false;
     let adminCurrentOrderDoc = null;
+    let adminCurrentProductionDoc = null;
+    let adminCurrentPlanningDoc = null;
     
     function setupAdminDadosPage() {
         // Verificar permissão - apenas gestores e admins
@@ -20149,7 +20576,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const dataProducao = document.getElementById('admin-producao-data');
         if (dataProducao) dataProducao.value = getProductionDateString();
         
-        // Popular select de máquinas
+        // Popular select de máquinas (Produção)
         const selectMaquina = document.getElementById('admin-producao-maquina');
         if (selectMaquina && window.databaseModule?.machineDatabase) {
             let options = '<option value="">Todas</option>';
@@ -20162,6 +20589,24 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         const btnBuscarProducao = document.getElementById('admin-btn-buscar-producao');
         if (btnBuscarProducao) btnBuscarProducao.addEventListener('click', adminBuscarProducao);
+
+        // Aba Planejamento - setup
+        const dataPlanejamento = document.getElementById('admin-planejamento-data');
+        if (dataPlanejamento) dataPlanejamento.value = getProductionDateString();
+        
+        // Popular select de máquinas (Planejamento)
+        const selectMaquinaPlan = document.getElementById('admin-planejamento-maquina');
+        if (selectMaquinaPlan && window.databaseModule?.machineDatabase) {
+            let options = '<option value="">Todas</option>';
+            window.databaseModule.machineDatabase.forEach(m => {
+                const id = normalizeMachineId(m.id);
+                options += `<option value="${id}">${id}</option>`;
+            });
+            selectMaquinaPlan.innerHTML = options;
+        }
+        
+        const btnBuscarPlanejamento = document.getElementById('admin-btn-buscar-planejamento');
+        if (btnBuscarPlanejamento) btnBuscarPlanejamento.addEventListener('click', adminBuscarPlanejamento);
         
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
@@ -20170,9 +20615,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         // Atualizar botões
         document.querySelectorAll('.admin-tab-btn').forEach(btn => {
             if (btn.dataset.adminTab === tabName) {
-                btn.className = 'admin-tab-btn active px-4 py-2 text-sm font-semibold rounded-t-lg transition bg-blue-500 text-white';
+                btn.className = 'admin-tab-btn active px-4 py-2 text-sm font-semibold rounded-t-lg transition bg-blue-500 text-white whitespace-nowrap';
             } else {
-                btn.className = 'admin-tab-btn px-4 py-2 text-sm font-semibold rounded-t-lg transition bg-gray-100 text-gray-600 hover:bg-gray-200';
+                btn.className = 'admin-tab-btn px-4 py-2 text-sm font-semibold rounded-t-lg transition bg-gray-100 text-gray-600 hover:bg-gray-200 whitespace-nowrap';
             }
         });
         
@@ -20502,10 +20947,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
     }
     
-    // ===== Funções de Produção =====
+    // ===== Funções de Produção (melhoradas) =====
     async function adminBuscarProducao() {
         const data = document.getElementById('admin-producao-data')?.value;
         const maquina = document.getElementById('admin-producao-maquina')?.value;
+        const turno = document.getElementById('admin-producao-turno')?.value;
         const listaDiv = document.getElementById('admin-producao-lista');
         
         if (!data) {
@@ -20516,50 +20962,130 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         try {
             listaDiv.innerHTML = '<div class="text-center py-4 text-gray-500"><i class="animate-spin">⏳</i> Carregando...</div>';
             
+            // Query simples sem orderBy para evitar necessidade de índice composto
             let query = db.collection('production_entries').where('date', '==', data);
-            if (maquina) {
-                query = query.where('machine_id', '==', maquina);
-            }
             
-            const snapshot = await query.orderBy('timestamp', 'desc').limit(100).get();
+            const snapshot = await query.limit(500).get();
             
             if (snapshot.empty) {
-                listaDiv.innerHTML = '<div class="text-center py-8 text-gray-400">Nenhum registro encontrado para esta data/máquina.</div>';
+                listaDiv.innerHTML = '<div class="text-center py-8 text-gray-400">Nenhum registro encontrado para esta data.</div>';
+                document.getElementById('admin-prod-total').textContent = '0';
+                document.getElementById('admin-prod-pecas').textContent = '0';
+                document.getElementById('admin-prod-peso').textContent = '0';
+                document.getElementById('admin-prod-refugo').textContent = '0';
+                return;
+            }
+            
+            // Converter para array e aplicar filtros/ordenação no cliente
+            let docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            // Filtrar por máquina se especificado
+            if (maquina) {
+                docs = docs.filter(d => d.machine_id === maquina);
+            }
+            
+            // Filtrar por turno se especificado
+            if (turno) {
+                docs = docs.filter(d => String(d.shift) === turno);
+            }
+            
+            // Ordenar por timestamp decrescente (mais recente primeiro)
+            docs.sort((a, b) => {
+                const tsA = a.timestamp?.toMillis ? a.timestamp.toMillis() : 0;
+                const tsB = b.timestamp?.toMillis ? b.timestamp.toMillis() : 0;
+                return tsB - tsA;
+            });
+            
+            // Limitar a 100 registros
+            docs = docs.slice(0, 100);
+            
+            if (docs.length === 0) {
+                listaDiv.innerHTML = '<div class="text-center py-8 text-gray-400">Nenhum registro encontrado para os filtros selecionados.</div>';
+                document.getElementById('admin-prod-total').textContent = '0';
+                document.getElementById('admin-prod-pecas').textContent = '0';
+                document.getElementById('admin-prod-peso').textContent = '0';
+                document.getElementById('admin-prod-refugo').textContent = '0';
                 return;
             }
             
             let html = '';
-            snapshot.forEach(doc => {
-                const d = doc.data();
-                const hora = d.timestamp?.toDate ? d.timestamp.toDate().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '-';
+            let totalPecas = 0;
+            let totalPeso = 0;
+            let totalRefugo = 0;
+            
+            // Usar o array docs já filtrado e ordenado
+            docs.forEach(d => {
+                const hora = d.timestamp?.toDate ? d.timestamp.toDate().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : d.hora || '-';
+                const qtd = d.quantity || d.produzido || 0;
+                const peso = (d.peso_kg || d.weight_kg || 0);
+                const refugo = (d.refugo_kg || d.refugo || 0);
                 
+                totalPecas += Number(qtd) || 0;
+                totalPeso += Number(peso) || 0;
+                totalRefugo += Number(refugo) || 0;
+
                 html += `
-                    <div class="flex items-center justify-between bg-gray-50 rounded-lg p-3 border border-gray-200">
-                        <div class="flex items-center gap-4">
-                            <span class="font-semibold text-gray-800">${d.machine_id || '-'}</span>
-                            <span class="text-sm text-gray-600">${d.product_name || d.product_code || '-'}</span>
-                            <span class="text-sm font-medium text-blue-600">Qtd: ${d.quantity || 0}</span>
-                            <span class="text-xs text-gray-400">${hora}</span>
-                            <span class="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600">T${d.shift || '-'}</span>
+                    <div class="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-3">
+                                <span class="font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">${d.machine_id || '-'}</span>
+                                <span class="text-sm text-gray-600 truncate max-w-[150px]" title="${d.product_name || d.product_code || '-'}">${d.product_name || d.product_code || '-'}</span>
+                                <span class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600">T${d.shift || '-'}</span>
+                                <span class="text-xs text-gray-400">${hora}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button class="admin-btn-edit-producao text-blue-500 hover:text-blue-700 p-1.5 rounded hover:bg-blue-50 transition" data-id="${d.id}" title="Editar">
+                                    <i data-lucide="edit-2" class="w-4 h-4"></i>
+                                </button>
+                                <button class="admin-btn-delete-producao text-red-500 hover:text-red-700 p-1.5 rounded hover:bg-red-50 transition" data-id="${d.id}" data-machine="${d.machine_id}" data-qty="${qtd}" title="Excluir">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <button class="admin-btn-edit-producao text-blue-500 hover:text-blue-700 px-2 py-1" data-id="${doc.id}">
-                                <i data-lucide="edit-2" class="w-4 h-4"></i>
-                            </button>
-                            <button class="admin-btn-delete-producao text-red-500 hover:text-red-700 px-2 py-1" data-id="${doc.id}" data-machine="${d.machine_id}" data-qty="${d.quantity}">
-                                <i data-lucide="trash-2" class="w-4 h-4"></i>
-                            </button>
+                        <div class="grid grid-cols-4 gap-2 text-xs">
+                            <div class="bg-green-50 rounded p-2 text-center">
+                                <div class="font-bold text-green-600">${Number(qtd).toLocaleString('pt-BR')}</div>
+                                <div class="text-green-700">Peças</div>
+                            </div>
+                            <div class="bg-amber-50 rounded p-2 text-center">
+                                <div class="font-bold text-amber-600">${Number(peso).toFixed(2)}</div>
+                                <div class="text-amber-700">Peso (kg)</div>
+                            </div>
+                            <div class="bg-red-50 rounded p-2 text-center">
+                                <div class="font-bold text-red-600">${Number(refugo).toFixed(2)}</div>
+                                <div class="text-red-700">Refugo (kg)</div>
+                            </div>
+                            <div class="bg-gray-50 rounded p-2 text-center">
+                                <div class="font-bold text-gray-600">${d.operador || d.user_name || '-'}</div>
+                                <div class="text-gray-500">Operador</div>
+                            </div>
                         </div>
                     </div>
                 `;
             });
             
-            listaDiv.innerHTML = html;
+            if (docs.length === 0) {
+                listaDiv.innerHTML = '<div class="text-center py-8 text-gray-400">Nenhum registro encontrado para os filtros selecionados.</div>';
+            } else {
+                listaDiv.innerHTML = html;
+            }
+            
+            // Atualizar estatísticas
+            document.getElementById('admin-prod-total').textContent = docs.length;
+            document.getElementById('admin-prod-pecas').textContent = totalPecas.toLocaleString('pt-BR');
+            document.getElementById('admin-prod-peso').textContent = totalPeso.toFixed(2);
+            document.getElementById('admin-prod-refugo').textContent = totalRefugo.toFixed(2);
+            
             lucide.createIcons();
             
-            // Attach delete handlers
+            // Attach handlers de edição
+            listaDiv.querySelectorAll('.admin-btn-edit-producao').forEach(btn => {
+                btn.addEventListener('click', () => adminEditarProducao(btn.dataset.id));
+            });
+            
+            // Attach handlers de exclusão
             listaDiv.querySelectorAll('.admin-btn-delete-producao').forEach(btn => {
-                btn.addEventListener('click', async (e) => {
+                btn.addEventListener('click', async () => {
                     const docId = btn.dataset.id;
                     const machine = btn.dataset.machine;
                     const qty = btn.dataset.qty;
@@ -20568,8 +21094,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     
                     try {
                         await db.collection('production_entries').doc(docId).delete();
-                        btn.closest('div.flex').remove();
-                        alert('Registro excluído com sucesso');
+                        btn.closest('div.bg-white').remove();
+                        showNotification('Registro excluído com sucesso', 'success');
+                        // Recarregar lista
+                        adminBuscarProducao();
                     } catch (err) {
                         alert('Erro ao excluir: ' + err.message);
                     }
@@ -20579,6 +21107,390 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         } catch (error) {
             console.error('[ADMIN] Erro ao buscar produção:', error);
             listaDiv.innerHTML = `<div class="text-center py-4 text-red-500">Erro: ${error.message}</div>`;
+        }
+    }
+
+    async function adminEditarProducao(docId) {
+        try {
+            const docRef = db.collection('production_entries').doc(docId);
+            const docSnap = await docRef.get();
+            
+            if (!docSnap.exists) {
+                alert('Registro não encontrado');
+                return;
+            }
+            
+            const data = docSnap.data();
+            
+            // Criar modal de edição
+            const modal = document.createElement('div');
+            modal.id = 'admin-edit-producao-modal';
+            modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+            modal.innerHTML = `
+                <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+                    <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-5 py-4">
+                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i data-lucide="edit-3" class="w-5 h-5"></i>
+                            Editar Lançamento de Produção
+                        </h3>
+                        <p class="text-blue-200 text-sm">${data.machine_id || '-'} - ${data.date || '-'}</p>
+                    </div>
+                    <form id="admin-edit-producao-form" class="p-5 space-y-4">
+                        <input type="hidden" id="admin-edit-prod-id" value="${docId}">
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Quantidade (peças)</label>
+                                <input type="number" id="admin-edit-prod-qty" value="${data.quantity || data.produzido || 0}" 
+                                    class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Peso (kg)</label>
+                                <input type="number" step="0.01" id="admin-edit-prod-peso" value="${data.peso_kg || data.weight_kg || 0}" 
+                                    class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Refugo (kg)</label>
+                                <input type="number" step="0.01" id="admin-edit-prod-refugo" value="${data.refugo_kg || data.refugo || 0}" 
+                                    class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Turno</label>
+                                <select id="admin-edit-prod-turno" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                    <option value="1" ${String(data.shift) === '1' ? 'selected' : ''}>1º Turno</option>
+                                    <option value="2" ${String(data.shift) === '2' ? 'selected' : ''}>2º Turno</option>
+                                    <option value="3" ${String(data.shift) === '3' ? 'selected' : ''}>3º Turno</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Observações</label>
+                            <textarea id="admin-edit-prod-obs" rows="2" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">${data.observations || data.obs || ''}</textarea>
+                        </div>
+                        
+                        <div class="flex gap-3 pt-4 border-t">
+                            <button type="button" id="admin-edit-prod-cancel" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2.5 rounded-lg transition">
+                                Cancelar
+                            </button>
+                            <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition">
+                                Salvar Alterações
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            lucide.createIcons();
+            
+            // Fechar modal
+            document.getElementById('admin-edit-prod-cancel').addEventListener('click', () => modal.remove());
+            modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+            
+            // Salvar alterações
+            document.getElementById('admin-edit-producao-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const novaQtd = parseInt(document.getElementById('admin-edit-prod-qty').value) || 0;
+                const novoPeso = parseFloat(document.getElementById('admin-edit-prod-peso').value) || 0;
+                const novoRefugo = parseFloat(document.getElementById('admin-edit-prod-refugo').value) || 0;
+                const novoTurno = document.getElementById('admin-edit-prod-turno').value;
+                const novaObs = document.getElementById('admin-edit-prod-obs').value.trim();
+                
+                try {
+                    await docRef.update({
+                        quantity: novaQtd,
+                        produzido: novaQtd,
+                        peso_kg: novoPeso,
+                        weight_kg: novoPeso,
+                        refugo_kg: novoRefugo,
+                        refugo: novoRefugo,
+                        shift: parseInt(novoTurno),
+                        observations: novaObs,
+                        last_edited_at: firebase.firestore.FieldValue.serverTimestamp(),
+                        edited_by: getActiveUser()?.name || 'Admin'
+                    });
+                    
+                    modal.remove();
+                    showNotification('Registro atualizado com sucesso!', 'success');
+                    adminBuscarProducao();
+                    
+                } catch (err) {
+                    alert('Erro ao atualizar: ' + err.message);
+                }
+            });
+            
+        } catch (error) {
+            alert('Erro ao carregar registro: ' + error.message);
+        }
+    }
+
+    // ===== Funções de Planejamento (NOVAS) =====
+    async function adminBuscarPlanejamento() {
+        const data = document.getElementById('admin-planejamento-data')?.value;
+        const maquina = document.getElementById('admin-planejamento-maquina')?.value;
+        const listaDiv = document.getElementById('admin-planejamento-lista');
+        
+        if (!data) {
+            alert('Selecione uma data');
+            return;
+        }
+        
+        try {
+            listaDiv.innerHTML = '<div class="text-center py-4 text-gray-500"><i class="animate-spin">⏳</i> Carregando...</div>';
+            
+            let query = db.collection('planning').where('date', '==', data);
+            if (maquina) {
+                query = query.where('machine', '==', maquina);
+            }
+            
+            const snapshot = await query.get();
+            
+            if (snapshot.empty) {
+                listaDiv.innerHTML = '<div class="text-center py-8 text-gray-400">Nenhum planejamento encontrado para esta data.</div>';
+                return;
+            }
+            
+            let html = '';
+            
+            snapshot.forEach(doc => {
+                const d = doc.data();
+                const cicloT1 = d.real_cycle_t1 || '-';
+                const cavT1 = d.active_cavities_t1 || '-';
+                const cicloT2 = d.real_cycle_t2 || '-';
+                const cavT2 = d.active_cavities_t2 || '-';
+                const cicloT3 = d.real_cycle_t3 || '-';
+                const cavT3 = d.active_cavities_t3 || '-';
+
+                html += `
+                    <div class="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-3">
+                                <span class="font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg text-lg">${d.machine || '-'}</span>
+                                <div>
+                                    <p class="font-semibold text-gray-800">${d.product || d.product_name || '-'}</p>
+                                    <p class="text-xs text-gray-500">MP: ${d.mp || '-'} | Código: ${d.product_cod || '-'}</p>
+                                </div>
+                            </div>
+                            <button class="admin-btn-edit-planejamento bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2" data-id="${doc.id}">
+                                <i data-lucide="edit-2" class="w-4 h-4"></i>
+                                Editar
+                            </button>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                            <div class="bg-blue-50 rounded-lg p-2 text-center">
+                                <div class="font-bold text-blue-600">${d.planned_quantity || d.daily_target || 0}</div>
+                                <div class="text-xs text-blue-700">Meta Planejada</div>
+                            </div>
+                            <div class="bg-gray-50 rounded-lg p-2 text-center">
+                                <div class="font-bold text-gray-600">${d.budgeted_cycle || '-'}</div>
+                                <div class="text-xs text-gray-500">Ciclo Orçado</div>
+                            </div>
+                            <div class="bg-gray-50 rounded-lg p-2 text-center">
+                                <div class="font-bold text-gray-600">${d.mold_cavities || '-'}</div>
+                                <div class="text-xs text-gray-500">Cavidades Molde</div>
+                            </div>
+                            <div class="bg-gray-50 rounded-lg p-2 text-center">
+                                <div class="font-bold text-gray-600">${d.piece_weight || '-'}</div>
+                                <div class="text-xs text-gray-500">Peso Peça (g)</div>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-3 gap-2 text-center text-xs">
+                            <div class="bg-blue-50 rounded-lg p-2 border border-blue-100">
+                                <div class="font-semibold text-blue-800">1º Turno</div>
+                                <div class="text-blue-600">Ciclo: <strong>${cicloT1}</strong> | Cav: <strong>${cavT1}</strong></div>
+                            </div>
+                            <div class="bg-amber-50 rounded-lg p-2 border border-amber-100">
+                                <div class="font-semibold text-amber-800">2º Turno</div>
+                                <div class="text-amber-600">Ciclo: <strong>${cicloT2}</strong> | Cav: <strong>${cavT2}</strong></div>
+                            </div>
+                            <div class="bg-purple-50 rounded-lg p-2 border border-purple-100">
+                                <div class="font-semibold text-purple-800">3º Turno</div>
+                                <div class="text-purple-600">Ciclo: <strong>${cicloT3}</strong> | Cav: <strong>${cavT3}</strong></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            listaDiv.innerHTML = html;
+            lucide.createIcons();
+            
+            // Attach handlers de edição
+            listaDiv.querySelectorAll('.admin-btn-edit-planejamento').forEach(btn => {
+                btn.addEventListener('click', () => adminEditarPlanejamento(btn.dataset.id));
+            });
+            
+        } catch (error) {
+            console.error('[ADMIN] Erro ao buscar planejamento:', error);
+            listaDiv.innerHTML = `<div class="text-center py-4 text-red-500">Erro: ${error.message}</div>`;
+        }
+    }
+
+    async function adminEditarPlanejamento(docId) {
+        try {
+            const docRef = db.collection('planning').doc(docId);
+            const docSnap = await docRef.get();
+            
+            if (!docSnap.exists) {
+                alert('Planejamento não encontrado');
+                return;
+            }
+            
+            const data = docSnap.data();
+            
+            // Criar modal de edição
+            const modal = document.createElement('div');
+            modal.id = 'admin-edit-planejamento-modal';
+            modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4';
+            modal.innerHTML = `
+                <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
+                    <div class="bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-4 sticky top-0">
+                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i data-lucide="calendar-check" class="w-5 h-5"></i>
+                            Editar Planejamento
+                        </h3>
+                        <p class="text-emerald-200 text-sm">${data.machine || '-'} - ${data.product || '-'} (${data.date || '-'})</p>
+                    </div>
+                    <form id="admin-edit-planejamento-form" class="p-5 space-y-4">
+                        <input type="hidden" id="admin-edit-plan-id" value="${docId}">
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Meta Planejada (peças)</label>
+                                <input type="number" id="admin-edit-plan-meta" value="${data.planned_quantity || data.daily_target || 0}" 
+                                    class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Ciclo Orçado (s)</label>
+                                <input type="number" step="0.1" id="admin-edit-plan-ciclo-orc" value="${data.budgeted_cycle || ''}" 
+                                    class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500">
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Cavidades do Molde</label>
+                                <input type="number" id="admin-edit-plan-cav-molde" value="${data.mold_cavities || ''}" 
+                                    class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Peso da Peça (g)</label>
+                                <input type="number" step="0.01" id="admin-edit-plan-peso" value="${data.piece_weight || ''}" 
+                                    class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500">
+                            </div>
+                        </div>
+                        
+                        <div class="border-t pt-4 mt-4">
+                            <h4 class="font-semibold text-gray-700 mb-3">Ciclo Real e Cavidades Ativas por Turno</h4>
+                            <div class="grid grid-cols-3 gap-4">
+                                <div class="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                                    <div class="font-semibold text-blue-800 text-center mb-2">1º Turno</div>
+                                    <div class="space-y-2">
+                                        <div>
+                                            <label class="block text-xs text-blue-600 mb-1">Ciclo Real (s)</label>
+                                            <input type="number" step="0.1" id="admin-edit-plan-ciclo-t1" value="${data.real_cycle_t1 || ''}" 
+                                                class="w-full p-2 border border-blue-200 rounded focus:ring-2 focus:ring-blue-500 text-sm">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-blue-600 mb-1">Cavidades Ativas</label>
+                                            <input type="number" id="admin-edit-plan-cav-t1" value="${data.active_cavities_t1 || ''}" 
+                                                class="w-full p-2 border border-blue-200 rounded focus:ring-2 focus:ring-blue-500 text-sm">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="bg-amber-50 rounded-lg p-3 border border-amber-200">
+                                    <div class="font-semibold text-amber-800 text-center mb-2">2º Turno</div>
+                                    <div class="space-y-2">
+                                        <div>
+                                            <label class="block text-xs text-amber-600 mb-1">Ciclo Real (s)</label>
+                                            <input type="number" step="0.1" id="admin-edit-plan-ciclo-t2" value="${data.real_cycle_t2 || ''}" 
+                                                class="w-full p-2 border border-amber-200 rounded focus:ring-2 focus:ring-amber-500 text-sm">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-amber-600 mb-1">Cavidades Ativas</label>
+                                            <input type="number" id="admin-edit-plan-cav-t2" value="${data.active_cavities_t2 || ''}" 
+                                                class="w-full p-2 border border-amber-200 rounded focus:ring-2 focus:ring-amber-500 text-sm">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="bg-purple-50 rounded-lg p-3 border border-purple-200">
+                                    <div class="font-semibold text-purple-800 text-center mb-2">3º Turno</div>
+                                    <div class="space-y-2">
+                                        <div>
+                                            <label class="block text-xs text-purple-600 mb-1">Ciclo Real (s)</label>
+                                            <input type="number" step="0.1" id="admin-edit-plan-ciclo-t3" value="${data.real_cycle_t3 || ''}" 
+                                                class="w-full p-2 border border-purple-200 rounded focus:ring-2 focus:ring-purple-500 text-sm">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-purple-600 mb-1">Cavidades Ativas</label>
+                                            <input type="number" id="admin-edit-plan-cav-t3" value="${data.active_cavities_t3 || ''}" 
+                                                class="w-full p-2 border border-purple-200 rounded focus:ring-2 focus:ring-purple-500 text-sm">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex gap-3 pt-4 border-t">
+                            <button type="button" id="admin-edit-plan-cancel" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2.5 rounded-lg transition">
+                                Cancelar
+                            </button>
+                            <button type="submit" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-lg transition">
+                                Salvar Alterações
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            lucide.createIcons();
+            
+            // Fechar modal
+            document.getElementById('admin-edit-plan-cancel').addEventListener('click', () => modal.remove());
+            modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+            
+            // Salvar alterações
+            document.getElementById('admin-edit-planejamento-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const updates = {
+                    planned_quantity: parseInt(document.getElementById('admin-edit-plan-meta').value) || 0,
+                    daily_target: parseInt(document.getElementById('admin-edit-plan-meta').value) || 0,
+                    budgeted_cycle: parseFloat(document.getElementById('admin-edit-plan-ciclo-orc').value) || null,
+                    mold_cavities: parseInt(document.getElementById('admin-edit-plan-cav-molde').value) || null,
+                    piece_weight: parseFloat(document.getElementById('admin-edit-plan-peso').value) || null,
+                    real_cycle_t1: parseFloat(document.getElementById('admin-edit-plan-ciclo-t1').value) || null,
+                    active_cavities_t1: parseInt(document.getElementById('admin-edit-plan-cav-t1').value) || null,
+                    real_cycle_t2: parseFloat(document.getElementById('admin-edit-plan-ciclo-t2').value) || null,
+                    active_cavities_t2: parseInt(document.getElementById('admin-edit-plan-cav-t2').value) || null,
+                    real_cycle_t3: parseFloat(document.getElementById('admin-edit-plan-ciclo-t3').value) || null,
+                    active_cavities_t3: parseInt(document.getElementById('admin-edit-plan-cav-t3').value) || null,
+                    last_edited_at: firebase.firestore.FieldValue.serverTimestamp(),
+                    edited_by: getActiveUser()?.name || 'Admin'
+                };
+                
+                try {
+                    await docRef.update(updates);
+                    
+                    modal.remove();
+                    showNotification('Planejamento atualizado com sucesso!', 'success');
+                    adminBuscarPlanejamento();
+                    
+                } catch (err) {
+                    alert('Erro ao atualizar: ' + err.message);
+                }
+            });
+            
+        } catch (error) {
+            alert('Erro ao carregar planejamento: ' + error.message);
         }
     }
 
@@ -21537,6 +22449,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (!validateOrderActivated()) {
             return;
         }
+
+        // ✅ POKA-YOKE: Bloquear lançamento se ciclo/cavidades não foram informados
+        if (!validateCycleCavityLaunched()) {
+            return;
+        }
         
         if (!window.authSystem || !window.authSystem.checkPermissionForAction) {
             showNotification('Erro de permissão', 'error');
@@ -21781,9 +22698,60 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         return true;
     }
 
-    // Função validateCycleCavityLaunched() DESABILITADA - ciclo/cavidade não é mais obrigatório
+    // ✅ POKA-YOKE: Verificar se ciclo/cavidades foram lançados antes de permitir produção/perdas
     function validateCycleCavityLaunched() {
-        // Sempre retorna true - validação desabilitada por solicitação do usuário
+        // Verificar se há dados de máquina selecionada
+        if (!selectedMachineData) {
+            console.warn('[POKA-YOKE] validateCycleCavityLaunched: selectedMachineData não disponível');
+            return true; // Permitir se não houver dados (fallback)
+        }
+
+        // Obter turno atual
+        const currentShift = typeof getCurrentShift === 'function' ? getCurrentShift() : null;
+        if (!currentShift) {
+            console.warn('[POKA-YOKE] validateCycleCavityLaunched: turno atual não identificado');
+            return true; // Permitir se não conseguir identificar o turno
+        }
+
+        // Mapear turno para chave do campo
+        const shiftKey = `t${currentShift}`; // t1, t2, t3
+        const realCycleField = `real_cycle_${shiftKey}`;
+        const activeCavitiesField = `active_cavities_${shiftKey}`;
+
+        // Verificar se ciclo e cavidades foram informados para o turno atual
+        const realCycle = selectedMachineData[realCycleField];
+        const activeCavities = selectedMachineData[activeCavitiesField];
+
+        const hasCycle = realCycle !== null && realCycle !== undefined && realCycle !== '' && Number(realCycle) > 0;
+        const hasCavities = activeCavities !== null && activeCavities !== undefined && activeCavities !== '' && Number(activeCavities) > 0;
+
+        if (!hasCycle || !hasCavities) {
+            const turnoLabel = currentShift === 1 ? '1º Turno' : currentShift === 2 ? '2º Turno' : '3º Turno';
+            const missing = [];
+            if (!hasCycle) missing.push('Ciclo Real');
+            if (!hasCavities) missing.push('Cavidades Ativas');
+
+            showNotification(
+                `⚠️ CICLO/CAVIDADES NÃO INFORMADO!\n\n` +
+                `Informe ${missing.join(' e ')} do ${turnoLabel} antes de fazer lançamentos.\n\n` +
+                `Acesse a aba LIDERANÇA → Painel de Lançamento Ciclo/Cavidades`,
+                'error'
+            );
+            console.warn('[POKA-YOKE] Tentativa de lançamento bloqueada: ciclo/cavidades não informados', {
+                turno: turnoLabel,
+                realCycle,
+                activeCavities,
+                machine: selectedMachineData.machine
+            });
+            return false;
+        }
+
+        console.log('[POKA-YOKE] validateCycleCavityLaunched: OK', {
+            turno: `T${currentShift}`,
+            realCycle,
+            activeCavities,
+            machine: selectedMachineData.machine
+        });
         return true;
     }
 
@@ -21803,6 +22771,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         // ✅ POKA-YOKE: Bloquear lançamento se OP não estiver ativada
         if (!validateOrderActivated()) {
+            return;
+        }
+
+        // ✅ POKA-YOKE: Bloquear lançamento se ciclo/cavidades não foram informados
+        if (!validateCycleCavityLaunched()) {
             return;
         }
 
@@ -22032,6 +23005,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
 
+        // ✅ POKA-YOKE: Bloquear lançamento se ciclo/cavidades não foram informados
+        if (!validateCycleCavityLaunched()) {
+            return;
+        }
+
 
         if (!window.authSystem || !window.authSystem.checkPermissionForAction) {
             showNotification('Erro de permissão', 'error');
@@ -22235,6 +23213,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
 
+        // ✅ POKA-YOKE: Bloquear lançamento se ciclo/cavidades não foram informados
+        if (!validateCycleCavityLaunched()) {
+            return;
+        }
         
         // Verificar permissão
         if (!window.authSystem.checkPermissionForAction('add_losses')) {
@@ -22503,6 +23485,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         // ✅ POKA-YOKE: Bloquear lançamento se OP não estiver ativada
         if (!isOrderActiveForCurrentMachine()) {
             showNotification('⚠️ Ative uma OP antes de fazer lançamentos. Vá em "Ordens" e clique em "Ativar" na OP desejada.', 'warning');
+            return;
+        }
+
+        // ✅ POKA-YOKE: Bloquear lançamento se ciclo/cavidades não foram informados
+        if (!validateCycleCavityLaunched()) {
             return;
         }
 
@@ -24358,6 +25345,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
 
+        // ✅ POKA-YOKE: Bloquear lançamento se ciclo/cavidades não foram informados
+        if (!validateCycleCavityLaunched()) {
+            return;
+        }
         
         // Verificar permissão
         if (!window.authSystem.checkPermissionForAction('add_rework')) {
