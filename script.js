@@ -905,6 +905,191 @@ document.addEventListener('DOMContentLoaded', function() {
         setupAllUserCodeInputs();
     }
     
+    // ================================
+    // SISTEMA DE AUTO-PREENCHIMENTO DE OPERADOR POR ESCALA
+    // ================================
+    
+    /**
+     * Busca o operador escalado para uma máquina/turno/data específica
+     * @param {string} maquina - Identificador da máquina (ex: "H31", "H15")
+     * @param {number} turno - Número do turno (1, 2 ou 3)
+     * @param {string} data - Data no formato "YYYY-MM-DD"
+     * @returns {Promise<{cod: number, nome: string, user: string}|null>} - Dados do operador ou null
+     */
+    async function getOperadorEscalado(maquina, turno, data) {
+        if (!maquina || !turno || !data) {
+            console.log('[ESCALA] Parâmetros inválidos:', { maquina, turno, data });
+            return null;
+        }
+        
+        try {
+            const db = firebase.firestore();
+            
+            // Buscar escalas para a data e turno especificados
+            const snapshot = await db.collection('escalas_operadores')
+                .where('data', '==', data)
+                .where('turno', '==', parseInt(turno))
+                .get();
+            
+            if (snapshot.empty) {
+                console.log('[ESCALA] Nenhuma escala encontrada para:', { data, turno });
+                return null;
+            }
+            
+            // Procurar qual escala contém a máquina especificada
+            for (const doc of snapshot.docs) {
+                const escala = doc.data();
+                const maquinas = escala.maquinas || [];
+                
+                // Verificar se a máquina está na lista (case-insensitive)
+                const maquinaEncontrada = maquinas.some(m => 
+                    m.toLowerCase() === maquina.toLowerCase()
+                );
+                
+                if (maquinaEncontrada) {
+                    console.log('[ESCALA] Operador encontrado:', {
+                        maquina,
+                        turno,
+                        data,
+                        operador: escala.operadorNome,
+                        cod: escala.operadorCod
+                    });
+                    
+                    return {
+                        cod: escala.operadorCod,
+                        nome: escala.operadorNome || escala.operadorUser,
+                        user: escala.operadorUser
+                    };
+                }
+            }
+            
+            console.log('[ESCALA] Máquina não encontrada em nenhuma escala:', maquina);
+            return null;
+            
+        } catch (error) {
+            console.error('[ESCALA] Erro ao buscar operador escalado:', error);
+            return null;
+        }
+    }
+    
+    /**
+     * Obtém o turno atual baseado na hora
+     * @returns {number} - Número do turno (1, 2 ou 3)
+     */
+    function getTurnoAtual() {
+        const now = new Date();
+        const hour = now.getHours();
+        const min = now.getMinutes();
+        
+        // Turno 1: 07:00 - 14:59
+        if (hour >= 7 && hour < 15) return 1;
+        // Turno 2: 15:00 - 23:19
+        if (hour >= 15 && (hour < 23 || (hour === 23 && min < 20))) return 2;
+        // Turno 3: 23:20 - 06:59
+        return 3;
+    }
+    
+    /**
+     * Obtém a data de produção atual (considera que antes das 7h é do dia anterior)
+     * @returns {string} - Data no formato "YYYY-MM-DD"
+     */
+    function getDataProducaoAtual() {
+        const now = new Date();
+        const hour = now.getHours();
+        
+        // Se for antes das 7h, pertence ao dia de trabalho anterior
+        if (hour < 7) {
+            const prevDay = new Date(now);
+            prevDay.setDate(prevDay.getDate() - 1);
+            return new Date(prevDay.getTime() - (prevDay.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+        }
+        
+        return new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+    }
+    
+    /**
+     * Auto-preenche o campo de código de operador baseado na escala da máquina selecionada
+     * @param {string} inputId - ID do campo de input do código do operador
+     * @param {string} maquina - Identificador da máquina (ex: "H31")
+     * @param {number} turno - Turno (opcional, usa atual se não informado)
+     * @param {string} data - Data (opcional, usa atual se não informado)
+     */
+    async function autoPreencherOperadorPorEscala(inputId, maquina, turno = null, data = null) {
+        const input = document.getElementById(inputId);
+        if (!input) {
+            console.log('[ESCALA] Input não encontrado:', inputId);
+            return;
+        }
+        
+        // Usar turno e data atuais se não informados
+        const turnoEfetivo = turno || getTurnoAtual();
+        const dataEfetiva = data || getDataProducaoAtual();
+        
+        console.log('[ESCALA] Buscando operador para:', { maquina, turno: turnoEfetivo, data: dataEfetiva });
+        
+        // Mostrar estado de carregamento
+        updateUserNameDisplay(inputId, '');
+        const displayMap = {
+            'quick-production-user': 'quick-production-user-name',
+            'quick-losses-user': 'quick-losses-user-name',
+            'quick-downtime-user': 'quick-downtime-user-name',
+            'manual-production-user': 'manual-production-user-name',
+            'manual-losses-user': 'manual-losses-user-name',
+            'manual-downtime-user': 'manual-downtime-user-name'
+        };
+        const displayEl = document.getElementById(displayMap[inputId]);
+        if (displayEl) {
+            displayEl.textContent = '🔍 Buscando operador na escala...';
+            displayEl.className = 'text-xs text-blue-500 mt-1';
+        }
+        
+        try {
+            const operador = await getOperadorEscalado(maquina, turnoEfetivo, dataEfetiva);
+            
+            if (operador && operador.cod) {
+                // Preencher automaticamente o código
+                input.value = operador.cod;
+                
+                // Atualizar exibição do nome
+                if (displayEl) {
+                    displayEl.textContent = `✅ ${operador.user || operador.nome} (Escala: ${maquina} - T${turnoEfetivo})`;
+                    displayEl.className = 'text-xs text-green-600 font-medium mt-1';
+                }
+                
+                // Marcar que foi preenchido automaticamente
+                input.dataset.autoPreenchido = 'true';
+                input.dataset.escalaMaquina = maquina;
+                input.dataset.escalaTurno = turnoEfetivo;
+                
+                console.log('[ESCALA] Operador auto-preenchido:', operador);
+            } else {
+                // Nenhum operador escalado - limpar e permitir digitação manual
+                input.value = '';
+                input.dataset.autoPreenchido = 'false';
+                
+                if (displayEl) {
+                    displayEl.textContent = '⚠️ Nenhum operador escalado - digite o código manualmente';
+                    displayEl.className = 'text-xs text-amber-600 mt-1';
+                }
+                
+                console.log('[ESCALA] Nenhum operador encontrado na escala');
+            }
+        } catch (error) {
+            console.error('[ESCALA] Erro ao auto-preencher operador:', error);
+            
+            if (displayEl) {
+                displayEl.textContent = '❌ Erro ao buscar escala - digite o código manualmente';
+                displayEl.className = 'text-xs text-red-500 mt-1';
+            }
+        }
+    }
+    
+    // Expor funções para uso global
+    window.getOperadorEscalado = getOperadorEscalado;
+    window.autoPreencherOperadorPorEscala = autoPreencherOperadorPorEscala;
+    window.getTurnoAtual = getTurnoAtual;
+    window.getDataProducaoAtual = getDataProducaoAtual;
+    
     // Carregar estado persistente da tara para todos os formulários
     function loadTareStateForAllForms(machine) {
         if (!machine) return;
@@ -18177,6 +18362,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
         
         openModal('quick-production-modal');
+        
+        // ✅ AUTO-PREENCHER: Buscar operador escalado após modal estar visível
+        // Delay para evitar problemas de scroll durante abertura
+        if (selectedMachineData?.machine) {
+            setTimeout(() => {
+                autoPreencherOperadorPorEscala('quick-production-user', selectedMachineData.machine);
+            }, 150);
+        }
     }
     
     function openLossesModal() {
@@ -18244,7 +18437,22 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             cancelBtn.addEventListener('click', () => closeModal('quick-losses-modal'));
         }
         
+        // ✅ Configurar campo de código do operador
+        setupUserCodeInput('quick-losses-user');
+        const userInputQuickLosses = document.getElementById('quick-losses-user');
+        if (userInputQuickLosses) {
+            userInputQuickLosses.value = '';
+            updateUserNameDisplay('quick-losses-user', '');
+        }
+        
         openModal('quick-losses-modal');
+        
+        // ✅ AUTO-PREENCHER: Buscar operador escalado após modal estar visível
+        if (selectedMachineData?.machine) {
+            setTimeout(() => {
+                autoPreencherOperadorPorEscala('quick-losses-user', selectedMachineData.machine);
+            }, 150);
+        }
     }
     
     // Atualizar feedback em tempo real do input de peso
@@ -18420,8 +18628,26 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             submitBtn.removeEventListener('click', handleManualProductionSubmit);
             submitBtn.addEventListener('click', handleManualProductionSubmit);
         }
+        
+        // ✅ Configurar campo de código do operador
+        setupUserCodeInput('manual-production-user');
+        const userInput = document.getElementById('manual-production-user');
+        if (userInput) {
+            userInput.value = '';
+            updateUserNameDisplay('manual-production-user', '');
+        }
 
         openModal('manual-production-modal');
+        
+        // ✅ AUTO-PREENCHER: Buscar operador escalado após modal estar visível
+        if (selectedMachineData?.machine) {
+            setTimeout(() => {
+                // Usar turno selecionado no modal se disponível
+                const selectedShift = shiftSelect?.value ? parseInt(shiftSelect.value) : null;
+                const selectedDate = dateInput?.value || null;
+                autoPreencherOperadorPorEscala('manual-production-user', selectedMachineData.machine, selectedShift, selectedDate);
+            }, 150);
+        }
     }
 
     function openManualLossesModal() {
@@ -18474,8 +18700,25 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             submitBtn.removeEventListener('click', handleManualLossesSubmit);
             submitBtn.addEventListener('click', handleManualLossesSubmit);
         }
+        
+        // ✅ Configurar campo de código do operador
+        setupUserCodeInput('manual-losses-user');
+        const userInputLosses = document.getElementById('manual-losses-user');
+        if (userInputLosses) {
+            userInputLosses.value = '';
+            updateUserNameDisplay('manual-losses-user', '');
+        }
 
         openModal('manual-losses-modal');
+        
+        // ✅ AUTO-PREENCHER: Buscar operador escalado após modal estar visível
+        if (selectedMachineData?.machine) {
+            setTimeout(() => {
+                const selectedShift = shiftSelect?.value ? parseInt(shiftSelect.value) : null;
+                const selectedDate = dateInput?.value || null;
+                autoPreencherOperadorPorEscala('manual-losses-user', selectedMachineData.machine, selectedShift, selectedDate);
+            }, 150);
+        }
     }
 
     function openManualBorraModal() {
@@ -18735,9 +18978,24 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             submitBtn.removeEventListener('click', handleManualDowntimeSubmit);
             submitBtn.addEventListener('click', handleManualDowntimeSubmit);
         }
+        
+        // ✅ Configurar campo de código do operador
+        setupUserCodeInput('manual-downtime-user');
+        const userInputDowntime = document.getElementById('manual-downtime-user');
+        if (userInputDowntime) {
+            userInputDowntime.value = '';
+            updateUserNameDisplay('manual-downtime-user', '');
+        }
 
         openModal('manual-downtime-modal');
         console.log('[TRACE][openManualDowntimeModal] completed');
+        
+        // ✅ AUTO-PREENCHER: Buscar operador escalado após modal estar visível
+        if (selectedMachineData?.machine) {
+            setTimeout(() => {
+                autoPreencherOperadorPorEscala('manual-downtime-user', selectedMachineData.machine);
+            }, 150);
+        }
     }
     
     // ========================================
@@ -18865,8 +19123,23 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (modalTitle) modalTitle.textContent = 'Iniciar Parada - Informe o Motivo';
         if (actionBtn) actionBtn.textContent = 'Iniciar Parada';
         
+        // ✅ Configurar campo de código do operador
+        setupUserCodeInput('quick-downtime-user');
+        const userInputQuickDowntime = document.getElementById('quick-downtime-user');
+        if (userInputQuickDowntime) {
+            userInputQuickDowntime.value = '';
+            updateUserNameDisplay('quick-downtime-user', '');
+        }
+        
         console.log('[TRACE][openDowntimeReasonModal] abrindo modal quick-downtime-modal');
         openModal('quick-downtime-modal');
+        
+        // ✅ AUTO-PREENCHER: Buscar operador escalado após modal estar visível
+        if (selectedMachineData?.machine) {
+            setTimeout(() => {
+                autoPreencherOperadorPorEscala('quick-downtime-user', selectedMachineData.machine);
+            }, 150);
+        }
     }
     
     /**
@@ -22483,13 +22756,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const userCod = userInput ? parseInt(userInput.value, 10) : null;
         if (userCod === null || isNaN(userCod) || userInput.value === '') {
             alert('⚠️ Operador obrigatório!\n\nPor favor, digite o código do operador responsável.');
-            if (userInput) userInput.focus();
+            if (userInput) userInput.focus({ preventScroll: true });
             return;
         }
         const userData = getUserByCode ? getUserByCode(userCod) : null;
         if (!userData) {
             alert('⚠️ Código inválido!\n\nO código digitado não foi encontrado no sistema.\nVerifique e tente novamente.');
-            if (userInput) userInput.focus();
+            if (userInput) userInput.focus({ preventScroll: true });
             return;
         }
         const nomeUsuario = userData.nomeUsuario;
@@ -22504,7 +22777,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         if (!dateValue) {
             showNotification('Informe a data da produção', 'warning');
-            dateInput?.focus();
+            dateInput?.focus({ preventScroll: true });
             return;
         }
         
@@ -22800,13 +23073,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const userCod = userInput ? parseInt(userInput.value, 10) : null;
         if (userCod === null || isNaN(userCod) || userInput.value === '') {
             alert('⚠️ Operador obrigatório!\n\nPor favor, digite o código do operador responsável.');
-            if (userInput) userInput.focus();
+            if (userInput) userInput.focus({ preventScroll: true });
             return;
         }
         const userData = getUserByCode ? getUserByCode(userCod) : null;
         if (!userData) {
             alert('⚠️ Código inválido!\n\nO código digitado não foi encontrado no sistema.\nVerifique e tente novamente.');
-            if (userInput) userInput.focus();
+            if (userInput) userInput.focus({ preventScroll: true });
             return;
         }
         const nomeUsuario = userData.nomeUsuario;
@@ -22983,10 +23256,23 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             }
 
             closeModal('quick-production-modal');
-            await populateMachineSelector();
-            await refreshLaunchCharts();
-            await loadTodayStats();
-            await loadRecentEntries(false);
+            
+            // Salvar posição do scroll antes de atualizar
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+            
+            // Executar atualizações em paralelo para reduzir tempo
+            await Promise.all([
+                populateMachineSelector(),
+                refreshLaunchCharts(),
+                loadTodayStats(),
+                loadRecentEntries(false)
+            ]);
+            
+            // Restaurar posição do scroll após atualizações
+            requestAnimationFrame(() => {
+                window.scrollTo({ left: scrollLeft, top: scrollTop, behavior: 'instant' });
+            });
 
             showNotification('✅ Produção rápida registrada com sucesso!', 'success');
         } catch (error) {
@@ -23039,13 +23325,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const userCod = userInput ? parseInt(userInput.value, 10) : null;
         if (userCod === null || isNaN(userCod) || userInput.value === '') {
             alert('⚠️ Operador obrigatório!\n\nPor favor, digite o código do operador responsável.');
-            if (userInput) userInput.focus();
+            if (userInput) userInput.focus({ preventScroll: true });
             return;
         }
         const userData = getUserByCode ? getUserByCode(userCod) : null;
         if (!userData) {
             alert('⚠️ Código inválido!\n\nO código digitado não foi encontrado no sistema.\nVerifique e tente novamente.');
-            if (userInput) userInput.focus();
+            if (userInput) userInput.focus({ preventScroll: true });
             return;
         }
         const nomeUsuario = userData.nomeUsuario;
@@ -23061,7 +23347,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         if (!dateValue) {
             showNotification('Informe a data da perda', 'warning');
-            dateInput?.focus();
+            dateInput?.focus({ preventScroll: true });
             return;
         }
 
@@ -23075,7 +23361,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         if (!reasonValue) {
             showNotification('Selecione o motivo da perda', 'warning');
-            reasonSelect?.focus();
+            reasonSelect?.focus({ preventScroll: true });
             return;
         }
 
@@ -23092,7 +23378,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             if (!hasQuantity && hasWeight) {
                 if (pieceWeightGrams <= 0) {
                     showNotification('Peso médio da peça não encontrado. Informe a quantidade manualmente ou cadastre o peso no planejamento.', 'warning');
-                    qtyInput?.focus();
+                    qtyInput?.focus({ preventScroll: true });
                     return;
                 }
                 const conversion = calculateQuantityFromGrams(netWeightGrams, pieceWeightGrams);
@@ -23165,10 +23451,22 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             }
 
             closeModal('manual-losses-modal');
-            await populateMachineSelector();
-            await refreshLaunchCharts();
-            await loadTodayStats();
-            await loadRecentEntries(false);
+            
+            // Salvar posição do scroll antes de atualizar
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+            
+            await Promise.all([
+                populateMachineSelector(),
+                refreshLaunchCharts(),
+                loadTodayStats(),
+                loadRecentEntries(false)
+            ]);
+            
+            // Restaurar posição do scroll após atualizações
+            requestAnimationFrame(() => {
+                window.scrollTo({ left: scrollLeft, top: scrollTop, behavior: 'instant' });
+            });
 
             showNotification('✅ Perda manual registrada com sucesso!', 'success');
         } catch (error) {
@@ -23241,13 +23539,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const userCod = userInput ? parseInt(userInput.value, 10) : null;
         if (userCod === null || isNaN(userCod) || userInput.value === '') {
             alert('⚠️ Operador obrigatório!\n\nPor favor, digite o código do operador responsável.');
-            if (userInput) userInput.focus();
+            if (userInput) userInput.focus({ preventScroll: true });
             return;
         }
         const userData = getUserByCode ? getUserByCode(userCod) : null;
         if (!userData) {
             alert('⚠️ Código inválido!\n\nO código digitado não foi encontrado no sistema.\nVerifique e tente novamente.');
-            if (userInput) userInput.focus();
+            if (userInput) userInput.focus({ preventScroll: true });
             return;
         }
         const nomeUsuario = userData.nomeUsuario;
@@ -23266,8 +23564,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         if (quantity <= 0 && weightGrams <= 0) {
             alert('Informe a quantidade ou o peso da perda.');
-            if (quantityInput) quantityInput.focus();
-            else if (weightInput) weightInput.focus();
+            if (quantityInput) quantityInput.focus({ preventScroll: true });
+            else if (weightInput) weightInput.focus({ preventScroll: true });
             return;
         }
 
@@ -23279,7 +23577,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         // ✅ POKA-YOKE: Observação obrigatória
         if (!obs || obs.length < 3) {
             alert('⚠️ Observação obrigatória!\n\nPor favor, descreva detalhes sobre a perda para garantir rastreabilidade.');
-            document.getElementById('quick-losses-obs').focus();
+            document.getElementById('quick-losses-obs').focus({ preventScroll: true });
             return;
         }
 
@@ -23381,6 +23679,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             }
 
             closeModal('quick-losses-modal');
+            
+            // Salvar posição do scroll antes de atualizar
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+            
             await populateMachineSelector();
             
             // Atualizar selectedMachineData com os dados mais recentes
@@ -23392,11 +23695,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 updateQuickProductionPieceWeightUI();
             }
             
-            await loadTodayStats();
-            await loadHourlyProductionChart();
-            await loadRecentEntries(false);
-            // Atualizar aba de análise se estiver aberta
-            await refreshAnalysisIfActive();
+            await Promise.all([
+                loadTodayStats(),
+                loadHourlyProductionChart(),
+                loadRecentEntries(false),
+                refreshAnalysisIfActive()
+            ]);
+            
+            // Restaurar posição do scroll após atualizações
+            requestAnimationFrame(() => {
+                window.scrollTo({ left: scrollLeft, top: scrollTop, behavior: 'instant' });
+            });
+            
             showNotification(successMessage, 'success');
             
             // Registrar log
@@ -23445,13 +23755,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const userCod = userInput ? parseInt(userInput.value, 10) : null;
         if (userCod === null || isNaN(userCod) || userInput.value === '') {
             alert('⚠️ Operador obrigatório!\n\nPor favor, digite o código do operador responsável.');
-            if (userInput) userInput.focus();
+            if (userInput) userInput.focus({ preventScroll: true });
             return;
         }
         const userData = getUserByCode ? getUserByCode(userCod) : null;
         if (!userData) {
             alert('⚠️ Código inválido!\n\nO código digitado não foi encontrado no sistema.\nVerifique e tente novamente.');
-            if (userInput) userInput.focus();
+            if (userInput) userInput.focus({ preventScroll: true });
             return;
         }
         const nomeUsuario = userData.nomeUsuario;
@@ -23466,7 +23776,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         // ✅ POKA-YOKE: Observação obrigatória
         if (!obs || obs.length < 3) {
             alert('⚠️ Observação obrigatória!\n\nPor favor, descreva detalhes sobre a parada para garantir rastreabilidade.');
-            document.getElementById('quick-downtime-obs').focus();
+            document.getElementById('quick-downtime-obs').focus({ preventScroll: true });
             return;
         }
 
@@ -25240,8 +25550,20 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             }
 
             closeModal('manual-downtime-modal');
-            await loadTodayStats();
-            await loadRecentEntries(false);
+            
+            // Salvar posição do scroll antes de atualizar
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+            
+            await Promise.all([
+                loadTodayStats(),
+                loadRecentEntries(false)
+            ]);
+            
+            // Restaurar posição do scroll após atualizações
+            requestAnimationFrame(() => {
+                window.scrollTo({ left: scrollLeft, top: scrollTop, behavior: 'instant' });
+            });
 
             showNotification('✅ Parada manual registrada com sucesso!', 'success');
         } catch (error) {
