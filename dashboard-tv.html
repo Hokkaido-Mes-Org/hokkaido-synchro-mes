@@ -1195,7 +1195,7 @@
         .machine-status-card.producao {
             background: rgba(187, 247, 208, 0.4);
             border-color: #86EFAC;
-            color: #4ADE80;
+            color: #064e3b;
         }
 
         /* Preparação = Rosa */
@@ -4944,7 +4944,7 @@
                     'processo': 'Processo',
                     'qualidade': 'Qualidade',
                     'preparacao': 'Preparação',
-                    'producao': 'Parada de Produção',
+                    'producao': 'Parada<br>De<br>Produção',
                     'pmp': 'PMP',
                     'pcp': 'PCP',
                     'comercial': 'Comercial',
@@ -4970,12 +4970,22 @@
                     title = 'Em produção';
                 }
                 
-                return `
-                    <div class="machine-status-card ${statusClass}" title="${title}">
-                        <span class="machine-number">${machineId}</span>
-                        <span class="machine-label">${statusLabel}</span>
-                    </div>
-                `;
+                const div = document.createElement('div');
+                div.className = `machine-status-card ${statusClass}`;
+                div.title = title;
+                
+                const numberSpan = document.createElement('span');
+                numberSpan.className = 'machine-number';
+                numberSpan.textContent = machineId;
+                
+                const labelSpan = document.createElement('span');
+                labelSpan.className = 'machine-label';
+                labelSpan.innerHTML = statusLabel;
+                
+                div.appendChild(numberSpan);
+                div.appendChild(labelSpan);
+                
+                return div.outerHTML;
             }).join('');
             
             console.log('[Dashboard TV] Machine Status Grid renderizado com', allMachineIds.length, 'máquinas');
