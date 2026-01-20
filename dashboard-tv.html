@@ -1149,11 +1149,11 @@
         }
 
         /* Status colors */
-        /* Produzindo = Verde */
+        /* Produzindo = Verde Forte */
         .machine-status-card.produzindo {
-            background: rgba(0, 230, 118, 0.2);
-            border-color: #00e676;
-            color: #00e676;
+            background: rgba(34, 197, 94, 0.25);
+            border-color: #22C55E;
+            color: #16A34A;
         }
 
         /* Manutenção = Amarelo */
@@ -1191,11 +1191,11 @@
             color: #F44336;
         }
 
-        /* Produção = Rosa */
+        /* Produção = Verde Claro */
         .machine-status-card.producao {
-            background: rgba(233, 30, 99, 0.2);
-            border-color: #E91E63;
-            color: #E91E63;
+            background: rgba(187, 247, 208, 0.4);
+            border-color: #86EFAC;
+            color: #4ADE80;
         }
 
         /* Preparação = Rosa */
@@ -1231,6 +1231,13 @@
             background: rgba(3, 169, 244, 0.2);
             border-color: #03A9F4;
             color: #03A9F4;
+        }
+
+        /* Administrativo = Branco */
+        .machine-status-card.administrativo {
+            background: rgba(255, 255, 255, 0.9);
+            border-color: #FFFFFF;
+            color: #424242;
         }
 
         /* Outros/Sem status */
@@ -4848,8 +4855,9 @@
                     
                     // Compras = Marrom
                     // Inclui: "FALTA DE MATÉRIA PRIMA", "FALTA DE SACO PLÁSTICO", "FALTA DE CAIXA DE PAPELÃO", "FALTA DE MASTER"
-                    if (reason.includes('compra') || reason.includes('falta de mat') || reason.includes('falta de saco') ||
-                        reason.includes('falta de caixa') || reason.includes('falta de master')) {
+                    if (reason.includes('compra') || 
+                        (reason.includes('falta') && (reason.includes('matéria') || reason.includes('materia') || 
+                        reason.includes('prima') || reason.includes('saco') || reason.includes('caixa') || reason.includes('master')))) {
                         return 'compras';
                     }
                     
@@ -4901,9 +4909,15 @@
                         return 'pcp';
                     }
                     
-                    // Administrativo/Outros
-                    // Inclui: "FALTA DE ENERGIA", "VAZAMENTO DO BICO", "QUEIMA DE RESISTÊNCIA"
-                    if (reason.includes('energia') || reason.includes('vazamento') || reason.includes('queima de resist')) {
+                    // Administrativo = Branco
+                    // Inclui: "FALTA DE ENERGIA", "FALTA DE ÁGUA", "QUEDA DE ENERGIA"
+                    if (reason.includes('energia') || reason.includes('falta de água') || reason.includes('queda')) {
+                        return 'administrativo';
+                    }
+                    
+                    // Outros
+                    // Inclui: "VAZAMENTO DO BICO", "QUEIMA DE RESISTÊNCIA"
+                    if (reason.includes('vazamento') || reason.includes('queima de resist')) {
                         return 'outros';
                     }
                     
@@ -4935,6 +4949,7 @@
                     'pcp': 'PCP',
                     'comercial': 'Comercial',
                     'setup': 'Setup',
+                    'administrativo': 'Energia',
                     'outros': 'Outros'
                 };
                 return labels[statusClass] || 'Outros';

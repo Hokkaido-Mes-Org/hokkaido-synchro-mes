@@ -19502,6 +19502,275 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             form.addEventListener('submit', handleExtendedDowntimeFormSubmit);
             form.dataset.listenerAttached = 'true';
         }
+        
+        // Inicializar parada em lote
+        setupParadaEmLote();
+    }
+
+    // ==================== PARADA EM LOTE ====================
+    
+    /**
+     * Configura a funcionalidade de parada em lote
+     * Permite registrar a mesma parada para múltiplas máquinas simultaneamente
+     */
+    function setupParadaEmLote() {
+        const btnAbrir = document.getElementById('btn-parada-em-lote');
+        const btnFechar = document.getElementById('btn-fechar-parada-lote');
+        const container = document.getElementById('parada-lote-container');
+        const gridMaquinas = document.getElementById('maquinas-lote-grid');
+        const countEl = document.getElementById('maquinas-selecionadas-count');
+        const btnSelecionarTodas = document.getElementById('btn-selecionar-todas');
+        const btnLimparSelecao = document.getElementById('btn-limpar-selecao');
+        const categoriaSelect = document.getElementById('parada-lote-categoria');
+        const motivoSelect = document.getElementById('parada-lote-motivo');
+        const dataInput = document.getElementById('parada-lote-data');
+        const horaInput = document.getElementById('parada-lote-hora');
+        const btnUsarAgora = document.getElementById('parada-lote-usar-agora');
+        const form = document.getElementById('parada-lote-form');
+        
+        if (!btnAbrir || !container) {
+            console.log('[PARADA-LOTE] Elementos não encontrados, pulando inicialização');
+            return;
+        }
+        
+        // Lista de máquinas válidas
+        const validMachines = ['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
+                               'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                               'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32'];
+        
+        // Motivos por categoria (para uso em lote - eventos que afetam múltiplas máquinas)
+        const motivosPorCategoria = {
+            'ADMINISTRATIVO': ['FALTA DE ENERGIA', 'FALTA DE ÁGUA', 'QUEDA DE ENERGIA', 'FERIADO', 'FIM DE SEMANA'],
+            'MANUTENÇÃO': ['MANUTENÇÃO PREVENTIVA GERAL', 'PARADA PROGRAMADA', 'MANUTENÇÃO DE INFRAESTRUTURA'],
+            'COMPRAS': ['FALTA DE MATÉRIA PRIMA GERAL', 'ATRASO NO FORNECEDOR'],
+            'PCP': ['SEM PROGRAMAÇÃO', 'SEM PROGRAMAÇÃO-FIM DE SEMANA', 'ESTRATÉGIA PCP'],
+            'COMERCIAL': ['SEM PEDIDO', 'BAIXA DEMANDA']
+        };
+        
+        // Preencher grid de máquinas
+        function renderMaquinasGrid() {
+            if (!gridMaquinas) return;
+            gridMaquinas.innerHTML = validMachines.map(m => `
+                <label class="flex items-center justify-center p-2 border-2 border-gray-200 rounded-lg cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-all maquina-lote-item" data-machine="${m}">
+                    <input type="checkbox" name="maquinas-lote" value="${m}" class="sr-only maquina-lote-checkbox">
+                    <span class="text-sm font-bold text-gray-700">${m}</span>
+                </label>
+            `).join('');
+            
+            // Adicionar event listeners aos checkboxes
+            gridMaquinas.querySelectorAll('.maquina-lote-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const checkbox = item.querySelector('.maquina-lote-checkbox');
+                    checkbox.checked = !checkbox.checked;
+                    if (checkbox.checked) {
+                        item.classList.add('bg-orange-100', 'border-orange-500');
+                        item.querySelector('span').classList.add('text-orange-700');
+                    } else {
+                        item.classList.remove('bg-orange-100', 'border-orange-500');
+                        item.querySelector('span').classList.remove('text-orange-700');
+                    }
+                    updateCount();
+                });
+            });
+        }
+        
+        // Atualizar contagem
+        function updateCount() {
+            const count = gridMaquinas.querySelectorAll('.maquina-lote-checkbox:checked').length;
+            if (countEl) countEl.textContent = `${count} máquina${count !== 1 ? 's' : ''} selecionada${count !== 1 ? 's' : ''}`;
+        }
+        
+        // Preencher motivos baseado na categoria
+        function updateMotivos() {
+            if (!motivoSelect || !categoriaSelect) return;
+            const categoria = categoriaSelect.value;
+            const motivos = motivosPorCategoria[categoria] || [];
+            
+            motivoSelect.innerHTML = '<option value="">Selecione o motivo...</option>' + 
+                motivos.map(m => `<option value="${m}">${m}</option>`).join('');
+        }
+        
+        // Definir data/hora atual
+        function setCurrentDateTime() {
+            const now = new Date();
+            if (dataInput) dataInput.value = now.toISOString().split('T')[0];
+            if (horaInput) horaInput.value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        }
+        
+        // Abrir/fechar container
+        btnAbrir.addEventListener('click', () => {
+            container.classList.toggle('hidden');
+            if (!container.classList.contains('hidden')) {
+                renderMaquinasGrid();
+                setCurrentDateTime();
+            }
+            lucide.createIcons();
+        });
+        
+        if (btnFechar) {
+            btnFechar.addEventListener('click', () => {
+                container.classList.add('hidden');
+            });
+        }
+        
+        // Selecionar todas
+        if (btnSelecionarTodas) {
+            btnSelecionarTodas.addEventListener('click', () => {
+                gridMaquinas.querySelectorAll('.maquina-lote-item').forEach(item => {
+                    const checkbox = item.querySelector('.maquina-lote-checkbox');
+                    checkbox.checked = true;
+                    item.classList.add('bg-orange-100', 'border-orange-500');
+                    item.querySelector('span').classList.add('text-orange-700');
+                });
+                updateCount();
+            });
+        }
+        
+        // Limpar seleção
+        if (btnLimparSelecao) {
+            btnLimparSelecao.addEventListener('click', () => {
+                gridMaquinas.querySelectorAll('.maquina-lote-item').forEach(item => {
+                    const checkbox = item.querySelector('.maquina-lote-checkbox');
+                    checkbox.checked = false;
+                    item.classList.remove('bg-orange-100', 'border-orange-500');
+                    item.querySelector('span').classList.remove('text-orange-700');
+                });
+                updateCount();
+            });
+        }
+        
+        // Atualizar motivos quando categoria mudar
+        if (categoriaSelect) {
+            categoriaSelect.addEventListener('change', updateMotivos);
+        }
+        
+        // Usar data/hora atual
+        if (btnUsarAgora) {
+            btnUsarAgora.addEventListener('click', () => {
+                setCurrentDateTime();
+                showNotification('✅ Data e hora atualizados', 'success');
+            });
+        }
+        
+        // Submit do formulário
+        if (form && !form.dataset.listenerAttached) {
+            form.dataset.listenerAttached = 'true';
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const statusDiv = document.getElementById('parada-lote-status');
+                const submitBtn = document.getElementById('parada-lote-submit');
+                
+                // Coletar máquinas selecionadas
+                const maquinasSelecionadas = Array.from(gridMaquinas.querySelectorAll('.maquina-lote-checkbox:checked'))
+                    .map(cb => cb.value);
+                
+                const categoria = categoriaSelect?.value;
+                const motivo = motivoSelect?.value;
+                const data = dataInput?.value;
+                const hora = horaInput?.value;
+                
+                // Validação
+                if (maquinasSelecionadas.length === 0) {
+                    if (statusDiv) {
+                        statusDiv.textContent = '❌ Selecione pelo menos uma máquina';
+                        statusDiv.className = 'text-sm font-semibold h-5 text-center text-red-600';
+                    }
+                    return;
+                }
+                
+                if (!categoria || !motivo || !data || !hora) {
+                    if (statusDiv) {
+                        statusDiv.textContent = '❌ Preencha todos os campos obrigatórios';
+                        statusDiv.className = 'text-sm font-semibold h-5 text-center text-red-600';
+                    }
+                    return;
+                }
+                
+                try {
+                    if (submitBtn) submitBtn.disabled = true;
+                    if (statusDiv) {
+                        statusDiv.textContent = `Registrando paradas para ${maquinasSelecionadas.length} máquinas...`;
+                        statusDiv.className = 'text-sm font-semibold h-5 text-center text-blue-600';
+                    }
+                    
+                    const startDateTime = new Date(`${data}T${hora}:00`);
+                    const userName = getActiveUser()?.name || 'Sistema';
+                    const batch = db.batch();
+                    
+                    // Criar documento para cada máquina
+                    maquinasSelecionadas.forEach(machineId => {
+                        const docRef = db.collection('extended_downtime_logs').doc();
+                        batch.set(docRef, {
+                            machine_id: machineId,
+                            category: categoria,
+                            type: motivo,
+                            reason: motivo,
+                            start_date: data,
+                            start_time: hora,
+                            start_datetime: firebase.firestore.Timestamp.fromDate(startDateTime),
+                            end_date: null,
+                            end_time: null,
+                            end_datetime: null,
+                            status: 'active',
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                            createdBy: userName,
+                            shift: getCurrentShift(startDateTime),
+                            date: data,
+                            batch_id: Date.now().toString() // ID para identificar paradas do mesmo lote
+                        });
+                    });
+                    
+                    await batch.commit();
+                    
+                    console.log('[PARADA-LOTE] ✅ Paradas registradas:', maquinasSelecionadas.length, 'máquinas');
+                    
+                    if (statusDiv) {
+                        statusDiv.textContent = `✅ Parada registrada para ${maquinasSelecionadas.length} máquinas!`;
+                        statusDiv.className = 'text-sm font-semibold h-5 text-center text-green-600';
+                    }
+                    
+                    // Limpar formulário
+                    gridMaquinas.querySelectorAll('.maquina-lote-item').forEach(item => {
+                        const checkbox = item.querySelector('.maquina-lote-checkbox');
+                        checkbox.checked = false;
+                        item.classList.remove('bg-orange-100', 'border-orange-500');
+                        item.querySelector('span').classList.remove('text-orange-700');
+                    });
+                    updateCount();
+                    if (categoriaSelect) categoriaSelect.value = '';
+                    if (motivoSelect) motivoSelect.innerHTML = '<option value="">Selecione o motivo...</option>';
+                    
+                    // Recarregar lista de paradas
+                    if (typeof loadExtendedDowntimeList === 'function') {
+                        await loadExtendedDowntimeList();
+                    }
+                    
+                    // Recarregar painel de máquinas
+                    const machinesDowntime = await getAllMachinesDowntimeStatus();
+                    await renderMachineCards([], [], [], new Set(), machinesDowntime);
+                    
+                    if (submitBtn) submitBtn.disabled = false;
+                    
+                    setTimeout(() => {
+                        if (statusDiv) {
+                            statusDiv.textContent = '';
+                            statusDiv.className = 'text-sm font-semibold h-5 text-center';
+                        }
+                    }, 5000);
+                    
+                } catch (error) {
+                    console.error('[PARADA-LOTE] Erro:', error);
+                    if (statusDiv) {
+                        statusDiv.textContent = `❌ Erro: ${error.message}`;
+                        statusDiv.className = 'text-sm font-semibold h-5 text-center text-red-600';
+                    }
+                    if (submitBtn) submitBtn.disabled = false;
+                }
+            });
+        }
+        
+        console.log('[PARADA-LOTE] ✅ Funcionalidade de parada em lote inicializada');
     }
 
     // ==================== ACOMPANHAMENTO DE TURNO ====================

@@ -923,9 +923,106 @@
                                     <p class="text-sm text-gray-500">Registre Paradas de fim de semana, manutenção, feriados e outros períodos prolongados.</p>
                                 </div>
                             </div>
-                            <span class="text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-full uppercase tracking-wide">
-                                Gerenciar Paradas
-                            </span>
+                            <div class="flex items-center gap-2">
+                                <button type="button" id="btn-parada-em-lote" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white text-sm font-semibold rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2">
+                                    <i data-lucide="layers" class="w-4 h-4"></i>
+                                    Parada em Lote
+                                </button>
+                                <span class="text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-full uppercase tracking-wide">
+                                    Gerenciar Paradas
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Modal/Formulário de Parada em Lote -->
+                        <div id="parada-lote-container" class="hidden mb-6">
+                            <div class="bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-300 rounded-xl p-5 shadow-md">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div class="flex items-center gap-2">
+                                        <i data-lucide="layers" class="w-5 h-5 text-orange-600"></i>
+                                        <h3 class="font-semibold text-orange-800">Parada em Lote - Múltiplas Máquinas</h3>
+                                    </div>
+                                    <button type="button" id="btn-fechar-parada-lote" class="p-1.5 bg-orange-200 hover:bg-orange-300 rounded-lg transition-colors">
+                                        <i data-lucide="x" class="w-4 h-4 text-orange-700"></i>
+                                    </button>
+                                </div>
+                                
+                                <p class="text-sm text-orange-700 mb-4">
+                                    <i data-lucide="info" class="w-4 h-4 inline mr-1"></i>
+                                    Selecione várias máquinas e registre a mesma parada para todas de uma vez (ex: Queda de energia, Falta d'água).
+                                </p>
+
+                                <form id="parada-lote-form" class="space-y-4">
+                                    <!-- Seleção de Máquinas em Grid -->
+                                    <div>
+                                        <label class="block text-xs font-semibold text-orange-700 uppercase tracking-wider mb-2">
+                                            Selecione as Máquinas *
+                                        </label>
+                                        <div class="flex gap-2 mb-2">
+                                            <button type="button" id="btn-selecionar-todas" class="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold rounded-lg transition-colors">
+                                                Selecionar Todas
+                                            </button>
+                                            <button type="button" id="btn-limpar-selecao" class="px-3 py-1.5 bg-gray-500 hover:bg-gray-600 text-white text-xs font-semibold rounded-lg transition-colors">
+                                                Limpar Seleção
+                                            </button>
+                                        </div>
+                                        <div id="maquinas-lote-grid" class="grid grid-cols-7 md:grid-cols-9 lg:grid-cols-14 gap-2 p-3 bg-white rounded-lg border border-orange-200 max-h-48 overflow-y-auto">
+                                            <!-- Gerado via JavaScript -->
+                                        </div>
+                                        <p id="maquinas-selecionadas-count" class="text-xs text-orange-600 mt-1">0 máquinas selecionadas</p>
+                                    </div>
+
+                                    <!-- Categoria e Motivo -->
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label for="parada-lote-categoria" class="block text-xs font-semibold text-orange-700 uppercase tracking-wider mb-1.5">Categoria *</label>
+                                            <select id="parada-lote-categoria" class="w-full p-2.5 bg-white border border-orange-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition cursor-pointer" required>
+                                                <option value="">Selecione a categoria...</option>
+                                                <option value="ADMINISTRATIVO">ADMINISTRATIVO</option>
+                                                <option value="MANUTENÇÃO">MANUTENÇÃO</option>
+                                                <option value="COMPRAS">COMPRAS</option>
+                                                <option value="PCP">PCP</option>
+                                                <option value="COMERCIAL">COMERCIAL</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label for="parada-lote-motivo" class="block text-xs font-semibold text-orange-700 uppercase tracking-wider mb-1.5">Motivo da Parada *</label>
+                                            <select id="parada-lote-motivo" class="w-full p-2.5 bg-white border border-orange-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition cursor-pointer" required>
+                                                <option value="">Selecione o motivo...</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <!-- Data e Hora -->
+                                    <div class="bg-white border border-orange-200 rounded-lg p-3">
+                                        <div class="flex items-center gap-2 text-sm text-orange-700 mb-3">
+                                            <i data-lucide="clock" class="w-4 h-4"></i> 
+                                            <strong>Data e Hora de Início</strong>
+                                        </div>
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <div>
+                                                <label class="text-xs font-medium text-orange-700 block mb-1">Data</label>
+                                                <input type="date" id="parada-lote-data" class="w-full px-3 py-2 bg-white border border-orange-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500" required />
+                                            </div>
+                                            <div>
+                                                <label class="text-xs font-medium text-orange-700 block mb-1">Horário</label>
+                                                <input type="time" id="parada-lote-hora" class="w-full px-3 py-2 bg-white border border-orange-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500" required />
+                                            </div>
+                                        </div>
+                                        <button type="button" id="parada-lote-usar-agora" class="mt-2 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1">
+                                            <i data-lucide="clock" class="w-3 h-3"></i>
+                                            Usar Agora
+                                        </button>
+                                    </div>
+
+                                    <!-- Botão de Submit -->
+                                    <button type="submit" id="parada-lote-submit" class="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-semibold py-3 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2">
+                                        <i data-lucide="zap" class="w-5 h-5"></i>
+                                        <span>🚨 REGISTRAR PARADA EM LOTE</span>
+                                    </button>
+                                    <div id="parada-lote-status" class="text-sm font-semibold h-5 text-center"></div>
+                                </form>
+                            </div>
                         </div>
 
                         <form id="extended-downtime-form" class="space-y-5">
@@ -2905,19 +3002,7 @@
                                 </div>
 
                                 <!-- KPIs Principais - Layout Aprimorado -->
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                                    <!-- PLANEJADO -->
-                                    <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl shadow-sm border border-blue-200 p-5 hover:shadow-md transition">
-                                        <div class="flex items-center justify-between mb-3">
-                                            <p class="text-sm font-medium text-blue-700">PLANEJADO</p>
-                                            <div class="p-2 bg-blue-200 rounded-lg">
-                                                <i data-lucide="calendar-check" class="w-4 h-4 text-blue-600"></i>
-                                            </div>
-                                        </div>
-                                        <p id="planned-production-kpi" class="text-3xl font-bold text-blue-600 mb-1">---</p>
-                                        <p id="planned-production-subtext" class="text-xs text-blue-600 opacity-70">peças planejadas</p>
-                                    </div>
-
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                                     <!-- REALIZADO -->
                                     <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-2xl shadow-sm border border-green-200 p-5 hover:shadow-md transition">
                                         <div class="flex items-center justify-between mb-3">
@@ -2940,18 +3025,6 @@
                                         </div>
                                         <p id="production-target-vs-actual" class="text-3xl font-bold text-amber-600 mb-1">---%</p>
                                         <p id="target-vs-actual-subtext" class="text-xs text-amber-600 opacity-70">eficiência da meta</p>
-                                    </div>
-
-                                    <!-- TAXA DE PRODUÇÃO -->
-                                    <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl shadow-sm border border-purple-200 p-5 hover:shadow-md transition">
-                                        <div class="flex items-center justify-between mb-3">
-                                            <p class="text-sm font-medium text-purple-700">TAXA DE PRODUÇÃO</p>
-                                            <div class="p-2 bg-purple-200 rounded-lg">
-                                                <i data-lucide="zap" class="w-4 h-4 text-purple-600"></i>
-                                            </div>
-                                        </div>
-                                        <p id="production-rate-value" class="text-3xl font-bold text-purple-600 mb-1">--- pcs/h</p>
-                                        <p id="production-rate-subtext" class="text-xs text-purple-600 opacity-70">velocidade média</p>
                                     </div>
                                 </div>
 
