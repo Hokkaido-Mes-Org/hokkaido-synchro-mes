@@ -2326,7 +2326,7 @@
                     <div class="shift-kpi-card">
                         <div class="shift-kpi-header">
                             <span class="shift-badge t1">T1</span>
-                            <span class="shift-time">07:00 - 15:00</span>
+                            <span class="shift-time">07:00 - 14:59</span>
                         </div>
                         <div class="shift-kpi-body">
                             <div class="shift-metric">
@@ -2351,7 +2351,7 @@
                     <div class="shift-kpi-card">
                         <div class="shift-kpi-header">
                             <span class="shift-badge t2">T2</span>
-                            <span class="shift-time">15:00 - 23:20</span>
+                            <span class="shift-time">15:00 - 23:19</span>
                         </div>
                         <div class="shift-kpi-body">
                             <div class="shift-metric">
@@ -2376,7 +2376,7 @@
                     <div class="shift-kpi-card">
                         <div class="shift-kpi-header">
                             <span class="shift-badge t3">T3</span>
-                            <span class="shift-time">23:20 - 07:00</span>
+                            <span class="shift-time">23:20 - 06:59</span>
                         </div>
                         <div class="shift-kpi-body">
                             <div class="shift-metric">
@@ -2819,13 +2819,13 @@
             const date = now.toLocaleDateString('pt-BR', options).toUpperCase();
             document.getElementById('currentDate').textContent = date;
             
-            // Shift
+            // Shift - T1: 07:00-14:59, T2: 15:00-23:19, T3: 23:20-06:59
             const hour = now.getHours();
             let shift = '1º TURNO';
             const minute = now.getMinutes();
-            if (hour >= 7 && hour < 15) shift = '1º TURNO (07:00-15:00)';
-            else if (hour >= 15 && (hour < 23 || (hour === 23 && minute < 20))) shift = '2º TURNO (15:00-23:20)';
-            else shift = '3º TURNO (23:20-07:00)';
+            if (hour >= 7 && hour < 15) shift = '1º TURNO (07:00-14:59)';
+            else if (hour >= 15 && (hour < 23 || (hour === 23 && minute < 20))) shift = '2º TURNO (15:00-23:19)';
+            else shift = '3º TURNO (23:20-06:59)';
             document.getElementById('currentShift').textContent = shift;
         }
 
@@ -4052,11 +4052,15 @@
                 
                 const determineShiftFromTime = (timeStr) => {
                     if (!timeStr || typeof timeStr !== 'string') return null;
-                    const [hoursStr] = timeStr.split(':');
+                    const [hoursStr, minutesStr] = timeStr.split(':');
                     const hours = Number(hoursStr);
+                    const minutes = Number(minutesStr) || 0;
                     if (!Number.isFinite(hours)) return null;
+                    // T1: 07:00 - 14:59
                     if (hours >= 7 && hours < 15) return 1;
-                    if (hours >= 15 && hours < 23) return 2;
+                    // T2: 15:00 - 23:19
+                    if (hours >= 15 && (hours < 23 || (hours === 23 && minutes < 20))) return 2;
+                    // T3: 23:20 - 06:59
                     return 3;
                 };
                 
@@ -4332,9 +4336,9 @@
             
             // Determinar quais turnos já ocorreram/estão em andamento
             // Se é visualização histórica, todos os turnos são considerados ativos (dia completo)
-            // T1: 07:00-15:00 (minutos 0-479 do workday)
-            // T2: 15:00-23:20 (minutos 480-979 do workday)
-            // T3: 23:20-07:00 (minutos 980-1439 do workday)
+            // T1: 07:00-14:59 (minutos 0-479 do workday)
+            // T2: 15:00-23:19 (minutos 480-979 do workday)
+            // T3: 23:20-06:59 (minutos 980-1439 do workday)
             const isT1Active = isHistoricalView || minutesSinceWorkDayStart >= 0;    // T1 sempre ativo após 07:00
             const isT2Active = isHistoricalView || minutesSinceWorkDayStart >= 480;  // T2 ativo após 15:00 (8h * 60min)
             const isT3Active = isHistoricalView || minutesSinceWorkDayStart >= 980;  // T3 ativo após 23:20 (16h20 * 60min = 980min)

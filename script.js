@@ -2653,8 +2653,8 @@ document.addEventListener('DOMContentLoaded', function() {
         return cachedResolvedUserName;
     }
     
-    // Funções para normalizar datas conforme o ciclo de trabalho (7h a 7h do dia seguinte)
-    // Turno 1: 07:00 - 15:00 | Turno 2: 15:00 - 23:00 | Turno 3: 23:00 - 07:00
+    // Funções para normalizar datas conforme o ciclo de trabalho (7h a 6h59 do dia seguinte)
+    // Turno 1: 07:00 - 14:59 | Turno 2: 15:00 - 23:19 | Turno 3: 23:20 - 06:59
 
     function getWorkDay(dateStr, timeStr) {
         if (!dateStr) return null;
@@ -4658,9 +4658,13 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
             if (!timeStr || typeof timeStr !== 'string') return null;
             const [hoursStr, minutesStr] = timeStr.split(':');
             const hours = Number(hoursStr);
+            const minutes = Number(minutesStr) || 0;
             if (!Number.isFinite(hours)) return null;
+            // T1: 07:00 - 14:59
             if (hours >= 7 && hours < 15) return 1;
-            if (hours >= 15 && hours < 23) return 2;
+            // T2: 15:00 - 23:19
+            if (hours >= 15 && (hours < 23 || (hours === 23 && minutes < 20))) return 2;
+            // T3: 23:20 - 06:59
             return 3;
         };
 
@@ -5614,10 +5618,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 
                 // Para turno, inferir pelo horário se disponível
                 if (shift !== 'all' && data.hour) {
-                    const hourNum = parseInt(data.hour.split(':')[0], 10);
+                    const hourParts = data.hour.split(':');
+                    const hourNum = parseInt(hourParts[0], 10);
+                    const minNum = parseInt(hourParts[1], 10) || 0;
                     let inferredShift = 1;
+                    // T1: 07:00-14:59, T2: 15:00-23:19, T3: 23:20-06:59
                     if (hourNum >= 7 && hourNum < 15) inferredShift = 1;
-                    else if (hourNum >= 15 && hourNum < 23) inferredShift = 2;
+                    else if (hourNum >= 15 && (hourNum < 23 || (hourNum === 23 && minNum < 20))) inferredShift = 2;
                     else inferredShift = 3;
                     
                     if (inferredShift !== parseInt(shift, 10)) {
@@ -17583,11 +17590,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     function updateCurrentShift() {
         const now = new Date();
         const hour = now.getHours();
+        const minute = now.getMinutes();
         let currentShift;
         
+        // T1: 07:00-14:59, T2: 15:00-23:19, T3: 23:20-06:59
         if (hour >= 7 && hour < 15) {
             currentShift = 'T1';
-        } else if (hour >= 15 && hour < 23) {
+        } else if (hour >= 15 && (hour < 23 || (hour === 23 && minute < 20))) {
             currentShift = 'T2';
         } else {
             currentShift = 'T3';
@@ -26297,10 +26306,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     // Funções auxiliares
     function getCurrentShift(reference = new Date()) {
         const hour = reference.getHours();
+        const minute = reference.getMinutes();
         
+        // T1: 07:00-14:59, T2: 15:00-23:19, T3: 23:20-06:59
         if (hour >= 7 && hour < 15) {
             return 1; // 1º Turno
-        } else if (hour >= 15 && hour < 23) {
+        } else if (hour >= 15 && (hour < 23 || (hour === 23 && minute < 20))) {
             return 2; // 2º Turno
         } else {
             return 3; // 3º Turno
@@ -28758,11 +28769,11 @@ function sendDowntimeNotification() {
         const currentHour = now.getHours();
         const currentMinute = now.getMinutes();
         
-        // Determinar turno atual
+        // Determinar turno atual - T1: 07:00-14:59, T2: 15:00-23:19, T3: 23:20-06:59
         let currentShift;
         if (currentHour >= 7 && currentHour < 15) {
             currentShift = 'T1';
-        } else if (currentHour >= 15 && currentHour < 23) {
+        } else if (currentHour >= 15 && (currentHour < 23 || (currentHour === 23 && currentMinute < 20))) {
             currentShift = 'T2';
         } else {
             currentShift = 'T3';
@@ -28776,7 +28787,8 @@ function sendDowntimeNotification() {
             tempoDecorridoMin = (currentHour - 15) * 60 + currentMinute;
         } else { // T3
             if (currentHour >= 23) {
-                tempoDecorridoMin = (currentHour - 23) * 60 + currentMinute;
+                // Após 23:20, calcular minutos desde 23:20
+                tempoDecorridoMin = (currentHour - 23) * 60 + (currentMinute - 20);
             } else {
                 tempoDecorridoMin = (currentHour + 1) * 60 + currentMinute; // Para horas 0-6
             }
