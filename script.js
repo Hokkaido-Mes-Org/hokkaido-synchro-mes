@@ -13,36 +13,43 @@ document.addEventListener('DOMContentLoaded', async function() {
         console.log(`[OK] Database carregado: ${productDatabase.length} produtos, productByCode size: ${productByCode?.size || 0}`);
     }
     
-    // Ocultar subaba Analytics IA para todos, exceto usuários autorizados (Leandro Camargo ou role 'suporte')
+    // Ocultar subaba Analytics IA para todos, exceto usuários autorizados (Leandro Camargo, Davi Batista ou role 'suporte')
     setTimeout(() => {
         try {
             const user = window.authSystem?.getCurrentUser?.();
             const analyticsBtn = document.querySelector('.analysis-tab-btn[data-view="predictive"]');
             const isAuthorizedUser = user && (
                 user.name === 'Leandro Camargo' || user.username === 'leandro.camargo' ||
+                user.name === 'Davi Batista' || user.username === 'davi.batista' ||
                 user.role === 'suporte'
             );
             if (analyticsBtn && !isAuthorizedUser) {
                 analyticsBtn.style.display = 'none';
             }
             
-            // Mostrar filtro de data no lançamento para Leandro Camargo ou perfis de suporte
+            // Mostrar filtro de data no lançamento para Leandro Camargo, Davi Batista ou perfis de suporte
             const lancamentoDateFilter = document.getElementById('lancamento-date-filter');
             const isLeandro = user && (
                 user.name === 'Leandro Camargo' || user.username === 'leandro.camargo' ||
                 user.email === 'leandro@hokkaido.com.br'
             );
+            const isDavi = user && (
+                user.name === 'Davi Batista' || user.username === 'davi.batista' ||
+                user.email === 'davi@hokkaido.com.br'
+            );
             const isSuporte = user?.role === 'suporte';
-            if (lancamentoDateFilter && (isLeandro || isSuporte)) {
+            if (lancamentoDateFilter && (isLeandro || isDavi || isSuporte)) {
                 lancamentoDateFilter.classList.remove('hidden');
                 setupLancamentoDateFilter();
             }
             
-            // Mostrar botão de Novo Produto apenas para usuários autorizados (gestores, suporte ou Leandro)
+            // Mostrar botão de Novo Produto apenas para usuários autorizados (gestores, suporte, Leandro ou Davi)
             const btnNewProduct = document.getElementById('btn-new-product');
             const isGestorOrAdmin = user && (
                 user.name === 'Leandro Camargo' || user.username === 'leandro.camargo' ||
                 user.email === 'leandro@hokkaido.com.br' ||
+                user.name === 'Davi Batista' || user.username === 'davi.batista' ||
+                user.email === 'davi@hokkaido.com.br' ||
                 user.role === 'suporte' || user.role === 'gestor'
             );
             if (btnNewProduct && !isGestorOrAdmin) {
@@ -77,8 +84,13 @@ document.addEventListener('DOMContentLoaded', async function() {
             
             // Mostrar/ocultar aba Dashboard TV para usuários autorizados
             const dashboardTVNavBtn = document.querySelector('[data-page="dashboard-tv"]');
-            const allowedDashboardTVUsers = ['daniel rocha'];
-            const isAllowedForDashboardTV = user && allowedDashboardTVUsers.includes(userNameLower);
+            const allowedDashboardTVUsers = ['daniel rocha', 'linaldo', 'luciano'];
+            const isAllowedForDashboardTV = user && (allowedDashboardTVUsers.includes(userNameLower) || 
+               user.name === 'Leandro Camargo' || 
+               user.email === 'leandro@hokkaido.com.br' ||
+               user.name === 'Davi Batista' || 
+               user.email === 'davi@hokkaido.com.br' ||
+               user.role === 'lider');
             
             console.log('[DASHBOARD-TV-DEBUG] Verificando acesso Dashboard TV:', {
                 userName: user?.name,
@@ -2521,21 +2533,22 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /**
-     * Verifica se o usuário atual é gestor, suporte ou tem acesso total (Leandro Camargo)
+     * Verifica se o usuário atual é gestor, suporte, lider ou tem acesso total (Leandro Camargo)
      * Usada para restringir funções de edição e exclusão
      */
     function isUserGestorOrAdmin() {
         const user = getActiveUser();
         if (!user) return false;
         
-        // Usuários com acesso total (Leandro Camargo ou role 'suporte')
+        // Usuários com acesso total (Leandro Camargo, Davi Batista ou role 'suporte')
         const isAuthorizedAdmin = 
             user.name === 'Leandro Camargo' || user.email === 'leandro@hokkaido.com.br' ||
+            user.name === 'Davi Batista' || user.email === 'davi@hokkaido.com.br' ||
             user.role === 'suporte';
         if (isAuthorizedAdmin) return true;
         
-        // Verificar se é gestor
-        return user.role === 'gestor';
+        // Verificar se é gestor ou lider
+        return user.role === 'gestor' || user.role === 'lider';
     }
 
     /**
