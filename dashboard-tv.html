@@ -1191,6 +1191,20 @@
             color: #F44336;
         }
 
+        /* Produção = Rosa */
+        .machine-status-card.producao {
+            background: rgba(233, 30, 99, 0.2);
+            border-color: #E91E63;
+            color: #E91E63;
+        }
+
+        /* Preparação = Rosa */
+        .machine-status-card.preparacao {
+            background: rgba(233, 30, 99, 0.2);
+            border-color: #E91E63;
+            color: #E91E63;
+        }
+
         /* PMP = Rosa */
         .machine-status-card.pmp {
             background: rgba(233, 30, 99, 0.2);
@@ -4818,57 +4832,79 @@
                     const lastDowntime = activeDowntimes[activeDowntimes.length - 1];
                     const reason = (lastDowntime.reason || lastDowntime.motivo || lastDowntime.downtime_reason || '').toLowerCase();
                     
+                    // Preparação de Material = Rosa
+                    // Inclui: "AGUARDANDO PREPARAÇÃO DE MATERIAL", "AGUARDANDO ESTUFAGEM DE M.P", "FORA DE COR", "TESTE DE COR"
+                    if (reason.includes('preparação') || reason.includes('preparacao') || 
+                        reason.includes('estufagem') || reason.includes('fora de cor') || reason.includes('teste de cor')) {
+                        return 'preparacao';
+                    }
+                    
                     // Setup = Azul Claro
-                    if (reason.includes('setup') || reason.includes('troca') || reason.includes('preparação') || 
-                        reason.includes('preparacao') || reason.includes('instalação') || reason.includes('instalacao')) {
+                    // Inclui: "INSTALAÇÃO DE MOLDE", "RETIRADA DE MOLDE", "INSTALAÇÃO DE PERÍFÉRICOS"
+                    if (reason.includes('setup') || reason.includes('instalação') || reason.includes('instalacao') ||
+                        reason.includes('retirada de molde')) {
                         return 'setup';
                     }
                     
                     // Compras = Marrom
-                    if (reason.includes('compra') || reason.includes('insumo') || reason.includes('falta de material')) {
+                    // Inclui: "FALTA DE MATÉRIA PRIMA", "FALTA DE SACO PLÁSTICO", "FALTA DE CAIXA DE PAPELÃO", "FALTA DE MASTER"
+                    if (reason.includes('compra') || reason.includes('falta de mat') || reason.includes('falta de saco') ||
+                        reason.includes('falta de caixa') || reason.includes('falta de master')) {
                         return 'compras';
                     }
                     
                     // Ferramentaria = Laranja
-                    if (reason.includes('ferramentaria') || reason.includes('tooling') || reason.includes('molde') || 
-                        reason.includes('corretiva de molde') || reason.includes('preventiva de molde') || reason.includes('versão')) {
+                    // Inclui: "CORRETIVA DE MOLDE", "PREVENTIVA DE MOLDE", "TROCA DE VERSÃO"
+                    if (reason.includes('ferramentaria') || reason.includes('corretiva de molde') || 
+                        reason.includes('preventiva de molde') || reason.includes('troca de versão') || reason.includes('versão')) {
                         return 'ferramentaria';
                     }
                     
                     // Processo = Roxo
+                    // Inclui: "ABERTURA DE CAVIDADE", "AJUSTE DE PROCESSO", "FECHAMENTO DE CAVIDADE", "TRY OUT", "PRENDENDO GALHO", "PRENDENDO PEÇAS"
                     if (reason.includes('processo') || reason.includes('ajuste') || reason.includes('cavidade') || 
-                        reason.includes('try out') || reason.includes('inicio') || reason.includes('reinicio') || 
-                        reason.includes('revezamento') || reason.includes('almoço') || reason.includes('janta')) {
+                        reason.includes('try out') || reason.includes('prendendo')) {
                         return 'processo';
                     }
                     
                     // Manutenção = Amarelo
-                    if (reason.includes('manutenção') || reason.includes('manutencao') || reason.includes('maintenance') ||
-                        reason.includes('vazamento') && reason.includes('máquina')) {
+                    // Inclui: "MANUTENÇÃO CORRETIVA", "MANUTENÇÃO PREVENTIVA"
+                    if (reason.includes('manutenção') || reason.includes('manutencao') || reason.includes('maintenance')) {
                         return 'manutencao';
                     }
                     
                     // Qualidade = Vermelho
+                    // Inclui: "AGUARDANDO CLIENTE/FORNECEDOR", "LIBERAÇÃO INÍCIAL", "AGUARDANDO DISPOSIÇÃO DA QUALIDADE"
                     if (reason.includes('qualidade') || reason.includes('liberação') || reason.includes('aguardando cliente') || 
-                        reason.includes('aguardando fornecedor') || reason.includes('inspeção')) {
+                        reason.includes('aguardando fornecedor') || reason.includes('disposição')) {
                         return 'qualidade';
                     }
                     
-                    // PMP/Produção = Rosa
-                    if (reason.includes('produção') || reason.includes('operador') || reason.includes('prendendo') || 
-                        reason.includes('galho') || reason.includes('peças')) {
-                        return 'pmp';
+                    // Produção = Rosa
+                    // Inclui: "FALTA DE OPERADOR", "TROCA DE COR", "F.O REVEZAMENTO ALMOÇO", "F.O REVEZAMENTO JANTA", "INICIO/REINICIO"
+                    if (reason.includes('operador') || reason.includes('troca de cor') || 
+                        reason.includes('revezamento') || reason.includes('almoço') || reason.includes('janta') ||
+                        reason.includes('inicio') || reason.includes('reinicio')) {
+                        return 'producao';
                     }
                     
-                    // Comercial = Cinza (separado de PCP)
-                    if (reason.includes('comercial') || reason.includes('sem pedido') || reason.includes('sem op')) {
+                    // Comercial = Cinza
+                    // Inclui: "SEM PEDIDO"
+                    if (reason.includes('comercial') || reason.includes('sem pedido')) {
                         return 'comercial';
                     }
                     
                     // PCP = Preto
+                    // Inclui: "SEM PROGRAMAÇÃO", "SEM PROGRAMAÇÃO-FIM DE SEMANA", "ESTRATÉGIA PCP"
                     if (reason.includes('pcp') || reason.includes('estratégia') || reason.includes('estrategia') || 
                         reason.includes('sem programação') || reason.includes('sem programacao')) {
                         return 'pcp';
+                    }
+                    
+                    // Administrativo/Outros
+                    // Inclui: "FALTA DE ENERGIA", "VAZAMENTO DO BICO", "QUEIMA DE RESISTÊNCIA"
+                    if (reason.includes('energia') || reason.includes('vazamento') || reason.includes('queima de resist')) {
+                        return 'outros';
                     }
                     
                     // Default para paradas não mapeadas = Outros
@@ -4893,7 +4929,9 @@
                     'compras': 'Compras',
                     'processo': 'Processo',
                     'qualidade': 'Qualidade',
-                    'pmp': 'Produção',
+                    'preparacao': 'Preparação',
+                    'producao': 'Produção',
+                    'pmp': 'PMP',
                     'pcp': 'PCP',
                     'comercial': 'Comercial',
                     'setup': 'Setup',
