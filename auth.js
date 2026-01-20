@@ -284,10 +284,11 @@ class AuthSystem {
         try {
             const tvLink = document.getElementById('nav-dashboard-tv');
             
-            // Dashboard TV disponível para todos os gestores e suporte
+            // Dashboard TV disponível para gestores, suporte e lider
             const canAccessDashboardTV = 
                 this.currentUser?.role === 'gestor' || 
-                this.currentUser?.role === 'suporte';
+                this.currentUser?.role === 'suporte' ||
+                this.currentUser?.role === 'lider';
             
             if (tvLink) {
                 if (canAccessDashboardTV) {
