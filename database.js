@@ -593,6 +593,7 @@ var productDatabase = [
     { "cod": 5483, "client": "DIVERSOS", "name": "PECA 2 PRETO POLICARBONATO - P2P2024", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 5484, "client": "DIVERSOS", "name": "PECA 1 CINZA NYLON - P1N2024", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 5485, "client": "DIVERSOS", "name": "PECA 2 CINZA NYLON - P2N2024", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
+    { "cod": 5477, "client": "STECK", "name": "CONJ DISP DE SEGURANÇA BRA/ITA 10/20A - BR59 - HRB25067", "cavities": 24, "cycle": 10, "weight": 1.0, "pieces_per_hour_goal": 7344, "mp": "" },
     { "cod": 5568, "client": "DIVERSOS", "name": "TAMPA PARA TUBO EXTERNO - AST117 - BL310062", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 5718, "client": "DIVERSOS", "name": "FLANGE PARA CARRETEL PLÁSTICO REEL IN THE BOX 3000093", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 5719, "client": "DIVERSOS", "name": "SUPORTE PLÁSTICO LATERAL DO REEL IN THE BOX RGE-06 - 3400160", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
