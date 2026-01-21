@@ -16444,6 +16444,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 if (linkedPartCode) {
                     docData.order_part_code = String(linkedPartCode);
                 }
+                // ✅ CORREÇÃO: Herdar total_produzido da ordem para manter consistência com aba Ordens
+                const linkedTotalProduzido = parseOptionalNumber(linkedOrder.total_produzido);
+                if (typeof linkedTotalProduzido === 'number' && linkedTotalProduzido > 0) {
+                    docData.total_produzido = linkedTotalProduzido;
+                    console.log('[PLANNING] Herdando total_produzido da ordem:', linkedTotalProduzido);
+                }
             }
             
             // ✅ POKA-YOKE: Verificar se já existe planejamento ATIVO com mesma OP na mesma máquina e data
@@ -16598,9 +16604,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const uniqueMachines = new Set((planningItems || []).map(p => p.machine).filter(Boolean));
         kpiMachines.textContent = uniqueMachines.size.toLocaleString('pt-BR');
         
-        // Produção total acumulada
+        // Produção total do dia
         const totalProduced = (combinedData || []).reduce((sum, item) => {
-            return sum + (Number(item.total_produzido) || 0);
+            // CORREÇÃO: Usar producao_dia para KPIs da tabela de planejamento
+            return sum + (Number(item.producao_dia) || Number(item.total_produzido) || 0);
         }, 0);
         kpiProduced.textContent = totalProduced.toLocaleString('pt-BR');
         
@@ -16688,12 +16695,54 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         detachActiveListener();
         showLoadingState('leader-panel', true);
         
+        // Limpar cache de produção ao mudar de data (evita valores antigos)
+        if (typeof machineCardProductionCache !== 'undefined' && machineCardProductionCache.clear) {
+            machineCardProductionCache.clear();
+        }
+        
         let planningItems = [];
         let productionEntries = [];
         let downtimeEntries = [];
         let activeDowntimeSet = new Set();
+        
+        // Cache de total_produzido das OPs vinculadas (para consistência com aba Ordens)
+        const orderTotalCache = new Map();
 
         const render = async () => {
+            // CORREÇÃO CONSISTÊNCIA: Enriquecer plannings com total_produzido da OP vinculada
+            // Isso garante que os cards das máquinas mostrem o mesmo valor que a aba Ordens
+            for (const plan of planningItems) {
+                const orderId = plan.production_order_id || plan.production_order || plan.order_id;
+                if (orderId && !orderTotalCache.has(orderId)) {
+                    try {
+                        const orderDoc = await db.collection('production_orders').doc(orderId).get();
+                        if (orderDoc.exists) {
+                            const orderData = orderDoc.data() || {};
+                            const orderTotal = coerceToNumber(orderData.total_produzido ?? orderData.totalProduced, 0);
+                            orderTotalCache.set(orderId, orderTotal);
+                            
+                            // Se o planning tem menos que a OP, atualizar em background
+                            const planTotal = coerceToNumber(plan.total_produzido, 0);
+                            if (orderTotal > planTotal) {
+                                console.log(`[SYNC-CONSISTENCIA] Planning ${plan.id} tem total_produzido (${planTotal}) menor que OP ${orderId} (${orderTotal}). Sincronizando...`);
+                                // Atualizar cache local imediatamente
+                                plan.total_produzido = orderTotal;
+                                // Atualizar Firebase em background (não esperar)
+                                db.collection('planning').doc(plan.id).update({
+                                    total_produzido: orderTotal,
+                                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                                }).catch(e => console.warn('[SYNC-CONSISTENCIA] Falha ao sincronizar planning:', e));
+                            }
+                        } else {
+                            orderTotalCache.set(orderId, 0);
+                        }
+                    } catch (e) {
+                        console.warn('[SYNC-CONSISTENCIA] Erro ao buscar OP:', orderId, e);
+                        orderTotalCache.set(orderId, 0);
+                    }
+                }
+            }
+            
             const combinedData = planningItems.map(plan => {
                 const shifts = { T1: 0, T2: 0, T3: 0 };
 
@@ -16705,12 +16754,25 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     shifts[shiftKey] += produced;
                 });
 
+                // CORREÇÃO: Calcular produção do dia (para referência)
+                const producao_dia = shifts.T1 + shifts.T2 + shifts.T3;
+                
+                // CORREÇÃO ESTABILIDADE + CONSISTÊNCIA: Usar o MAIOR valor entre:
+                // 1. total_produzido armazenado no planning
+                // 2. total_produzido da OP vinculada (do cache)
+                // 3. produção calculada do dia
+                const storedTotal = coerceToNumber(plan.total_produzido, 0);
+                const orderId = plan.production_order_id || plan.production_order || plan.order_id;
+                const orderTotal = orderId ? (orderTotalCache.get(orderId) || 0) : 0;
+                const total_produzido_final = Math.max(storedTotal, orderTotal, producao_dia);
+
                 return {
                     ...plan,
                     T1: { produzido: shifts.T1 },
                     T2: { produzido: shifts.T2 },
                     T3: { produzido: shifts.T3 },
-                    total_produzido: shifts.T1 + shifts.T2 + shifts.T3
+                    producao_dia: producao_dia,  // Produção apenas do dia (para tabela)
+                    total_produzido: total_produzido_final  // Total acumulado da OP (maior valor)
                 };
             });
 
@@ -16742,7 +16804,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             }
             renderDebounceTimer = setTimeout(() => {
                 requestAnimationFrame(() => render().catch(e => console.error('Erro em render:', e)));
-            }, 100); // 100ms de debounce
+            }, 200); // 200ms de debounce (aumentado para evitar oscilações)
         };
 
         // Limpar listeners anteriores se existirem
@@ -16900,6 +16962,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     T1: { produzido: Number(item.T1?.produzido) || 0 },
                     T2: { produzido: Number(item.T2?.produzido) || 0 },
                     T3: { produzido: Number(item.T3?.produzido) || 0 },
+                    // CORREÇÃO: Na tabela usar produção do dia (T1+T2+T3), não total acumulado da OP
+                    producao_dia: coerceToNumber(item.producao_dia, 0) || (Number(item.T1?.produzido) || 0) + (Number(item.T2?.produzido) || 0) + (Number(item.T3?.produzido) || 0),
                     total_produzido: coerceToNumber(item.total_produzido, 0)
                 });
             } else {
@@ -16920,6 +16984,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 agg.T1.produzido += Number(item.T1?.produzido) || 0;
                 agg.T2.produzido += Number(item.T2?.produzido) || 0;
                 agg.T3.produzido += Number(item.T3?.produzido) || 0;
+                // CORREÇÃO: Somar produção do dia separadamente
+                agg.producao_dia += coerceToNumber(item.producao_dia, 0) || (Number(item.T1?.produzido) || 0) + (Number(item.T2?.produzido) || 0) + (Number(item.T3?.produzido) || 0);
                 agg.total_produzido += coerceToNumber(item.total_produzido, 0);
             }
         });
@@ -16958,7 +17024,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 <td class="px-2 py-2 whitespace-nowrap border bg-purple-50">${orDash(item.active_cavities_t3)}</td>
                 <td class="px-2 py-2 whitespace-nowrap border bg-purple-50">${orDashNum(item.T3?.produzido)}</td>
 
-                <td class="px-3 py-2 whitespace-nowrap bg-emerald-50 font-bold text-emerald-700 text-base">${orDashNum(item.total_produzido)}</td>
+                <td class="px-3 py-2 whitespace-nowrap bg-emerald-50 font-bold text-emerald-700 text-base">${orDashNum(item.producao_dia)}</td>
                 <td class="px-2 py-2 whitespace-nowrap no-print text-center">
                     <button class="delete-plan-btn bg-red-100 hover:bg-red-200 text-red-600 hover:text-red-700 p-1.5 rounded-lg transition-all" data-id="${item.id}" title="Deletar planejamento">
                         <i data-lucide="trash-2" class="w-4 h-4"></i>
@@ -21205,6 +21271,33 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const btnBuscarPlanejamento = document.getElementById('admin-btn-buscar-planejamento');
         if (btnBuscarPlanejamento) btnBuscarPlanejamento.addEventListener('click', adminBuscarPlanejamento);
         
+        // ===== Aba Ajustes em Lote - setup =====
+        const dataAjuste = document.getElementById('admin-ajuste-data');
+        if (dataAjuste) dataAjuste.value = getProductionDateString();
+        
+        // Popular select de máquinas (Ajustes)
+        const selectMaquinaAjuste = document.getElementById('admin-ajuste-maquina');
+        if (selectMaquinaAjuste && window.databaseModule?.machineDatabase) {
+            let options = '<option value="">Todas</option>';
+            window.databaseModule.machineDatabase.forEach(m => {
+                const id = normalizeMachineId(m.id);
+                options += `<option value="${id}">${id}</option>`;
+            });
+            selectMaquinaAjuste.innerHTML = options;
+        }
+        
+        const btnCarregarAjustes = document.getElementById('admin-btn-carregar-ajustes');
+        if (btnCarregarAjustes) btnCarregarAjustes.addEventListener('click', adminCarregarAjustesLote);
+        
+        const btnSalvarAjustes = document.getElementById('admin-btn-salvar-ajustes');
+        if (btnSalvarAjustes) btnSalvarAjustes.addEventListener('click', adminSalvarAjustesLote);
+        
+        const btnDescartarAjustes = document.getElementById('admin-btn-descartar-ajustes');
+        if (btnDescartarAjustes) btnDescartarAjustes.addEventListener('click', adminDescartarAjustes);
+        
+        const btnSyncTotais = document.getElementById('admin-btn-sync-totais');
+        if (btnSyncTotais) btnSyncTotais.addEventListener('click', adminSincronizarTotais);
+        
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
     
@@ -22088,6 +22181,799 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             
         } catch (error) {
             alert('Erro ao carregar planejamento: ' + error.message);
+        }
+    }
+
+    // ===== AJUSTES EM LOTE - FUNÇÕES =====
+    let ajustesLoteData = [];
+    let ajustesLotePendentes = new Map(); // Armazena alterações pendentes
+    
+    async function adminCarregarAjustesLote() {
+        const data = document.getElementById('admin-ajuste-data')?.value;
+        const maquina = document.getElementById('admin-ajuste-maquina')?.value;
+        const tipo = document.getElementById('admin-ajuste-tipo')?.value || 'resumo';
+        const tbody = document.getElementById('admin-ajustes-body');
+        const thead = document.getElementById('admin-ajustes-header');
+        
+        if (!data) {
+            alert('Selecione uma data');
+            return;
+        }
+        
+        // Limpar alterações pendentes
+        ajustesLotePendentes.clear();
+        atualizarContadorAjustes();
+        
+        try {
+            tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500"><i class="animate-spin inline-block">⏳</i> Carregando dados...</td></tr>';
+            
+            if (tipo === 'resumo') {
+                await carregarResumoMaquinas(data, maquina, tbody, thead);
+            } else if (tipo === 'lancamentos') {
+                await carregarLancamentosIndividuais(data, maquina, tbody, thead);
+            } else if (tipo === 'ordens') {
+                await carregarOrdensDia(data, maquina, tbody, thead);
+            }
+            
+            lucide.createIcons();
+            
+        } catch (error) {
+            console.error('[ADMIN] Erro ao carregar ajustes:', error);
+            tbody.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-red-500">Erro: ${error.message}</td></tr>`;
+        }
+    }
+    
+    async function carregarResumoMaquinas(data, maquinaFiltro, tbody, thead) {
+        // Ajustar cabeçalho para visão resumo
+        thead.innerHTML = `
+            <th class="px-3 py-2 text-left font-semibold text-gray-700 border-b">Máquina</th>
+            <th class="px-3 py-2 text-left font-semibold text-gray-700 border-b">Produto/OP</th>
+            <th class="px-3 py-2 text-right font-semibold text-blue-700 border-b bg-blue-50">Planejado (Lote)</th>
+            <th class="px-3 py-2 text-right font-semibold text-green-700 border-b bg-green-50">Executado Total</th>
+            <th class="px-3 py-2 text-right font-semibold text-cyan-700 border-b bg-cyan-50">Produção Dia</th>
+            <th class="px-3 py-2 text-right font-semibold text-amber-700 border-b bg-amber-50">Faltante</th>
+            <th class="px-3 py-2 text-center font-semibold text-gray-700 border-b">Progresso</th>
+            <th class="px-3 py-2 text-center font-semibold text-gray-500 border-b w-20">Ações</th>
+        `;
+        
+        // Buscar planejamentos do dia
+        let queryPlanning = db.collection('planning').where('date', '==', data);
+        if (maquinaFiltro) {
+            queryPlanning = queryPlanning.where('machine', '==', maquinaFiltro);
+        }
+        const planningSnap = await queryPlanning.get();
+        
+        if (planningSnap.empty) {
+            tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">Nenhum planejamento encontrado para esta data.</td></tr>';
+            return;
+        }
+        
+        // Buscar production_entries do dia para calcular produção do dia
+        let queryProd = db.collection('production_entries').where('data', '==', data);
+        const prodSnap = await queryProd.get();
+        
+        // Mapear produção por planId
+        const producaoPorPlan = new Map();
+        prodSnap.docs.forEach(doc => {
+            const d = doc.data();
+            const planId = d.planId;
+            if (planId) {
+                const atual = producaoPorPlan.get(planId) || 0;
+                producaoPorPlan.set(planId, atual + (Number(d.produzido) || Number(d.quantity) || 0));
+            }
+        });
+        
+        let html = '';
+        const items = [];
+        
+        planningSnap.docs.forEach(doc => {
+            const d = doc.data();
+            const planId = doc.id;
+            const planejado = Number(d.order_lot_size) || Number(d.lot_size) || 0;
+            const executadoTotal = Number(d.total_produzido) || 0;
+            const producaoDia = producaoPorPlan.get(planId) || 0;
+            const faltante = Math.max(0, planejado - executadoTotal);
+            const progresso = planejado > 0 ? Math.min(100, (executadoTotal / planejado) * 100) : 0;
+            const progressoClass = progresso >= 100 ? 'text-green-600' : progresso >= 50 ? 'text-amber-600' : 'text-red-600';
+            
+            items.push({
+                planId,
+                orderId: d.order_id || d.orderId,
+                machine: d.machine,
+                product: d.product || d.product_name,
+                orderNumber: d.order_number,
+                planejado,
+                executadoTotal,
+                producaoDia,
+                faltante,
+                progresso
+            });
+            
+            html += `
+                <tr class="hover:bg-gray-50 transition" data-plan-id="${planId}" data-order-id="${d.order_id || d.orderId || ''}">
+                    <td class="px-3 py-2 font-semibold text-indigo-700">${d.machine || '-'}</td>
+                    <td class="px-3 py-2">
+                        <div class="text-sm font-medium text-gray-800 truncate max-w-[200px]" title="${d.product || ''}">${d.product || d.product_name || '-'}</div>
+                        <div class="text-xs text-gray-500">OP: ${d.order_number || '-'}</div>
+                    </td>
+                    <td class="px-3 py-2 text-right bg-blue-50">
+                        <input type="number" class="ajuste-input-planejado w-24 text-right p-1 border border-transparent rounded hover:border-blue-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-transparent font-semibold text-blue-700" 
+                            value="${planejado}" data-original="${planejado}" data-field="planejado" data-plan-id="${planId}">
+                    </td>
+                    <td class="px-3 py-2 text-right bg-green-50">
+                        <input type="number" class="ajuste-input-executado w-24 text-right p-1 border border-transparent rounded hover:border-green-300 focus:border-green-500 focus:ring-1 focus:ring-green-500 bg-transparent font-semibold text-green-700" 
+                            value="${executadoTotal}" data-original="${executadoTotal}" data-field="executado" data-plan-id="${planId}">
+                    </td>
+                    <td class="px-3 py-2 text-right bg-cyan-50 text-cyan-700 font-medium">${producaoDia.toLocaleString('pt-BR')}</td>
+                    <td class="px-3 py-2 text-right bg-amber-50 font-semibold text-amber-700" data-faltante="${planId}">${faltante.toLocaleString('pt-BR')}</td>
+                    <td class="px-3 py-2 text-center">
+                        <div class="flex items-center gap-2">
+                            <div class="flex-1 bg-gray-200 rounded-full h-2">
+                                <div class="h-2 rounded-full ${progresso >= 100 ? 'bg-green-500' : progresso >= 50 ? 'bg-amber-500' : 'bg-red-500'}" style="width: ${Math.min(100, progresso)}%"></div>
+                            </div>
+                            <span class="text-xs font-semibold ${progressoClass} w-12 text-right">${progresso.toFixed(1)}%</span>
+                        </div>
+                    </td>
+                    <td class="px-3 py-2 text-center">
+                        <button class="ajuste-btn-detalhe text-gray-500 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50 transition" data-plan-id="${planId}" title="Ver detalhes">
+                            <i data-lucide="eye" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        tbody.innerHTML = html || '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">Nenhum dado encontrado.</td></tr>';
+        ajustesLoteData = items;
+        
+        // Adicionar listeners aos inputs editáveis
+        tbody.querySelectorAll('.ajuste-input-planejado, .ajuste-input-executado').forEach(input => {
+            input.addEventListener('change', handleAjusteInputChange);
+            input.addEventListener('focus', (e) => e.target.select());
+        });
+        
+        // Listeners para detalhes
+        tbody.querySelectorAll('.ajuste-btn-detalhe').forEach(btn => {
+            btn.addEventListener('click', () => mostrarDetalhePlano(btn.dataset.planId));
+        });
+    }
+    
+    async function carregarLancamentosIndividuais(data, maquinaFiltro, tbody, thead) {
+        // Ajustar cabeçalho para visão de lançamentos
+        thead.innerHTML = `
+            <th class="px-2 py-2 text-left font-semibold text-gray-700 border-b w-8"><input type="checkbox" id="ajuste-select-all" class="rounded"></th>
+            <th class="px-3 py-2 text-left font-semibold text-gray-700 border-b">Máquina</th>
+            <th class="px-3 py-2 text-left font-semibold text-gray-700 border-b">Produto</th>
+            <th class="px-3 py-2 text-center font-semibold text-gray-700 border-b">Turno</th>
+            <th class="px-3 py-2 text-center font-semibold text-gray-700 border-b">Hora</th>
+            <th class="px-3 py-2 text-right font-semibold text-green-700 border-b bg-green-50">Quantidade</th>
+            <th class="px-3 py-2 text-right font-semibold text-amber-700 border-b bg-amber-50">Peso (kg)</th>
+            <th class="px-3 py-2 text-center font-semibold text-gray-500 border-b w-20">Ações</th>
+        `;
+        
+        // Buscar lançamentos do dia
+        let query = db.collection('production_entries').where('data', '==', data);
+        const snapshot = await query.limit(200).get();
+        
+        let docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        // Filtrar por máquina se especificado
+        if (maquinaFiltro) {
+            docs = docs.filter(d => d.machine === maquinaFiltro || d.machine_id === maquinaFiltro);
+        }
+        
+        // Ordenar por máquina e timestamp
+        docs.sort((a, b) => {
+            const machineCompare = (a.machine || '').localeCompare(b.machine || '');
+            if (machineCompare !== 0) return machineCompare;
+            const tsA = a.timestamp?.toMillis ? a.timestamp.toMillis() : 0;
+            const tsB = b.timestamp?.toMillis ? b.timestamp.toMillis() : 0;
+            return tsB - tsA;
+        });
+        
+        if (docs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">Nenhum lançamento encontrado para esta data.</td></tr>';
+            return;
+        }
+        
+        let html = '';
+        
+        docs.forEach(d => {
+            const hora = d.timestamp?.toDate ? d.timestamp.toDate().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : d.horaInformada || '-';
+            const qtd = Number(d.produzido) || Number(d.quantity) || 0;
+            const peso = Number(d.peso_bruto) || Number(d.peso_kg) || 0;
+            const turno = d.turno || d.shift || '-';
+            
+            html += `
+                <tr class="hover:bg-gray-50 transition" data-entry-id="${d.id}">
+                    <td class="px-2 py-2 text-center"><input type="checkbox" class="ajuste-checkbox rounded" data-id="${d.id}"></td>
+                    <td class="px-3 py-2 font-semibold text-indigo-700">${d.machine || d.machine_id || '-'}</td>
+                    <td class="px-3 py-2 text-sm text-gray-700 truncate max-w-[180px]" title="${d.product_name || d.product_code || ''}">${d.product_name || d.product_code || '-'}</td>
+                    <td class="px-3 py-2 text-center"><span class="px-2 py-0.5 rounded text-xs font-semibold ${turno === 'T1' || turno == '1' ? 'bg-blue-100 text-blue-700' : turno === 'T2' || turno == '2' ? 'bg-amber-100 text-amber-700' : 'bg-purple-100 text-purple-700'}">${turno}</span></td>
+                    <td class="px-3 py-2 text-center text-gray-600 text-sm">${hora}</td>
+                    <td class="px-3 py-2 text-right bg-green-50">
+                        <input type="number" class="ajuste-input-qty w-20 text-right p-1 border border-transparent rounded hover:border-green-300 focus:border-green-500 focus:ring-1 focus:ring-green-500 bg-transparent font-semibold text-green-700" 
+                            value="${qtd}" data-original="${qtd}" data-field="produzido" data-entry-id="${d.id}">
+                    </td>
+                    <td class="px-3 py-2 text-right bg-amber-50">
+                        <input type="number" step="0.01" class="ajuste-input-peso w-20 text-right p-1 border border-transparent rounded hover:border-amber-300 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-transparent font-semibold text-amber-700" 
+                            value="${peso.toFixed(2)}" data-original="${peso.toFixed(2)}" data-field="peso" data-entry-id="${d.id}">
+                    </td>
+                    <td class="px-3 py-2 text-center">
+                        <button class="ajuste-btn-delete-entry text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition" data-entry-id="${d.id}" title="Excluir">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        tbody.innerHTML = html;
+        ajustesLoteData = docs;
+        
+        // Listeners
+        tbody.querySelectorAll('.ajuste-input-qty, .ajuste-input-peso').forEach(input => {
+            input.addEventListener('change', handleAjusteEntryChange);
+            input.addEventListener('focus', (e) => e.target.select());
+        });
+        
+        // Select all checkbox
+        const selectAll = document.getElementById('ajuste-select-all');
+        if (selectAll) {
+            selectAll.addEventListener('change', (e) => {
+                tbody.querySelectorAll('.ajuste-checkbox').forEach(cb => cb.checked = e.target.checked);
+            });
+        }
+        
+        // Delete buttons
+        tbody.querySelectorAll('.ajuste-btn-delete-entry').forEach(btn => {
+            btn.addEventListener('click', () => excluirLancamento(btn.dataset.entryId));
+        });
+    }
+    
+    async function carregarOrdensDia(data, maquinaFiltro, tbody, thead) {
+        // Ajustar cabeçalho para visão de ordens
+        thead.innerHTML = `
+            <th class="px-3 py-2 text-left font-semibold text-gray-700 border-b">Nº OP</th>
+            <th class="px-3 py-2 text-left font-semibold text-gray-700 border-b">Produto</th>
+            <th class="px-3 py-2 text-left font-semibold text-gray-700 border-b">Máquina</th>
+            <th class="px-3 py-2 text-center font-semibold text-gray-700 border-b">Status</th>
+            <th class="px-3 py-2 text-right font-semibold text-blue-700 border-b bg-blue-50">Lote (Plan.)</th>
+            <th class="px-3 py-2 text-right font-semibold text-green-700 border-b bg-green-50">Executado</th>
+            <th class="px-3 py-2 text-center font-semibold text-gray-700 border-b">Progresso</th>
+            <th class="px-3 py-2 text-center font-semibold text-gray-500 border-b w-20">Ações</th>
+        `;
+        
+        // Buscar ordens ativas ou do dia
+        let query = db.collection('production_orders')
+            .where('status', 'in', ['ativa', 'em_andamento', 'planejada']);
+        
+        const snapshot = await query.limit(100).get();
+        
+        let docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        // Filtrar por máquina se especificado
+        if (maquinaFiltro) {
+            docs = docs.filter(d => d.machine_id === maquinaFiltro);
+        }
+        
+        // Ordenar por número da OP
+        docs.sort((a, b) => (a.order_number || '').localeCompare(b.order_number || ''));
+        
+        if (docs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">Nenhuma ordem de produção ativa encontrada.</td></tr>';
+            return;
+        }
+        
+        let html = '';
+        
+        docs.forEach(d => {
+            const lotSize = Number(d.lot_size) || 0;
+            const executado = Number(d.total_produzido) || Number(d.totalProduced) || 0;
+            const progresso = lotSize > 0 ? Math.min(100, (executado / lotSize) * 100) : 0;
+            const statusClass = d.status === 'ativa' || d.status === 'em_andamento' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600';
+            const progressoClass = progresso >= 100 ? 'text-green-600' : progresso >= 50 ? 'text-amber-600' : 'text-red-600';
+            
+            html += `
+                <tr class="hover:bg-gray-50 transition" data-order-id="${d.id}">
+                    <td class="px-3 py-2 font-bold text-indigo-700">${d.order_number || '-'}</td>
+                    <td class="px-3 py-2 text-sm text-gray-700 truncate max-w-[180px]" title="${d.product || ''}">${d.product || '-'}</td>
+                    <td class="px-3 py-2 font-medium">${d.machine_id || '-'}</td>
+                    <td class="px-3 py-2 text-center"><span class="px-2 py-0.5 rounded text-xs font-semibold ${statusClass}">${d.status || '-'}</span></td>
+                    <td class="px-3 py-2 text-right bg-blue-50">
+                        <input type="number" class="ajuste-input-lote w-24 text-right p-1 border border-transparent rounded hover:border-blue-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-transparent font-semibold text-blue-700" 
+                            value="${lotSize}" data-original="${lotSize}" data-field="lot_size" data-order-id="${d.id}">
+                    </td>
+                    <td class="px-3 py-2 text-right bg-green-50">
+                        <input type="number" class="ajuste-input-exec w-24 text-right p-1 border border-transparent rounded hover:border-green-300 focus:border-green-500 focus:ring-1 focus:ring-green-500 bg-transparent font-semibold text-green-700" 
+                            value="${executado}" data-original="${executado}" data-field="total_produzido" data-order-id="${d.id}">
+                    </td>
+                    <td class="px-3 py-2 text-center">
+                        <div class="flex items-center gap-2">
+                            <div class="flex-1 bg-gray-200 rounded-full h-2">
+                                <div class="h-2 rounded-full ${progresso >= 100 ? 'bg-green-500' : progresso >= 50 ? 'bg-amber-500' : 'bg-red-500'}" style="width: ${Math.min(100, progresso)}%"></div>
+                            </div>
+                            <span class="text-xs font-semibold ${progressoClass} w-12 text-right">${progresso.toFixed(1)}%</span>
+                        </div>
+                    </td>
+                    <td class="px-3 py-2 text-center">
+                        <button class="ajuste-btn-sync-ordem text-amber-500 hover:text-amber-700 p-1 rounded hover:bg-amber-50 transition" data-order-id="${d.id}" title="Recalcular total">
+                            <i data-lucide="calculator" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        tbody.innerHTML = html;
+        ajustesLoteData = docs;
+        
+        // Listeners
+        tbody.querySelectorAll('.ajuste-input-lote, .ajuste-input-exec').forEach(input => {
+            input.addEventListener('change', handleAjusteOrdemChange);
+            input.addEventListener('focus', (e) => e.target.select());
+        });
+        
+        // Sync buttons
+        tbody.querySelectorAll('.ajuste-btn-sync-ordem').forEach(btn => {
+            btn.addEventListener('click', () => recalcularTotalOrdem(btn.dataset.orderId));
+        });
+    }
+    
+    function handleAjusteInputChange(e) {
+        const input = e.target;
+        const planId = input.dataset.planId;
+        const field = input.dataset.field;
+        const original = Number(input.dataset.original);
+        const newValue = Number(input.value);
+        
+        if (newValue !== original) {
+            input.classList.add('bg-yellow-100', 'border-yellow-400');
+            
+            // Adicionar ao Map de pendentes
+            if (!ajustesLotePendentes.has(planId)) {
+                ajustesLotePendentes.set(planId, { type: 'planning', changes: {} });
+            }
+            ajustesLotePendentes.get(planId).changes[field] = newValue;
+            
+            // Atualizar faltante em tempo real
+            const row = input.closest('tr');
+            if (row) {
+                const planejadoInput = row.querySelector('.ajuste-input-planejado');
+                const executadoInput = row.querySelector('.ajuste-input-executado');
+                const faltanteCell = row.querySelector(`[data-faltante="${planId}"]`);
+                
+                if (planejadoInput && executadoInput && faltanteCell) {
+                    const planejado = Number(planejadoInput.value) || 0;
+                    const executado = Number(executadoInput.value) || 0;
+                    const novoFaltante = Math.max(0, planejado - executado);
+                    faltanteCell.textContent = novoFaltante.toLocaleString('pt-BR');
+                }
+            }
+        } else {
+            input.classList.remove('bg-yellow-100', 'border-yellow-400');
+            
+            // Remover do Map se voltar ao original
+            if (ajustesLotePendentes.has(planId)) {
+                delete ajustesLotePendentes.get(planId).changes[field];
+                if (Object.keys(ajustesLotePendentes.get(planId).changes).length === 0) {
+                    ajustesLotePendentes.delete(planId);
+                }
+            }
+        }
+        
+        atualizarContadorAjustes();
+    }
+    
+    function handleAjusteEntryChange(e) {
+        const input = e.target;
+        const entryId = input.dataset.entryId;
+        const field = input.dataset.field;
+        const original = field === 'peso' ? parseFloat(input.dataset.original) : Number(input.dataset.original);
+        const newValue = field === 'peso' ? parseFloat(input.value) : Number(input.value);
+        
+        if (newValue !== original) {
+            input.classList.add('bg-yellow-100', 'border-yellow-400');
+            
+            if (!ajustesLotePendentes.has(entryId)) {
+                ajustesLotePendentes.set(entryId, { type: 'entry', changes: {} });
+            }
+            ajustesLotePendentes.get(entryId).changes[field] = newValue;
+        } else {
+            input.classList.remove('bg-yellow-100', 'border-yellow-400');
+            
+            if (ajustesLotePendentes.has(entryId)) {
+                delete ajustesLotePendentes.get(entryId).changes[field];
+                if (Object.keys(ajustesLotePendentes.get(entryId).changes).length === 0) {
+                    ajustesLotePendentes.delete(entryId);
+                }
+            }
+        }
+        
+        atualizarContadorAjustes();
+    }
+    
+    function handleAjusteOrdemChange(e) {
+        const input = e.target;
+        const orderId = input.dataset.orderId;
+        const field = input.dataset.field;
+        const original = Number(input.dataset.original);
+        const newValue = Number(input.value);
+        
+        if (newValue !== original) {
+            input.classList.add('bg-yellow-100', 'border-yellow-400');
+            
+            if (!ajustesLotePendentes.has(orderId)) {
+                ajustesLotePendentes.set(orderId, { type: 'order', changes: {} });
+            }
+            ajustesLotePendentes.get(orderId).changes[field] = newValue;
+        } else {
+            input.classList.remove('bg-yellow-100', 'border-yellow-400');
+            
+            if (ajustesLotePendentes.has(orderId)) {
+                delete ajustesLotePendentes.get(orderId).changes[field];
+                if (Object.keys(ajustesLotePendentes.get(orderId).changes).length === 0) {
+                    ajustesLotePendentes.delete(orderId);
+                }
+            }
+        }
+        
+        atualizarContadorAjustes();
+    }
+    
+    function atualizarContadorAjustes() {
+        const count = ajustesLotePendentes.size;
+        const countEl = document.getElementById('admin-ajustes-count');
+        const btnSalvar = document.getElementById('admin-btn-salvar-ajustes');
+        const btnDescartar = document.getElementById('admin-btn-descartar-ajustes');
+        
+        if (countEl) {
+            countEl.textContent = count;
+            countEl.classList.toggle('hidden', count === 0);
+        }
+        
+        if (btnSalvar) btnSalvar.disabled = count === 0;
+        if (btnDescartar) btnDescartar.disabled = count === 0;
+    }
+    
+    async function adminSalvarAjustesLote() {
+        if (ajustesLotePendentes.size === 0) {
+            showNotification('Nenhuma alteração pendente', 'info');
+            return;
+        }
+        
+        if (!confirm(`Salvar ${ajustesLotePendentes.size} alteração(ões)?`)) return;
+        
+        const btnSalvar = document.getElementById('admin-btn-salvar-ajustes');
+        if (btnSalvar) {
+            btnSalvar.disabled = true;
+            btnSalvar.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Salvando...';
+        }
+        
+        let successCount = 0;
+        let errorCount = 0;
+        const user = getActiveUser();
+        
+        try {
+            for (const [docId, data] of ajustesLotePendentes) {
+                try {
+                    let collection = '';
+                    let updateData = {
+                        ...data.changes,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        editedBy: user?.name || 'Admin',
+                        editedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    };
+                    
+                    if (data.type === 'planning') {
+                        collection = 'planning';
+                        // Se alterou executado, também atualizar total_produzido
+                        if (data.changes.executado !== undefined) {
+                            updateData.total_produzido = data.changes.executado;
+                        }
+                        // Se alterou planejado, também atualizar lot_size e order_lot_size
+                        if (data.changes.planejado !== undefined) {
+                            updateData.lot_size = data.changes.planejado;
+                            updateData.order_lot_size = data.changes.planejado;
+                        }
+                    } else if (data.type === 'entry') {
+                        collection = 'production_entries';
+                        // Mapear campos
+                        if (data.changes.produzido !== undefined) {
+                            updateData.produzido = data.changes.produzido;
+                            updateData.quantity = data.changes.produzido;
+                        }
+                        if (data.changes.peso !== undefined) {
+                            updateData.peso_bruto = data.changes.peso;
+                            updateData.peso_kg = data.changes.peso;
+                        }
+                    } else if (data.type === 'order') {
+                        collection = 'production_orders';
+                        // Mapear campos
+                        if (data.changes.total_produzido !== undefined) {
+                            updateData.total_produzido = data.changes.total_produzido;
+                            updateData.totalProduced = data.changes.total_produzido;
+                        }
+                    }
+                    
+                    await db.collection(collection).doc(docId).update(updateData);
+                    
+                    // Marcar visualmente como salvo
+                    const inputs = document.querySelectorAll(`[data-plan-id="${docId}"], [data-entry-id="${docId}"], [data-order-id="${docId}"]`);
+                    inputs.forEach(input => {
+                        if (input.tagName === 'INPUT') {
+                            input.classList.remove('bg-yellow-100', 'border-yellow-400');
+                            input.classList.add('bg-green-100', 'border-green-400');
+                            input.dataset.original = input.value;
+                            setTimeout(() => {
+                                input.classList.remove('bg-green-100', 'border-green-400');
+                            }, 2000);
+                        }
+                    });
+                    
+                    successCount++;
+                } catch (err) {
+                    console.error(`Erro ao salvar ${docId}:`, err);
+                    errorCount++;
+                    
+                    // Marcar visualmente como erro
+                    const inputs = document.querySelectorAll(`[data-plan-id="${docId}"], [data-entry-id="${docId}"], [data-order-id="${docId}"]`);
+                    inputs.forEach(input => {
+                        if (input.tagName === 'INPUT') {
+                            input.classList.add('bg-red-100', 'border-red-400');
+                        }
+                    });
+                }
+            }
+            
+            // Limpar pendentes salvos com sucesso
+            ajustesLotePendentes.clear();
+            atualizarContadorAjustes();
+            
+            if (errorCount === 0) {
+                showNotification(`${successCount} alteração(ões) salva(s) com sucesso!`, 'success');
+            } else {
+                showNotification(`${successCount} salva(s), ${errorCount} erro(s)`, 'warning');
+            }
+            
+        } catch (error) {
+            console.error('[ADMIN] Erro ao salvar ajustes:', error);
+            showNotification('Erro ao salvar: ' + error.message, 'error');
+        } finally {
+            if (btnSalvar) {
+                btnSalvar.disabled = false;
+                btnSalvar.innerHTML = '<i data-lucide="save" class="w-4 h-4"></i> Salvar Alterações <span id="admin-ajustes-count" class="bg-green-800 px-2 py-0.5 rounded text-xs hidden">0</span>';
+                lucide.createIcons();
+            }
+        }
+    }
+    
+    function adminDescartarAjustes() {
+        if (ajustesLotePendentes.size === 0) return;
+        
+        if (!confirm('Descartar todas as alterações não salvas?')) return;
+        
+        // Restaurar valores originais
+        ajustesLotePendentes.forEach((data, docId) => {
+            const inputs = document.querySelectorAll(`[data-plan-id="${docId}"], [data-entry-id="${docId}"], [data-order-id="${docId}"]`);
+            inputs.forEach(input => {
+                if (input.tagName === 'INPUT') {
+                    input.value = input.dataset.original;
+                    input.classList.remove('bg-yellow-100', 'border-yellow-400');
+                }
+            });
+        });
+        
+        ajustesLotePendentes.clear();
+        atualizarContadorAjustes();
+        showNotification('Alterações descartadas', 'info');
+    }
+    
+    async function adminSincronizarTotais() {
+        const data = document.getElementById('admin-ajuste-data')?.value;
+        
+        if (!data) {
+            alert('Selecione uma data primeiro');
+            return;
+        }
+        
+        if (!confirm('Isso irá recalcular os totais de todas as ordens com base nos lançamentos.\n\nContinuar?')) return;
+        
+        const btnSync = document.getElementById('admin-btn-sync-totais');
+        if (btnSync) {
+            btnSync.disabled = true;
+            btnSync.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Sincronizando...';
+        }
+        
+        try {
+            // Buscar todos os lançamentos
+            const prodSnap = await db.collection('production_entries').where('data', '==', data).get();
+            
+            // Agregar por orderId
+            const totaisPorOrdem = new Map();
+            prodSnap.docs.forEach(doc => {
+                const d = doc.data();
+                const orderId = d.orderId || d.order_id;
+                if (orderId) {
+                    const atual = totaisPorOrdem.get(orderId) || 0;
+                    totaisPorOrdem.set(orderId, atual + (Number(d.produzido) || Number(d.quantity) || 0));
+                }
+            });
+            
+            // Atualizar cada ordem
+            let updated = 0;
+            for (const [orderId, total] of totaisPorOrdem) {
+                try {
+                    await db.collection('production_orders').doc(orderId).update({
+                        total_produzido: total,
+                        totalProduced: total,
+                        syncedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    updated++;
+                } catch (e) {
+                    console.warn(`Erro ao atualizar ordem ${orderId}:`, e);
+                }
+            }
+            
+            showNotification(`${updated} ordem(ns) sincronizada(s)`, 'success');
+            
+            // Recarregar dados
+            adminCarregarAjustesLote();
+            
+        } catch (error) {
+            console.error('[ADMIN] Erro ao sincronizar:', error);
+            showNotification('Erro: ' + error.message, 'error');
+        } finally {
+            if (btnSync) {
+                btnSync.disabled = false;
+                btnSync.innerHTML = '<i data-lucide="calculator" class="w-4 h-4"></i> Sincronizar Totais';
+                lucide.createIcons();
+            }
+        }
+    }
+    
+    async function excluirLancamento(entryId) {
+        if (!confirm('Excluir este lançamento? Esta ação não pode ser desfeita.')) return;
+        
+        try {
+            await db.collection('production_entries').doc(entryId).delete();
+            
+            // Remover da tabela
+            const row = document.querySelector(`tr[data-entry-id="${entryId}"]`);
+            if (row) row.remove();
+            
+            showNotification('Lançamento excluído', 'success');
+        } catch (error) {
+            showNotification('Erro ao excluir: ' + error.message, 'error');
+        }
+    }
+    
+    async function recalcularTotalOrdem(orderId) {
+        try {
+            // Buscar todos os lançamentos desta ordem
+            const prodSnap = await db.collection('production_entries')
+                .where('orderId', '==', orderId)
+                .get();
+            
+            let total = 0;
+            prodSnap.docs.forEach(doc => {
+                const d = doc.data();
+                total += Number(d.produzido) || Number(d.quantity) || 0;
+            });
+            
+            // Atualizar ordem
+            await db.collection('production_orders').doc(orderId).update({
+                total_produzido: total,
+                totalProduced: total,
+                syncedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            // Atualizar input na tabela
+            const input = document.querySelector(`input[data-order-id="${orderId}"][data-field="total_produzido"]`);
+            if (input) {
+                input.value = total;
+                input.dataset.original = total;
+                input.classList.add('bg-green-100');
+                setTimeout(() => input.classList.remove('bg-green-100'), 2000);
+            }
+            
+            showNotification(`Total recalculado: ${total.toLocaleString('pt-BR')} peças`, 'success');
+        } catch (error) {
+            showNotification('Erro: ' + error.message, 'error');
+        }
+    }
+    
+    async function mostrarDetalhePlano(planId) {
+        try {
+            const planDoc = await db.collection('planning').doc(planId).get();
+            if (!planDoc.exists) {
+                alert('Planejamento não encontrado');
+                return;
+            }
+            
+            const plan = planDoc.data();
+            
+            // Buscar lançamentos deste plano
+            const prodSnap = await db.collection('production_entries')
+                .where('planId', '==', planId)
+                .get();
+            
+            let lancamentos = prodSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            lancamentos.sort((a, b) => {
+                const tsA = a.timestamp?.toMillis ? a.timestamp.toMillis() : 0;
+                const tsB = b.timestamp?.toMillis ? b.timestamp.toMillis() : 0;
+                return tsB - tsA;
+            });
+            
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4';
+            modal.innerHTML = `
+                <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+                    <div class="bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-4 flex items-center justify-between">
+                        <div>
+                            <h3 class="text-lg font-bold text-white">${plan.machine || '-'} - Detalhes</h3>
+                            <p class="text-indigo-200 text-sm">${plan.product || '-'} | OP: ${plan.order_number || '-'}</p>
+                        </div>
+                        <button class="modal-close text-white/80 hover:text-white p-1">
+                            <i data-lucide="x" class="w-6 h-6"></i>
+                        </button>
+                    </div>
+                    <div class="p-5 overflow-y-auto flex-1">
+                        <div class="grid grid-cols-3 gap-3 mb-4">
+                            <div class="bg-blue-50 rounded-lg p-3 text-center">
+                                <div class="text-2xl font-bold text-blue-700">${(Number(plan.order_lot_size) || Number(plan.lot_size) || 0).toLocaleString('pt-BR')}</div>
+                                <div class="text-xs text-blue-600">Planejado (Lote)</div>
+                            </div>
+                            <div class="bg-green-50 rounded-lg p-3 text-center">
+                                <div class="text-2xl font-bold text-green-700">${(Number(plan.total_produzido) || 0).toLocaleString('pt-BR')}</div>
+                                <div class="text-xs text-green-600">Executado Total</div>
+                            </div>
+                            <div class="bg-amber-50 rounded-lg p-3 text-center">
+                                <div class="text-2xl font-bold text-amber-700">${Math.max(0, (Number(plan.order_lot_size) || Number(plan.lot_size) || 0) - (Number(plan.total_produzido) || 0)).toLocaleString('pt-BR')}</div>
+                                <div class="text-xs text-amber-600">Faltante</div>
+                            </div>
+                        </div>
+                        
+                        <h4 class="font-semibold text-gray-700 mb-2">Lançamentos (${lancamentos.length})</h4>
+                        <div class="border rounded-lg overflow-hidden max-h-64 overflow-y-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-gray-100 sticky top-0">
+                                    <tr>
+                                        <th class="px-3 py-2 text-left text-gray-600">Data/Hora</th>
+                                        <th class="px-3 py-2 text-center text-gray-600">Turno</th>
+                                        <th class="px-3 py-2 text-right text-gray-600">Quantidade</th>
+                                        <th class="px-3 py-2 text-left text-gray-600">Operador</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y">
+                                    ${lancamentos.length > 0 ? lancamentos.map(l => `
+                                        <tr class="hover:bg-gray-50">
+                                            <td class="px-3 py-2 text-gray-700">${l.data || '-'} ${l.timestamp?.toDate ? l.timestamp.toDate().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''}</td>
+                                            <td class="px-3 py-2 text-center"><span class="px-2 py-0.5 rounded text-xs font-semibold bg-gray-100">${l.turno || l.shift || '-'}</span></td>
+                                            <td class="px-3 py-2 text-right font-semibold text-green-700">${(Number(l.produzido) || Number(l.quantity) || 0).toLocaleString('pt-BR')}</td>
+                                            <td class="px-3 py-2 text-gray-600">${l.registradoPorNome || l.operador || '-'}</td>
+                                        </tr>
+                                    `).join('') : '<tr><td colspan="4" class="px-4 py-8 text-center text-gray-400">Nenhum lançamento encontrado</td></tr>'}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="border-t px-5 py-3 bg-gray-50 flex justify-end">
+                        <button class="modal-close bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-medium transition">Fechar</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            lucide.createIcons();
+            
+            modal.querySelectorAll('.modal-close').forEach(btn => {
+                btn.addEventListener('click', () => modal.remove());
+            });
+            modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+            
+        } catch (error) {
+            alert('Erro ao carregar detalhes: ' + error.message);
         }
     }
 
@@ -27411,6 +28297,9 @@ function sendDowntimeNotification() {
         });
     }
 
+    // Cache para evitar que valores de produção diminuam entre renders (anti-oscilação)
+    const machineCardProductionCache = new Map();
+    
     function renderMachineCards(plans = [], productionEntries = [], downtimeEntries = [], activeDowntimeMachines = new Set(), machinesDowntime = {}) {
         if (!machineCardGrid) {
             if (machineSelector) {
@@ -27724,12 +28613,19 @@ function sendDowntimeNotification() {
             const plannedQtyFallback = parseOptionalNumber(p.lot_size);
             const plannedQty = Math.round(plannedQtyPrimary ?? plannedQtyFallback ?? 0);
             
-            // CORREÇÃO: Usar total_produzido do plano (acumulado da OP) para o progresso
-            // O planData.totalProduced é apenas a produção DO DIA, não o total da OP
-            const accumulatedFromOrder = coerceToNumber(p.total_produzido, 0);
+            // CORREÇÃO ESTABILIDADE: Usar o MAIOR valor entre:
+            // 1. total_produzido armazenado no planning (acumulado da OP)
+            // 2. Produção calculada do dia (soma dos lançamentos)
+            // 3. Valor em cache do render anterior (anti-oscilação)
+            const storedTotal = coerceToNumber(p.total_produzido, 0);
             const producedToday = Math.round(planData.totalProduced ?? 0);
-            // Para o progresso, usar o acumulado total da OP
-            const produced = accumulatedFromOrder > 0 ? Math.round(accumulatedFromOrder) : producedToday;
+            const cachedValue = machineCardProductionCache.get(p.id) || 0;
+            
+            // Usar o maior valor para evitar quedas temporárias durante atualizações
+            const produced = Math.max(storedTotal, producedToday, cachedValue);
+            
+            // Atualizar cache com o valor mais alto já visto
+            machineCardProductionCache.set(p.id, produced);
             
             const lossKg = Math.round(planData.totalLossesKg ?? 0);
             const pieceWeight = coerceToNumber(p.piece_weight, 0);
