@@ -397,6 +397,7 @@ var productDatabase = [
     { "cod": 277, "client": "PARKER", "name": "CONICO FILTRO OLEO - 219910309", "cavities": 3, "cycle": 60, "weight": 0.95, "pieces_per_hour_goal": 180, "mp": "" },
     { "cod": 278, "client": "PARKER", "name": "TURBINA (MONTADA) P/ FILTRO DE OLEO", "cavities": 3, "cycle": 60, "weight": 1.05, "pieces_per_hour_goal": 180, "mp": "" },
     { "cod": 1912, "client": "PARKER", "name": "SUPORTE PLÁSTICO", "cavities": 2, "cycle": 30.41, "weight": 48, "pieces_per_hour_goal": 236, "mp": "" },
+    { "cod": 2206, "client": "PARKER", "name": "SUPORTE DO COPO NOVO - 6 CAVIDADES - NYLON - 283601079", "cavities": 6, "cycle": 50, "weight": 54.85, "pieces_per_hour_goal": 432, "mp": "" },
     { "cod": 2294, "client": "PARKER", "name": "SUPORTE DO COPO NOVO - 6 CAVIDADES - TECHNYL", "cavities": 6, "cycle": 50, "weight": 54.85, "pieces_per_hour_goal": 432, "mp": "" },
     { "cod": 3457, "client": "PARKER", "name": "TAMPA PLASTICA 5923 - DURETHAN", "cavities": 4, "cycle": 40, "weight": 21.36, "pieces_per_hour_goal": 360, "mp": "" },
     { "cod": 3503, "client": "PARKER", "name": "TAMPA SUPERIOR PARA FILTRO - 285058449", "cavities": 4, "cycle": 34.38, "weight": 0.85, "pieces_per_hour_goal": 419, "mp": "" },
