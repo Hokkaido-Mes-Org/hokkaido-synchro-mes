@@ -2326,7 +2326,7 @@
                     <div class="shift-kpi-card">
                         <div class="shift-kpi-header">
                             <span class="shift-badge t1">T1</span>
-                            <span class="shift-time">07:00 - 14:59</span>
+                            <span class="shift-time">06:30 - 14:59</span>
                         </div>
                         <div class="shift-kpi-body">
                             <div class="shift-metric">
@@ -2376,7 +2376,7 @@
                     <div class="shift-kpi-card">
                         <div class="shift-kpi-header">
                             <span class="shift-badge t3">T3</span>
-                            <span class="shift-time">23:20 - 06:59</span>
+                            <span class="shift-time">23:20 - 06:29</span>
                         </div>
                         <div class="shift-kpi-body">
                             <div class="shift-metric">
@@ -2819,13 +2819,13 @@
             const date = now.toLocaleDateString('pt-BR', options).toUpperCase();
             document.getElementById('currentDate').textContent = date;
             
-            // Shift - T1: 07:00-14:59, T2: 15:00-23:19, T3: 23:20-06:59
+            // Shift - T1: 06:30-14:59, T2: 15:00-23:19, T3: 23:20-06:29
             const hour = now.getHours();
             let shift = '1º TURNO';
             const minute = now.getMinutes();
-            if (hour >= 7 && hour < 15) shift = '1º TURNO (07:00-14:59)';
+            if ((hour === 6 && minute >= 30) || (hour >= 7 && hour < 15)) shift = '1º TURNO (06:30-14:59)';
             else if (hour >= 15 && (hour < 23 || (hour === 23 && minute < 20))) shift = '2º TURNO (15:00-23:19)';
-            else shift = '3º TURNO (23:20-06:59)';
+            else shift = '3º TURNO (23:20-06:29)';
             document.getElementById('currentShift').textContent = shift;
         }
 
@@ -2858,10 +2858,10 @@
             const baseDate = new Date(dateStr + 'T12:00:00');
             if (Number.isNaN(baseDate.getTime())) return dateStr;
             
-            // Se houver timeHint, verificar se é turno 3 (antes das 7h)
+            // Se houver timeHint, verificar se é turno 3 (antes das 6h30)
             if (timeHint) {
-                const [hours] = timeHint.split(':').map(Number);
-                if (!Number.isNaN(hours) && hours < 7) {
+                const [hours, mins] = timeHint.split(':').map(Number);
+                if (!Number.isNaN(hours) && (hours < 6 || (hours === 6 && (mins || 0) < 30))) {
                     // Turno 3 após meia-noite - pertence ao dia anterior
                     baseDate.setDate(baseDate.getDate() - 1);
                 }
@@ -2886,8 +2886,9 @@
             if (Number.isNaN(date.getTime())) return null;
             
             const hours = date.getHours();
-            // Se antes das 7h, pertence ao dia anterior
-            if (hours < 7) {
+            const mins = date.getMinutes();
+            // Se antes das 6h30, pertence ao dia anterior
+            if (hours < 6 || (hours === 6 && mins < 30)) {
                 date.setDate(date.getDate() - 1);
             }
             // Usar mesma lógica de getTodayString para evitar problemas de timezone
@@ -3013,9 +3014,9 @@
                             // Inferir turno se não informado
                             let mappedShift = normalizeShift(raw.shift ?? raw.turno);
                             if (!mappedShift && raw.startTime) {
-                                const [hours] = raw.startTime.split(':').map(Number);
+                                const [hours, mins] = raw.startTime.split(':').map(Number);
                                 if (!Number.isNaN(hours)) {
-                                    if (hours >= 7 && hours < 15) mappedShift = 1;
+                                    if ((hours === 6 && (mins || 0) >= 30) || (hours >= 7 && hours < 15)) mappedShift = 1;
                                     else if (hours >= 15 && hours < 23) mappedShift = 2;
                                     else mappedShift = 3;
                                 }
@@ -3346,10 +3347,12 @@
             }
         }
 
-        // Alinha com a lógica do app principal: dia de produção vira "ontem" antes das 07:00
+        // Alinha com a lógica do app principal: dia de produção vira "ontem" antes das 06:30
         function getTodayString(date = new Date()) {
             const localDate = new Date(date);
-            if (localDate.getHours() < 7) {
+            const hours = localDate.getHours();
+            const mins = localDate.getMinutes();
+            if (hours < 6 || (hours === 6 && mins < 30)) {
                 localDate.setDate(localDate.getDate() - 1);
             }
             return new Date(localDate.getTime() - (localDate.getTimezoneOffset() * 60000))
@@ -4056,11 +4059,11 @@
                     const hours = Number(hoursStr);
                     const minutes = Number(minutesStr) || 0;
                     if (!Number.isFinite(hours)) return null;
-                    // T1: 07:00 - 14:59
-                    if (hours >= 7 && hours < 15) return 1;
+                    // T1: 06:30 - 14:59
+                    if ((hours === 6 && minutes >= 30) || (hours >= 7 && hours < 15)) return 1;
                     // T2: 15:00 - 23:19
                     if (hours >= 15 && (hours < 23 || (hours === 23 && minutes < 20))) return 2;
-                    // T3: 23:20 - 06:59
+                    // T3: 23:20 - 06:29
                     return 3;
                 };
                 
@@ -4311,7 +4314,7 @@
             const normalizedData = window._tvNormalizedData;
             
             // IMPORTANTE: Usar a data filtrada ou workDay atual
-            // O workDay só muda às 07:00, então T1, T2 e T3 permanecem do mesmo dia até o fim do T3
+            // O workDay só muda às 06:30, então T1, T2 e T3 permanecem do mesmo dia até o fim do T3
             const workDay = getFilteredDateForData(); // Usa data filtrada se selecionada
             
             // Verificar se estamos visualizando dados históricos (data passada)
@@ -4322,26 +4325,26 @@
             const currentHour = now.getHours();
             const currentMinute = now.getMinutes();
             
-            // Calcular minutos desde o início do dia de trabalho (07:00)
-            // Se estamos entre 00:00-06:59, o dia de trabalho começou ontem às 07:00
-            // Se estamos entre 07:00-23:59, o dia de trabalho começou hoje às 07:00
+            // Calcular minutos desde o início do dia de trabalho (06:30)
+            // Se estamos entre 00:00-06:29, o dia de trabalho começou ontem às 06:30
+            // Se estamos entre 06:30-23:59, o dia de trabalho começou hoje às 06:30
             let minutesSinceWorkDayStart;
-            if (currentHour < 7) {
-                // Madrugada: já passaram (24 - 7 + currentHour) * 60 + currentMinute minutos
-                minutesSinceWorkDayStart = (17 + currentHour) * 60 + currentMinute; // 17 = 24 - 7
+            if (currentHour < 6 || (currentHour === 6 && currentMinute < 30)) {
+                // Madrugada: já passaram (24 - 6.5 + currentHour) * 60 + currentMinute minutos
+                minutesSinceWorkDayStart = (17 * 60 + 30) + currentHour * 60 + currentMinute; // 17.5h = 24 - 6.5
             } else {
-                // Dia normal: passaram (currentHour - 7) * 60 + currentMinute minutos
-                minutesSinceWorkDayStart = (currentHour - 7) * 60 + currentMinute;
+                // Dia normal: passaram (currentHour - 6) * 60 + currentMinute - 30 minutos
+                minutesSinceWorkDayStart = (currentHour - 6) * 60 + currentMinute - 30;
             }
             
             // Determinar quais turnos já ocorreram/estão em andamento
             // Se é visualização histórica, todos os turnos são considerados ativos (dia completo)
-            // T1: 07:00-14:59 (minutos 0-479 do workday)
-            // T2: 15:00-23:19 (minutos 480-979 do workday)
-            // T3: 23:20-06:59 (minutos 980-1439 do workday)
-            const isT1Active = isHistoricalView || minutesSinceWorkDayStart >= 0;    // T1 sempre ativo após 07:00
-            const isT2Active = isHistoricalView || minutesSinceWorkDayStart >= 480;  // T2 ativo após 15:00 (8h * 60min)
-            const isT3Active = isHistoricalView || minutesSinceWorkDayStart >= 980;  // T3 ativo após 23:20 (16h20 * 60min = 980min)
+            // T1: 06:30-14:59 (minutos 0-509 do workday)
+            // T2: 15:00-23:19 (minutos 510-1009 do workday)
+            // T3: 23:20-06:29 (minutos 1010-1439 do workday)
+            const isT1Active = isHistoricalView || minutesSinceWorkDayStart >= 0;    // T1 sempre ativo após 06:30
+            const isT2Active = isHistoricalView || minutesSinceWorkDayStart >= 510;  // T2 ativo após 15:00 (8.5h * 60min)
+            const isT3Active = isHistoricalView || minutesSinceWorkDayStart >= 1010;  // T3 ativo após 23:20 (16h50 * 60min = 1010min)
             
             console.log('[Dashboard TV] WorkDay:', workDay, '| Histórico:', isHistoricalView, '| Minutos desde início:', minutesSinceWorkDayStart);
             console.log('[Dashboard TV] Turnos ativos - T1:', isT1Active, 'T2:', isT2Active, 'T3:', isT3Active, '| Hora atual:', currentHour + ':' + currentMinute);

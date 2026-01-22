@@ -128,7 +128,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         // Definir data atual como padrão
         const today = new Date();
         const hour = today.getHours();
-        if (hour < 7) today.setDate(today.getDate() - 1);
+        const minute = today.getMinutes();
+        if (hour < 6 || (hour === 6 && minute < 30)) today.setDate(today.getDate() - 1);
         const todayStr = today.toISOString().split('T')[0];
         dateInput.value = todayStr;
         
@@ -993,11 +994,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const hour = now.getHours();
         const min = now.getMinutes();
         
-        // Turno 1: 07:00 - 14:59
-        if (hour >= 7 && hour < 15) return 1;
+        // Turno 1: 06:30 - 14:59
+        if ((hour === 6 && min >= 30) || (hour >= 7 && hour < 15)) return 1;
         // Turno 2: 15:00 - 23:19
         if (hour >= 15 && (hour < 23 || (hour === 23 && min < 20))) return 2;
-        // Turno 3: 23:20 - 06:59
+        // Turno 3: 23:20 - 06:29
         return 3;
     }
     
@@ -1008,9 +1009,10 @@ document.addEventListener('DOMContentLoaded', function() {
     function getDataProducaoAtual() {
         const now = new Date();
         const hour = now.getHours();
+        const minute = now.getMinutes();
         
-        // Se for antes das 7h, pertence ao dia de trabalho anterior
-        if (hour < 7) {
+        // Se for antes das 6h30, pertence ao dia de trabalho anterior
+        if (hour < 6 || (hour === 6 && minute < 30)) {
             const prevDay = new Date(now);
             prevDay.setDate(prevDay.getDate() - 1);
             return new Date(prevDay.getTime() - (prevDay.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
@@ -2653,21 +2655,24 @@ document.addEventListener('DOMContentLoaded', function() {
         return cachedResolvedUserName;
     }
     
-    // Funções para normalizar datas conforme o ciclo de trabalho (7h a 6h59 do dia seguinte)
-    // Turno 1: 07:00 - 14:59 | Turno 2: 15:00 - 23:19 | Turno 3: 23:20 - 06:59
+    // Funções para normalizar datas conforme o ciclo de trabalho (6h30 a 6h29 do dia seguinte)
+    // Turno 1: 06:30 - 14:59 | Turno 2: 15:00 - 23:19 | Turno 3: 23:20 - 06:29
 
     function getWorkDay(dateStr, timeStr) {
         if (!dateStr) return null;
 
         let hours = 12; // padrão neutro (meio-dia)
+        let mins = 0;
         if (typeof timeStr === 'string' && timeStr.includes(':')) {
-            const [timeHours] = timeStr.split(':').map(Number);
+            const [timeHours, timeMinutes] = timeStr.split(':').map(Number);
             if (!Number.isNaN(timeHours)) {
                 hours = timeHours;
+                mins = timeMinutes || 0;
             }
         }
 
-        if (hours >= 7) {
+        // Se for 6:30 ou depois, é do dia atual
+        if (hours > 6 || (hours === 6 && mins >= 30)) {
             return dateStr;
         }
 
@@ -4660,11 +4665,11 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
             const hours = Number(hoursStr);
             const minutes = Number(minutesStr) || 0;
             if (!Number.isFinite(hours)) return null;
-            // T1: 07:00 - 14:59
-            if (hours >= 7 && hours < 15) return 1;
+            // T1: 06:30 - 14:59
+            if ((hours === 6 && minutes >= 30) || (hours >= 7 && hours < 15)) return 1;
             // T2: 15:00 - 23:19
             if (hours >= 15 && (hours < 23 || (hours === 23 && minutes < 20))) return 2;
-            // T3: 23:20 - 06:59
+            // T3: 23:20 - 06:29
             return 3;
         };
 
@@ -5622,8 +5627,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     const hourNum = parseInt(hourParts[0], 10);
                     const minNum = parseInt(hourParts[1], 10) || 0;
                     let inferredShift = 1;
-                    // T1: 07:00-14:59, T2: 15:00-23:19, T3: 23:20-06:59
-                    if (hourNum >= 7 && hourNum < 15) inferredShift = 1;
+                    // T1: 06:30-14:59, T2: 15:00-23:19, T3: 23:20-06:29
+                    if ((hourNum === 6 && minNum >= 30) || (hourNum >= 7 && hourNum < 15)) inferredShift = 1;
                     else if (hourNum >= 15 && (hourNum < 23 || (hourNum === 23 && minNum < 20))) inferredShift = 2;
                     else inferredShift = 3;
                     
@@ -7139,14 +7144,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     
     /**
      * Definição dos turnos (configurável)
-     * Turno 1: 07:00 - 14:59
+     * Turno 1: 06:30 - 14:59
      * Turno 2: 15:00 - 23:19
-     * Turno 3: 23:20 - 06:59 (cruza meia-noite)
+     * Turno 3: 23:20 - 06:29 (cruza meia-noite)
      */
     const SHIFT_DEFINITIONS = [
-        { shift: 1, startHour: 7, startMin: 0, endHour: 14, endMin: 59 },
+        { shift: 1, startHour: 6, startMin: 30, endHour: 14, endMin: 59 },
         { shift: 2, startHour: 15, startMin: 0, endHour: 23, endMin: 19 },
-        { shift: 3, startHour: 23, startMin: 20, endHour: 6, endMin: 59, crossesMidnight: true }
+        { shift: 3, startHour: 23, startMin: 20, endHour: 6, endMin: 29, crossesMidnight: true }
     ];
 
     /**
@@ -7159,11 +7164,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const min = dateTime.getMinutes();
         const totalMinutes = hour * 60 + min;
         
-        // Turno 1: 07:00 - 14:59 (420 - 899 minutos)
-        if (totalMinutes >= 420 && totalMinutes < 900) return 1;
+        // Turno 1: 06:30 - 14:59 (390 - 899 minutos)
+        if (totalMinutes >= 390 && totalMinutes < 900) return 1;
         // Turno 2: 15:00 - 23:19 (900 - 1399 minutos)
         if (totalMinutes >= 900 && totalMinutes < 1400) return 2;
-        // Turno 3: 23:20 - 06:59 (1400 - 1439 ou 0 - 419 minutos)
+        // Turno 3: 23:20 - 06:29 (1400 - 1439 ou 0 - 389 minutos)
         return 3;
     }
 
@@ -7173,10 +7178,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     function getShiftStart(date, shift) {
         const d = new Date(date);
         switch (shift) {
-            case 1: d.setHours(7, 0, 0, 0); break;
+            case 1: d.setHours(6, 30, 0, 0); break;
             case 2: d.setHours(15, 0, 0, 0); break;
             case 3: d.setHours(23, 20, 0, 0); break;
-            default: d.setHours(7, 0, 0, 0);
+            default: d.setHours(6, 30, 0, 0);
         }
         return d;
     }
@@ -7196,13 +7201,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 d.setHours(23, 19, 59, 999); 
                 break;
             case 3: 
-                // Turno 3 vai até 06:59
-                // Se estamos entre 23:20-23:59, o fim é 06:59 do dia SEGUINTE
-                // Se estamos entre 00:00-06:59, o fim é 06:59 do MESMO dia
+                // Turno 3 vai até 06:29
+                // Se estamos entre 23:20-23:59, o fim é 06:29 do dia SEGUINTE
+                // Se estamos entre 00:00-06:29, o fim é 06:29 do MESMO dia
                 if (hour >= 23) {
                     d.setDate(d.getDate() + 1);
                 }
-                d.setHours(6, 59, 59, 999); 
+                d.setHours(6, 29, 59, 999); 
                 break;
             default: 
                 d.setHours(14, 59, 59, 999);
@@ -7220,8 +7225,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
         
         const hour = dateTime.getHours();
-        // Se for entre 00:00 e 06:59, pertence ao dia anterior de produção
-        if (hour < 7) {
+        const minute = dateTime.getMinutes();
+        // Se for entre 00:00 e 06:29, pertence ao dia anterior de produção
+        if (hour < 6 || (hour === 6 && minute < 30)) {
             const prevDay = new Date(dateTime);
             prevDay.setDate(prevDay.getDate() - 1);
             return formatDateYMD(prevDay);
@@ -10503,9 +10509,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     function getProductionDateString(date = new Date()) {
         const dateObj = date instanceof Date ? date : new Date(date);
         const hour = dateObj.getHours();
+        const minute = dateObj.getMinutes();
         
-        // Se for antes das 7h, pertence ao dia de trabalho anterior
-        if (hour < 7) {
+        // Se for antes das 6h30, pertence ao dia de trabalho anterior
+        if (hour < 6 || (hour === 6 && minute < 30)) {
             const prevDay = new Date(dateObj);
             prevDay.setDate(prevDay.getDate() - 1);
             return new Date(prevDay.getTime() - (prevDay.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
@@ -17659,8 +17666,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const minute = now.getMinutes();
         let currentShift;
         
-        // T1: 07:00-14:59, T2: 15:00-23:19, T3: 23:20-06:59
-        if (hour >= 7 && hour < 15) {
+        // T1: 06:30-14:59, T2: 15:00-23:19, T3: 23:20-06:29
+        if ((hour === 6 && minute >= 30) || (hour >= 7 && hour < 15)) {
             currentShift = 'T1';
         } else if (hour >= 15 && (hour < 23 || (hour === 23 && minute < 20))) {
             currentShift = 'T2';
@@ -27194,8 +27201,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const hour = reference.getHours();
         const minute = reference.getMinutes();
         
-        // T1: 07:00-14:59, T2: 15:00-23:19, T3: 23:20-06:59
-        if (hour >= 7 && hour < 15) {
+        // T1: 06:30-14:59, T2: 15:00-23:19, T3: 23:20-06:29
+        if ((hour === 6 && minute >= 30) || (hour >= 7 && hour < 15)) {
             return 1; // 1º Turno
         } else if (hour >= 15 && (hour < 23 || (hour === 23 && minute < 20))) {
             return 2; // 2º Turno
@@ -29665,9 +29672,9 @@ function sendDowntimeNotification() {
         const currentHour = now.getHours();
         const currentMinute = now.getMinutes();
         
-        // Determinar turno atual - T1: 07:00-14:59, T2: 15:00-23:19, T3: 23:20-06:59
+        // Determinar turno atual - T1: 06:30-14:59, T2: 15:00-23:19, T3: 23:20-06:29
         let currentShift;
-        if (currentHour >= 7 && currentHour < 15) {
+        if ((currentHour === 6 && currentMinute >= 30) || (currentHour >= 7 && currentHour < 15)) {
             currentShift = 'T1';
         } else if (currentHour >= 15 && (currentHour < 23 || (currentHour === 23 && currentMinute < 20))) {
             currentShift = 'T2';
@@ -29678,7 +29685,8 @@ function sendDowntimeNotification() {
         // Calcular tempo decorrido no turno atual
         let tempoDecorridoMin;
         if (currentShift === 'T1') {
-            tempoDecorridoMin = (currentHour - 7) * 60 + currentMinute;
+            // T1 começa às 6:30
+            tempoDecorridoMin = (currentHour - 6) * 60 + currentMinute - 30;
         } else if (currentShift === 'T2') {
             tempoDecorridoMin = (currentHour - 15) * 60 + currentMinute;
         } else { // T3
@@ -29690,8 +29698,9 @@ function sendDowntimeNotification() {
             }
         }
         
-        // Limitar o tempo decorrido ao máximo do turno
-        tempoDecorridoMin = Math.min(tempoDecorridoMin, 480);
+        // Limitar o tempo decorrido ao máximo do turno (T1: 510min, T2: 500min, T3: 430min)
+        const maxTurnoMin = currentShift === 'T1' ? 510 : (currentShift === 'T2' ? 500 : 430);
+        tempoDecorridoMin = Math.min(tempoDecorridoMin, maxTurnoMin);
         
         const oeeByShift = {};
         const oeeByMachine = {};
@@ -30357,8 +30366,8 @@ function sendDowntimeNotification() {
         const sortedHours = Object.keys(hourlyData).sort((a,b) => {
             const hourA = parseInt(a.split(':')[0]);
             const hourB = parseInt(b.split(':')[0]);
-            if (hourA >= 7 && hourB < 7) return -1;
-            if (hourA < 7 && hourB >= 7) return 1;
+            if (hourA >= 6 && hourB < 6) return -1;
+            if (hourA < 6 && hourB >= 6) return 1;
             return hourA - hourB;
         });
         
@@ -30389,8 +30398,8 @@ function sendDowntimeNotification() {
             const currentHour = new Date().getHours();
             let currentHourIndex = sortedHours.findIndex(h => parseInt(h.split(':')[0]) === currentHour);
             
-            if (currentHourIndex === -1 && currentHour < 7) {
-                currentHourIndex = 17 + currentHour;
+            if (currentHourIndex === -1 && currentHour < 6) {
+                currentHourIndex = 18 + currentHour;
             } else if (currentHourIndex === -1) {
                 currentHourIndex = 23;
             }
@@ -34845,9 +34854,10 @@ let escalaEmEdicao = null; // Armazena o ID da escala sendo editada
 function getLiderancaDateString(date = new Date()) {
     const dateObj = date instanceof Date ? date : new Date(date);
     const hour = dateObj.getHours();
+    const minute = dateObj.getMinutes();
     
-    // Se for antes das 7h, pertence ao dia de trabalho anterior
-    if (hour < 7) {
+    // Se for antes das 6h30, pertence ao dia de trabalho anterior
+    if (hour < 6 || (hour === 6 && minute < 30)) {
         const prevDay = new Date(dateObj);
         prevDay.setDate(prevDay.getDate() - 1);
         return new Date(prevDay.getTime() - (prevDay.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
