@@ -573,12 +573,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Função centralizada para extrair quantidade planejada de um plano
     // Usada para garantir consistência entre Dashboard TV e Aba Análise
+    // CORREÇÃO: Priorizar planned_quantity (meta diária calculada) sobre lot_size (tamanho total OP)
     function getPlanQuantity(raw) {
         if (!raw) return 0;
-        // Prioridade: lot_size > order_lot_size > planned_quantity > planned_qty > quantidade > meta > target > qtdPlanejada
-        const qty = raw.lot_size || 
-                    raw.order_lot_size || 
-                    raw.planned_quantity || 
+        // Prioridade: planned_quantity (meta diária) > planned_qty > quantidade > meta > target > qtdPlanejada
+        // NÃO USAR lot_size/order_lot_size aqui - esses são o tamanho total da OP, não a meta diária!
+        const qty = raw.planned_quantity || 
                     raw.planned_qty || 
                     raw.quantidade || 
                     raw.meta || 
@@ -2478,11 +2478,373 @@ document.addEventListener('DOMContentLoaded', function() {
                 : 0;
             if (plannedQty > 0) {
                 plannedQtyInput.value = plannedQty;
+                // Calcular e mostrar distribuição por turno
+                updateShiftDistribution(plannedQty, cycle, cavities);
             } else {
                 plannedQtyInput.value = '';
+                hideShiftDistribution();
             }
         }
     }
+    
+    // ========================================
+    // DISTRIBUIÇÃO POR TURNO - OPÇÃO 3 (HÍBRIDO)
+    // ========================================
+    
+    // Configuração de horas por turno (para cálculo proporcional)
+    const SHIFT_CONFIG = {
+        t1: { name: '1º Turno', hours: 8.5, percent: 0.35, start: '06:30', end: '15:00' },  // 35%
+        t2: { name: '2º Turno', hours: 8.33, percent: 0.35, start: '15:00', end: '23:20' }, // 35%
+        t3: { name: '3º Turno', hours: 7.17, percent: 0.30, start: '23:20', end: '06:29' }  // 30%
+    };
+    
+    // Armazena os dados de distribuição por turno atual
+    let shiftDistributionData = {
+        totalQty: 0,
+        baseCycle: 0,
+        baseCavities: 0,
+        t1: { cycle: 0, cavities: 0, qty: 0, customized: false },
+        t2: { cycle: 0, cavities: 0, qty: 0, customized: false },
+        t3: { cycle: 0, cavities: 0, qty: 0, customized: false }
+    };
+    
+    /**
+     * Calcula a quantidade planejada para um turno específico
+     * @param {number} cycle - Ciclo em segundos
+     * @param {number} cavities - Número de cavidades
+     * @param {number} hoursAvailable - Horas disponíveis no turno
+     * @param {number} efficiency - Eficiência (padrão 0.85 = 85%)
+     */
+    function calculateShiftQuantity(cycle, cavities, hoursAvailable, efficiency = 0.85) {
+        if (!cycle || !cavities || cycle <= 0 || cavities <= 0) return 0;
+        const secondsAvailable = hoursAvailable * 3600;
+        return Math.floor((secondsAvailable / cycle) * cavities * efficiency);
+    }
+    
+    /**
+     * Atualiza a distribuição por turno e exibe a seção
+     */
+    function updateShiftDistribution(totalQty, cycle, cavities) {
+        console.log('[SHIFT DISTRIBUTION] updateShiftDistribution chamada:', { totalQty, cycle, cavities });
+        const section = document.getElementById('shift-distribution-section');
+        if (!section) {
+            console.warn('[SHIFT DISTRIBUTION] Seção não encontrada no DOM');
+            return;
+        }
+        
+        // Armazenar dados base
+        shiftDistributionData.totalQty = totalQty;
+        shiftDistributionData.baseCycle = cycle;
+        shiftDistributionData.baseCavities = cavities;
+        
+        // Calcular para cada turno usando o mesmo ciclo/cavidades (distribuição proporcional)
+        const t1Qty = Math.round(totalQty * SHIFT_CONFIG.t1.percent);
+        const t2Qty = Math.round(totalQty * SHIFT_CONFIG.t2.percent);
+        const t3Qty = totalQty - t1Qty - t2Qty; // Garantir que soma = total
+        
+        // Atualizar dados
+        shiftDistributionData.t1 = { cycle, cavities, qty: t1Qty, customized: false };
+        shiftDistributionData.t2 = { cycle, cavities, qty: t2Qty, customized: false };
+        shiftDistributionData.t3 = { cycle, cavities, qty: t3Qty, customized: false };
+        
+        // Atualizar UI
+        updateShiftDistributionUI();
+        
+        // Mostrar seção
+        section.style.display = 'block';
+        
+        // Atualizar campos ocultos do formulário
+        updateShiftHiddenFields();
+    }
+    
+    /**
+     * Oculta a seção de distribuição por turno
+     */
+    function hideShiftDistribution() {
+        const section = document.getElementById('shift-distribution-section');
+        if (section) {
+            section.style.display = 'none';
+        }
+        // Limpar dados
+        shiftDistributionData = {
+            totalQty: 0, baseCycle: 0, baseCavities: 0,
+            t1: { cycle: 0, cavities: 0, qty: 0, customized: false },
+            t2: { cycle: 0, cavities: 0, qty: 0, customized: false },
+            t3: { cycle: 0, cavities: 0, qty: 0, customized: false }
+        };
+    }
+    
+    /**
+     * Atualiza a UI da seção de distribuição por turno
+     */
+    function updateShiftDistributionUI() {
+        // T1
+        const t1El = document.getElementById('shift-t1-qty');
+        const t1Input = document.getElementById('planned-qty-t1');
+        if (t1El) t1El.textContent = shiftDistributionData.t1.qty.toLocaleString('pt-BR');
+        if (t1Input) t1Input.value = shiftDistributionData.t1.qty;
+        
+        // T2
+        const t2El = document.getElementById('shift-t2-qty');
+        const t2Input = document.getElementById('planned-qty-t2');
+        if (t2El) t2El.textContent = shiftDistributionData.t2.qty.toLocaleString('pt-BR');
+        if (t2Input) t2Input.value = shiftDistributionData.t2.qty;
+        
+        // T3
+        const t3El = document.getElementById('shift-t3-qty');
+        const t3Input = document.getElementById('planned-qty-t3');
+        if (t3El) t3El.textContent = shiftDistributionData.t3.qty.toLocaleString('pt-BR');
+        if (t3Input) t3Input.value = shiftDistributionData.t3.qty;
+    }
+    
+    /**
+     * Atualiza os campos ocultos do formulário de planejamento
+     */
+    function updateShiftHiddenFields() {
+        // Ciclo por turno
+        const cycleT1 = document.getElementById('cycle-t1');
+        const cycleT2 = document.getElementById('cycle-t2');
+        const cycleT3 = document.getElementById('cycle-t3');
+        if (cycleT1) cycleT1.value = shiftDistributionData.t1.cycle;
+        if (cycleT2) cycleT2.value = shiftDistributionData.t2.cycle;
+        if (cycleT3) cycleT3.value = shiftDistributionData.t3.cycle;
+        
+        // Cavidades por turno
+        const cavitiesT1 = document.getElementById('cavities-t1');
+        const cavitiesT2 = document.getElementById('cavities-t2');
+        const cavitiesT3 = document.getElementById('cavities-t3');
+        if (cavitiesT1) cavitiesT1.value = shiftDistributionData.t1.cavities;
+        if (cavitiesT2) cavitiesT2.value = shiftDistributionData.t2.cavities;
+        if (cavitiesT3) cavitiesT3.value = shiftDistributionData.t3.cavities;
+    }
+    
+    /**
+     * Abre o modal de customização por turno
+     */
+    function openShiftCustomizeModal() {
+        console.log('[SHIFT DISTRIBUTION] Abrindo modal de customização');
+        const modal = document.getElementById('shift-customize-modal');
+        if (!modal) {
+            console.warn('[SHIFT DISTRIBUTION] Modal não encontrado');
+            return;
+        }
+        
+        // Preencher campos com valores atuais
+        document.getElementById('custom-cycle-t1').value = shiftDistributionData.t1.cycle || shiftDistributionData.baseCycle;
+        document.getElementById('custom-cavities-t1').value = shiftDistributionData.t1.cavities || shiftDistributionData.baseCavities;
+        document.getElementById('custom-qty-t1').value = shiftDistributionData.t1.qty;
+        
+        document.getElementById('custom-cycle-t2').value = shiftDistributionData.t2.cycle || shiftDistributionData.baseCycle;
+        document.getElementById('custom-cavities-t2').value = shiftDistributionData.t2.cavities || shiftDistributionData.baseCavities;
+        document.getElementById('custom-qty-t2').value = shiftDistributionData.t2.qty;
+        
+        document.getElementById('custom-cycle-t3').value = shiftDistributionData.t3.cycle || shiftDistributionData.baseCycle;
+        document.getElementById('custom-cavities-t3').value = shiftDistributionData.t3.cavities || shiftDistributionData.baseCavities;
+        document.getElementById('custom-qty-t3').value = shiftDistributionData.t3.qty;
+        
+        // Atualizar resumo
+        updateShiftModalSummary();
+        
+        modal.classList.remove('hidden');
+        
+        // Reinicializar ícones Lucide no modal
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+    
+    /**
+     * Fecha o modal de customização por turno
+     */
+    function closeShiftCustomizeModal() {
+        const modal = document.getElementById('shift-customize-modal');
+        if (modal) modal.classList.add('hidden');
+    }
+    
+    /**
+     * Recalcula a quantidade para um turno específico baseado no ciclo e cavidades
+     * @param {string} shiftId - 't1', 't2' ou 't3'
+     */
+    window.recalculateShiftQty = function(shiftId) {
+        const cycleInput = document.getElementById(`custom-cycle-${shiftId}`);
+        const cavitiesInput = document.getElementById(`custom-cavities-${shiftId}`);
+        const qtyInput = document.getElementById(`custom-qty-${shiftId}`);
+        
+        if (!cycleInput || !cavitiesInput || !qtyInput) return;
+        
+        const cycle = parseFloat(cycleInput.value) || 0;
+        const cavities = parseInt(cavitiesInput.value) || 0;
+        
+        const shiftConfig = SHIFT_CONFIG[shiftId];
+        if (!shiftConfig) return;
+        
+        const qty = calculateShiftQuantity(cycle, cavities, shiftConfig.hours);
+        qtyInput.value = qty;
+        
+        updateShiftModalSummary();
+    };
+    
+    /**
+     * Atualiza o resumo no modal de customização
+     */
+    function updateShiftModalSummary() {
+        const t1Qty = parseInt(document.getElementById('custom-qty-t1')?.value) || 0;
+        const t2Qty = parseInt(document.getElementById('custom-qty-t2')?.value) || 0;
+        const t3Qty = parseInt(document.getElementById('custom-qty-t3')?.value) || 0;
+        
+        const total = t1Qty + t2Qty + t3Qty;
+        
+        const totalEl = document.getElementById('shift-total-qty');
+        const summaryT1 = document.getElementById('shift-summary-t1');
+        const summaryT2 = document.getElementById('shift-summary-t2');
+        const summaryT3 = document.getElementById('shift-summary-t3');
+        
+        if (totalEl) totalEl.textContent = total.toLocaleString('pt-BR');
+        if (summaryT1) summaryT1.textContent = t1Qty.toLocaleString('pt-BR');
+        if (summaryT2) summaryT2.textContent = t2Qty.toLocaleString('pt-BR');
+        if (summaryT3) summaryT3.textContent = t3Qty.toLocaleString('pt-BR');
+    }
+    
+    /**
+     * Restaura a distribuição padrão (proporcional)
+     */
+    function resetShiftDistribution() {
+        const total = shiftDistributionData.totalQty;
+        const cycle = shiftDistributionData.baseCycle;
+        const cavities = shiftDistributionData.baseCavities;
+        
+        if (total > 0 && cycle > 0 && cavities > 0) {
+            // Recalcular distribuição proporcional
+            const t1Qty = Math.round(total * SHIFT_CONFIG.t1.percent);
+            const t2Qty = Math.round(total * SHIFT_CONFIG.t2.percent);
+            const t3Qty = total - t1Qty - t2Qty;
+            
+            // Preencher modal
+            document.getElementById('custom-cycle-t1').value = cycle;
+            document.getElementById('custom-cavities-t1').value = cavities;
+            document.getElementById('custom-qty-t1').value = t1Qty;
+            
+            document.getElementById('custom-cycle-t2').value = cycle;
+            document.getElementById('custom-cavities-t2').value = cavities;
+            document.getElementById('custom-qty-t2').value = t2Qty;
+            
+            document.getElementById('custom-cycle-t3').value = cycle;
+            document.getElementById('custom-cavities-t3').value = cavities;
+            document.getElementById('custom-qty-t3').value = t3Qty;
+            
+            updateShiftModalSummary();
+        }
+    }
+    
+    /**
+     * Aplica a distribuição customizada ao formulário de planejamento
+     */
+    function applyShiftDistribution() {
+        // Capturar valores do modal
+        const t1Cycle = parseFloat(document.getElementById('custom-cycle-t1')?.value) || shiftDistributionData.baseCycle;
+        const t1Cavities = parseInt(document.getElementById('custom-cavities-t1')?.value) || shiftDistributionData.baseCavities;
+        const t1Qty = parseInt(document.getElementById('custom-qty-t1')?.value) || 0;
+        
+        const t2Cycle = parseFloat(document.getElementById('custom-cycle-t2')?.value) || shiftDistributionData.baseCycle;
+        const t2Cavities = parseInt(document.getElementById('custom-cavities-t2')?.value) || shiftDistributionData.baseCavities;
+        const t2Qty = parseInt(document.getElementById('custom-qty-t2')?.value) || 0;
+        
+        const t3Cycle = parseFloat(document.getElementById('custom-cycle-t3')?.value) || shiftDistributionData.baseCycle;
+        const t3Cavities = parseInt(document.getElementById('custom-cavities-t3')?.value) || shiftDistributionData.baseCavities;
+        const t3Qty = parseInt(document.getElementById('custom-qty-t3')?.value) || 0;
+        
+        // Atualizar dados
+        shiftDistributionData.t1 = { cycle: t1Cycle, cavities: t1Cavities, qty: t1Qty, customized: true };
+        shiftDistributionData.t2 = { cycle: t2Cycle, cavities: t2Cavities, qty: t2Qty, customized: true };
+        shiftDistributionData.t3 = { cycle: t3Cycle, cavities: t3Cavities, qty: t3Qty, customized: true };
+        
+        // Atualizar total planejado
+        const newTotal = t1Qty + t2Qty + t3Qty;
+        shiftDistributionData.totalQty = newTotal;
+        
+        // Atualizar campo principal de quantidade planejada
+        const plannedQtyInput = document.getElementById('planned-quantity');
+        if (plannedQtyInput) {
+            plannedQtyInput.value = newTotal;
+        }
+        
+        // Atualizar UI da seção de distribuição
+        updateShiftDistributionUI();
+        
+        // Atualizar campos ocultos
+        updateShiftHiddenFields();
+        
+        // Fechar modal
+        closeShiftCustomizeModal();
+        
+        // Feedback
+        if (typeof window.showNotification === 'function') {
+            window.showNotification('Distribuição por turno aplicada com sucesso!', 'success');
+        } else {
+            console.log('✅ Distribuição por turno aplicada com sucesso!');
+        }
+    }
+    
+    // Event Listeners para o modal de customização por turno
+    // Registrar eventos diretamente (já estamos dentro de um DOMContentLoaded)
+    setTimeout(function() {
+        // Botão customizar na seção principal
+        const customizeBtn = document.getElementById('customize-shifts-btn');
+        if (customizeBtn) {
+            customizeBtn.addEventListener('click', openShiftCustomizeModal);
+        }
+        
+        // Botão fechar modal
+        const closeBtn = document.getElementById('shift-customize-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closeShiftCustomizeModal);
+        }
+        
+        // Botão restaurar padrão
+        const resetBtn = document.getElementById('shift-reset-btn');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', resetShiftDistribution);
+        }
+        
+        // Botão aplicar distribuição
+        const applyBtn = document.getElementById('shift-apply-btn');
+        if (applyBtn) {
+            applyBtn.addEventListener('click', applyShiftDistribution);
+        }
+        
+        // Fechar modal ao clicar fora
+        const modal = document.getElementById('shift-customize-modal');
+        if (modal) {
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    closeShiftCustomizeModal();
+                }
+            });
+        }
+        
+        // Recalcular ao alterar campos no modal
+        ['t1', 't2', 't3'].forEach(shift => {
+            const cycleInput = document.getElementById(`custom-cycle-${shift}`);
+            const cavitiesInput = document.getElementById(`custom-cavities-${shift}`);
+            
+            if (cycleInput) {
+                cycleInput.addEventListener('input', () => {
+                    recalculateShiftQty(shift);
+                });
+            }
+            if (cavitiesInput) {
+                cavitiesInput.addEventListener('input', () => {
+                    recalculateShiftQty(shift);
+                });
+            }
+        });
+        
+        console.log('[SHIFT DISTRIBUTION] Event listeners registrados com sucesso');
+    }, 500); // Delay para garantir que o DOM está completamente carregado
+    
+    // ========================================
+    // FIM - DISTRIBUIÇÃO POR TURNO
+    // ========================================
     
     let cachedResolvedUserName = null;
 
@@ -14041,7 +14403,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         metrics.operators = Array.from(operatorSet);
         metrics.shiftSuggestion = determineSuggestedShift(metrics.shifts) || getCurrentShift();
-        metrics.planTarget = Number(planData?.planned_quantity || planData?.order_lot_size || 0);
+        // CORREÇÃO: Usar planned_quantity (meta diária), não order_lot_size (tamanho total OP)
+        metrics.planTarget = Number(planData?.planned_quantity || planData?.planned_qty || planData?.meta || 0);
 
         return metrics;
     }
@@ -14086,7 +14449,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const { plan, date, metrics, productionEntries, hourlyEntries, downtimeEntries } = context;
 
         if (qualityInfoGrid) {
-            const plannedQty = Number(plan?.planned_quantity || plan?.order_lot_size || 0);
+            // CORREÇÃO: Usar planned_quantity (meta diária), não order_lot_size (tamanho total OP)
+            const plannedQty = Number(plan?.planned_quantity || plan?.planned_qty || plan?.meta || 0);
             const producedTotal = metrics.totals.produced || 0;
             const progressPercent = plannedQty > 0 ? Math.min(100, Math.round((producedTotal / plannedQty) * 100)) : 0;
             const progressLabel = plannedQty > 0 ? `${progressPercent}%` : 'N/D';
@@ -14322,7 +14686,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         let bagCapacity = Number(plan.bag_capacity || 0);
         if (bagCapacity <= 0) {
             // Calcular capacidade por saco: quantidade_planejada / 2 (estimativa de 2 sacos)
-            const plannedQty = Number(plan.planned_quantity || plan.order_lot_size || 1000);
+            // CORREÇÃO: Usar planned_quantity (meta diária), não order_lot_size (tamanho total OP)
+            const plannedQty = Number(plan.planned_quantity || plan.planned_qty || plan.meta || 1000);
             bagCapacity = Math.ceil(plannedQty / 2);
         }
 
@@ -15394,8 +15759,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         // Calcular quantidade atual baseado nos entries (fonte única de verdade)
         const planId = selectedMachineData.id;
         const currentExecuted = Math.round(coerceToNumber(selectedMachineData.totalProduced, 0));
+        // CORREÇÃO: Usar planned_quantity (meta diária) primeiro, não lot_size (tamanho total OP)
         const plannedQty = Math.round(coerceToNumber(
-            selectedMachineData.order_lot_size ?? selectedMachineData.lot_size ?? selectedMachineData.planned_quantity, 0
+            selectedMachineData.planned_quantity ?? selectedMachineData.planned_qty ?? selectedMachineData.meta, 0
         ));
 
         // Preencher informações
@@ -16429,8 +16795,29 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 mp: resolvedMp,
                 mp_type: data.mp_type || linkedOrder?.mp_type || '',
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                // ✅ DISTRIBUIÇÃO POR TURNO (Opção 3 - Híbrido)
+                shift_distribution: {
+                    t1: {
+                        planned_qty: parseInt(data.planned_qty_t1) || 0,
+                        cycle: parseFloat(data.cycle_t1) || resolvedCycle || null,
+                        cavities: parseInt(data.cavities_t1) || resolvedCavities || null,
+                        customized: shiftDistributionData?.t1?.customized || false
+                    },
+                    t2: {
+                        planned_qty: parseInt(data.planned_qty_t2) || 0,
+                        cycle: parseFloat(data.cycle_t2) || resolvedCycle || null,
+                        cavities: parseInt(data.cavities_t2) || resolvedCavities || null,
+                        customized: shiftDistributionData?.t2?.customized || false
+                    },
+                    t3: {
+                        planned_qty: parseInt(data.planned_qty_t3) || 0,
+                        cycle: parseFloat(data.cycle_t3) || resolvedCycle || null,
+                        cavities: parseInt(data.cavities_t3) || resolvedCavities || null,
+                        customized: shiftDistributionData?.t3?.customized || false
+                    }
+                }
             };
-            console.log('[PLANNING] docData to be saved:', { piece_weight: docData.piece_weight, piece_weight_grams: docData.piece_weight_grams });
+            console.log('[PLANNING] docData to be saved:', { piece_weight: docData.piece_weight, piece_weight_grams: docData.piece_weight_grams, shift_distribution: docData.shift_distribution });
 
             if (linkedOrder) {
                 docData.order_id = linkedOrder.id;
@@ -16571,6 +16958,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 orderInfo.style.display = 'none';
                 orderInfo.textContent = '';
             }
+            
+            // Ocultar e limpar seção de distribuição por turno
+            hideShiftDistribution();
         } catch (error) {
             console.error("Erro ao adicionar planejamento: ", error);
             if (statusMessage) {

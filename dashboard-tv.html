@@ -5206,10 +5206,64 @@
                                                  'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
                                                  'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32']);
             
-            // Filtrar cachedMachines para apenas máquinas válidas
-            const validMachines = cachedMachines.filter(m => validMachineIdsSet.has(normalizeMachineId(m.id || m.name)));
-            const activeMachines = validMachines.filter(m => m.status === 'running' || m.status === 'producao');
-            const stoppedMachines = validMachines.filter(m => m.status === 'parada' || m.status === 'stopped' || m.status === 'setup');
+            // Obter data filtrada ou workDay atual para comparar paradas
+            const tickerToday = getFilteredDateForData();
+            const tickerNow = new Date();
+            const tickerCurrentTime = tickerNow.toTimeString().slice(0, 5); // HH:MM
+            
+            // CORREÇÃO: Calcular máquinas produzindo e paradas com base nos dados reais
+            // Máquinas com planejamento ativo
+            const machinesWithPlanning = new Set();
+            cachedPlanning.forEach(p => {
+                const machineId = normalizeMachineId(p.machine || p.machineId || p.maquina);
+                if (machineId && validMachineIdsSet.has(machineId)) {
+                    machinesWithPlanning.add(machineId);
+                }
+            });
+            
+            // Máquinas com paradas ativas
+            const machinesWithActiveDowntime = new Set();
+            cachedDowntimes.forEach(dt => {
+                const machineId = normalizeMachineId(dt.machine || dt.maquina || dt.machine_id);
+                if (!machineId || !validMachineIdsSet.has(machineId)) return;
+                
+                // Verificar se é parada ativa
+                // PRIORIDADE 1: Parada LIVE (active_downtimes)
+                if (dt.source === 'active_live' && dt.isActive === true) {
+                    machinesWithActiveDowntime.add(machineId);
+                    return;
+                }
+                
+                // PRIORIDADE 2: Extended downtimes com status = 'active'
+                if (dt.source === 'extended' && dt.status === 'active') {
+                    machinesWithActiveDowntime.add(machineId);
+                    return;
+                }
+                
+                // PRIORIDADE 3: Paradas normais (downtime_entries) - verificar se é de hoje e sem endTime
+                const dtDate = dt.date || dt.workDay || '';
+                const isToday = dtDate === tickerToday;
+                const hasNoEndTime = !dt.endTime || dt.endTime === '' || dt.endTime === '--:--';
+                const endTimeNotPassed = dt.endTime && tickerCurrentTime < dt.endTime;
+                
+                if (isToday && (hasNoEndTime || endTimeNotPassed)) {
+                    machinesWithActiveDowntime.add(machineId);
+                }
+            });
+            
+            // Máquinas produzindo = planejamento SEM parada ativa
+            const runningMachines = Array.from(machinesWithPlanning).filter(m => !machinesWithActiveDowntime.has(m));
+            const stoppedMachines = Array.from(machinesWithActiveDowntime);
+            
+            const runningCount = runningMachines.length;
+            const stoppedCount = stoppedMachines.length;
+            
+            console.log('[Ticker] Contagem de máquinas:', {
+                comPlanejamento: Array.from(machinesWithPlanning),
+                comParadaAtiva: Array.from(machinesWithActiveDowntime),
+                produzindo: runningMachines,
+                paradas: stoppedMachines
+            });
             
             // Classes de destaque
             const completionClass = completion >= 80 ? 'highlight-good' : (completion >= 50 ? 'highlight-warning' : 'highlight-critical');
@@ -5228,10 +5282,8 @@
             // Item 3: Paradas
             tickerItems.push(`<span class="ticker-item"><strong>⏱️ PARADAS:</strong> <span class="${downtimeClass}">${totalDowntimeMinutes}min</span> em ${todayDowntimes.length} evento(s) hoje</span>`);
             
-            // Item 4: Status das máquinas
-            if (cachedMachines.length > 0) {
-                const runningCount = activeMachines.length;
-                const stoppedCount = stoppedMachines.length;
+            // Item 4: Status das máquinas - CORRIGIDO: usar runningCount e stoppedCount calculados acima
+            if (runningCount > 0 || stoppedCount > 0) {
                 const statusClass = stoppedCount === 0 ? 'highlight-good' : (stoppedCount <= 2 ? 'highlight-warning' : 'highlight-critical');
                 tickerItems.push(`<span class="ticker-item"><strong>🏭 MÁQUINAS:</strong> <span class="${statusClass}">${runningCount} produzindo | ${stoppedCount} parada(s)</span></span>`);
             }
@@ -5245,9 +5297,9 @@
             tickerItems.push(`<span class="ticker-item"><strong>📋 ORDENS:</strong> ${cachedPlanning.length} ordens ativas | ${cachedProductions.length} lançamentos hoje</span>`);
             
             // Item 7: Alerta de máquinas paradas (se houver)
-            if (stoppedMachines.length > 0) {
-                const stoppedNames = stoppedMachines.slice(0, 3).map(m => m.name || m.id).join(', ');
-                tickerItems.push(`<span class="ticker-item"><strong>🔴 ATENÇÃO:</strong> <span class="highlight-critical">${stoppedNames}</span> ${stoppedMachines.length > 3 ? '(+' + (stoppedMachines.length - 3) + ')' : ''} parada(s)</span>`);
+            if (stoppedCount > 0) {
+                const stoppedNames = stoppedMachines.slice(0, 3).join(', ');
+                tickerItems.push(`<span class="ticker-item"><strong>🔴 ATENÇÃO:</strong> <span class="highlight-critical">${stoppedNames}</span> ${stoppedCount > 3 ? '(+' + (stoppedCount - 3) + ')' : ''} parada(s)</span>`);
             }
             
             // Atualizar ticker - duplicar itens para animação contínua
@@ -5258,13 +5310,57 @@
         }
 
         // ==================== HELPERS ====================
+        
+        /**
+         * Identifica o turno atual baseado na hora
+         * T1: 06:30-15:00, T2: 15:00-23:20, T3: 23:20-06:29
+         */
+        function getCurrentShift() {
+            const now = new Date();
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
+            const totalMinutes = hours * 60 + minutes;
+            
+            // T1: 06:30 (390) - 15:00 (900)
+            // T2: 15:00 (900) - 23:20 (1400)
+            // T3: 23:20 (1400) - 06:29 (389)
+            if (totalMinutes >= 390 && totalMinutes < 900) return 't1';
+            if (totalMinutes >= 900 && totalMinutes < 1400) return 't2';
+            return 't3'; // 23:20 até 06:29
+        }
+        
+        /**
+         * Retorna a meta planejada para o turno atual
+         * Caso tenha distribuição por turno, usa o valor do turno atual
+         * Caso contrário, calcula proporcionalmente
+         */
+        function getShiftTarget(plan) {
+            if (!plan) return 0;
+            
+            const currentShift = getCurrentShift();
+            const shiftDistrib = plan.shift_distribution;
+            
+            // Se tem distribuição por turno definida, usar
+            if (shiftDistrib && shiftDistrib[currentShift]) {
+                const shiftQty = shiftDistrib[currentShift].planned_qty;
+                if (shiftQty && shiftQty > 0) {
+                    return Math.round(shiftQty);
+                }
+            }
+            
+            // Fallback: calcular proporcional (35%, 35%, 30%)
+            const totalTarget = getPlanTarget(plan);
+            const proportions = { t1: 0.35, t2: 0.35, t3: 0.30 };
+            return Math.round(totalTarget * (proportions[currentShift] || 0.33));
+        }
+        
         // Função centralizada para extrair quantidade planejada (consistente com script.js)
+        // CORREÇÃO: Priorizar planned_quantity (meta diária calculada) sobre lot_size (tamanho total OP)
         function getPlanTarget(plan) {
             if (!plan) return 0;
-            // Prioridade: lot_size > order_lot_size > planned_quantity > planned_qty > quantidade > meta > target > qtdPlanejada
-            const qty = plan.lot_size || 
-                        plan.order_lot_size || 
-                        plan.planned_quantity || 
+            // Prioridade: planned_quantity (meta diária) > planned_qty > quantidade > meta > target > qtdPlanejada
+            // NÃO USAR lot_size/order_lot_size aqui - esses são o tamanho total da OP, não a meta diária!
+            const qty = plan.planned_quantity || 
                         plan.planned_qty || 
                         plan.quantidade || 
                         plan.meta || 
