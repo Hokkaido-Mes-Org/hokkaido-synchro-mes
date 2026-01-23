@@ -12001,6 +12001,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             setupFerramentariaPage();
         }
 
+        if (page === 'pcp') {
+            setupPCPPage();
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        }
+
         if (page === 'pmp') {
             // Inicializar aba PMP - Gestão de Materiais
             if (typeof initPMPPage === 'function') {
@@ -37077,6 +37084,47 @@ let ferramentariaState = {
     },
     initialized: false
 };
+
+// =====================================================
+// ============ SETUP: Página PCP =====================
+// =====================================================
+
+function setupPCPPage() {
+    console.log('[PCP] Inicializando página de Planejamento e Controle da Produção...');
+    
+    try {
+        // Verificar se o usuário é Leandro Camargo
+        const user = window.authSystem?.getCurrentUser?.();
+        const isAuthorized = user && (
+            user.name === 'Leandro Camargo' || 
+            user.email === 'leandro@hokkaido.com.br'
+        );
+        
+        if (!isAuthorized) {
+            console.warn('[PCP] Acesso não autorizado para este usuário');
+            return;
+        }
+        
+        // Configurar botões de ação
+        const btnRefresh = document.getElementById('btn-pcp-refresh');
+        if (btnRefresh) {
+            btnRefresh.addEventListener('click', () => {
+                console.log('[PCP] Atualizando dados...');
+                // Placeholder para futuras funcionalidades
+                showNotification('Dados atualizados com sucesso!', 'success');
+            });
+        }
+        
+        // Renderizar ícones lucide
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+        
+        console.log('[PCP] Página inicializada com sucesso!');
+    } catch (e) {
+        console.error('[PCP] Erro ao inicializar página:', e);
+    }
+}
 
 // Inicializar página de Ferramentaria
 function setupFerramentariaPage() {

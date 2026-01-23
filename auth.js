@@ -185,6 +185,16 @@ class AuthSystem {
             return true;
         }
 
+        // ⚙️ ACESSO EXCLUSIVO: Aba PCP para Leandro Camargo, Roberto Fernandes, Elaine e Daniel Rocha
+        if (tabName === 'pcp') {
+            const allowedPCP = ['leandro camargo', 'roberto fernandes', 'elaine', 'daniel rocha'];
+            const userNameLower = (this.currentUser.name || '').toLowerCase().trim();
+            if (!allowedPCP.includes(userNameLower)) {
+                return false;
+            }
+            return true;
+        }
+
         // ⚙️ ACESSO EXCLUSIVO: Aba Liderança Produção para Leandro Camargo, Michelle Benjamin e Líderes (em teste)
         if (tabName === 'lideranca-producao') {
             const allowedLideranca = ['Leandro Camargo', 'Michelle Benjamin', 'Manaus Silva', 'Luciano', 'Davi Batista', 'Linaldo', 'Tiago Oliveira'];

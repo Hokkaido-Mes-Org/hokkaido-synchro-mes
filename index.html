@@ -381,6 +381,10 @@
                     <i data-lucide="settings-2" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Ferramentaria</span>
                     <span class="nav-tooltip">Controle de Moldes</span>
                 </a>
+                <a href="#" class="nav-btn group" data-page="pcp" title="PCP - Planejamento e Controle">
+                    <i data-lucide="sliders" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">PCP</span>
+                    <span class="nav-tooltip">PCP - Planejamento e Controle</span>
+                </a>
                 <a href="dashboard-tv.html" target="_blank" rel="noopener" id="nav-dashboard-tv" class="nav-btn group" title="Dashboard TV">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 flex-shrink-0"><rect width="20" height="15" x="2" y="7" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg><span class="nav-text transition-opacity duration-300">Dashboard TV</span>
                     <span class="nav-tooltip">Dashboard TV</span>
@@ -2348,6 +2352,120 @@
                                     <i data-lucide="clipboard-list" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
                                     <p class="text-sm">Nenhuma manutenção registrada</p>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PÁGINA: PCP - Planejamento e Controle da Produção -->
+                <div id="pcp-page" class="page-content hidden space-y-4 p-2">
+                    <div class="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+                        <!-- Header -->
+                        <div class="bg-gradient-to-r from-indigo-700 to-purple-800 px-6 py-4">
+                            <div class="flex items-center justify-between flex-wrap gap-3">
+                                <div class="flex items-center gap-3">
+                                    <div class="p-2 bg-white/10 rounded-xl">
+                                        <i data-lucide="sliders" class="w-6 h-6 text-white"></i>
+                                    </div>
+                                    <div>
+                                        <h2 class="text-xl font-bold text-white">PCP - Planejamento e Controle da Produção</h2>
+                                        <p class="text-indigo-200 text-sm">Ferramentas avançadas de planejamento e controle</p>
+                                    </div>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button id="btn-pcp-refresh" class="bg-indigo-500/80 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg transition flex items-center gap-2 font-semibold">
+                                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                                        <span class="hidden sm:inline">Atualizar</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Conteúdo Principal -->
+                        <div class="p-6 space-y-6">
+                            <!-- Aviso de Versão Beta -->
+                            <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-indigo-500 rounded-lg p-4 flex gap-3">
+                                <div class="flex-shrink-0">
+                                    <i data-lucide="info" class="w-5 h-5 text-indigo-600"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-semibold text-indigo-900">Versão em Desenvolvimento</h3>
+                                    <p class="text-sm text-indigo-800 mt-1">Esta aba está em desenvolvimento. Em breve estarão disponíveis as seguintes funcionalidades:</p>
+                                    <ul class="text-sm text-indigo-700 mt-2 ml-4 space-y-1 list-disc">
+                                        <li>Análise avançada de capacidade de produção</li>
+                                        <li>Otimização de sequências de produção</li>
+                                        <li>Planejamento de materiais (MRP)</li>
+                                        <li>Simulação de cenários</li>
+                                        <li>Relatórios de planejamento integrados</li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <!-- Placeholder para Componentes Futuros -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <!-- Card 1: Análise de Capacidade -->
+                                <div class="bg-gradient-to-br from-slate-50 to-gray-100 rounded-xl border border-gray-200 p-6 opacity-50">
+                                    <div class="flex items-center gap-3 mb-4">
+                                        <div class="p-2 bg-blue-100 rounded-lg">
+                                            <i data-lucide="bar-chart-3" class="w-5 h-5 text-blue-600"></i>
+                                        </div>
+                                        <h3 class="font-bold text-gray-700">Análise de Capacidade</h3>
+                                    </div>
+                                    <p class="text-sm text-gray-600">Análise detalhada da capacidade produtiva e utilização de máquinas</p>
+                                    <button class="mt-4 px-4 py-2 bg-gray-300 text-gray-500 rounded-lg cursor-not-allowed" disabled>
+                                        Disponível em breve
+                                    </button>
+                                </div>
+
+                                <!-- Card 2: Otimização de Sequências -->
+                                <div class="bg-gradient-to-br from-slate-50 to-gray-100 rounded-xl border border-gray-200 p-6 opacity-50">
+                                    <div class="flex items-center gap-3 mb-4">
+                                        <div class="p-2 bg-purple-100 rounded-lg">
+                                            <i data-lucide="shuffle" class="w-5 h-5 text-purple-600"></i>
+                                        </div>
+                                        <h3 class="font-bold text-gray-700">Otimização de Sequências</h3>
+                                    </div>
+                                    <p class="text-sm text-gray-600">Otimizar a sequência de ordens para maximizar eficiência</p>
+                                    <button class="mt-4 px-4 py-2 bg-gray-300 text-gray-500 rounded-lg cursor-not-allowed" disabled>
+                                        Disponível em breve
+                                    </button>
+                                </div>
+
+                                <!-- Card 3: Planejamento MRP -->
+                                <div class="bg-gradient-to-br from-slate-50 to-gray-100 rounded-xl border border-gray-200 p-6 opacity-50">
+                                    <div class="flex items-center gap-3 mb-4">
+                                        <div class="p-2 bg-green-100 rounded-lg">
+                                            <i data-lucide="package" class="w-5 h-5 text-green-600"></i>
+                                        </div>
+                                        <h3 class="font-bold text-gray-700">Planejamento de Materiais (MRP)</h3>
+                                    </div>
+                                    <p class="text-sm text-gray-600">Planejamento integrado de materiais e matérias-primas</p>
+                                    <button class="mt-4 px-4 py-2 bg-gray-300 text-gray-500 rounded-lg cursor-not-allowed" disabled>
+                                        Disponível em breve
+                                    </button>
+                                </div>
+
+                                <!-- Card 4: Simulação de Cenários -->
+                                <div class="bg-gradient-to-br from-slate-50 to-gray-100 rounded-xl border border-gray-200 p-6 opacity-50">
+                                    <div class="flex items-center gap-3 mb-4">
+                                        <div class="p-2 bg-orange-100 rounded-lg">
+                                            <i data-lucide="zap" class="w-5 h-5 text-orange-600"></i>
+                                        </div>
+                                        <h3 class="font-bold text-gray-700">Simulação de Cenários</h3>
+                                    </div>
+                                    <p class="text-sm text-gray-600">Simular diferentes cenários de produção e demanda</p>
+                                    <button class="mt-4 px-4 py-2 bg-gray-300 text-gray-500 rounded-lg cursor-not-allowed" disabled>
+                                        Disponível em breve
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Informação de Contato -->
+                            <div class="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-4 mt-6">
+                                <p class="text-sm text-amber-900">
+                                    <i data-lucide="alert-circle" class="w-4 h-4 inline mr-2"></i>
+                                    Para solicitar novas funcionalidades ou relatar problemas, entre em contato com a equipe de desenvolvimento.
+                                </p>
                             </div>
                         </div>
                     </div>
