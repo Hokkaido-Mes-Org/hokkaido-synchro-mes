@@ -37249,6 +37249,69 @@ async function loadPCPData(date) {
         
         console.log('[PCP] Paradas normais em andamento (downtime_entries):', normalDowntimes.size, [...normalDowntimes.keys()]);
         
+        // Coletar máquinas com paradas mas sem planejamento para buscar dados
+        const machinesNeedingData = new Set();
+        activeDowntimes.forEach((_, machineId) => {
+            if (!machinesWithPlanning.has(machineId)) machinesNeedingData.add(machineId);
+        });
+        extendedDowntimes.forEach((_, machineId) => {
+            if (!machinesWithPlanning.has(machineId)) machinesNeedingData.add(machineId);
+        });
+        normalDowntimes.forEach((_, machineId) => {
+            if (!machinesWithPlanning.has(machineId)) machinesNeedingData.add(machineId);
+        });
+        
+        // Buscar último planejamento de cada máquina sem planejamento no dia para obter cavidade/ciclo
+        const lastPlanningByMachine = new Map();
+        if (machinesNeedingData.size > 0) {
+            // Buscar planejamentos recentes (últimos 30 dias) para essas máquinas
+            const machineArray = [...machinesNeedingData];
+            console.log('[PCP] Buscando último planejamento para máquinas:', machineArray);
+            
+            for (const machineId of machineArray) {
+                try {
+                    const lastPlanSnapshot = await db.collection('planning')
+                        .where('machine', '==', machineId)
+                        .orderBy('date', 'desc')
+                        .limit(1)
+                        .get();
+                    
+                    if (!lastPlanSnapshot.empty) {
+                        const planData = lastPlanSnapshot.docs[0].data();
+                        const productCode = planData.product_code || planData.productCode || planData.product || '';
+                        const productInfo = productByCode?.get(productCode) || {};
+                        
+                        // Buscar valores REAIS do painel de lançamento (prioridade)
+                        let realCavidades = null;
+                        let realCiclo = null;
+                        for (const shiftKey of ['t1', 't2', 't3']) {
+                            if (realCavidades === null) {
+                                const cavValue = Number(planData[`active_cavities_${shiftKey}`]) || 
+                                                 Number(planData[`active_cavities_${shiftKey.toUpperCase()}`]);
+                                if (cavValue > 0) realCavidades = cavValue;
+                            }
+                            if (realCiclo === null) {
+                                const cycleValue = Number(planData[`real_cycle_${shiftKey}`]) || 
+                                                   Number(planData[`real_cycle_${shiftKey.toUpperCase()}`]);
+                                if (cycleValue > 0) realCiclo = cycleValue;
+                            }
+                            if (realCavidades !== null && realCiclo !== null) break;
+                        }
+                        
+                        lastPlanningByMachine.set(machineId, {
+                            cavidades: realCavidades || Number(planData.cavities) || Number(planData.cavidade) || Number(productInfo.cavidades) || 0,
+                            ciclo: realCiclo || Number(planData.cycle) || Number(planData.cycle_time) || Number(productInfo.ciclo) || 0,
+                            cliente: planData.client || planData.cliente || productInfo.cliente || '-',
+                            produto: planData.product_name || planData.productName || productInfo.descricao || productCode || '-'
+                        });
+                    }
+                } catch (e) {
+                    console.warn('[PCP] Erro ao buscar último planejamento para', machineId, e);
+                }
+            }
+            console.log('[PCP] Últimos planejamentos encontrados:', lastPlanningByMachine.size);
+        }
+        
         // Verificar se há dados para mostrar
         if (planningItems.length === 0 && activeDowntimes.size === 0 && extendedDowntimes.size === 0 && normalDowntimes.size === 0) {
             if (loadingEl) loadingEl.classList.add('hidden');
@@ -37305,9 +37368,60 @@ async function loadPCPData(date) {
                 downtimeReason = normalDowntime.reason || normalDowntime.motivo || 'Não informado';
             }
             
-            // Calcular valores
-            const cavidades = Number(plan.cavities) || Number(plan.cavidade) || Number(productInfo.cavidades) || 0;
-            const ciclo = Number(plan.cycle) || Number(plan.cycle_time) || Number(productInfo.ciclo) || 0;
+            // Determinar turno atual para buscar ciclo/cavidades reais
+            const now = new Date();
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
+            const currentMinutes = hours * 60 + minutes;
+            
+            // Turno 1: 06:30 às 15:00 (390 a 900)
+            // Turno 2: 15:00 às 23:30 (900 a 1410)
+            // Turno 3: 23:30 às 06:30 (1410 a 390)
+            let currentShiftKey = 't3';
+            if (currentMinutes >= 390 && currentMinutes < 900) currentShiftKey = 't1';
+            else if (currentMinutes >= 900 && currentMinutes < 1410) currentShiftKey = 't2';
+            
+            // Calcular valores - PRIORIZAR valores REAIS do painel de lançamento
+            // Tentar buscar do turno atual primeiro, depois dos outros turnos
+            const shiftKeys = [currentShiftKey, 't1', 't2', 't3'];
+            let realCavidades = null;
+            let realCiclo = null;
+            
+            for (const shiftKey of shiftKeys) {
+                if (realCavidades === null) {
+                    // Tentar diferentes variações dos nomes dos campos
+                    const cavValue = Number(plan[`active_cavities_${shiftKey}`]) || 
+                                     Number(plan[`active_cavities_${shiftKey.toUpperCase()}`]) ||
+                                     Number(plan[`activeCavities${shiftKey.toUpperCase()}`]);
+                    if (cavValue > 0) realCavidades = cavValue;
+                }
+                if (realCiclo === null) {
+                    // Tentar diferentes variações dos nomes dos campos
+                    const cycleValue = Number(plan[`real_cycle_${shiftKey}`]) || 
+                                       Number(plan[`real_cycle_${shiftKey.toUpperCase()}`]) ||
+                                       Number(plan[`realCycle${shiftKey.toUpperCase()}`]);
+                    if (cycleValue > 0) realCiclo = cycleValue;
+                }
+                if (realCavidades !== null && realCiclo !== null) break;
+            }
+            
+            // DEBUG: Log para verificar os valores encontrados
+            console.log(`[PCP] Máquina ${machineId}: realCav=${realCavidades}, realCiclo=${realCiclo}`);
+            console.log(`[PCP] Máquina ${machineId} campos:`, {
+                active_cavities_t1: plan.active_cavities_t1,
+                active_cavities_t2: plan.active_cavities_t2,
+                active_cavities_t3: plan.active_cavities_t3,
+                real_cycle_t1: plan.real_cycle_t1,
+                real_cycle_t2: plan.real_cycle_t2,
+                real_cycle_t3: plan.real_cycle_t3,
+                cavities: plan.cavities,
+                cycle: plan.cycle
+            });
+            
+            // Se não encontrou valores reais, usar valores planejados
+            const cavidades = realCavidades || Number(plan.cavities) || Number(plan.cavidade) || Number(productInfo.cavidades) || 0;
+            const ciclo = realCiclo || Number(plan.cycle) || Number(plan.cycle_time) || Number(productInfo.ciclo) || 0;
+            
             const planejado = Number(plan.planned_quantity) || Number(plan.planned_qty) || Number(plan.quantity) || 0;
             const executado = productionByPlan.get(plan.id) || Number(plan.total_produzido) || 0;
             const faltante = Math.max(0, planejado - executado);
@@ -37338,13 +37452,14 @@ async function loadPCPData(date) {
         activeDowntimes.forEach((downtimeData, machineId) => {
             if (!machinesWithPlanning.has(machineId)) {
                 const reason = downtimeData.motivo || downtimeData.reason || 'Não informado';
+                const lastPlan = lastPlanningByMachine.get(machineId) || {};
                 tableData.push({
                     machine: machineId,
-                    cavidades: '-',
-                    ciclo: '-',
+                    cavidades: lastPlan.cavidades || '-',
+                    ciclo: lastPlan.ciclo || '-',
                     status: 'Parada',
-                    cliente: '-',
-                    produto: '-',
+                    cliente: lastPlan.cliente || '-',
+                    produto: lastPlan.produto || '-',
                     motivoParada: reason,
                     planejado: 0,
                     executado: 0,
@@ -37359,13 +37474,14 @@ async function loadPCPData(date) {
             // Só adiciona se não tem planejamento E não foi adicionada como parada ativa
             if (!machinesWithPlanning.has(machineId) && !activeDowntimes.has(machineId)) {
                 const reason = downtimeData.motivo || downtimeData.reason || 'Não informado';
+                const lastPlan = lastPlanningByMachine.get(machineId) || {};
                 tableData.push({
                     machine: machineId,
-                    cavidades: '-',
-                    ciclo: '-',
+                    cavidades: lastPlan.cavidades || '-',
+                    ciclo: lastPlan.ciclo || '-',
                     status: 'Parada Longa',
-                    cliente: '-',
-                    produto: '-',
+                    cliente: lastPlan.cliente || '-',
+                    produto: lastPlan.produto || '-',
                     motivoParada: reason,
                     planejado: 0,
                     executado: 0,
@@ -37380,13 +37496,14 @@ async function loadPCPData(date) {
             // Só adiciona se não tem planejamento E não foi adicionada como parada ativa ou longa
             if (!machinesWithPlanning.has(machineId) && !activeDowntimes.has(machineId) && !extendedDowntimes.has(machineId)) {
                 const reason = downtimeData.reason || downtimeData.motivo || 'Não informado';
+                const lastPlan = lastPlanningByMachine.get(machineId) || {};
                 tableData.push({
                     machine: machineId,
-                    cavidades: '-',
-                    ciclo: '-',
+                    cavidades: lastPlan.cavidades || '-',
+                    ciclo: lastPlan.ciclo || '-',
                     status: 'Parada',
-                    cliente: '-',
-                    produto: '-',
+                    cliente: lastPlan.cliente || '-',
+                    produto: lastPlan.produto || '-',
                     motivoParada: reason,
                     planejado: 0,
                     executado: 0,
