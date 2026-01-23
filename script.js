@@ -6432,23 +6432,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
         
         const btn = e.currentTarget;
+        const recordId = btn.dataset.id;
         
-        // Navegar para a aba de paradas longas
-        const paradas = document.querySelector('[data-page="paradas-longas"]');
-        if (paradas) {
-            paradas.click();
-        }
+        console.log('[EXTENDED-DOWNTIME] Editando da análise:', recordId);
         
-        // Simular click no botão de edição equivalente
-        setTimeout(() => {
-            const editBtn = document.querySelector(`.btn-edit-extended-downtime[data-id="${btn.dataset.id}"]`);
-            if (editBtn) {
-                editBtn.click();
-            } else {
-                // Se não encontrar, popular form manualmente
-                handleEditExtendedDowntime.call(btn);
-            }
-        }, 300);
+        // Abrir diretamente o modal de edição completa
+        await openEditDowntimeModal(recordId);
     }
 
     async function handleDeleteExtendedDowntimeFromAnalysis(e) {
@@ -6888,11 +6877,15 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                         // Resolver produto através de múltiplas fontes
                         const product = raw.product || raw.produto || raw.product_cod || raw.cod_produto || raw.productName || raw.mp || '';
                         
+                        // CORREÇÃO: Usar mesma lógica do Dashboard TV para consistência
+                        // Verificar todos os campos possíveis de quantidade produzida
+                        const rawQty = Number(raw.produzido ?? raw.pecasBoas ?? raw.quantity ?? raw.produced ?? raw.qtd ?? raw.quantidade ?? raw.total_produzido ?? 0) || 0;
+                        
                         return {
                             id,
                             date: mappedDate,
                             machine: normalizeMachineId(raw.machine || raw.machineRef || raw.machine_id || null),
-                            quantity: Number(raw.produzido ?? raw.quantity ?? 0) || 0,
+                            quantity: Math.round(rawQty), // Sempre inteiro, consistente com Dashboard TV
                             shift: normalizeShift(raw.turno ?? raw.shift),
                             datetime: isoDateTime,
                             mp: raw.mp || '',
@@ -7791,26 +7784,26 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
     function setAnalysisDefaultDates() {
         const workdayDate = getProductionDateString();
-        const { startDate: calendarStart, endDate: calendarEnd } = getCalendarDateRangeForWorkday(workdayDate);
+        // CORREÇÃO: Usar apenas o workday, não o range de calendário
+        // O range de calendário era usado para cobrir dados de dois dias, mas isso causa
+        // discrepância com o Dashboard TV que só mostra o dia atual
         
         const startDateInput = document.getElementById('analysis-start-date');
         const endDateInput = document.getElementById('analysis-end-date');
         
-        if (startDateInput) startDateInput.value = calendarStart || workdayDate;
-        if (endDateInput) endDateInput.value = calendarEnd || workdayDate;
+        if (startDateInput) startDateInput.value = workdayDate;
+        if (endDateInput) endDateInput.value = workdayDate;
         
-        // Configurar filtros padrão - usar o range de calendário que cobre o dia de trabalho
+        // Configurar filtros padrão - usar apenas o workday atual (consistente com Dashboard TV)
         currentAnalysisFilters = {
-            startDate: calendarStart || workdayDate,
-            endDate: calendarEnd || workdayDate,
+            startDate: workdayDate,
+            endDate: workdayDate,
             machine: 'all',
             shift: 'all'
         };
         
         console.log('[ANALYSIS] Default dates set:', {
             workdayDate,
-            calendarStart,
-            calendarEnd,
             filters: currentAnalysisFilters
         });
     }
@@ -9180,20 +9173,20 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         let labels, data, colors;
         const isMobile = window.innerWidth < 768;
         
-        // Cores para cada categoria
+        // Cores para cada categoria - Sincronizadas com status do Dashboard TV
         const categoryColors = {
-            'FERRAMENTARIA': '#6366F1',
-            'PROCESSO': '#8B5CF6',
-            'COMPRAS': '#EC4899',
-            'PREPARAÇÃO': '#F59E0B',
-            'QUALIDADE': '#10B981',
-            'MANUTENÇÃO': '#EF4444',
-            'PRODUÇÃO': '#3B82F6',
-            'SETUP': '#14B8A6',
-            'ADMINISTRATIVO': '#F97316',
-            'PCP': '#84CC16',
-            'COMERCIAL': '#06B6D4',
-            'OUTROS': '#6B7280'
+            'FERRAMENTARIA': '#ff1744',      // Status Critical - Vermelho
+            'PROCESSO': '#7c4dff',            // Status Maintenance - Roxo
+            'COMPRAS': '#ffab00',             // Status Warning - Amarelo
+            'PREPARAÇÃO': '#ffab00',          // Status Warning - Amarelo
+            'QUALIDADE': '#7c4dff',           // Status Maintenance - Roxo
+            'MANUTENÇÃO': '#ff1744',          // Status Critical - Vermelho
+            'PRODUÇÃO': '#00e676',            // Status Running - Verde
+            'SETUP': '#ffab00',               // Status Warning - Amarelo
+            'ADMINISTRATIVO': '#78909c',      // Status Idle - Cinza
+            'PCP': '#78909c',                 // Status Idle - Cinza
+            'COMERCIAL': '#78909c',           // Status Idle - Cinza
+            'OUTROS': '#78909c'               // Status Idle - Cinza
         };
 
         if (downtimeChartMode === 'category') {
@@ -19537,6 +19530,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     function setupExtendedDowntimeTab() {
         populateExtendedDowntimeReasons();
         populateExtendedDowntimeMachines();
+        
+        // Inicializar modal de edição completa
+        initEditExtendedDowntimeModal();
 
         // Elementos do formulário
         const startDateInput = document.getElementById('extended-downtime-start-date');
@@ -23702,6 +23698,400 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
     }
 
+    // Cache de registros para filtragem
+    let extendedDowntimeListCache = [];
+    
+    /**
+     * Inicializa os filtros da lista de paradas longas
+     */
+    function initExtendedDowntimeListFilters() {
+        const filterStatus = document.getElementById('extended-downtime-list-filter-status');
+        const filterMachine = document.getElementById('extended-downtime-list-filter-machine');
+        const refreshBtn = document.getElementById('extended-downtime-list-refresh');
+        
+        if (filterStatus) {
+            filterStatus.addEventListener('change', () => renderFilteredDowntimeList());
+        }
+        
+        if (filterMachine) {
+            filterMachine.addEventListener('change', () => renderFilteredDowntimeList());
+        }
+        
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', async () => {
+                refreshBtn.disabled = true;
+                refreshBtn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Atualizando...';
+                await loadExtendedDowntimeList();
+                refreshBtn.disabled = false;
+                refreshBtn.innerHTML = '<i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Atualizar';
+                lucide.createIcons();
+            });
+        }
+    }
+    
+    /**
+     * Popula o filtro de máquinas com as máquinas disponíveis
+     */
+    function populateMachineFilter(records) {
+        const filterMachine = document.getElementById('extended-downtime-list-filter-machine');
+        if (!filterMachine) return;
+        
+        const machines = [...new Set(records.map(r => r.machine_id).filter(Boolean))].sort();
+        filterMachine.innerHTML = '<option value="all">Todas Máquinas</option>' +
+            machines.map(m => `<option value="${m}">${m}</option>`).join('');
+    }
+    
+    /**
+     * Atualiza os contadores do resumo
+     */
+    function updateDowntimeSummary(records) {
+        const activeCount = records.filter(r => r.status === 'active').length;
+        const finishedCount = records.filter(r => r.status !== 'active').length;
+        const uniqueMachines = new Set(records.map(r => r.machine_id)).size;
+        
+        // Calcular total de horas
+        let totalMinutes = 0;
+        records.forEach(r => {
+            if (r.status === 'active') {
+                // Calcular até agora
+                let startDt;
+                if (r.start_datetime?.toDate) {
+                    startDt = r.start_datetime.toDate();
+                } else if (r.start_date && r.start_time) {
+                    startDt = new Date(`${r.start_date}T${r.start_time}`);
+                }
+                if (startDt) {
+                    totalMinutes += Math.floor((new Date() - startDt) / (1000 * 60));
+                }
+            } else {
+                totalMinutes += (r.duration_minutes || 0);
+            }
+        });
+        
+        const totalHours = Math.floor(totalMinutes / 60);
+        
+        // Atualizar elementos
+        const activeEl = document.getElementById('summary-active-count');
+        const finishedEl = document.getElementById('summary-finished-count');
+        const hoursEl = document.getElementById('summary-total-hours');
+        const machinesEl = document.getElementById('summary-machines-count');
+        
+        if (activeEl) activeEl.textContent = activeCount;
+        if (finishedEl) finishedEl.textContent = finishedCount;
+        if (hoursEl) hoursEl.textContent = totalHours > 24 ? `${Math.floor(totalHours/24)}d ${totalHours%24}h` : `${totalHours}h`;
+        if (machinesEl) machinesEl.textContent = uniqueMachines;
+    }
+    
+    /**
+     * Renderiza a lista filtrada
+     */
+    function renderFilteredDowntimeList() {
+        const filterStatus = document.getElementById('extended-downtime-list-filter-status')?.value || 'all';
+        const filterMachine = document.getElementById('extended-downtime-list-filter-machine')?.value || 'all';
+        
+        let filtered = [...extendedDowntimeListCache];
+        
+        // Filtrar por status
+        if (filterStatus === 'active') {
+            filtered = filtered.filter(r => r.status === 'active');
+        } else if (filterStatus === 'finished') {
+            filtered = filtered.filter(r => r.status !== 'active');
+        }
+        
+        // Filtrar por máquina
+        if (filterMachine !== 'all') {
+            filtered = filtered.filter(r => r.machine_id === filterMachine);
+        }
+        
+        renderDowntimeListItems(filtered);
+    }
+    
+    /**
+     * Renderiza os itens da lista
+     */
+    function renderDowntimeListItems(records) {
+        const listContainer = document.getElementById('extended-downtime-list');
+        const emptyDiv = document.getElementById('extended-downtime-list-empty');
+        
+        if (!listContainer) return;
+        
+        listContainer.innerHTML = '';
+        
+        if (records.length === 0) {
+            emptyDiv?.classList.remove('hidden');
+            return;
+        }
+        
+        emptyDiv?.classList.add('hidden');
+        
+        const typeLabels = {
+            weekend: 'Fim de Semana',
+            maintenance: 'Manutenção Preventiva',
+            preventive: 'Manutenção Preventiva',
+            maintenance_planned: 'Manutenção Programada',
+            maintenance_emergency: 'Manutenção Emergencial',
+            no_order: 'Sem Pedido',
+            commercial: 'Parada Comercial',
+            holiday: 'Feriado',
+            setup: 'Setup/Troca',
+            other: 'Outro'
+        };
+        const typeColors = {
+            weekend: 'bg-gray-100 text-gray-700',
+            maintenance: 'bg-blue-100 text-blue-700',
+            preventive: 'bg-blue-100 text-blue-700',
+            maintenance_planned: 'bg-blue-100 text-blue-700',
+            maintenance_emergency: 'bg-red-100 text-red-700',
+            no_order: 'bg-orange-100 text-orange-700',
+            commercial: 'bg-amber-100 text-amber-700',
+            holiday: 'bg-amber-100 text-amber-700',
+            setup: 'bg-purple-100 text-purple-700',
+            other: 'bg-red-100 text-red-700'
+        };
+
+        records.forEach(record => {
+            const html = createDowntimeListItemHTML(record, typeLabels, typeColors);
+            listContainer.insertAdjacentHTML('beforeend', html);
+        });
+
+        // Attach event listeners
+        attachExtendedDowntimeEventListeners();
+        
+        // Attach listeners para botão de finalizar
+        document.querySelectorAll('.btn-finish-extended-downtime').forEach(btn => {
+            btn.addEventListener('click', handleFinishExtendedDowntime);
+        });
+        
+        lucide.createIcons();
+    }
+    
+    /**
+     * Cria o HTML de um item da lista
+     */
+    function createDowntimeListItemHTML(record, typeLabels, typeColors) {
+        const startDate = record.start_date || '-';
+        const endDate = record.end_date || '-';
+        const startTime = record.start_time || '00:00';
+        const endTime = record.end_time || '23:59';
+        const machine = record.machine_id || '-';
+        const type = record.type || 'other';
+        const category = record.category || '';
+        const reason = record.reason || '-';
+        const isActive = record.status === 'active';
+        
+        // Calcular duração
+        let durationText = '--';
+        let durationMinutes = 0;
+        
+        if (isActive) {
+            let startDt;
+            if (record.start_datetime?.toDate) {
+                startDt = record.start_datetime.toDate();
+            } else if (startDate && startTime) {
+                startDt = new Date(`${startDate}T${startTime}`);
+            }
+            if (startDt) {
+                durationMinutes = Math.floor((new Date() - startDt) / (1000 * 60));
+            }
+        } else {
+            durationMinutes = record.duration_minutes || 0;
+        }
+        
+        const durationDays = Math.floor(durationMinutes / (24 * 60));
+        const durationHours = Math.floor((durationMinutes % (24 * 60)) / 60);
+        const durationMins = durationMinutes % 60;
+        
+        if (durationDays > 0) {
+            durationText = `${durationDays}d ${durationHours}h`;
+        } else if (durationHours > 0) {
+            durationText = `${durationHours}h ${durationMins}min`;
+        } else {
+            durationText = `${durationMins}min`;
+        }
+        
+        // Cores das categorias
+        const categoryColors = {
+            'FERRAMENTARIA': 'bg-indigo-100 text-indigo-700',
+            'PROCESSO': 'bg-cyan-100 text-cyan-700',
+            'COMPRAS': 'bg-green-100 text-green-700',
+            'PREPARAÇÃO': 'bg-yellow-100 text-yellow-700',
+            'QUALIDADE': 'bg-pink-100 text-pink-700',
+            'MANUTENÇÃO': 'bg-blue-100 text-blue-700',
+            'PRODUÇÃO': 'bg-orange-100 text-orange-700',
+            'SETUP': 'bg-purple-100 text-purple-700',
+            'ADMINISTRATIVO': 'bg-slate-100 text-slate-700',
+            'PCP': 'bg-teal-100 text-teal-700',
+            'COMERCIAL': 'bg-amber-100 text-amber-700'
+        };
+        const categoryColor = categoryColors[category] || 'bg-gray-100 text-gray-600';
+        const categoryBadge = category ? `<span class="text-xs px-2 py-0.5 rounded font-medium ${categoryColor}">${category}</span>` : '';
+        
+        // Badge de status
+        const statusBadge = isActive 
+            ? '<span class="text-xs px-2 py-0.5 rounded bg-red-100 text-red-700 font-semibold animate-pulse">🔴 ATIVA</span>'
+            : '<span class="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700 font-semibold">✅ Finalizada</span>';
+        
+        // Período formatado
+        const periodStart = `${startDate} ${startTime}`;
+        const periodEnd = isActive ? '(em andamento)' : `${endDate} ${endTime}`;
+        
+        // Registrado por
+        const createdBy = record.createdBy || record.registered_by || '-';
+        const finishedBy = record.finishedBy || record.finished_by || '-';
+        
+        // Botão de finalizar (apenas para ativas)
+        const finishButton = isActive 
+            ? `<button class="btn-finish-extended-downtime bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 shadow-sm" data-id="${record.id}" data-machine="${machine}">
+                    <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+                    <span>Finalizar</span>
+                </button>` 
+            : '';
+
+        return `
+            <div class="bg-white border ${isActive ? 'border-red-300 bg-red-50' : 'border-gray-200'} rounded-xl px-4 py-3 shadow-sm hover:shadow-md transition-shadow">
+                <!-- Header com máquina e status -->
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-gradient-to-br ${isActive ? 'from-red-500 to-red-600' : 'from-slate-500 to-slate-600'} rounded-lg flex items-center justify-center text-white font-bold text-sm shadow">
+                            ${machine.slice(-2)}
+                        </div>
+                        <div>
+                            <span class="font-bold text-gray-800">${machine}</span>
+                            <div class="flex items-center gap-2 mt-0.5">
+                                ${categoryBadge}
+                                ${statusBadge}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-lg font-bold ${isActive ? 'text-red-600' : 'text-slate-700'}">${durationText}</span>
+                    </div>
+                </div>
+                
+                <!-- Detalhes -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3 text-xs">
+                    <div class="bg-gray-50 rounded-lg px-2 py-1.5">
+                        <span class="text-gray-500 block">Motivo</span>
+                        <span class="font-medium text-gray-700 truncate block" title="${reason}">${reason}</span>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg px-2 py-1.5">
+                        <span class="text-gray-500 block">Início</span>
+                        <span class="font-medium text-gray-700">${periodStart}</span>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg px-2 py-1.5">
+                        <span class="text-gray-500 block">Fim</span>
+                        <span class="font-medium ${isActive ? 'text-red-600' : 'text-gray-700'}">${periodEnd}</span>
+                    </div>
+                </div>
+                
+                <!-- Rodapé com ações -->
+                <div class="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <div class="text-xs text-gray-400">
+                        Registrado por: <span class="font-medium">${createdBy}</span>
+                        ${!isActive && finishedBy !== '-' ? ` | Finalizado por: <span class="font-medium">${finishedBy}</span>` : ''}
+                    </div>
+                    <div class="flex items-center gap-2">
+                        ${finishButton}
+                        <button class="btn-edit-extended-downtime bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 shadow-sm" data-id="${record.id}" data-machine="${machine}" data-type="${type}" data-category="${category}" data-start-date="${startDate}" data-end-date="${endDate}" data-reason="${reason}" data-start-time="${startTime}" data-end-time="${endTime}">
+                            <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+                            <span>Editar</span>
+                        </button>
+                        <button class="btn-delete-extended-downtime bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 shadow-sm" data-id="${record.id}" data-machine="${machine}">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            <span>Excluir</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    /**
+     * Handler para finalizar uma parada ativa diretamente da lista
+     */
+    async function handleFinishExtendedDowntime(e) {
+        // ⚠️ VERIFICAÇÃO DE PERMISSÃO
+        if (!isUserGestorOrAdmin()) {
+            showPermissionDeniedNotification('finalizar paradas longas');
+            return;
+        }
+        
+        const btn = e.currentTarget;
+        const recordId = btn.dataset.id;
+        const machine = btn.dataset.machine;
+        
+        const confirmMsg = `Finalizar parada da máquina ${machine}?\n\nA data/hora atual será registrada como fim da parada.`;
+        if (!confirm(confirmMsg)) return;
+        
+        try {
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Finalizando...';
+            
+            const now = new Date();
+            const endDate = now.toISOString().split('T')[0];
+            const endTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+            
+            // Buscar dados atuais para calcular duração
+            const doc = await db.collection('extended_downtime_logs').doc(recordId).get();
+            if (!doc.exists) {
+                alert('Registro não encontrado!');
+                return;
+            }
+            
+            const data = doc.data();
+            let startDateTime;
+            if (data.start_datetime?.toDate) {
+                startDateTime = data.start_datetime.toDate();
+            } else if (data.start_date && data.start_time) {
+                startDateTime = new Date(`${data.start_date}T${data.start_time}`);
+            } else {
+                startDateTime = new Date();
+            }
+            
+            const durationMinutes = Math.floor((now - startDateTime) / (1000 * 60));
+            const userName = getActiveUser()?.name || 'Sistema';
+            
+            await db.collection('extended_downtime_logs').doc(recordId).update({
+                status: 'finished',
+                end_date: endDate,
+                end_time: endTime,
+                end_datetime: firebase.firestore.Timestamp.fromDate(now),
+                duration_minutes: durationMinutes,
+                finishedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                finishedBy: userName,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedBy: userName
+            });
+            
+            console.log('[EXTENDED-DOWNTIME] Parada finalizada:', recordId);
+            
+            // Registrar log
+            registrarLogSistema('FINALIZAÇÃO DE PARADA LONGA', 'parada', {
+                recordId: recordId,
+                machine: machine,
+                endDate: endDate,
+                endTime: endTime,
+                durationMinutes: durationMinutes
+            });
+            
+            showNotification(`✅ Parada da ${machine} finalizada!`, 'success');
+            
+            // Recarregar lista
+            await loadExtendedDowntimeList();
+            
+            // Atualizar cards de máquinas
+            const machinesDowntime = await getAllMachinesDowntimeStatus();
+            await renderMachineCards([], [], [], new Set(), machinesDowntime);
+            
+        } catch (error) {
+            console.error('[EXTENDED-DOWNTIME] Erro ao finalizar:', error);
+            alert('Erro ao finalizar parada: ' + error.message);
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="check-circle" class="w-3.5 h-3.5"></i><span>Finalizar</span>';
+            lucide.createIcons();
+        }
+    }
+
     async function loadExtendedDowntimeList() {
         const listContainer = document.getElementById('extended-downtime-list');
         const loadingDiv = document.getElementById('extended-downtime-list-loading');
@@ -23713,7 +24103,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             loadingDiv?.classList.remove('hidden');
             listContainer.innerHTML = '';
 
-            const snap = await db.collection('extended_downtime_logs').orderBy('createdAt', 'desc').limit(50).get();
+            const snap = await db.collection('extended_downtime_logs').orderBy('createdAt', 'desc').limit(100).get();
             const rawRecords = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             const records = [];
             const seenIds = new Set();
@@ -23727,6 +24117,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 seenIds.add(record.id);
                 records.push(record);
             });
+            
+            // Guardar no cache para filtragem
+            extendedDowntimeListCache = records;
+            
+            // Inicializar filtros (apenas na primeira vez)
+            initExtendedDowntimeListFilters();
+            
+            // Popular filtro de máquinas
+            populateMachineFilter(records);
+            
+            // Atualizar resumo
+            updateDowntimeSummary(records);
 
             if (records.length === 0) {
                 emptyDiv?.classList.remove('hidden');
@@ -23737,89 +24139,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             emptyDiv?.classList.add('hidden');
             loadingDiv?.classList.add('hidden');
 
-            const typeLabels = {
-                weekend: 'Fim de Semana',
-                maintenance: 'Manutenção Preventiva',
-                preventive: 'Manutenção Preventiva',
-                maintenance_planned: 'Manutenção Programada',
-                maintenance_emergency: 'Manutenção Emergencial',
-                no_order: 'Sem Pedido',
-                commercial: 'Parada Comercial',
-                holiday: 'Feriado',
-                setup: 'Setup/Troca',
-                other: 'Outro'
-            };
-            const typeColors = {
-                weekend: 'bg-gray-100 text-gray-700',
-                maintenance: 'bg-blue-100 text-blue-700',
-                preventive: 'bg-blue-100 text-blue-700',
-                maintenance_planned: 'bg-blue-100 text-blue-700',
-                maintenance_emergency: 'bg-red-100 text-red-700',
-                no_order: 'bg-orange-100 text-orange-700',
-                commercial: 'bg-amber-100 text-amber-700',
-                holiday: 'bg-amber-100 text-amber-700',
-                setup: 'bg-purple-100 text-purple-700',
-                other: 'bg-red-100 text-red-700'
-            };
-
-            records.forEach(record => {
-                const startDate = record.start_date || '-';
-                const endDate = record.end_date || '-';
-                const machine = record.machine_id || '-';
-                const type = record.type || 'other';
-                const category = record.category || '';
-                const reason = record.reason || '-';
-                const durationDays = Math.floor((record.duration_minutes || 0) / (24 * 60));
-                const durationHours = Math.floor(((record.duration_minutes || 0) % (24 * 60)) / 60);
-                const durationText = durationDays > 0 ? `${durationDays}d ${durationHours}h` : `${durationHours}h`;
-                const typeLabel = typeLabels[type] || type;
-                const typeColor = typeColors[type] || 'bg-gray-100 text-gray-700';
-                
-                // Cores das categorias
-                const categoryColors = {
-                    'FERRAMENTARIA': 'bg-indigo-100 text-indigo-700',
-                    'PROCESSO': 'bg-cyan-100 text-cyan-700',
-                    'COMPRAS': 'bg-green-100 text-green-700',
-                    'PREPARAÇÃO': 'bg-yellow-100 text-yellow-700',
-                    'QUALIDADE': 'bg-pink-100 text-pink-700',
-                    'MANUTENÇÃO': 'bg-blue-100 text-blue-700',
-                    'PRODUÇÃO': 'bg-orange-100 text-orange-700',
-                    'SETUP': 'bg-purple-100 text-purple-700',
-                    'ADMINISTRATIVO': 'bg-slate-100 text-slate-700',
-                    'PCP': 'bg-teal-100 text-teal-700',
-                    'COMERCIAL': 'bg-amber-100 text-amber-700'
-                };
-                const categoryColor = categoryColors[category] || 'bg-gray-100 text-gray-600';
-                const categoryBadge = category ? `<span class="text-xs px-2 py-0.5 rounded font-medium ${categoryColor}">${category}</span>` : '';
-
-                const html = `
-                    <div class="bg-white border border-gray-200 rounded-lg px-3 py-2 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                        <div class="flex-1 flex flex-wrap items-center gap-3 text-sm">
-                            <span class="font-semibold text-gray-800">${machine}</span>
-                            ${categoryBadge}
-                            <span class="text-xs px-2 py-0.5 rounded ${typeColor}">${typeLabel}</span>
-                            <span class="text-xs text-gray-500">${startDate} → ${endDate}</span>
-                            <span class="text-xs text-gray-500">${durationText}</span>
-                            <span class="text-xs text-gray-400 truncate max-w-[220px]">${reason}</span>
-                        </div>
-                        <div class="flex items-center gap-2 text-xs">
-                            <button class="btn-edit-extended-downtime bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded font-semibold transition flex items-center gap-1" data-id="${record.id}" data-machine="${machine}" data-type="${type}" data-category="${category}" data-start-date="${startDate}" data-end-date="${endDate}" data-reason="${reason}" data-start-time="${record.start_time || '00:00'}" data-end-time="${record.end_time || '23:59'}">
-                                <i data-lucide="edit-2" class="w-4 h-4"></i>
-                                <span>Editar</span>
-                            </button>
-                            <button class="btn-delete-extended-downtime bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded font-semibold transition flex items-center gap-1" data-id="${record.id}" data-machine="${machine}">
-                                <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                <span>Excluir</span>
-                            </button>
-                        </div>
-                    </div>
-                `;
-                listContainer.insertAdjacentHTML('beforeend', html);
-            });
-
-            // Attach event listeners para edit e delete
-            attachExtendedDowntimeEventListeners();
-            lucide.createIcons();
+            // Renderizar lista usando a nova função
+            renderFilteredDowntimeList();
 
         } catch (error) {
             console.error('Erro ao carregar paradas longas:', error);
@@ -23842,6 +24163,426 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         });
     }
 
+    // ============================================================
+    // MODAL DE EDIÇÃO COMPLETA DE PARADAS LONGAS (INÍCIO E FIM)
+    // ============================================================
+    
+    /**
+     * Inicializa o modal de edição completa de paradas longas
+     */
+    function initEditExtendedDowntimeModal() {
+        const modal = document.getElementById('edit-extended-downtime-modal');
+        if (!modal) return;
+        
+        const closeBtn = document.getElementById('edit-extended-downtime-close');
+        const cancelBtn = document.getElementById('edit-downtime-cancel');
+        const form = document.getElementById('edit-extended-downtime-form');
+        const isActiveCheckbox = document.getElementById('edit-downtime-is-active');
+        const categorySelect = document.getElementById('edit-downtime-category');
+        
+        // Fechar modal
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => closeEditDowntimeModal());
+        }
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => closeEditDowntimeModal());
+        }
+        
+        // Fechar ao clicar fora
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeEditDowntimeModal();
+        });
+        
+        // Toggle campos de fim quando checkbox "ativa" mudar
+        if (isActiveCheckbox) {
+            isActiveCheckbox.addEventListener('change', () => {
+                toggleEndFields(isActiveCheckbox.checked);
+                calculateEditDuration();
+            });
+        }
+        
+        // Atualizar duração quando datas/horas mudarem
+        ['edit-downtime-start-date', 'edit-downtime-start-time', 'edit-downtime-end-date', 'edit-downtime-end-time'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('change', calculateEditDuration);
+        });
+        
+        // Atualizar motivos quando categoria mudar
+        if (categorySelect) {
+            categorySelect.addEventListener('change', () => {
+                updateEditDowntimeReasons(categorySelect.value);
+            });
+        }
+        
+        // Submit do formulário
+        if (form) {
+            form.addEventListener('submit', handleEditDowntimeSubmit);
+        }
+        
+        // Popular select de máquinas
+        populateEditDowntimeMachines();
+        
+        console.log('[EDIT-DOWNTIME-MODAL] Modal inicializado');
+    }
+    
+    /**
+     * Popula o select de máquinas no modal de edição
+     */
+    function populateEditDowntimeMachines() {
+        const machineSelect = document.getElementById('edit-downtime-machine');
+        if (!machineSelect) return;
+        
+        const validMachines = ['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
+                               'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                               'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32'];
+        
+        machineSelect.innerHTML = '<option value="">Selecione a máquina...</option>' +
+            validMachines.map(m => `<option value="${m}">${m}</option>`).join('');
+    }
+    
+    /**
+     * Atualiza os motivos baseado na categoria selecionada
+     */
+    function updateEditDowntimeReasons(category) {
+        const reasonSelect = document.getElementById('edit-downtime-reason');
+        if (!reasonSelect) return;
+        
+        const motivosPorCategoria = {
+            'FERRAMENTARIA': ['CORRETIVA DE MOLDE', 'PREVENTIVA DE MOLDE', 'TROCA DE VERSÃO', 'AJUSTE DE MOLDE'],
+            'PROCESSO': ['ABERTURA DE CAVIDADE', 'AJUSTE DE PROCESSO', 'TRY OUT', 'TESTE DE PROCESSO'],
+            'COMPRAS': ['FALTA DE INSUMO PLANEJADA', 'FALTA DE INSUMO NÃO PLANEJADA', 'ATRASO FORNECEDOR', 'FALTA DE MATÉRIA PRIMA'],
+            'PREPARAÇÃO': ['AGUARDANDO PREPARAÇÃO DE MATERIAL', 'SECAGEM DE MATERIAL', 'PREPARAÇÃO DE PIGMENTO'],
+            'QUALIDADE': ['AGUARDANDO CLIENTE/FORNECEDOR', 'LIBERAÇÃO', 'INSPEÇÃO', 'ANÁLISE DE DEFEITO'],
+            'MANUTENÇÃO': ['MANUTENÇÃO CORRETIVA', 'MANUTENÇÃO PREVENTIVA', 'MANUTENÇÃO PROGRAMADA', 'MANUTENÇÃO EMERGENCIAL'],
+            'PRODUÇÃO': ['FALTA DE OPERADOR', 'TROCA DE COR', 'LIMPEZA', 'ORGANIZAÇÃO'],
+            'SETUP': ['INSTALAÇÃO DE MOLDE', 'RETIRADA DE MOLDE', 'TROCA DE MOLDE', 'AQUECIMENTO'],
+            'ADMINISTRATIVO': ['FALTA DE ENERGIA', 'FALTA DE ÁGUA', 'QUEDA DE ENERGIA', 'FERIADO', 'FIM DE SEMANA'],
+            'PCP': ['SEM PROGRAMAÇÃO', 'SEM PROGRAMAÇÃO-FIM DE SEMANA', 'ESTRATÉGIA PCP', 'AGUARDANDO OP'],
+            'COMERCIAL': ['SEM PEDIDO', 'BAIXA DEMANDA', 'PARADA COMERCIAL']
+        };
+        
+        const motivos = motivosPorCategoria[category] || [];
+        reasonSelect.innerHTML = '<option value="">Selecione o motivo...</option>' +
+            motivos.map(m => `<option value="${m}">${m}</option>`).join('');
+    }
+    
+    /**
+     * Toggle dos campos de fim (habilita/desabilita baseado no checkbox "ativa")
+     */
+    function toggleEndFields(isActive) {
+        const endFields = document.getElementById('edit-downtime-end-fields');
+        const activeMsg = document.getElementById('edit-downtime-active-msg');
+        const endDateInput = document.getElementById('edit-downtime-end-date');
+        const endTimeInput = document.getElementById('edit-downtime-end-time');
+        
+        if (isActive) {
+            endFields?.classList.add('opacity-50', 'pointer-events-none');
+            activeMsg?.classList.remove('hidden');
+            if (endDateInput) endDateInput.required = false;
+            if (endTimeInput) endTimeInput.required = false;
+        } else {
+            endFields?.classList.remove('opacity-50', 'pointer-events-none');
+            activeMsg?.classList.add('hidden');
+            if (endDateInput) endDateInput.required = true;
+            if (endTimeInput) endTimeInput.required = true;
+        }
+    }
+    
+    /**
+     * Calcula e exibe a duração da parada
+     */
+    function calculateEditDuration() {
+        const startDate = document.getElementById('edit-downtime-start-date')?.value;
+        const startTime = document.getElementById('edit-downtime-start-time')?.value;
+        const endDate = document.getElementById('edit-downtime-end-date')?.value;
+        const endTime = document.getElementById('edit-downtime-end-time')?.value;
+        const isActive = document.getElementById('edit-downtime-is-active')?.checked;
+        const durationEl = document.getElementById('edit-downtime-duration');
+        
+        if (!durationEl) return;
+        
+        if (!startDate || !startTime) {
+            durationEl.textContent = '--';
+            return;
+        }
+        
+        const start = new Date(`${startDate}T${startTime}`);
+        let end;
+        
+        if (isActive) {
+            end = new Date(); // Usar agora como fim
+        } else if (endDate && endTime) {
+            end = new Date(`${endDate}T${endTime}`);
+        } else {
+            durationEl.textContent = '--';
+            return;
+        }
+        
+        const diffMs = end - start;
+        if (diffMs < 0) {
+            durationEl.textContent = '⚠️ Inválido';
+            durationEl.classList.add('text-red-600');
+            return;
+        }
+        
+        durationEl.classList.remove('text-red-600');
+        const diffMinutes = Math.floor(diffMs / (1000 * 60));
+        const days = Math.floor(diffMinutes / (24 * 60));
+        const hours = Math.floor((diffMinutes % (24 * 60)) / 60);
+        const minutes = diffMinutes % 60;
+        
+        let text = '';
+        if (days > 0) text += `${days}d `;
+        if (hours > 0 || days > 0) text += `${hours}h `;
+        text += `${minutes}min`;
+        
+        if (isActive) text += ' (até agora)';
+        
+        durationEl.textContent = text.trim();
+    }
+    
+    /**
+     * Abre o modal de edição com os dados da parada
+     */
+    async function openEditDowntimeModal(recordId) {
+        const modal = document.getElementById('edit-extended-downtime-modal');
+        if (!modal) {
+            console.error('[EDIT-DOWNTIME] Modal não encontrado');
+            return;
+        }
+        
+        try {
+            // Buscar dados atuais do Firebase
+            const doc = await db.collection('extended_downtime_logs').doc(recordId).get();
+            if (!doc.exists) {
+                alert('Registro não encontrado!');
+                return;
+            }
+            
+            const data = doc.data();
+            console.log('[EDIT-DOWNTIME] Dados carregados:', data);
+            
+            // Preencher campos
+            document.getElementById('edit-downtime-id').value = recordId;
+            document.getElementById('edit-downtime-machine').value = data.machine_id || '';
+            document.getElementById('edit-downtime-machine-display').textContent = data.machine_id || '-';
+            
+            // Categoria e motivo
+            const categorySelect = document.getElementById('edit-downtime-category');
+            if (categorySelect) {
+                categorySelect.value = data.category || '';
+                updateEditDowntimeReasons(data.category || '');
+            }
+            
+            // Aguardar um pouco para os motivos serem carregados
+            setTimeout(() => {
+                const reasonSelect = document.getElementById('edit-downtime-reason');
+                if (reasonSelect) reasonSelect.value = data.reason || data.type || '';
+            }, 100);
+            
+            // Datas e horas de início
+            document.getElementById('edit-downtime-start-date').value = data.start_date || '';
+            document.getElementById('edit-downtime-start-time').value = data.start_time || '00:00';
+            
+            // Status (ativa ou finalizada)
+            const isActive = data.status === 'active';
+            const isActiveCheckbox = document.getElementById('edit-downtime-is-active');
+            const statusBadge = document.getElementById('edit-downtime-status-badge');
+            
+            if (isActiveCheckbox) isActiveCheckbox.checked = isActive;
+            if (statusBadge) {
+                if (isActive) {
+                    statusBadge.textContent = '🔴 ATIVA';
+                    statusBadge.className = 'text-xs px-2 py-1 rounded bg-red-100 text-red-700 font-semibold animate-pulse';
+                } else {
+                    statusBadge.textContent = '✅ FINALIZADA';
+                    statusBadge.className = 'text-xs px-2 py-1 rounded bg-green-100 text-green-700 font-semibold';
+                }
+            }
+            
+            // Datas e horas de fim
+            document.getElementById('edit-downtime-end-date').value = data.end_date || '';
+            document.getElementById('edit-downtime-end-time').value = data.end_time || '';
+            
+            // Atualizar estado dos campos de fim
+            toggleEndFields(isActive);
+            
+            // Calcular duração
+            calculateEditDuration();
+            
+            // Mostrar modal
+            modal.classList.remove('hidden');
+            lucide.createIcons();
+            
+        } catch (error) {
+            console.error('[EDIT-DOWNTIME] Erro ao carregar dados:', error);
+            alert('Erro ao carregar dados da parada: ' + error.message);
+        }
+    }
+    
+    /**
+     * Fecha o modal de edição
+     */
+    function closeEditDowntimeModal() {
+        const modal = document.getElementById('edit-extended-downtime-modal');
+        if (modal) modal.classList.add('hidden');
+        
+        // Limpar status
+        const statusDiv = document.getElementById('edit-downtime-status');
+        if (statusDiv) {
+            statusDiv.textContent = '';
+            statusDiv.className = 'text-sm font-semibold h-5 text-center';
+        }
+    }
+    
+    /**
+     * Handler do submit do formulário de edição
+     */
+    async function handleEditDowntimeSubmit(e) {
+        e.preventDefault();
+        
+        const recordId = document.getElementById('edit-downtime-id')?.value;
+        const machine = document.getElementById('edit-downtime-machine')?.value;
+        const category = document.getElementById('edit-downtime-category')?.value;
+        const reason = document.getElementById('edit-downtime-reason')?.value;
+        const startDate = document.getElementById('edit-downtime-start-date')?.value;
+        const startTime = document.getElementById('edit-downtime-start-time')?.value;
+        const endDate = document.getElementById('edit-downtime-end-date')?.value;
+        const endTime = document.getElementById('edit-downtime-end-time')?.value;
+        const isActive = document.getElementById('edit-downtime-is-active')?.checked;
+        
+        const statusDiv = document.getElementById('edit-downtime-status');
+        const submitBtn = document.getElementById('edit-downtime-submit');
+        
+        // Validações
+        if (!machine || !category || !reason || !startDate || !startTime) {
+            if (statusDiv) {
+                statusDiv.textContent = '❌ Preencha todos os campos obrigatórios';
+                statusDiv.className = 'text-sm font-semibold h-5 text-center text-red-600';
+            }
+            return;
+        }
+        
+        // Se não está ativa, precisa de data/hora de fim
+        if (!isActive && (!endDate || !endTime)) {
+            if (statusDiv) {
+                statusDiv.textContent = '❌ Informe a data/hora de fim ou marque como ativa';
+                statusDiv.className = 'text-sm font-semibold h-5 text-center text-red-600';
+            }
+            return;
+        }
+        
+        // Validar que fim é depois do início (se não está ativa)
+        if (!isActive) {
+            const start = new Date(`${startDate}T${startTime}`);
+            const end = new Date(`${endDate}T${endTime}`);
+            if (end <= start) {
+                if (statusDiv) {
+                    statusDiv.textContent = '❌ Data/hora de fim deve ser posterior ao início';
+                    statusDiv.className = 'text-sm font-semibold h-5 text-center text-red-600';
+                }
+                return;
+            }
+        }
+        
+        try {
+            if (submitBtn) submitBtn.disabled = true;
+            if (statusDiv) {
+                statusDiv.textContent = '⏳ Salvando alterações...';
+                statusDiv.className = 'text-sm font-semibold h-5 text-center text-blue-600';
+            }
+            
+            const startDateTime = new Date(`${startDate}T${startTime}`);
+            let endDateTime = null;
+            let durationMinutes = 0;
+            
+            if (!isActive && endDate && endTime) {
+                endDateTime = new Date(`${endDate}T${endTime}`);
+                durationMinutes = Math.floor((endDateTime - startDateTime) / (1000 * 60));
+            } else if (isActive) {
+                // Para paradas ativas, calcular duração até agora
+                durationMinutes = Math.floor((new Date() - startDateTime) / (1000 * 60));
+            }
+            
+            const userName = getActiveUser()?.name || 'Sistema';
+            
+            const updateData = {
+                machine_id: machine,
+                category: category,
+                type: reason,
+                reason: reason,
+                start_date: startDate,
+                start_time: startTime,
+                start_datetime: firebase.firestore.Timestamp.fromDate(startDateTime),
+                end_date: isActive ? null : endDate,
+                end_time: isActive ? null : endTime,
+                end_datetime: isActive ? null : (endDateTime ? firebase.firestore.Timestamp.fromDate(endDateTime) : null),
+                status: isActive ? 'active' : 'finished',
+                duration_minutes: durationMinutes,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedBy: userName,
+                shift: getCurrentShift(startDateTime)
+            };
+            
+            // Se estava ativa e foi finalizada agora
+            if (!isActive && endDateTime) {
+                updateData.finishedAt = firebase.firestore.FieldValue.serverTimestamp();
+                updateData.finishedBy = userName;
+            }
+            
+            await db.collection('extended_downtime_logs').doc(recordId).update(updateData);
+            
+            console.log('[EDIT-DOWNTIME] Parada atualizada:', recordId, updateData);
+            
+            // Registrar log
+            registrarLogSistema('EDIÇÃO DE PARADA LONGA', 'parada', {
+                recordId: recordId,
+                machine: machine,
+                startDate: startDate,
+                endDate: endDate,
+                status: isActive ? 'active' : 'finished'
+            });
+            
+            if (statusDiv) {
+                statusDiv.textContent = '✅ Parada atualizada com sucesso!';
+                statusDiv.className = 'text-sm font-semibold h-5 text-center text-green-600';
+            }
+            
+            // Fechar modal após 1.5s
+            setTimeout(async () => {
+                closeEditDowntimeModal();
+                
+                // Recarregar listas
+                if (typeof loadExtendedDowntimeList === 'function') {
+                    await loadExtendedDowntimeList();
+                }
+                
+                // Se análise está visível, recarregar
+                if (document.querySelector('#extended-downtime-analysis-list')) {
+                    const filters = currentAnalysisFilters || {};
+                    await loadExtendedDowntimeAnalysis(filters.startDate, filters.endDate, filters.machine);
+                }
+                
+                // Recarregar cards de máquinas
+                const machinesDowntime = await getAllMachinesDowntimeStatus();
+                await renderMachineCards([], [], [], new Set(), machinesDowntime);
+                
+            }, 1500);
+            
+        } catch (error) {
+            console.error('[EDIT-DOWNTIME] Erro ao salvar:', error);
+            if (statusDiv) {
+                statusDiv.textContent = `❌ Erro: ${error.message}`;
+                statusDiv.className = 'text-sm font-semibold h-5 text-center text-red-600';
+            }
+        } finally {
+            if (submitBtn) submitBtn.disabled = false;
+        }
+    }
+
+    /**
+     * Handler para editar parada longa - ABRE O MODAL COMPLETO
+     */
     async function handleEditExtendedDowntime(e) {
         // ⚠️ VERIFICAÇÃO DE PERMISSÃO: Apenas gestores podem editar
         if (!isUserGestorOrAdmin()) {
@@ -23851,34 +24592,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         const btn = e.currentTarget;
         const recordId = btn.dataset.id;
-        const machine = btn.dataset.machine;
-        const type = btn.dataset.type;
-        const category = btn.dataset.category || '';
-        const startDate = btn.dataset.startDate;
-        const endDate = btn.dataset.endDate;
-        const reason = btn.dataset.reason;
-        const startTime = btn.dataset.startTime;
-        const endTime = btn.dataset.endTime;
-
-        console.log('[EXTENDED-DOWNTIME] Editando registro:', recordId, { category });
-
-        // Preencher form com dados existentes
-        document.getElementById('extended-downtime-machine').value = machine;
-        const categorySelect = document.getElementById('extended-downtime-category');
-        if (categorySelect) categorySelect.value = category;
-        document.getElementById('extended-downtime-reason').value = reason;
-        document.getElementById('extended-downtime-start-date').value = startDate;
-        document.getElementById('extended-downtime-custom-time').value = startTime;
-
-        // Mudar texto do botão para "Atualizar"
-        const submitBtn = document.getElementById('extended-downtime-submit');
-        const originalText = submitBtn.innerHTML;
-        submitBtn.dataset.editingId = recordId;
-        submitBtn.innerHTML = '<i data-lucide="save" class="w-4 h-4"></i><span>Atualizar Parada</span>';
-        lucide.createIcons();
-
-        // Scroll para o formulário
-        document.getElementById('extended-downtime-form').scrollIntoView({ behavior: 'smooth' });
+        
+        console.log('[EXTENDED-DOWNTIME] Abrindo modal de edição para:', recordId);
+        
+        // Abrir o novo modal completo
+        await openEditDowntimeModal(recordId);
     }
 
     async function handleDeleteExtendedDowntime(e) {
@@ -37039,4 +37757,3 @@ document.addEventListener('DOMContentLoaded', function() {
         
     }, 1000); // Aguardar 1 segundo para garantir que DOM está pronto
 });
-

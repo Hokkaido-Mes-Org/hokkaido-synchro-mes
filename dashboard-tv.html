@@ -2897,23 +2897,49 @@
                 .split('T')[0];
         }
         
-        // Resolver datetime de produção
-        function resolveProductionDateTime(raw) {
-            if (!raw) return null;
-            
-            // Tentar timestamp direto
-            if (raw.timestamp?.toDate) return raw.timestamp.toDate();
-            if (raw.createdAt?.toDate) return raw.createdAt.toDate();
-            
-            // Tentar combinar data + hora
-            const dateStr = raw.data || raw.date;
-            const timeStr = raw.horaInformada || raw.hora || raw.hour || raw.time;
-            
-            if (dateStr && timeStr) {
-                const combined = new Date(`${dateStr}T${timeStr}:00`);
-                if (!Number.isNaN(combined.getTime())) return combined;
+        // Normalizar valor para Date - IDÊNTICO ao script.js
+        function normalizeToDate(value) {
+            if (!value) return null;
+            if (value instanceof Date) {
+                return Number.isNaN(value.getTime()) ? null : value;
             }
-            
+            if (value && typeof value.toDate === 'function') {
+                const converted = value.toDate();
+                return converted instanceof Date && !Number.isNaN(converted.getTime()) ? converted : null;
+            }
+            const parsed = new Date(value);
+            return Number.isNaN(parsed.getTime()) ? null : parsed;
+        }
+        
+        // Resolver datetime de produção - IDÊNTICO ao script.js
+        function resolveProductionDateTime(raw) {
+            if (!raw || typeof raw !== 'object') return null;
+
+            const candidates = [];
+
+            if (raw.dataHoraInformada) {
+                candidates.push(raw.dataHoraInformada);
+            }
+
+            if (raw.horaInformada && (raw.data || raw.date)) {
+                candidates.push(`${raw.data || raw.date}T${raw.horaInformada}`);
+            }
+
+            if (raw.datetime) {
+                candidates.push(raw.datetime);
+            }
+
+            candidates.push(raw.timestamp);
+            candidates.push(raw.createdAt);
+            candidates.push(raw.updatedAt);
+
+            for (const candidate of candidates) {
+                const dateObj = normalizeToDate(candidate);
+                if (dateObj) {
+                    return dateObj;
+                }
+            }
+
             return null;
         }
         
@@ -2936,13 +2962,15 @@
                         dateField: 'data',
                         mapper: (id, raw) => {
                             const mappedDate = raw.data || raw.date || '';
+                            const primaryTimestamp = raw.timestamp || raw.createdAt || raw.updatedAt;
                             const resolvedDateTime = resolveProductionDateTime(raw);
                             const timeHint = raw.horaInformada || raw.hora || raw.hour || raw.time || null;
-                            const workDay = getWorkDayFromTimestamp(resolvedDateTime) || getWorkDay(mappedDate, timeHint);
+                            // CORREÇÃO: Usar mesma lógica do script.js - fallback para primaryTimestamp
+                            const workDay = getWorkDayFromTimestamp(resolvedDateTime || primaryTimestamp) || getWorkDay(mappedDate, timeHint);
                             const product = raw.product || raw.produto || raw.product_cod || raw.cod_produto || raw.productName || raw.mp || '';
                             
-                            // Garantir que quantity seja sempre inteiro (sem decimais)
-                            const rawQty = Number(raw.produzido ?? raw.pecasBoas ?? raw.quantity ?? raw.produced ?? 0) || 0;
+                            // CORREÇÃO: Verificar TODOS os campos possíveis - IDÊNTICO ao script.js
+                            const rawQty = Number(raw.produzido ?? raw.pecasBoas ?? raw.quantity ?? raw.produced ?? raw.qtd ?? raw.quantidade ?? raw.total_produzido ?? 0) || 0;
                             
                             return {
                                 id,
@@ -2962,9 +2990,11 @@
                         dateField: 'data',
                         mapper: (id, raw) => {
                             const dateValue = raw.data || raw.date || '';
+                            const primaryTimestamp = raw.timestamp || raw.createdAt || raw.updatedAt;
                             const resolvedDateTime = resolveProductionDateTime(raw);
                             const timeHint = raw.horaInformada || raw.hora || raw.hour || raw.time || null;
-                            const workDay = getWorkDayFromTimestamp(resolvedDateTime) || getWorkDay(dateValue, timeHint);
+                            // CORREÇÃO: Usar mesma lógica do script.js - fallback para primaryTimestamp
+                            const workDay = getWorkDayFromTimestamp(resolvedDateTime || primaryTimestamp) || getWorkDay(dateValue, timeHint);
                             
                             // Extrair refugo de múltiplos campos
                             const rawRefugoKg = Number(raw.refugo_kg ?? raw.refugoKg ?? raw.scrap_kg ?? raw.scrapKg ?? 0) || 0;
@@ -3039,17 +3069,24 @@
                     plan: {
                         collection: 'planning',
                         dateField: 'date',
-                        mapper: (id, raw) => ({
-                            id,
-                            date: raw.date || '',
-                            machine: normalizeMachineId(raw.machine || null),
-                            quantity: Number(raw.planned_quantity ?? raw.quantity ?? 0) || 0,
-                            shift: normalizeShift(raw.shift ?? raw.turno),
-                            product: raw.product || '',
-                            mp: raw.mp || '',
-                            workDay: raw.date || '',
-                            raw
-                        })
+                        mapper: (id, raw) => {
+                            const dateValue = raw.date || '';
+                            const primaryTimestamp = raw.createdAt || raw.updatedAt || raw.timestamp;
+                            // CORREÇÃO: Usar mesma lógica do script.js para calcular workDay
+                            const workDay = getWorkDayFromTimestamp(primaryTimestamp) || dateValue;
+                            
+                            return {
+                                id,
+                                date: dateValue,
+                                machine: normalizeMachineId(raw.machine || null),
+                                quantity: getPlanTarget(raw), // Usa função centralizada - IDÊNTICO ao script.js
+                                shift: normalizeShift(raw.shift ?? raw.turno),
+                                product: raw.product || '',
+                                mp: raw.mp || '',
+                                workDay: workDay || dateValue,
+                                raw
+                            };
+                        }
                     }
                 };
                 
@@ -3811,8 +3848,12 @@
                     }
                 });
             } else {
-                // Fallback para cachedProductions
+                // Fallback para cachedProductions - TAMBÉM FILTRAR POR WORKDAY
                 cachedProductions.forEach(prod => {
+                    // CORREÇÃO: Verificar workDay para consistência
+                    const prodWorkDay = prod._normalized?.workDay || getWorkDay(prod.data || prod.date, prod.horaInformada || prod.hora);
+                    if (prodWorkDay && prodWorkDay !== workDay) return;
+                    
                     const good = getProducedQty(prod);
                     totalProduced += good;
 
@@ -3837,7 +3878,12 @@
                     .reduce((sum, item) => sum + (item.scrapPcs || item.quantity || 0), 0));
                 console.log('[Dashboard TV] Refugo normalizado (workDay=' + workDay + '):', totalRefugo, 'pçs');
             } else {
+                // Fallback - TAMBÉM FILTRAR POR WORKDAY
                 cachedProductions.forEach(prod => {
+                    // CORREÇÃO: Verificar workDay para consistência
+                    const prodWorkDay = prod._normalized?.workDay || getWorkDay(prod.data || prod.date, prod.horaInformada || prod.hora);
+                    if (prodWorkDay && prodWorkDay !== workDay) return;
+                    
                     const bad = Math.round(prod.pecasRuins || prod.refugo_pcs || prod.refugo || prod.scrap || 0);
                     totalRefugo += bad;
                 });
@@ -4364,8 +4410,12 @@
                     }
                 });
             } else {
-                // Fallback: usar cachedProductions
+                // Fallback: usar cachedProductions - TAMBÉM FILTRAR POR WORKDAY
                 cachedProductions.forEach(prod => {
+                    // CORREÇÃO: Verificar workDay para consistência
+                    const prodWorkDay = prod._normalized?.workDay || getWorkDay(prod.data || prod.date, prod.horaInformada || prod.hora);
+                    if (prodWorkDay && prodWorkDay !== workDay) return;
+                    
                     const turnoRaw = prod.turno || prod.shift;
                     let turno = '';
                     if (typeof turnoRaw === 'string') {
@@ -5074,23 +5124,42 @@
             // Usar dados normalizados quando disponíveis
             const normalizedData = window._tvNormalizedData;
             
+            // IMPORTANTE: Usar a data filtrada ou workDay atual - CONSISTENTE COM updateKPIs
+            const workDay = getFilteredDateForData();
+            
             // Calcular estatísticas de produção
             let totalProduced = 0;
             let totalRefugo = 0;
             
             if (normalizedData?.production) {
-                totalProduced = normalizedData.production.reduce((sum, p) => sum + (p.quantity || 0), 0);
+                // CORREÇÃO: Filtrar por workDay para consistência
+                totalProduced = normalizedData.production
+                    .filter(p => p.workDay === workDay)
+                    .reduce((sum, p) => sum + (p.quantity || 0), 0);
             } else {
-                totalProduced = cachedProductions.reduce((sum, p) => sum + getProducedQty(p), 0);
+                totalProduced = cachedProductions
+                    .filter(p => {
+                        const prodWorkDay = p._normalized?.workDay || getWorkDay(p.data || p.date, p.horaInformada || p.hora);
+                        return !prodWorkDay || prodWorkDay === workDay;
+                    })
+                    .reduce((sum, p) => sum + getProducedQty(p), 0);
             }
             
             // Refugo vem da coleção losses (dados normalizados) - IGUAL AO SYNCHRO
             if (normalizedData?.losses) {
-                totalRefugo = normalizedData.losses.reduce((sum, p) => sum + (p.scrapPcs || p.quantity || 0), 0);
+                // CORREÇÃO: Filtrar por workDay para consistência
+                totalRefugo = normalizedData.losses
+                    .filter(p => p.workDay === workDay)
+                    .reduce((sum, p) => sum + (p.scrapPcs || p.quantity || 0), 0);
                 console.log('[Dashboard TV Ticker] Refugo dos dados normalizados:', totalRefugo);
             } else {
                 // Fallback: tentar dos cachedProductions
-                totalRefugo = cachedProductions.reduce((sum, p) => sum + (p.pecasRuins || p.refugo_pcs || p.refugo || 0), 0);
+                totalRefugo = cachedProductions
+                    .filter(p => {
+                        const prodWorkDay = p._normalized?.workDay || getWorkDay(p.data || p.date, p.horaInformada || p.hora);
+                        return !prodWorkDay || prodWorkDay === workDay;
+                    })
+                    .reduce((sum, p) => sum + (p.pecasRuins || p.refugo_pcs || p.refugo || 0), 0);
             }
             
             const totalTarget = cachedPlanning.reduce((sum, p) => sum + getPlanTarget(p), 0);
