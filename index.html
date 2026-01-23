@@ -2368,11 +2368,16 @@
                                         <i data-lucide="sliders" class="w-6 h-6 text-white"></i>
                                     </div>
                                     <div>
-                                        <h2 class="text-xl font-bold text-white">PCP - Planejamento e Controle da Produção</h2>
-                                        <p class="text-indigo-200 text-sm">Ferramentas avançadas de planejamento e controle</p>
+                                        <h2 class="text-xl font-bold text-white">PCP - Dashboard de Produção</h2>
+                                        <p class="text-indigo-200 text-sm">Visão em tempo real do status das máquinas</p>
                                     </div>
                                 </div>
-                                <div class="flex gap-2">
+                                <div class="flex gap-2 items-center">
+                                    <div class="bg-white/10 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-2">
+                                        <i data-lucide="calendar" class="w-4 h-4 text-white"></i>
+                                        <input type="date" id="pcp-date-selector" 
+                                            class="bg-transparent border-none text-white placeholder-white/70 focus:outline-none focus:ring-0 text-xs font-medium">
+                                    </div>
                                     <button id="btn-pcp-refresh" class="bg-indigo-500/80 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg transition flex items-center gap-2 font-semibold">
                                         <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                                         <span class="hidden sm:inline">Atualizar</span>
@@ -2381,91 +2386,80 @@
                             </div>
                         </div>
 
-                        <!-- Conteúdo Principal -->
-                        <div class="p-6 space-y-6">
-                            <!-- Aviso de Versão Beta -->
-                            <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-indigo-500 rounded-lg p-4 flex gap-3">
-                                <div class="flex-shrink-0">
-                                    <i data-lucide="info" class="w-5 h-5 text-indigo-600"></i>
+                        <!-- KPIs Resumo -->
+                        <div class="grid grid-cols-3 gap-3 p-4 bg-gradient-to-r from-slate-50 to-gray-50 border-b">
+                            <div class="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+                                <div class="flex items-center gap-2">
+                                    <div class="p-1.5 bg-blue-100 rounded-lg">
+                                        <i data-lucide="settings-2" class="w-4 h-4 text-blue-600"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-xs text-gray-500">Máquinas Planejadas</p>
+                                        <p class="text-lg font-bold text-blue-600" id="pcp-kpi-machines">0</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h3 class="font-semibold text-indigo-900">Versão em Desenvolvimento</h3>
-                                    <p class="text-sm text-indigo-800 mt-1">Esta aba está em desenvolvimento. Em breve estarão disponíveis as seguintes funcionalidades:</p>
-                                    <ul class="text-sm text-indigo-700 mt-2 ml-4 space-y-1 list-disc">
-                                        <li>Análise avançada de capacidade de produção</li>
-                                        <li>Otimização de sequências de produção</li>
-                                        <li>Planejamento de materiais (MRP)</li>
-                                        <li>Simulação de cenários</li>
-                                        <li>Relatórios de planejamento integrados</li>
-                                    </ul>
+                            </div>
+                            <div class="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+                                <div class="flex items-center gap-2">
+                                    <div class="p-1.5 bg-green-100 rounded-lg">
+                                        <i data-lucide="play-circle" class="w-4 h-4 text-green-600"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-xs text-gray-500">Produzindo</p>
+                                        <p class="text-lg font-bold text-green-600" id="pcp-kpi-producing">0</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+                                <div class="flex items-center gap-2">
+                                    <div class="p-1.5 bg-red-100 rounded-lg">
+                                        <i data-lucide="alert-circle" class="w-4 h-4 text-red-600"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-xs text-gray-500">Paradas</p>
+                                        <p class="text-lg font-bold text-red-600" id="pcp-kpi-stopped">0</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tabela Dashboard -->
+                        <div class="p-4">
+                            <!-- Loading -->
+                            <div id="pcp-loading" class="flex items-center justify-center py-12">
+                                <div class="flex flex-col items-center gap-3">
+                                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                                    <p class="text-sm text-gray-500">Carregando dados...</p>
                                 </div>
                             </div>
 
-                            <!-- Placeholder para Componentes Futuros -->
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <!-- Card 1: Análise de Capacidade -->
-                                <div class="bg-gradient-to-br from-slate-50 to-gray-100 rounded-xl border border-gray-200 p-6 opacity-50">
-                                    <div class="flex items-center gap-3 mb-4">
-                                        <div class="p-2 bg-blue-100 rounded-lg">
-                                            <i data-lucide="bar-chart-3" class="w-5 h-5 text-blue-600"></i>
-                                        </div>
-                                        <h3 class="font-bold text-gray-700">Análise de Capacidade</h3>
-                                    </div>
-                                    <p class="text-sm text-gray-600">Análise detalhada da capacidade produtiva e utilização de máquinas</p>
-                                    <button class="mt-4 px-4 py-2 bg-gray-300 text-gray-500 rounded-lg cursor-not-allowed" disabled>
-                                        Disponível em breve
-                                    </button>
-                                </div>
-
-                                <!-- Card 2: Otimização de Sequências -->
-                                <div class="bg-gradient-to-br from-slate-50 to-gray-100 rounded-xl border border-gray-200 p-6 opacity-50">
-                                    <div class="flex items-center gap-3 mb-4">
-                                        <div class="p-2 bg-purple-100 rounded-lg">
-                                            <i data-lucide="shuffle" class="w-5 h-5 text-purple-600"></i>
-                                        </div>
-                                        <h3 class="font-bold text-gray-700">Otimização de Sequências</h3>
-                                    </div>
-                                    <p class="text-sm text-gray-600">Otimizar a sequência de ordens para maximizar eficiência</p>
-                                    <button class="mt-4 px-4 py-2 bg-gray-300 text-gray-500 rounded-lg cursor-not-allowed" disabled>
-                                        Disponível em breve
-                                    </button>
-                                </div>
-
-                                <!-- Card 3: Planejamento MRP -->
-                                <div class="bg-gradient-to-br from-slate-50 to-gray-100 rounded-xl border border-gray-200 p-6 opacity-50">
-                                    <div class="flex items-center gap-3 mb-4">
-                                        <div class="p-2 bg-green-100 rounded-lg">
-                                            <i data-lucide="package" class="w-5 h-5 text-green-600"></i>
-                                        </div>
-                                        <h3 class="font-bold text-gray-700">Planejamento de Materiais (MRP)</h3>
-                                    </div>
-                                    <p class="text-sm text-gray-600">Planejamento integrado de materiais e matérias-primas</p>
-                                    <button class="mt-4 px-4 py-2 bg-gray-300 text-gray-500 rounded-lg cursor-not-allowed" disabled>
-                                        Disponível em breve
-                                    </button>
-                                </div>
-
-                                <!-- Card 4: Simulação de Cenários -->
-                                <div class="bg-gradient-to-br from-slate-50 to-gray-100 rounded-xl border border-gray-200 p-6 opacity-50">
-                                    <div class="flex items-center gap-3 mb-4">
-                                        <div class="p-2 bg-orange-100 rounded-lg">
-                                            <i data-lucide="zap" class="w-5 h-5 text-orange-600"></i>
-                                        </div>
-                                        <h3 class="font-bold text-gray-700">Simulação de Cenários</h3>
-                                    </div>
-                                    <p class="text-sm text-gray-600">Simular diferentes cenários de produção e demanda</p>
-                                    <button class="mt-4 px-4 py-2 bg-gray-300 text-gray-500 rounded-lg cursor-not-allowed" disabled>
-                                        Disponível em breve
-                                    </button>
-                                </div>
+                            <!-- Tabela -->
+                            <div id="pcp-table-container" class="hidden overflow-x-auto">
+                                <table class="w-full text-sm border-collapse">
+                                    <thead class="bg-slate-700 text-white sticky top-0">
+                                        <tr>
+                                            <th class="px-2 py-2 text-center font-semibold whitespace-nowrap border border-slate-600">Máquina</th>
+                                            <th class="px-2 py-2 text-center font-semibold whitespace-nowrap border border-slate-600">Cavidade</th>
+                                            <th class="px-2 py-2 text-center font-semibold whitespace-nowrap border border-slate-600">Ciclo (s)</th>
+                                            <th class="px-2 py-2 text-center font-semibold whitespace-nowrap border border-slate-600">Status</th>
+                                            <th class="px-2 py-2 text-left font-semibold whitespace-nowrap border border-slate-600">Cliente</th>
+                                            <th class="px-2 py-2 text-left font-semibold whitespace-nowrap border border-slate-600">Produto</th>
+                                            <th class="px-2 py-2 text-left font-semibold whitespace-nowrap border border-slate-600">Motivo Parada</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="pcp-table-body">
+                                        <!-- Linhas serão inseridas via JavaScript -->
+                                    </tbody>
+                                </table>
                             </div>
 
-                            <!-- Informação de Contato -->
-                            <div class="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-4 mt-6">
-                                <p class="text-sm text-amber-900">
-                                    <i data-lucide="alert-circle" class="w-4 h-4 inline mr-2"></i>
-                                    Para solicitar novas funcionalidades ou relatar problemas, entre em contato com a equipe de desenvolvimento.
-                                </p>
+                            <!-- Estado Vazio -->
+                            <div id="pcp-empty-state" class="hidden py-12 text-center">
+                                <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
+                                    <i data-lucide="inbox" class="w-8 h-8 text-gray-400"></i>
+                                </div>
+                                <h3 class="text-lg font-semibold text-gray-700 mb-2">Nenhum planejamento encontrado</h3>
+                                <p class="text-sm text-gray-500">Não há planejamento cadastrado para a data selecionada.</p>
                             </div>
                         </div>
                     </div>

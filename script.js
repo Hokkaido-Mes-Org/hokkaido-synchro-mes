@@ -37089,29 +37089,62 @@ let ferramentariaState = {
 // ============ SETUP: Página PCP =====================
 // =====================================================
 
+// Estado global da página PCP
+let pcpState = {
+    initialized: false,
+    currentDate: null,
+    data: []
+};
+
+// Função auxiliar para obter data de produção (considera turno noturno até 6:30)
+function getPCPProductionDateString(date = new Date()) {
+    const d = date instanceof Date ? date : new Date(date);
+    const hour = d.getHours();
+    const minute = d.getMinutes();
+    
+    // Se for antes das 6:30, considera como dia anterior (turno noturno)
+    if (hour < 6 || (hour === 6 && minute < 30)) {
+        d.setDate(d.getDate() - 1);
+    }
+    
+    return d.toISOString().split('T')[0];
+}
+
 function setupPCPPage() {
     console.log('[PCP] Inicializando página de Planejamento e Controle da Produção...');
     
     try {
-        // Verificar se o usuário é Leandro Camargo
+        // Verificar se o usuário tem permissão
         const user = window.authSystem?.getCurrentUser?.();
-        const isAuthorized = user && (
-            user.name === 'Leandro Camargo' || 
-            user.email === 'leandro@hokkaido.com.br'
-        );
+        const allowedUsers = ['leandro camargo', 'roberto fernandes', 'elaine', 'daniel rocha'];
+        const userNameLower = (user?.name || '').toLowerCase().trim();
         
-        if (!isAuthorized) {
+        if (!allowedUsers.includes(userNameLower)) {
             console.warn('[PCP] Acesso não autorizado para este usuário');
             return;
         }
         
-        // Configurar botões de ação
+        // Configurar data inicial (data de produção atual)
+        const dateSelector = document.getElementById('pcp-date-selector');
+        if (dateSelector) {
+            const today = getPCPProductionDateString();
+            dateSelector.value = today;
+            pcpState.currentDate = today;
+            
+            // Event listener para mudança de data
+            dateSelector.addEventListener('change', (e) => {
+                pcpState.currentDate = e.target.value;
+                loadPCPData(e.target.value);
+            });
+        }
+        
+        // Configurar botão de atualização
         const btnRefresh = document.getElementById('btn-pcp-refresh');
         if (btnRefresh) {
             btnRefresh.addEventListener('click', () => {
                 console.log('[PCP] Atualizando dados...');
-                // Placeholder para futuras funcionalidades
-                showNotification('Dados atualizados com sucesso!', 'success');
+                const date = document.getElementById('pcp-date-selector')?.value || getProductionDateString();
+                loadPCPData(date);
             });
         }
         
@@ -37120,10 +37153,394 @@ function setupPCPPage() {
             lucide.createIcons();
         }
         
+        // Carregar dados iniciais
+        loadPCPData(pcpState.currentDate || getPCPProductionDateString());
+        
+        pcpState.initialized = true;
         console.log('[PCP] Página inicializada com sucesso!');
     } catch (e) {
         console.error('[PCP] Erro ao inicializar página:', e);
     }
+}
+
+// Carregar dados do PCP
+async function loadPCPData(date) {
+    console.log('[PCP] Carregando dados para:', date);
+    
+    const loadingEl = document.getElementById('pcp-loading');
+    const tableContainer = document.getElementById('pcp-table-container');
+    const emptyState = document.getElementById('pcp-empty-state');
+    const tableBody = document.getElementById('pcp-table-body');
+    
+    // Mostrar loading
+    if (loadingEl) loadingEl.classList.remove('hidden');
+    if (tableContainer) tableContainer.classList.add('hidden');
+    if (emptyState) emptyState.classList.add('hidden');
+    
+    try {
+        // 1. Buscar planejamentos da data
+        const planningSnapshot = await db.collection('planning')
+            .where('date', '==', date)
+            .get();
+        
+        const planningItems = [];
+        const machinesWithPlanning = new Set();
+        planningSnapshot.forEach(doc => {
+            const data = { id: doc.id, ...doc.data() };
+            planningItems.push(data);
+            const machineId = (data.machine || '').toUpperCase().trim();
+            if (machineId) machinesWithPlanning.add(machineId);
+        });
+        
+        console.log('[PCP] Planejamentos encontrados:', planningItems.length, 'para data:', date);
+        
+        // 2. Buscar paradas ativas (active_downtimes) - PRIORIDADE 1
+        const activeDowntimesSnapshot = await db.collection('active_downtimes').get();
+        const activeDowntimes = new Map();
+        activeDowntimesSnapshot.forEach(doc => {
+            const data = doc.data();
+            // IMPORTANTE: Verificar se isActive === true
+            if (data && data.isActive === true) {
+                const machineId = doc.id.toUpperCase().trim();
+                activeDowntimes.set(machineId, { ...data, source: 'active_live' });
+            }
+        });
+        
+        console.log('[PCP] Paradas ativas (active_downtimes):', activeDowntimes.size, [...activeDowntimes.keys()]);
+        
+        // 3. Buscar extended_downtime_logs ativos - PRIORIDADE 2
+        const extendedSnapshot = await db.collection('extended_downtime_logs')
+            .where('status', '==', 'active')
+            .get();
+        
+        const extendedDowntimes = new Map();
+        extendedSnapshot.forEach(doc => {
+            const data = doc.data();
+            const machineId = (data.machine || data.machine_id || '').toUpperCase().trim();
+            if (machineId) {
+                extendedDowntimes.set(machineId, { ...data, source: 'extended' });
+            }
+        });
+        
+        console.log('[PCP] Paradas longas ativas (extended_downtime_logs):', extendedDowntimes.size, [...extendedDowntimes.keys()]);
+        
+        // 4. Buscar downtime_entries do dia - PRIORIDADE 3
+        // Paradas normais que ainda estão em andamento (sem endTime ou endTime ainda não passou)
+        const downtimeEntriesSnapshot = await db.collection('downtime_entries')
+            .where('date', '==', date)
+            .get();
+        
+        const now = new Date();
+        const currentTime = now.toTimeString().slice(0, 5); // HH:MM
+        const normalDowntimes = new Map();
+        downtimeEntriesSnapshot.forEach(doc => {
+            const data = doc.data();
+            const machineId = (data.machine || '').toUpperCase().trim();
+            if (!machineId) return;
+            
+            // Verificar se a parada está em andamento
+            const hasNoEndTime = !data.endTime || data.endTime === '';
+            const endTimeNotPassed = data.endTime && currentTime < data.endTime;
+            
+            if (hasNoEndTime || endTimeNotPassed) {
+                normalDowntimes.set(machineId, { ...data, source: 'downtime_entries' });
+            }
+        });
+        
+        console.log('[PCP] Paradas normais em andamento (downtime_entries):', normalDowntimes.size, [...normalDowntimes.keys()]);
+        
+        // Verificar se há dados para mostrar
+        if (planningItems.length === 0 && activeDowntimes.size === 0 && extendedDowntimes.size === 0 && normalDowntimes.size === 0) {
+            if (loadingEl) loadingEl.classList.add('hidden');
+            if (emptyState) emptyState.classList.remove('hidden');
+            updatePCPKPIs([], []);
+            return;
+        }
+        
+        // 5. Buscar produção do dia
+        const productionSnapshot = await db.collection('production_entries')
+            .where('workDay', '==', date)
+            .get();
+        
+        const productionByPlan = new Map();
+        productionSnapshot.forEach(doc => {
+            const data = doc.data();
+            const planId = data.planId;
+            if (planId) {
+                const current = productionByPlan.get(planId) || 0;
+                productionByPlan.set(planId, current + (Number(data.produzido) || 0));
+            }
+        });
+        
+        // 5. Processar dados para a tabela - MÁQUINAS COM PLANEJAMENTO
+        const tableData = planningItems.map(plan => {
+            const machineId = (plan.machine || '').toUpperCase().trim();
+            
+            // Buscar dados do produto no database local
+            const productCode = plan.product_code || plan.productCode || plan.product || '';
+            const productInfo = productByCode?.get(productCode) || {};
+            
+            // Verificar status da máquina
+            let status = 'Produzindo';
+            let downtimeReason = '-';
+            
+            // PRIORIDADE 1: Parada ativa (active_downtimes)
+            const activeDowntime = activeDowntimes.get(machineId);
+            if (activeDowntime) {
+                status = 'Parada';
+                downtimeReason = activeDowntime.motivo || activeDowntime.reason || 'Não informado';
+            }
+            
+            // PRIORIDADE 2: Parada longa (extended_downtime_logs)
+            const extendedDowntime = extendedDowntimes.get(machineId);
+            if (extendedDowntime && !activeDowntime) {
+                status = 'Parada Longa';
+                downtimeReason = extendedDowntime.motivo || extendedDowntime.reason || 'Não informado';
+            }
+            
+            // PRIORIDADE 3: Parada normal (downtime_entries) em andamento
+            const normalDowntime = normalDowntimes.get(machineId);
+            if (normalDowntime && !activeDowntime && !extendedDowntime) {
+                status = 'Parada';
+                downtimeReason = normalDowntime.reason || normalDowntime.motivo || 'Não informado';
+            }
+            
+            // Calcular valores
+            const cavidades = Number(plan.cavities) || Number(plan.cavidade) || Number(productInfo.cavidades) || 0;
+            const ciclo = Number(plan.cycle) || Number(plan.cycle_time) || Number(productInfo.ciclo) || 0;
+            const planejado = Number(plan.planned_quantity) || Number(plan.planned_qty) || Number(plan.quantity) || 0;
+            const executado = productionByPlan.get(plan.id) || Number(plan.total_produzido) || 0;
+            const faltante = Math.max(0, planejado - executado);
+            
+            // Cliente
+            const cliente = plan.client || plan.cliente || productInfo.cliente || '-';
+            
+            // Produto (descrição)
+            const produto = plan.product_name || plan.productName || productInfo.descricao || productCode || '-';
+            
+            return {
+                machine: machineId,
+                cavidades: cavidades,
+                ciclo: ciclo,
+                status: status,
+                cliente: cliente,
+                produto: produto,
+                motivoParada: downtimeReason,
+                planejado: planejado,
+                executado: executado,
+                faltante: faltante,
+                hasPlanning: true
+            };
+        });
+        
+        // 6. Adicionar máquinas com paradas ativas que NÃO têm planejamento
+        // Paradas ativas (active_downtimes)
+        activeDowntimes.forEach((downtimeData, machineId) => {
+            if (!machinesWithPlanning.has(machineId)) {
+                const reason = downtimeData.motivo || downtimeData.reason || 'Não informado';
+                tableData.push({
+                    machine: machineId,
+                    cavidades: '-',
+                    ciclo: '-',
+                    status: 'Parada',
+                    cliente: '-',
+                    produto: '-',
+                    motivoParada: reason,
+                    planejado: 0,
+                    executado: 0,
+                    faltante: 0,
+                    hasPlanning: false
+                });
+            }
+        });
+        
+        // Paradas longas (extended_downtime_logs)
+        extendedDowntimes.forEach((downtimeData, machineId) => {
+            // Só adiciona se não tem planejamento E não foi adicionada como parada ativa
+            if (!machinesWithPlanning.has(machineId) && !activeDowntimes.has(machineId)) {
+                const reason = downtimeData.motivo || downtimeData.reason || 'Não informado';
+                tableData.push({
+                    machine: machineId,
+                    cavidades: '-',
+                    ciclo: '-',
+                    status: 'Parada Longa',
+                    cliente: '-',
+                    produto: '-',
+                    motivoParada: reason,
+                    planejado: 0,
+                    executado: 0,
+                    faltante: 0,
+                    hasPlanning: false
+                });
+            }
+        });
+        
+        // Paradas normais em andamento (downtime_entries) - PRIORIDADE 3
+        normalDowntimes.forEach((downtimeData, machineId) => {
+            // Só adiciona se não tem planejamento E não foi adicionada como parada ativa ou longa
+            if (!machinesWithPlanning.has(machineId) && !activeDowntimes.has(machineId) && !extendedDowntimes.has(machineId)) {
+                const reason = downtimeData.reason || downtimeData.motivo || 'Não informado';
+                tableData.push({
+                    machine: machineId,
+                    cavidades: '-',
+                    ciclo: '-',
+                    status: 'Parada',
+                    cliente: '-',
+                    produto: '-',
+                    motivoParada: reason,
+                    planejado: 0,
+                    executado: 0,
+                    faltante: 0,
+                    hasPlanning: false
+                });
+            }
+        });
+        
+        // Ordenar por máquina
+        tableData.sort((a, b) => a.machine.localeCompare(b.machine, undefined, { numeric: true }));
+        
+        // Atualizar KPIs
+        updatePCPKPIs(tableData, activeDowntimes);
+        
+        // Renderizar tabela
+        renderPCPTable(tableData);
+        
+        // Esconder loading e mostrar tabela
+        if (loadingEl) loadingEl.classList.add('hidden');
+        if (tableContainer) tableContainer.classList.remove('hidden');
+        
+        // Renderizar ícones
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+        
+    } catch (error) {
+        console.error('[PCP] Erro ao carregar dados:', error);
+        if (loadingEl) loadingEl.classList.add('hidden');
+        if (emptyState) {
+            emptyState.classList.remove('hidden');
+            emptyState.querySelector('h3').textContent = 'Erro ao carregar dados';
+            emptyState.querySelector('p').textContent = error.message;
+        }
+    }
+}
+
+// Atualizar KPIs do PCP
+function updatePCPKPIs(tableData, activeDowntimes) {
+    const totalMachines = tableData.length;
+    const stoppedMachines = tableData.filter(d => d.status !== 'Produzindo').length;
+    const producingMachines = totalMachines - stoppedMachines;
+    
+    document.getElementById('pcp-kpi-machines').textContent = totalMachines.toLocaleString('pt-BR');
+    document.getElementById('pcp-kpi-producing').textContent = producingMachines.toLocaleString('pt-BR');
+    document.getElementById('pcp-kpi-stopped').textContent = stoppedMachines.toLocaleString('pt-BR');
+}
+
+// Renderizar tabela do PCP
+function renderPCPTable(data) {
+    const tableBody = document.getElementById('pcp-table-body');
+    if (!tableBody) return;
+    
+    tableBody.innerHTML = data.map(row => {
+        // Determinar cor do status baseado no motivo (igual ao Dashboard TV)
+        const statusColors = getPCPStatusColor(row.status, row.motivoParada);
+        
+        // Formatar ciclo (pode ser número ou '-')
+        const cicloDisplay = (typeof row.ciclo === 'number' && row.ciclo > 0) ? row.ciclo.toFixed(1) : '-';
+        
+        return `
+            <tr class="border-b border-gray-200 hover:bg-gray-100">
+                <td class="px-2 py-2 text-center font-bold text-gray-900 whitespace-nowrap border border-gray-300">${row.machine}</td>
+                <td class="px-2 py-2 text-center text-gray-700 border border-gray-300">${row.cavidades || '-'}</td>
+                <td class="px-2 py-2 text-center text-gray-700 border border-gray-300">${cicloDisplay}</td>
+                <td class="px-2 py-2 text-center font-semibold border border-gray-300" style="background-color: ${statusColors.bg}; color: ${statusColors.text}; border-color: ${statusColors.border};">
+                    ${statusColors.label}
+                </td>
+                <td class="px-2 py-2 text-left text-gray-700 whitespace-nowrap border border-gray-300">${row.cliente}</td>
+                <td class="px-2 py-2 text-left text-gray-700 border border-gray-300">${row.produto}</td>
+                <td class="px-2 py-2 text-left border border-gray-300 ${row.status !== 'Produzindo' ? 'text-red-600 font-semibold' : 'text-gray-500'}">${row.motivoParada}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// Função para determinar cor do status igual ao Dashboard TV
+function getPCPStatusColor(status, motivoParada) {
+    // Se está produzindo
+    if (status === 'Produzindo') {
+        return { bg: 'rgba(34, 197, 94, 0.3)', text: '#16A34A', border: '#22C55E', label: 'Produzindo' };
+    }
+    
+    // Se não está produzindo, analisar o motivo
+    const reason = (motivoParada || '').toLowerCase();
+    
+    // Preparação de Material = Rosa
+    if (reason.includes('preparação') || reason.includes('preparacao') || 
+        reason.includes('estufagem') || reason.includes('fora de cor') || reason.includes('teste de cor')) {
+        return { bg: 'rgba(233, 30, 99, 0.25)', text: '#E91E63', border: '#E91E63', label: 'Preparação' };
+    }
+    
+    // Setup = Azul Claro
+    if (reason.includes('setup') || reason.includes('instalação') || reason.includes('instalacao') ||
+        reason.includes('retirada de molde') || reason.includes('aguardando setup')) {
+        return { bg: 'rgba(3, 169, 244, 0.25)', text: '#03A9F4', border: '#03A9F4', label: 'Setup' };
+    }
+    
+    // Compras = Marrom
+    if (reason.includes('compra') || 
+        (reason.includes('falta') && (reason.includes('matéria') || reason.includes('materia') || 
+        reason.includes('prima') || reason.includes('saco') || reason.includes('caixa') || reason.includes('master')))) {
+        return { bg: 'rgba(121, 85, 72, 0.25)', text: '#795548', border: '#795548', label: 'Compras' };
+    }
+    
+    // Ferramentaria = Laranja
+    if (reason.includes('ferramentaria') || reason.includes('corretiva de molde') || 
+        reason.includes('preventiva de molde') || reason.includes('troca de versão') || reason.includes('versão')) {
+        return { bg: 'rgba(255, 152, 0, 0.25)', text: '#FF9800', border: '#FF9800', label: 'Ferrament.' };
+    }
+    
+    // Processo = Roxo
+    if (reason.includes('processo') || reason.includes('ajuste') || reason.includes('cavidade') || 
+        reason.includes('try out') || reason.includes('prendendo')) {
+        return { bg: 'rgba(156, 39, 176, 0.25)', text: '#9C27B0', border: '#9C27B0', label: 'Processo' };
+    }
+    
+    // Manutenção = Amarelo
+    if (reason.includes('manutenção') || reason.includes('manutencao') || reason.includes('maintenance')) {
+        return { bg: 'rgba(255, 235, 59, 0.3)', text: '#F59E0B', border: '#FFEB3B', label: 'Manutenção' };
+    }
+    
+    // Qualidade = Vermelho
+    if (reason.includes('qualidade') || reason.includes('liberação') || reason.includes('aguardando cliente') || 
+        reason.includes('aguardando fornecedor') || reason.includes('disposição')) {
+        return { bg: 'rgba(244, 67, 54, 0.25)', text: '#F44336', border: '#F44336', label: 'Qualidade' };
+    }
+    
+    // Produção = Verde Claro
+    if (reason.includes('operador') || reason.includes('troca de cor') || 
+        reason.includes('revezamento') || reason.includes('almoço') || reason.includes('janta') ||
+        reason.includes('inicio') || reason.includes('reinicio')) {
+        return { bg: 'rgba(187, 247, 208, 0.5)', text: '#064e3b', border: '#86EFAC', label: 'Produção' };
+    }
+    
+    // Comercial = Cinza
+    if (reason.includes('comercial') || reason.includes('sem pedido')) {
+        return { bg: 'rgba(97, 97, 97, 0.3)', text: '#616161', border: '#616161', label: 'Comercial' };
+    }
+    
+    // PCP = Preto
+    if (reason.includes('pcp') || reason.includes('estratégia') || reason.includes('estrategia') || 
+        reason.includes('sem programação') || reason.includes('sem programacao')) {
+        return { bg: 'rgba(33, 33, 33, 0.8)', text: '#BDBDBD', border: '#212121', label: 'PCP' };
+    }
+    
+    // Administrativo = Branco/Cinza claro
+    if (reason.includes('energia') || reason.includes('falta de água') || reason.includes('queda') || reason.includes('análise administrativa')) {
+        return { bg: 'rgba(158, 158, 158, 0.3)', text: '#424242', border: '#9E9E9E', label: 'Admin.' };
+    }
+    
+    // Default = Outros (Cinza)
+    return { bg: 'rgba(120, 144, 156, 0.25)', text: '#78909C', border: '#78909C', label: 'Outros' };
 }
 
 // Inicializar página de Ferramentaria
