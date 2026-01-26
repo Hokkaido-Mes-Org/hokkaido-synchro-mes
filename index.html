@@ -2372,15 +2372,29 @@
                                         <p class="text-indigo-200 text-sm">Visão em tempo real do status das máquinas</p>
                                     </div>
                                 </div>
-                                <div class="flex gap-2 items-center">
+                                <div class="flex gap-2 items-center flex-wrap">
                                     <div class="bg-white/10 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-2">
                                         <i data-lucide="calendar" class="w-4 h-4 text-white"></i>
                                         <input type="date" id="pcp-date-selector" 
                                             class="bg-transparent border-none text-white placeholder-white/70 focus:outline-none focus:ring-0 text-xs font-medium">
                                     </div>
+                                    <div class="bg-white/10 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-2">
+                                        <i data-lucide="clock" class="w-4 h-4 text-white"></i>
+                                        <select id="pcp-shift-selector" class="bg-transparent border-none text-white focus:outline-none focus:ring-0 text-xs font-medium cursor-pointer">
+                                            <option value="current" class="text-gray-900">Turno Atual</option>
+                                            <option value="all" class="text-gray-900">Todos os Turnos</option>
+                                            <option value="1" class="text-gray-900">Turno 1 (06:30-15:00)</option>
+                                            <option value="2" class="text-gray-900">Turno 2 (15:00-23:30)</option>
+                                            <option value="3" class="text-gray-900">Turno 3 (23:30-06:30)</option>
+                                        </select>
+                                    </div>
                                     <button id="btn-pcp-refresh" class="bg-indigo-500/80 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg transition flex items-center gap-2 font-semibold">
                                         <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                                         <span class="hidden sm:inline">Atualizar</span>
+                                    </button>
+                                    <button id="btn-pcp-export-excel" class="bg-green-600/80 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition flex items-center gap-2 font-semibold">
+                                        <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+                                        <span class="hidden sm:inline">Exportar Excel</span>
                                     </button>
                                 </div>
                             </div>
@@ -2435,7 +2449,7 @@
 
                             <!-- Tabela -->
                             <div id="pcp-table-container" class="hidden overflow-x-auto">
-                                <table class="w-full text-sm border-collapse">
+                                <table class="w-full text-sm border-collapse" id="pcp-table">
                                     <thead class="bg-slate-700 text-white sticky top-0">
                                         <tr>
                                             <th class="px-2 py-2 text-center font-semibold whitespace-nowrap border border-slate-600">Máquina</th>

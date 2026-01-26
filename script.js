@@ -37342,7 +37342,22 @@ function setupPCPPage() {
             // Event listener para mudança de data
             dateSelector.addEventListener('change', (e) => {
                 pcpState.currentDate = e.target.value;
-                loadPCPData(e.target.value);
+                const shiftFilter = document.getElementById('pcp-shift-selector')?.value || 'current';
+                loadPCPData(e.target.value, shiftFilter);
+            });
+        }
+        
+        // Configurar filtro de turno
+        const shiftSelector = document.getElementById('pcp-shift-selector');
+        if (shiftSelector) {
+            // Definir turno atual como padrão
+            pcpState.currentShift = 'current';
+            
+            // Event listener para mudança de turno
+            shiftSelector.addEventListener('change', (e) => {
+                pcpState.currentShift = e.target.value;
+                const date = document.getElementById('pcp-date-selector')?.value || getProductionDateString();
+                loadPCPData(date, e.target.value);
             });
         }
         
@@ -37352,7 +37367,17 @@ function setupPCPPage() {
             btnRefresh.addEventListener('click', () => {
                 console.log('[PCP] Atualizando dados...');
                 const date = document.getElementById('pcp-date-selector')?.value || getProductionDateString();
-                loadPCPData(date);
+                const shiftFilter = document.getElementById('pcp-shift-selector')?.value || 'current';
+                loadPCPData(date, shiftFilter);
+            });
+        }
+        
+        // Configurar botão de exportar Excel
+        const btnExportExcel = document.getElementById('btn-pcp-export-excel');
+        if (btnExportExcel) {
+            btnExportExcel.addEventListener('click', () => {
+                console.log('[PCP] Exportando para Excel...');
+                exportPCPToExcel();
             });
         }
         
@@ -37362,7 +37387,8 @@ function setupPCPPage() {
         }
         
         // Carregar dados iniciais
-        loadPCPData(pcpState.currentDate || getPCPProductionDateString());
+        const initialShiftFilter = document.getElementById('pcp-shift-selector')?.value || 'current';
+        loadPCPData(pcpState.currentDate || getPCPProductionDateString(), initialShiftFilter);
         
         pcpState.initialized = true;
         console.log('[PCP] Página inicializada com sucesso!');
@@ -37371,9 +37397,24 @@ function setupPCPPage() {
     }
 }
 
+// Função auxiliar para determinar o turno atual
+function getCurrentShift() {
+    const now = new Date();
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    const currentMinutes = hours * 60 + minutes;
+    
+    // Turno 1: 06:30 às 15:00 (390 a 900)
+    // Turno 2: 15:00 às 23:30 (900 a 1410)
+    // Turno 3: 23:30 às 06:30 (1410 a 390)
+    if (currentMinutes >= 390 && currentMinutes < 900) return '1';
+    if (currentMinutes >= 900 && currentMinutes < 1410) return '2';
+    return '3';
+}
+
 // Carregar dados do PCP
-async function loadPCPData(date) {
-    console.log('[PCP] Carregando dados para:', date);
+async function loadPCPData(date, shiftFilter = 'current') {
+    console.log('[PCP] Carregando dados para:', date, 'Turno:', shiftFilter);
     
     const loadingEl = document.getElementById('pcp-loading');
     const tableContainer = document.getElementById('pcp-table-container');
@@ -37386,21 +37427,68 @@ async function loadPCPData(date) {
     if (emptyState) emptyState.classList.add('hidden');
     
     try {
+        // Determinar turno efetivo para filtro
+        const effectiveShift = shiftFilter === 'current' ? getCurrentShift() : shiftFilter;
+        console.log('[PCP] Turno efetivo para filtro:', effectiveShift);
+        
         // 1. Buscar planejamentos da data
         const planningSnapshot = await db.collection('planning')
             .where('date', '==', date)
             .get();
         
-        const planningItems = [];
+        // Agrupar planejamentos por máquina para evitar duplicação
+        const planningByMachine = new Map();
         const machinesWithPlanning = new Set();
+        
         planningSnapshot.forEach(doc => {
             const data = { id: doc.id, ...doc.data() };
-            planningItems.push(data);
             const machineId = (data.machine || '').toUpperCase().trim();
-            if (machineId) machinesWithPlanning.add(machineId);
+            if (!machineId) return;
+            
+            machinesWithPlanning.add(machineId);
+            
+            // Determinar o turno do planejamento
+            const planShift = String(data.shift || data.turno || '1');
+            
+            // Se filtro é "all", agrupar todos os turnos por máquina
+            // Se filtro é um turno específico, só adicionar planejamentos daquele turno
+            if (shiftFilter === 'all') {
+                // Agrupar: priorizar o planejamento do turno atual ou o mais recente
+                const existing = planningByMachine.get(machineId);
+                const currentShiftNow = getCurrentShift();
+                
+                if (!existing) {
+                    planningByMachine.set(machineId, data);
+                } else {
+                    // Priorizar o turno atual
+                    const existingShift = String(existing.shift || existing.turno || '1');
+                    if (planShift === currentShiftNow && existingShift !== currentShiftNow) {
+                        planningByMachine.set(machineId, data);
+                    }
+                }
+            } else {
+                // Filtrar: só adicionar se for do turno selecionado
+                if (planShift === effectiveShift) {
+                    planningByMachine.set(machineId, data);
+                } else if (!planningByMachine.has(machineId)) {
+                    // Se não tem planejamento do turno selecionado, guardar como fallback
+                    planningByMachine.set(machineId, { ...data, _isFallback: true });
+                }
+            }
         });
         
-        console.log('[PCP] Planejamentos encontrados:', planningItems.length, 'para data:', date);
+        // Converter para array, removendo fallbacks se existir planejamento do turno correto
+        const planningItems = [];
+        planningByMachine.forEach((data, machineId) => {
+            // Se não é "all" e é fallback, ainda incluir mas marcar
+            if (shiftFilter !== 'all' && data._isFallback) {
+                // Incluir mesmo assim para não perder a máquina, mas sinalizar
+                console.log(`[PCP] Máquina ${machineId} não tem planejamento para turno ${effectiveShift}, usando fallback`);
+            }
+            planningItems.push(data);
+        });
+        
+        console.log('[PCP] Planejamentos após agrupamento:', planningItems.length, 'máquinas únicas:', machinesWithPlanning.size);
         
         // 2. Buscar paradas ativas (active_downtimes) - PRIORIDADE 1
         const activeDowntimesSnapshot = await db.collection('active_downtimes').get();
@@ -37651,8 +37739,12 @@ async function loadPCPData(date) {
             console.log(`[PCP] ${machineId} - Ciclo: real=${realCiclo}, planejado=${cicloPlanejado}, exibido=${ciclo}`);
             console.log(`[PCP] ${machineId} - Cavidades: real=${realCavidades}, planejadas=${cavidadesPlanejadas}, exibido=${cavidades}`);
             
+            // Turno do planejamento
+            const planShift = String(plan.shift || plan.turno || '1');
+            
             return {
                 machine: machineId,
+                turno: planShift,
                 cavidades: cavidades,
                 ciclo: ciclo,
                 cavidadesPlanejadas: cavidadesPlanejadas,
@@ -37678,6 +37770,7 @@ async function loadPCPData(date) {
                 const lastPlan = lastPlanningByMachine.get(machineId) || {};
                 tableData.push({
                     machine: machineId,
+                    turno: '-',
                     cavidades: lastPlan.cavidades || '-',
                     ciclo: lastPlan.ciclo || '-',
                     status: 'Parada',
@@ -37700,6 +37793,7 @@ async function loadPCPData(date) {
                 const lastPlan = lastPlanningByMachine.get(machineId) || {};
                 tableData.push({
                     machine: machineId,
+                    turno: '-',
                     cavidades: lastPlan.cavidades || '-',
                     ciclo: lastPlan.ciclo || '-',
                     status: 'Parada Longa',
@@ -37722,6 +37816,7 @@ async function loadPCPData(date) {
                 const lastPlan = lastPlanningByMachine.get(machineId) || {};
                 tableData.push({
                     machine: machineId,
+                    turno: '-',
                     cavidades: lastPlan.cavidades || '-',
                     ciclo: lastPlan.ciclo || '-',
                     status: 'Parada',
@@ -37929,6 +38024,181 @@ function getPCPStatusColor(status, motivoParada) {
     
     // Default = Outros (Cinza)
     return { bg: 'rgba(120, 144, 156, 0.25)', text: '#78909C', border: '#78909C', label: 'Outros' };
+}
+
+// Função para exportar PCP Dashboard para Excel com formatação de cores
+function exportPCPToExcel() {
+    const table = document.getElementById('pcp-table');
+    if (!table) {
+        alert('Tabela não encontrada!');
+        return;
+    }
+    
+    const date = document.getElementById('pcp-date-selector')?.value || getProductionDateString();
+    const shiftFilter = document.getElementById('pcp-shift-selector')?.value || 'current';
+    
+    // Determinar nome do turno para o arquivo
+    let shiftName = 'Atual';
+    if (shiftFilter === 'all') shiftName = 'Todos';
+    else if (shiftFilter === '1') shiftName = 'T1';
+    else if (shiftFilter === '2') shiftName = 'T2';
+    else if (shiftFilter === '3') shiftName = 'T3';
+    else if (shiftFilter === 'current') {
+        const currentShift = getCurrentShift();
+        shiftName = `T${currentShift}`;
+    }
+    
+    // KPIs do dashboard
+    const totalMachines = document.getElementById('pcp-kpi-machines')?.textContent || '0';
+    const producingMachines = document.getElementById('pcp-kpi-producing')?.textContent || '0';
+    const stoppedMachines = document.getElementById('pcp-kpi-stopped')?.textContent || '0';
+    
+    // Criar HTML com estilos para Excel
+    let html = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+        <meta charset="UTF-8">
+        <!--[if gte mso 9]>
+        <xml>
+            <x:ExcelWorkbook>
+                <x:ExcelWorksheets>
+                    <x:ExcelWorksheet>
+                        <x:Name>PCP Dashboard</x:Name>
+                        <x:WorksheetOptions>
+                            <x:DisplayGridlines/>
+                        </x:WorksheetOptions>
+                    </x:ExcelWorksheet>
+                </x:ExcelWorksheets>
+            </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
+        <style>
+            table { border-collapse: collapse; width: 100%; }
+            th, td { border: 1px solid #333; padding: 8px; text-align: center; }
+            th { background-color: #334155; color: white; font-weight: bold; }
+            .title { font-size: 16px; font-weight: bold; background-color: #1e293b; color: white; }
+            .kpi-header { background-color: #f1f5f9; font-weight: bold; }
+            .kpi-value { font-weight: bold; }
+            .kpi-machines { color: #2563eb; }
+            .kpi-producing { color: #16a34a; }
+            .kpi-stopped { color: #dc2626; }
+            .text-left { text-align: left; }
+            .text-red { color: #dc2626; font-weight: bold; }
+            .text-green { color: #16a34a; font-weight: bold; }
+            .text-amber { color: #d97706; font-weight: bold; }
+        </style>
+    </head>
+    <body>
+        <table>
+            <tr>
+                <td colspan="7" class="title">PCP Dashboard - Produção | Data: ${date} | Turno: ${shiftName}</td>
+            </tr>
+            <tr>
+                <td colspan="2" class="kpi-header">Máquinas Planejadas</td>
+                <td colspan="2" class="kpi-header">Produzindo</td>
+                <td colspan="3" class="kpi-header">Paradas</td>
+            </tr>
+            <tr>
+                <td colspan="2" class="kpi-value kpi-machines">${totalMachines}</td>
+                <td colspan="2" class="kpi-value kpi-producing">${producingMachines}</td>
+                <td colspan="3" class="kpi-value kpi-stopped">${stoppedMachines}</td>
+            </tr>
+            <tr><td colspan="7"></td></tr>
+            <tr>
+                <th>Máquina</th>
+                <th>Cavidade</th>
+                <th>Ciclo (s)</th>
+                <th>Status</th>
+                <th>Cliente</th>
+                <th>Produto</th>
+                <th>Motivo Parada</th>
+            </tr>`;
+    
+    // Dados da tabela
+    const tbody = table.querySelector('tbody');
+    if (tbody) {
+        const trs = tbody.querySelectorAll('tr');
+        trs.forEach(tr => {
+            const tds = tr.querySelectorAll('td');
+            if (tds.length >= 7) {
+                const maquina = tds[0].textContent.trim();
+                const cavidade = tds[1].textContent.trim();
+                const ciclo = tds[2].textContent.trim();
+                const statusCell = tds[3];
+                const statusText = statusCell.textContent.trim();
+                const cliente = tds[4].textContent.trim();
+                const produto = tds[5].textContent.trim();
+                const motivoParada = tds[6].textContent.trim();
+                
+                // Obter cores do status da célula original
+                const bgColor = statusCell.style.backgroundColor || 'transparent';
+                const textColor = statusCell.style.color || '#000';
+                
+                // Verificar classes de cor nas células de cavidade e ciclo
+                const cavClass = tds[1].classList.contains('text-red-600') ? 'text-red' : 
+                                 tds[1].classList.contains('text-green-600') ? 'text-green' : '';
+                const cicloClass = tds[2].classList.contains('text-red-600') ? 'text-red' : 
+                                   tds[2].classList.contains('text-amber-600') ? 'text-amber' :
+                                   tds[2].classList.contains('text-green-600') ? 'text-green' : '';
+                
+                // Classe para motivo de parada
+                const motivoClass = tds[6].classList.contains('text-red-600') ? 'text-red' : '';
+                
+                html += `
+            <tr>
+                <td style="font-weight: bold;">${maquina}</td>
+                <td class="${cavClass}">${cavidade}</td>
+                <td class="${cicloClass}">${ciclo}</td>
+                <td style="background-color: ${bgColor}; color: ${textColor}; font-weight: bold;">${statusText}</td>
+                <td class="text-left">${cliente}</td>
+                <td class="text-left">${produto}</td>
+                <td class="text-left ${motivoClass}">${motivoParada}</td>
+            </tr>`;
+            }
+        });
+    }
+    
+    html += `
+        </table>
+        <br/>
+        <table>
+            <tr><td colspan="7" style="font-size: 10px; color: #666;">Legenda de Status:</td></tr>
+            <tr>
+                <td style="background-color: rgba(34, 197, 94, 0.3); color: #16A34A; font-weight: bold;">Produzindo</td>
+                <td style="background-color: rgba(233, 30, 99, 0.25); color: #E91E63; font-weight: bold;">Preparação</td>
+                <td style="background-color: rgba(3, 169, 244, 0.25); color: #03A9F4; font-weight: bold;">Setup</td>
+                <td style="background-color: rgba(255, 152, 0, 0.25); color: #FF9800; font-weight: bold;">Ferramentaria</td>
+                <td style="background-color: rgba(156, 39, 176, 0.25); color: #9C27B0; font-weight: bold;">Processo</td>
+                <td style="background-color: rgba(255, 235, 59, 0.3); color: #F59E0B; font-weight: bold;">Manutenção</td>
+                <td style="background-color: rgba(244, 67, 54, 0.25); color: #F44336; font-weight: bold;">Qualidade</td>
+            </tr>
+            <tr>
+                <td style="background-color: rgba(187, 247, 208, 0.5); color: #064e3b; font-weight: bold;">Produção</td>
+                <td style="background-color: rgba(121, 85, 72, 0.25); color: #795548; font-weight: bold;">Compras</td>
+                <td style="background-color: rgba(97, 97, 97, 0.3); color: #616161; font-weight: bold;">Comercial</td>
+                <td style="background-color: rgba(33, 33, 33, 0.8); color: #BDBDBD; font-weight: bold;">PCP</td>
+                <td style="background-color: rgba(158, 158, 158, 0.3); color: #424242; font-weight: bold;">Admin.</td>
+                <td style="background-color: rgba(120, 144, 156, 0.25); color: #78909C; font-weight: bold;">Outros</td>
+                <td></td>
+            </tr>
+        </table>
+        <br/>
+        <p style="font-size: 10px; color: #666;">Exportado em: ${new Date().toLocaleString('pt-BR')}</p>
+    </body>
+    </html>`;
+    
+    // Criar Blob e download
+    const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `PCP_Dashboard_${date}_${shiftName}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    console.log('[PCP] Excel exportado com formatação:', `PCP_Dashboard_${date}_${shiftName}.xls`);
 }
 
 // Inicializar página de Ferramentaria
