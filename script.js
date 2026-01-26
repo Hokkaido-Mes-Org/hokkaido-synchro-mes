@@ -28620,17 +28620,72 @@ function sendDowntimeNotification() {
         const nowMs = referenceNow.getTime();
         let downtimeMillis = 0;
 
+        // Helper function to extract start time with multiple field name support
+        const extractStartTime = (dt) => {
+            // Try multiple date field names
+            const dateStr = dt.date || dt.start_date || dt.data_inicio;
+            
+            // Try multiple start time field names
+            const timeStr = dt.startTime || dt.start_time || dt.hora_inicio || dt.horaInicio;
+            
+            if (dateStr && timeStr) {
+                const combined = combineDateAndTime(dateStr, timeStr);
+                if (combined instanceof Date && !Number.isNaN(combined.getTime())) {
+                    return combined;
+                }
+            }
+            
+            // Try parsing as a full datetime
+            if (dt.start_datetime) {
+                const asDate = dt.start_datetime?.toDate?.() || new Date(dt.start_datetime);
+                if (asDate instanceof Date && !Number.isNaN(asDate.getTime())) {
+                    return asDate;
+                }
+            }
+            
+            return null;
+        };
+
+        // Helper function to extract end time with multiple field name support
+        const extractEndTime = (dt) => {
+            // Try multiple date field names
+            const dateStr = dt.date || dt.end_date || dt.data_fim;
+            
+            // Try multiple end time field names
+            const timeStr = dt.endTime || dt.end_time || dt.hora_fim || dt.horaFim;
+            
+            if (dateStr && timeStr) {
+                const combined = combineDateAndTime(dateStr, timeStr);
+                if (combined instanceof Date && !Number.isNaN(combined.getTime())) {
+                    return combined;
+                }
+            }
+            
+            // Try parsing as a full datetime
+            if (dt.end_datetime) {
+                const asDate = dt.end_datetime?.toDate?.() || new Date(dt.end_datetime);
+                if (asDate instanceof Date && !Number.isNaN(asDate.getTime())) {
+                    return asDate;
+                }
+            }
+            
+            return null;
+        };
+
         downtimes.forEach(dt => {
             if (!dt) return;
-            const start = combineDateAndTime(dt.date, dt.startTime);
-            const end = dt.endTime ? combineDateAndTime(dt.date, dt.endTime) : null;
+            
+            const start = extractStartTime(dt);
             if (!(start instanceof Date) || Number.isNaN(start.getTime())) {
                 return;
             }
 
-            let effectiveEnd = end;
+            let effectiveEnd = extractEndTime(dt);
+            
+            // If no explicit end time, try to calculate from duration
             if (!(effectiveEnd instanceof Date) || Number.isNaN(effectiveEnd.getTime()) || effectiveEnd <= start) {
-                const durationMinutes = Number(dt.duration) || 0;
+                // Try multiple duration field names
+                const durationMinutes = Number(dt.duration || dt.duracao || dt.duration_minutes || dt.duracao_minutos || 0);
                 effectiveEnd = new Date(start.getTime() + Math.max(durationMinutes, 0) * 60000);
             }
 
@@ -28641,8 +28696,8 @@ function sendDowntimeNotification() {
             }
         });
 
-        if (activeDowntime && activeDowntime.startTime && activeDowntime.date) {
-            const activeStart = combineDateAndTime(activeDowntime.date, activeDowntime.startTime);
+        if (activeDowntime) {
+            const activeStart = extractStartTime(activeDowntime);
             if (activeStart instanceof Date && !Number.isNaN(activeStart.getTime())) {
                 const windowStart = Math.max(activeStart.getTime(), shiftStartMs);
                 if (nowMs > windowStart) {
@@ -37419,8 +37474,12 @@ async function loadPCPData(date) {
             });
             
             // Se não encontrou valores reais, usar valores planejados
-            const cavidades = realCavidades || Number(plan.cavities) || Number(plan.cavidade) || Number(productInfo.cavidades) || 0;
-            const ciclo = realCiclo || Number(plan.cycle) || Number(plan.cycle_time) || Number(productInfo.ciclo) || 0;
+            const cavidadesPlanejadas = Number(plan.cavities) || Number(plan.cavidade) || Number(productInfo.cavidades) || 0;
+            const cicloPlanejado = Number(plan.cycle) || Number(plan.cycle_time) || Number(productInfo.ciclo) || 0;
+            
+            // Valores a exibir (reais se disponíveis, senão planejados)
+            const cavidades = realCavidades || cavidadesPlanejadas;
+            const ciclo = realCiclo || cicloPlanejado;
             
             const planejado = Number(plan.planned_quantity) || Number(plan.planned_qty) || Number(plan.quantity) || 0;
             const executado = productionByPlan.get(plan.id) || Number(plan.total_produzido) || 0;
@@ -37436,6 +37495,10 @@ async function loadPCPData(date) {
                 machine: machineId,
                 cavidades: cavidades,
                 ciclo: ciclo,
+                cavidadesPlanejadas: cavidadesPlanejadas,
+                cicloPlanejado: cicloPlanejado,
+                isRealCavidades: realCavidades !== null,
+                isRealCiclo: realCiclo !== null,
                 status: status,
                 cliente: cliente,
                 produto: produto,
@@ -37564,12 +37627,23 @@ function renderPCPTable(data) {
         
         // Formatar ciclo (pode ser número ou '-')
         const cicloDisplay = (typeof row.ciclo === 'number' && row.ciclo > 0) ? row.ciclo.toFixed(1) : '-';
+        const cavidadesDisplay = (typeof row.cavidades === 'number' && row.cavidades > 0) ? row.cavidades : '-';
+        
+        // Verificar se ciclo está fora do planejado (ciclo real > ciclo planejado = ruim)
+        const cicloFora = row.isRealCiclo && row.cicloPlanejado > 0 && row.ciclo > row.cicloPlanejado;
+        const cicloBom = row.isRealCiclo && row.cicloPlanejado > 0 && row.ciclo <= row.cicloPlanejado;
+        const cicloClass = cicloFora ? 'text-red-600 font-bold' : (cicloBom ? 'text-green-600 font-semibold' : 'text-gray-700');
+        
+        // Verificar se cavidades está fora do planejado (cavidades real < cavidades planejado = ruim)
+        const cavidadesFora = row.isRealCavidades && row.cavidadesPlanejadas > 0 && row.cavidades < row.cavidadesPlanejadas;
+        const cavidadesBom = row.isRealCavidades && row.cavidadesPlanejadas > 0 && row.cavidades >= row.cavidadesPlanejadas;
+        const cavidadesClass = cavidadesFora ? 'text-red-600 font-bold' : (cavidadesBom ? 'text-green-600 font-semibold' : 'text-gray-700');
         
         return `
             <tr class="border-b border-gray-200 hover:bg-gray-100">
                 <td class="px-2 py-2 text-center font-bold text-gray-900 whitespace-nowrap border border-gray-300">${row.machine}</td>
-                <td class="px-2 py-2 text-center text-gray-700 border border-gray-300">${row.cavidades || '-'}</td>
-                <td class="px-2 py-2 text-center text-gray-700 border border-gray-300">${cicloDisplay}</td>
+                <td class="px-2 py-2 text-center border border-gray-300 ${cavidadesClass}">${cavidadesDisplay}</td>
+                <td class="px-2 py-2 text-center border border-gray-300 ${cicloClass}">${cicloDisplay}</td>
                 <td class="px-2 py-2 text-center font-semibold border border-gray-300" style="background-color: ${statusColors.bg}; color: ${statusColors.text}; border-color: ${statusColors.border};">
                     ${statusColors.label}
                 </td>
