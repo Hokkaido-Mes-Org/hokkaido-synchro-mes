@@ -6133,6 +6133,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         await generateLossesParetoChart(regularLossesData);
         await generateLossesByMachineChart(regularLossesData);
         await generateLossesByMaterialChart(regularLossesData); // ✅ CORRIGIDO: Usar apenas regularLossesData (sem borra)
+        await generateLossesDailyChart(regularLossesData); // ✅ NOVO: Gráfico de perdas diárias
         
         // Gerar gráficos específicos de borra
         await generateBorraByMachineChart(borraData);
@@ -9500,6 +9501,158 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 const value = Number(context.parsed || 0);
                 const percentage = totalLosses > 0 ? ((value / totalLosses) * 100).toFixed(1) : '0.0';
                 return `${context.label}: ${value.toFixed(3)} kg (${percentage}%)`;
+            }
+        });
+    }
+
+    // ✅ NOVO: Gerar gráfico de perdas diárias
+    async function generateLossesDailyChart(lossesData) {
+        const ctx = document.getElementById('losses-daily-chart');
+        if (!ctx) return;
+
+        destroyChart('losses-daily-chart');
+
+        if (!lossesData || lossesData.length === 0) {
+            showNoDataMessage('losses-daily-chart', 'Nenhuma perda registrada no período');
+            return;
+        }
+        
+        clearNoDataMessage('losses-daily-chart');
+
+        // Agrupar perdas por data
+        const dailyLosses = {};
+        lossesData.forEach(item => {
+            // Tentar extrair a data do item
+            let dateStr = item.date || item.raw?.date || item.raw?.data || '';
+            
+            // Se não tem data direta, tentar extrair do timestamp
+            if (!dateStr && item.raw?.timestamp) {
+                const ts = item.raw.timestamp?.toDate ? item.raw.timestamp.toDate() : new Date(item.raw.timestamp);
+                if (ts instanceof Date && !isNaN(ts)) {
+                    dateStr = ts.toISOString().split('T')[0];
+                }
+            }
+            
+            // Se ainda não tem data, usar data atual como fallback
+            if (!dateStr) {
+                dateStr = new Date().toISOString().split('T')[0];
+            }
+            
+            // Usar refugo_kg para perdas em kg
+            const lossKg = item.raw?.refugo_kg || item.quantity || 0;
+            dailyLosses[dateStr] = (dailyLosses[dateStr] || 0) + lossKg;
+        });
+
+        // Ordenar as datas
+        const sortedDates = Object.keys(dailyLosses).sort((a, b) => new Date(a) - new Date(b));
+        
+        // Formatar labels para exibição (DD/MM)
+        const labels = sortedDates.map(date => {
+            const parts = date.split('-');
+            if (parts.length === 3) {
+                return `${parts[2]}/${parts[1]}`;
+            }
+            return date;
+        });
+        
+        const data = sortedDates.map(date => dailyLosses[date]);
+
+        // Calcular média para linha de referência
+        const avgLoss = data.length > 0 ? data.reduce((sum, val) => sum + val, 0) / data.length : 0;
+        const avgLine = data.map(() => avgLoss);
+
+        const isMobile = window.innerWidth < 768;
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Perdas (kg)',
+                        data: data,
+                        backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                        borderColor: '#3B82F6',
+                        borderWidth: 1,
+                        borderRadius: 4,
+                        order: 2
+                    },
+                    {
+                        label: `Média (${avgLoss.toFixed(2)} kg)`,
+                        data: avgLine,
+                        type: 'line',
+                        borderColor: '#EF4444',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        fill: false,
+                        order: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            font: {
+                                size: isMobile ? 9 : 11
+                            },
+                            maxRotation: 45,
+                            minRotation: 0
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        },
+                        ticks: {
+                            font: {
+                                size: isMobile ? 10 : 12
+                            },
+                            callback: function(value) {
+                                return value.toFixed(1) + ' kg';
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 15,
+                            font: {
+                                size: isMobile ? 10 : 12
+                            }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleFont: { size: 13 },
+                        bodyFont: { size: 12 },
+                        padding: 12,
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed.y;
+                                if (context.dataset.label.includes('Média')) {
+                                    return `Média: ${value.toFixed(2)} kg`;
+                                }
+                                return `Perdas: ${value.toFixed(3)} kg`;
+                            }
+                        }
+                    }
+                }
             }
         });
     }
