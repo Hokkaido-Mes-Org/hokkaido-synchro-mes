@@ -37623,12 +37623,15 @@ async function loadPCPData(date) {
                 real_cycle_t2: plan.real_cycle_t2,
                 real_cycle_t3: plan.real_cycle_t3,
                 cavities: plan.cavities,
-                cycle: plan.cycle
+                mold_cavities: plan.mold_cavities,
+                cycle: plan.cycle,
+                budgeted_cycle: plan.budgeted_cycle
             });
             
             // Se não encontrou valores reais, usar valores planejados
-            const cavidadesPlanejadas = Number(plan.cavities) || Number(plan.cavidade) || Number(productInfo.cavidades) || 0;
-            const cicloPlanejado = Number(plan.cycle) || Number(plan.cycle_time) || Number(productInfo.ciclo) || 0;
+            // CORREÇÃO: Usar budgeted_cycle e mold_cavities que são os campos corretos do planejamento
+            const cavidadesPlanejadas = Number(plan.mold_cavities) || Number(plan.cavities) || Number(plan.cavidade) || Number(productInfo.cavidades) || 0;
+            const cicloPlanejado = Number(plan.budgeted_cycle) || Number(plan.cycle) || Number(plan.cycle_time) || Number(productInfo.ciclo) || 0;
             
             // Valores a exibir (reais se disponíveis, senão planejados)
             const cavidades = realCavidades || cavidadesPlanejadas;
@@ -37643,6 +37646,10 @@ async function loadPCPData(date) {
             
             // Produto (descrição)
             const produto = plan.product_name || plan.productName || productInfo.descricao || productCode || '-';
+            
+            // DEBUG: Log para comparação ciclo/cavidades
+            console.log(`[PCP] ${machineId} - Ciclo: real=${realCiclo}, planejado=${cicloPlanejado}, exibido=${ciclo}`);
+            console.log(`[PCP] ${machineId} - Cavidades: real=${realCavidades}, planejadas=${cavidadesPlanejadas}, exibido=${cavidades}`);
             
             return {
                 machine: machineId,
@@ -37782,21 +37789,58 @@ function renderPCPTable(data) {
         const cicloDisplay = (typeof row.ciclo === 'number' && row.ciclo > 0) ? row.ciclo.toFixed(1) : '-';
         const cavidadesDisplay = (typeof row.cavidades === 'number' && row.cavidades > 0) ? row.cavidades : '-';
         
-        // Verificar se ciclo está fora do planejado (ciclo real > ciclo planejado = ruim)
-        const cicloFora = row.isRealCiclo && row.cicloPlanejado > 0 && row.ciclo > row.cicloPlanejado;
-        const cicloBom = row.isRealCiclo && row.cicloPlanejado > 0 && row.ciclo <= row.cicloPlanejado;
-        const cicloClass = cicloFora ? 'text-red-600 font-bold' : (cicloBom ? 'text-green-600 font-semibold' : 'text-gray-700');
+        // Verificar se ciclo está fora do planejado
+        // Ciclo real > ciclo planejado = ruim (máquina mais lenta)
+        const cicloNum = typeof row.ciclo === 'number' ? row.ciclo : 0;
+        const cicloPlanNum = typeof row.cicloPlanejado === 'number' ? row.cicloPlanejado : 0;
         
-        // Verificar se cavidades está fora do planejado (cavidades real < cavidades planejado = ruim)
-        const cavidadesFora = row.isRealCavidades && row.cavidadesPlanejadas > 0 && row.cavidades < row.cavidadesPlanejadas;
-        const cavidadesBom = row.isRealCavidades && row.cavidadesPlanejadas > 0 && row.cavidades >= row.cavidadesPlanejadas;
-        const cavidadesClass = cavidadesFora ? 'text-red-600 font-bold' : (cavidadesBom ? 'text-green-600 font-semibold' : 'text-gray-700');
+        // DEBUG para verificar valores
+        console.log(`[PCP-RENDER] ${row.machine}: ciclo=${cicloNum}, planejado=${cicloPlanNum}, isReal=${row.isRealCiclo}`);
+        
+        let cicloClass = 'text-gray-700';
+        if (cicloNum > 0 && cicloPlanNum > 0) {
+            const diferenca = cicloNum - cicloPlanNum;
+            const percentualDiferenca = (diferenca / cicloPlanNum) * 100;
+            
+            if (percentualDiferenca > 10) {
+                // Ciclo mais de 10% acima do planejado = vermelho (máquina muito lenta)
+                cicloClass = 'text-red-600 font-bold';
+            } else if (percentualDiferenca > 0) {
+                // Ciclo entre 0-10% acima = amarelo (um pouco lento)
+                cicloClass = 'text-amber-600 font-semibold';
+            } else {
+                // Ciclo igual ou menor que planejado = verde (ok ou mais rápido)
+                cicloClass = 'text-green-600 font-semibold';
+            }
+        }
+        
+        // Verificar se cavidades está fora do planejado
+        // Cavidades real < cavidades planejado = ruim (menos produção)
+        const cavNum = typeof row.cavidades === 'number' ? row.cavidades : 0;
+        const cavPlanNum = typeof row.cavidadesPlanejadas === 'number' ? row.cavidadesPlanejadas : 0;
+        
+        console.log(`[PCP-RENDER] ${row.machine}: cavidades=${cavNum}, planejadas=${cavPlanNum}, isReal=${row.isRealCavidades}`);
+        
+        let cavidadesClass = 'text-gray-700';
+        if (cavNum > 0 && cavPlanNum > 0) {
+            if (cavNum < cavPlanNum) {
+                // Cavidades abaixo do planejado = vermelho
+                cavidadesClass = 'text-red-600 font-bold';
+            } else {
+                // Cavidades igual ou acima do planejado = verde
+                cavidadesClass = 'text-green-600 font-semibold';
+            }
+        }
+        
+        // Tooltip com informação do planejado
+        const cicloTitle = cicloPlanNum > 0 ? `Planejado: ${cicloPlanNum.toFixed(1)}s | Atual: ${cicloNum > 0 ? cicloNum.toFixed(1) + 's' : '-'}` : '';
+        const cavTitle = cavPlanNum > 0 ? `Planejado: ${cavPlanNum} | Atual: ${cavNum > 0 ? cavNum : '-'}` : '';
         
         return `
             <tr class="border-b border-gray-200 hover:bg-gray-100">
                 <td class="px-2 py-2 text-center font-bold text-gray-900 whitespace-nowrap border border-gray-300">${row.machine}</td>
-                <td class="px-2 py-2 text-center border border-gray-300 ${cavidadesClass}">${cavidadesDisplay}</td>
-                <td class="px-2 py-2 text-center border border-gray-300 ${cicloClass}">${cicloDisplay}</td>
+                <td class="px-2 py-2 text-center border border-gray-300 ${cavidadesClass}" title="${cavTitle}">${cavidadesDisplay}</td>
+                <td class="px-2 py-2 text-center border border-gray-300 ${cicloClass}" title="${cicloTitle}">${cicloDisplay}</td>
                 <td class="px-2 py-2 text-center font-semibold border border-gray-300" style="background-color: ${statusColors.bg}; color: ${statusColors.text}; border-color: ${statusColors.border};">
                     ${statusColors.label}
                 </td>
