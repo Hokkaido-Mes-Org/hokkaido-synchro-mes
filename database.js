@@ -778,6 +778,7 @@ var userDatabase = [
     { cod: 27, nomeUsuario: "WESLEY", nomeCompleto: "WESLEY DA SILVA VASCONCELOS" },
     { cod: 28, nomeUsuario: "PAMELA", nomeCompleto: "PAMELA MUTA" },
     { cod: 29, nomeUsuario: "DAIANE.A", nomeCompleto: "Daiane Andrade Reis" },
+    { cod: 283, nomeUsuario: "FRANCISCA", nomeCompleto: "FRANCISCA ZACARIAS SILVA" },
     { cod: 30, nomeUsuario: "MONICA", nomeCompleto: "MONICA PINHEIRO AMAZONAS" },
     { cod: 31, nomeUsuario: "THAIS", nomeCompleto: "THAIS ARAGÃO ROS DE MOURA" },
     { cod: 32, nomeUsuario: "ROGER", nomeCompleto: "ROGER BERNARDES COSTA" },
