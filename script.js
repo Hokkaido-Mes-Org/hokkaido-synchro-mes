@@ -11359,29 +11359,33 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     function updateOrdersKPIs(orders) {
         const total = orders.length;
         const active = orders.filter(o => ['ativa', 'em_andamento'].includes((o.status || '').toLowerCase())).length;
+        const suspended = orders.filter(o => (o.status || '').toLowerCase() === 'suspensa').length;
         const completed = orders.filter(o => ['concluida', 'finalizada'].includes((o.status || '').toLowerCase())).length;
         
-        // Calcular progresso médio
-        let totalProgress = 0;
+        // Calcular totais de produção e perdas
+        let totalProducedAll = 0;
+        let totalLossesAll = 0;
         orders.forEach(o => {
-            const lotSize = Number(o.lot_size) || 0;
             const produced = Number(o.total_produzido ?? o.totalProduced ?? o.total_produced) || 0;
-            if (lotSize > 0) {
-                totalProgress += Math.min((produced / lotSize) * 100, 100);
-            }
+            const losses = Number(o.total_perdas ?? o.totalLosses ?? o.total_losses ?? o.refugo ?? o.scrap) || 0;
+            totalProducedAll += produced;
+            totalLossesAll += losses;
         });
-        const avgProgress = total > 0 ? Math.round(totalProgress / total) : 0;
         
         // Atualizar elementos
         const kpiTotal = document.getElementById('orders-kpi-total');
         const kpiActive = document.getElementById('orders-kpi-active');
+        const kpiSuspended = document.getElementById('orders-kpi-suspended');
         const kpiCompleted = document.getElementById('orders-kpi-completed');
-        const kpiAvgProgress = document.getElementById('orders-kpi-avg-progress');
+        const kpiTotalProduced = document.getElementById('orders-kpi-total-produced');
+        const kpiTotalLosses = document.getElementById('orders-kpi-total-losses');
         
         if (kpiTotal) kpiTotal.textContent = total;
         if (kpiActive) kpiActive.textContent = active;
+        if (kpiSuspended) kpiSuspended.textContent = suspended;
         if (kpiCompleted) kpiCompleted.textContent = completed;
-        if (kpiAvgProgress) kpiAvgProgress.textContent = avgProgress + '%';
+        if (kpiTotalProduced) kpiTotalProduced.textContent = totalProducedAll.toLocaleString('pt-BR');
+        if (kpiTotalLosses) kpiTotalLosses.textContent = totalLossesAll.toLocaleString('pt-BR');
     }
     
     function renderOrders(orders) {
@@ -11421,12 +11425,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const lotSize = Number(order.lot_size) || 0;
         // CORREÇÃO: Usar total_produzido OU totalProduced (nomes corretos do campo no Firebase)
         const produced = Number(order.total_produzido ?? order.totalProduced ?? order.total_produced) || 0;
+        const losses = Number(order.total_perdas ?? order.totalLosses ?? order.total_losses ?? order.refugo ?? order.scrap) || 0;
         const progress = lotSize > 0 ? Math.min((produced / lotSize) * 100, 100) : 0;
         
         const statusConfig = {
             'planejada': { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Planejada', icon: 'calendar' },
             'ativa': { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Ativa', icon: 'zap' },
             'em_andamento': { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Em Andamento', icon: 'play-circle' },
+            'suspensa': { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Suspensa', icon: 'pause-circle' },
             'concluida': { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Concluída', icon: 'check-circle-2' },
             'finalizada': { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Finalizada', icon: 'check-circle-2' },
             'cancelada': { bg: 'bg-red-100', text: 'text-red-700', label: 'Cancelada', icon: 'x-circle' }
@@ -11435,11 +11441,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const sc = statusConfig[status] || statusConfig['planejada'];
         const progressColor = progress >= 100 ? 'bg-emerald-500' : progress >= 50 ? 'bg-blue-500' : 'bg-amber-500';
         const isActive = ['ativa', 'em_andamento'].includes(status);
+        const isSuspended = status === 'suspensa';
         const canActivate = status === 'planejada';
         const canReactivate = ['concluida', 'finalizada'].includes(status);
+        const canSuspend = isActive;
+        const canResume = isSuspended;
         
-        return '<div class="bg-white rounded-xl border ' + (isActive ? 'border-blue-300 ring-2 ring-blue-100' : 'border-gray-200') + ' shadow-sm hover:shadow-md transition-all overflow-hidden">' +
-            '<div class="p-4 border-b border-gray-100 ' + (isActive ? 'bg-blue-50' : 'bg-gray-50') + '">' +
+        return '<div class="bg-white rounded-xl border ' + (isActive ? 'border-blue-300 ring-2 ring-blue-100' : isSuspended ? 'border-orange-300 ring-2 ring-orange-100' : 'border-gray-200') + ' shadow-sm hover:shadow-md transition-all overflow-hidden">' +
+            '<div class="p-4 border-b border-gray-100 ' + (isActive ? 'bg-blue-50' : isSuspended ? 'bg-orange-50' : 'bg-gray-50') + '">' +
                 '<div class="flex items-start justify-between gap-2">' +
                     '<div class="flex-1 min-w-0">' +
                         '<h4 class="font-bold text-gray-800 truncate">OP ' + escapeHtml(order.order_number || '') + '</h4>' +
@@ -11470,16 +11479,20 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     '<div class="w-full bg-gray-200 rounded-full h-2">' +
                         '<div class="' + progressColor + ' h-2 rounded-full transition-all" style="width: ' + progress + '%"></div>' +
                     '</div>' +
-                    '<div class="flex justify-between text-xs text-gray-500 mt-1">' +
-                        '<span>' + produced.toLocaleString('pt-BR') + ' prod.</span>' +
-                        '<span>' + lotSize.toLocaleString('pt-BR') + ' plan.</span>' +
+                    '<div class="grid grid-cols-3 text-xs text-gray-500 mt-2">' +
+                        '<span class="text-center"><span class="font-semibold text-green-600">' + produced.toLocaleString('pt-BR') + '</span><br>Produzido</span>' +
+                        '<span class="text-center"><span class="font-semibold text-blue-600">' + lotSize.toLocaleString('pt-BR') + '</span><br>Planejado</span>' +
+                        '<span class="text-center"><span class="font-semibold text-red-600">' + losses.toLocaleString('pt-BR') + '</span><br>Perdas</span>' +
                     '</div>' +
                 '</div>' +
             '</div>' +
-            '<div class="px-4 pb-4 flex gap-2">' +
-                (canActivate ? '<button onclick="activateOrder(\'' + order.id + '\', \'' + (order.machine_id || '') + '\')" class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition"><i data-lucide="play" class="w-4 h-4"></i>Ativar</button>' : '') +
-                (canReactivate ? '<button onclick="reactivateOrder(\'' + order.id + '\')" class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition"><i data-lucide="rotate-ccw" class="w-4 h-4"></i>Reativar</button>' : '') +
-                '<button onclick="editOrder(\'' + order.id + '\')" class="' + ((canActivate || canReactivate) ? 'flex-1' : 'w-full') + ' flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition"><i data-lucide="edit-3" class="w-4 h-4"></i>Editar</button>' +
+            '<div class="px-4 pb-4 grid grid-cols-2 gap-2">' +
+                (canActivate ? '<button onclick="activateOrder(\'' + order.id + '\', \'' + (order.machine_id || '') + '\')" class="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition"><i data-lucide="play" class="w-4 h-4"></i>Ativar</button>' : '') +
+                (canSuspend ? '<button onclick="suspendOrder(\'' + order.id + '\')" class="flex items-center justify-center gap-1.5 px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium transition"><i data-lucide="pause" class="w-4 h-4"></i>Suspender</button>' : '') +
+                (canResume ? '<button onclick="resumeOrder(\'' + order.id + '\')" class="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition"><i data-lucide="play" class="w-4 h-4"></i>Retomar</button>' : '') +
+                (canReactivate ? '<button onclick="reactivateOrder(\'' + order.id + '\')" class="flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition"><i data-lucide="rotate-ccw" class="w-4 h-4"></i>Reativar</button>' : '') +
+                '<button onclick="openOrderTraceability(\'' + order.id + '\')" class="flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition"><i data-lucide="file-search" class="w-4 h-4"></i>Rastrear</button>' +
+                '<button onclick="editOrder(\'' + order.id + '\')" class="flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition"><i data-lucide="edit-3" class="w-4 h-4"></i>Editar</button>' +
             '</div>' +
         '</div>';
     }
@@ -11489,28 +11502,41 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const lotSize = Number(order.lot_size) || 0;
         // CORREÇÃO: Usar total_produzido OU totalProduced (nomes corretos do campo no Firebase)
         const produced = Number(order.total_produzido ?? order.totalProduced ?? order.total_produced) || 0;
+        const losses = Number(order.total_perdas ?? order.totalLosses ?? order.total_losses ?? order.refugo ?? order.scrap) || 0;
         const progress = lotSize > 0 ? Math.min((produced / lotSize) * 100, 100) : 0;
         
         const statusBadge = {
             'planejada': '<span class="px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">Planejada</span>',
             'ativa': '<span class="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">Ativa</span>',
             'em_andamento': '<span class="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Em Andamento</span>',
+            'suspensa': '<span class="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700">Suspensa</span>',
             'concluida': '<span class="px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Concluída</span>',
             'finalizada': '<span class="px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Finalizada</span>',
             'cancelada': '<span class="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">Cancelada</span>'
         };
         
+        const isActive = ['ativa', 'em_andamento'].includes(status);
+        const isSuspended = status === 'suspensa';
         const canActivate = status === 'planejada';
         const canReactivate = ['concluida', 'finalizada'].includes(status);
+        const canSuspend = isActive;
+        const canResume = isSuspended;
         
         let actions = '';
         if (canActivate) {
-            actions += '<button onclick="activateOrder(\'' + order.id + '\', \'' + (order.machine_id || '') + '\')" class="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-medium mr-1">Ativar</button>';
+            actions += '<button onclick="activateOrder(\'' + order.id + '\', \'' + (order.machine_id || '') + '\')" class="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-medium mr-1" title="Ativar"><i data-lucide="play" class="w-3 h-3 inline"></i></button>';
+        }
+        if (canSuspend) {
+            actions += '<button onclick="suspendOrder(\'' + order.id + '\')" class="px-2 py-1 bg-orange-500 hover:bg-orange-600 text-white rounded text-xs font-medium mr-1" title="Suspender"><i data-lucide="pause" class="w-3 h-3 inline"></i></button>';
+        }
+        if (canResume) {
+            actions += '<button onclick="resumeOrder(\'' + order.id + '\')" class="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-medium mr-1" title="Retomar"><i data-lucide="play" class="w-3 h-3 inline"></i></button>';
         }
         if (canReactivate) {
-            actions += '<button onclick="reactivateOrder(\'' + order.id + '\')" class="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium mr-1">Reativar</button>';
+            actions += '<button onclick="reactivateOrder(\'' + order.id + '\')" class="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium mr-1" title="Reativar"><i data-lucide="rotate-ccw" class="w-3 h-3 inline"></i></button>';
         }
-        actions += '<button onclick="editOrder(\'' + order.id + '\')" class="px-2 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded text-xs font-medium">Editar</button>';
+        actions += '<button onclick="openOrderTraceability(\'' + order.id + '\')" class="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-medium mr-1" title="Rastrear"><i data-lucide="file-search" class="w-3 h-3 inline"></i></button>';
+        actions += '<button onclick="editOrder(\'' + order.id + '\')" class="px-2 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded text-xs font-medium" title="Editar"><i data-lucide="edit-3" class="w-3 h-3 inline"></i></button>';
         
         const progressBar = '<div class="w-full bg-gray-200 rounded-full h-2"><div class="bg-blue-500 h-2 rounded-full" style="width: ' + progress + '%"></div></div><span class="text-xs text-gray-500">' + Math.round(progress) + '%</span>';
         
@@ -11519,9 +11545,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             '<td class="px-4 py-3">' + escapeHtml(order.product || order.part_code || '-') + '</td>' +
             '<td class="px-4 py-3">' + escapeHtml(order.machine_id || '-') + '</td>' +
             '<td class="px-4 py-3 text-center">' + lotSize.toLocaleString('pt-BR') + '</td>' +
+            '<td class="px-4 py-3 text-center text-green-600 font-semibold">' + produced.toLocaleString('pt-BR') + '</td>' +
+            '<td class="px-4 py-3 text-center text-red-600 font-semibold">' + losses.toLocaleString('pt-BR') + '</td>' +
             '<td class="px-4 py-3 text-center"><div class="flex flex-col items-center gap-1">' + progressBar + '</div></td>' +
             '<td class="px-4 py-3 text-center">' + (statusBadge[status] || statusBadge['planejada']) + '</td>' +
-            '<td class="px-4 py-3 text-center">' + actions + '</td>' +
+            '<td class="px-4 py-3 text-center whitespace-nowrap">' + actions + '</td>' +
         '</tr>';
     }
     
@@ -11688,6 +11716,212 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         openNewOrderModal(order);
     };
     
+    // Suspender ordem de produção
+    window.suspendOrder = async function(orderId) {
+        const order = ordersCache.find(o => o.id === orderId);
+        const orderNum = order?.order_number || orderId;
+        
+        const motivo = prompt('Informe o motivo da suspensão da OP ' + orderNum + ':');
+        if (!motivo) {
+            showNotification('Suspensão cancelada - motivo não informado', 'info');
+            return;
+        }
+        
+        try {
+            await db.collection('production_orders').doc(orderId).update({
+                status: 'suspensa',
+                suspendedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                suspendedReason: motivo,
+                previousStatus: order?.status || 'ativa'
+            });
+            showNotification('Ordem OP ' + orderNum + ' suspensa!', 'warning');
+            loadProductionOrders();
+        } catch (e) {
+            console.error('Erro ao suspender ordem:', e);
+            showNotification('Erro ao suspender ordem', 'error');
+        }
+    };
+    
+    // Retomar ordem suspensa
+    window.resumeOrder = async function(orderId) {
+        const order = ordersCache.find(o => o.id === orderId);
+        const orderNum = order?.order_number || orderId;
+        
+        if (!confirm('Retomar ordem OP ' + orderNum + '?')) return;
+        
+        try {
+            const previousStatus = order?.previousStatus || 'ativa';
+            await db.collection('production_orders').doc(orderId).update({
+                status: previousStatus,
+                resumedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                suspendedReason: firebase.firestore.FieldValue.delete()
+            });
+            showNotification('Ordem OP ' + orderNum + ' retomada!', 'success');
+            loadProductionOrders();
+        } catch (e) {
+            console.error('Erro ao retomar ordem:', e);
+            showNotification('Erro ao retomar ordem', 'error');
+        }
+    };
+    
+    // Abrir modal de rastreabilidade da ordem
+    window.openOrderTraceability = async function(orderId) {
+        const order = ordersCache.find(o => o.id === orderId);
+        if (!order) {
+            showNotification('Ordem não encontrada', 'error');
+            return;
+        }
+        
+        const modal = document.getElementById('order-traceability-modal');
+        if (!modal) {
+            showNotification('Modal de rastreabilidade não encontrado', 'error');
+            return;
+        }
+        
+        // Atualizar cabeçalho
+        const orderNumEl = document.getElementById('order-trace-number');
+        if (orderNumEl) orderNumEl.textContent = 'OP #' + (order.order_number || 'N/A') + ' - ' + (order.product || order.part_code || 'Sem produto');
+        
+        // Mostrar loading
+        const entriesContainer = document.getElementById('order-trace-entries');
+        if (entriesContainer) entriesContainer.innerHTML = '<div class="p-4 text-center text-gray-500"><i data-lucide="loader-2" class="w-6 h-6 animate-spin mx-auto"></i><p class="mt-2">Carregando lançamentos...</p></div>';
+        
+        // Mostrar modal
+        modal.classList.remove('hidden');
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        
+        try {
+            // Buscar lançamentos de produção
+            const productionSnapshot = await db.collection('production_entries')
+                .where('orderId', '==', orderId)
+                .orderBy('timestamp', 'desc')
+                .limit(100)
+                .get();
+            
+            let totalProduced = 0;
+            let totalLosses = 0;
+            const entries = [];
+            
+            productionSnapshot.forEach(doc => {
+                const data = doc.data();
+                const qty = Number(data.quantity || data.qty || data.produced) || 0;
+                const loss = Number(data.losses || data.refugo || data.scrap || data.perdas) || 0;
+                totalProduced += qty;
+                totalLosses += loss;
+                entries.push({ id: doc.id, ...data, qty, loss });
+            });
+            
+            // Atualizar resumo
+            const lotSize = Number(order.lot_size) || 0;
+            const progress = lotSize > 0 ? Math.min((totalProduced / lotSize) * 100, 100) : 0;
+            
+            const plannedEl = document.getElementById('order-trace-planned');
+            const producedEl = document.getElementById('order-trace-produced');
+            const lossesEl = document.getElementById('order-trace-losses');
+            const progressEl = document.getElementById('order-trace-progress');
+            const countEl = document.getElementById('order-trace-entries-count');
+            
+            if (plannedEl) plannedEl.textContent = lotSize.toLocaleString('pt-BR');
+            if (producedEl) producedEl.textContent = totalProduced.toLocaleString('pt-BR');
+            if (lossesEl) lossesEl.textContent = totalLosses.toLocaleString('pt-BR');
+            if (progressEl) progressEl.textContent = Math.round(progress) + '%';
+            if (countEl) countEl.textContent = entries.length + ' registro(s)';
+            
+            // Renderizar lançamentos
+            if (entries.length === 0) {
+                entriesContainer.innerHTML = '<div class="p-8 text-center text-gray-400"><i data-lucide="inbox" class="w-12 h-12 mx-auto mb-3"></i><p>Nenhum lançamento encontrado para esta ordem</p></div>';
+            } else {
+                entriesContainer.innerHTML = entries.map(entry => {
+                    const timestamp = entry.timestamp?.toDate?.() || new Date();
+                    const dateStr = timestamp.toLocaleDateString('pt-BR');
+                    const timeStr = timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                    
+                    return '<div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 hover:bg-gray-50">' +
+                        '<div class="flex items-center gap-3">' +
+                            '<div class="p-2 bg-blue-100 rounded-lg"><i data-lucide="package-check" class="w-4 h-4 text-blue-600"></i></div>' +
+                            '<div>' +
+                                '<p class="text-sm font-medium text-gray-800">' + (entry.machine_id || entry.machineId || 'N/A') + '</p>' +
+                                '<p class="text-xs text-gray-500">' + dateStr + ' às ' + timeStr + ' - ' + (entry.operator || entry.operador || 'Operador N/A') + '</p>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-4 text-sm">' +
+                            '<div class="text-right">' +
+                                '<span class="font-semibold text-green-600">+' + entry.qty.toLocaleString('pt-BR') + '</span>' +
+                                '<p class="text-xs text-gray-500">Produzido</p>' +
+                            '</div>' +
+                            (entry.loss > 0 ? '<div class="text-right"><span class="font-semibold text-red-600">-' + entry.loss.toLocaleString('pt-BR') + '</span><p class="text-xs text-gray-500">Perdas</p></div>' : '') +
+                        '</div>' +
+                    '</div>';
+                }).join('');
+            }
+            
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            
+        } catch (error) {
+            console.error('Erro ao carregar rastreabilidade:', error);
+            entriesContainer.innerHTML = '<div class="p-8 text-center text-red-500"><i data-lucide="alert-circle" class="w-12 h-12 mx-auto mb-3"></i><p>Erro ao carregar dados de rastreabilidade</p></div>';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+    };
+    
+    // Recalcular totais de todas as ordens
+    window.recalculateAllOrdersTotals = async function() {
+        if (!confirm('Recalcular totais de produção e perdas para todas as ordens?\n\nIsso pode levar alguns segundos.')) return;
+        
+        showNotification('Recalculando totais...', 'info');
+        
+        try {
+            const ordersSnapshot = await db.collection('production_orders').get();
+            let updated = 0;
+            let errors = 0;
+            
+            for (const orderDoc of ordersSnapshot.docs) {
+                const orderId = orderDoc.id;
+                
+                try {
+                    // Buscar todos os lançamentos da ordem
+                    const entriesSnapshot = await db.collection('production_entries')
+                        .where('orderId', '==', orderId)
+                        .get();
+                    
+                    let totalProduced = 0;
+                    let totalLosses = 0;
+                    
+                    entriesSnapshot.forEach(entryDoc => {
+                        const data = entryDoc.data();
+                        totalProduced += Number(data.quantity || data.qty || data.produced) || 0;
+                        totalLosses += Number(data.losses || data.refugo || data.scrap || data.perdas) || 0;
+                    });
+                    
+                    // Atualizar ordem
+                    await db.collection('production_orders').doc(orderId).update({
+                        total_produzido: totalProduced,
+                        total_perdas: totalLosses,
+                        lastRecalculated: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    
+                    updated++;
+                } catch (entryError) {
+                    console.error('Erro ao recalcular ordem ' + orderId + ':', entryError);
+                    errors++;
+                }
+            }
+            
+            showNotification('✅ Recalculado! ' + updated + ' ordens atualizadas' + (errors > 0 ? ', ' + errors + ' erros' : ''), 'success');
+            loadProductionOrders();
+            
+        } catch (error) {
+            console.error('Erro ao recalcular totais:', error);
+            showNotification('Erro ao recalcular totais', 'error');
+        }
+    };
+    
+    // Atualizar lista de ordens
+    window.refreshOrdersList = function() {
+        loadProductionOrders();
+        showNotification('Lista de ordens atualizada!', 'success');
+    };
+
     // Buscar MP por texto
     window.searchMP = function() {
         const searchTerm = prompt('Digite o código ou descrição da MP:');
@@ -21809,12 +22043,26 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             if (logContainer) logContainer.innerHTML = '';
         });
         
-        // Aba Ordens - botões
-        const btnBuscarOrdem = document.getElementById('admin-btn-buscar-ordem');
-        const btnAjustarOrdem = document.getElementById('admin-btn-ajustar-ordem');
+        // Aba Ordens - nova estrutura simplificada
+        const btnBuscarOP = document.getElementById('admin-btn-buscar-op');
+        const btnSalvarOP = document.getElementById('admin-btn-salvar-op');
+        const inputBuscaOP = document.getElementById('admin-ordem-busca');
+        const inputNovaQtd = document.getElementById('admin-op-nova-qtd');
         
-        if (btnBuscarOrdem) btnBuscarOrdem.addEventListener('click', adminBuscarOrdem);
-        if (btnAjustarOrdem) btnAjustarOrdem.addEventListener('click', adminAjustarQuantidadeOrdem);
+        if (btnBuscarOP) btnBuscarOP.addEventListener('click', adminBuscarOrdemSimplificado);
+        if (btnSalvarOP) btnSalvarOP.addEventListener('click', adminSalvarOrdemSimplificado);
+        
+        // Busca ao pressionar Enter
+        if (inputBuscaOP) {
+            inputBuscaOP.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') adminBuscarOrdemSimplificado();
+            });
+        }
+        
+        // Preview ao digitar nova quantidade
+        if (inputNovaQtd) {
+            inputNovaQtd.addEventListener('input', adminPreviewAlteracao);
+        }
         
         // Aba Produção - setup
         const dataProducao = document.getElementById('admin-producao-data');
@@ -22070,31 +22318,56 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
     }
     
-    // ===== Funções de Ajuste de Ordens =====
-    async function adminBuscarOrdem() {
-        const numeroOP = document.getElementById('admin-ordem-numero')?.value?.trim();
-        const detalhesDiv = document.getElementById('admin-ordem-detalhes');
-        const btnAjustar = document.getElementById('admin-btn-ajustar-ordem');
+    // ===== Funções de Ajuste de Ordens - NOVA ESTRUTURA SIMPLIFICADA =====
+    // Variável para armazenar a ordem atual sendo editada
+    let adminOrdemAtual = null;
+    
+    function adminOrdemLog(message, type = 'info') {
         const logDiv = document.getElementById('admin-ordem-log');
+        if (!logDiv) return;
+        
+        const colors = {
+            info: 'text-blue-400',
+            success: 'text-green-400',
+            warn: 'text-yellow-400',
+            error: 'text-red-400'
+        };
+        
+        const entry = document.createElement('div');
+        entry.className = `${colors[type] || colors.info} py-0.5`;
+        entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        logDiv.appendChild(entry);
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
+    
+    async function adminBuscarOrdemSimplificado() {
+        const numeroOP = document.getElementById('admin-ordem-busca')?.value?.trim();
+        const cardOrdem = document.getElementById('admin-ordem-card');
+        const emptyState = document.getElementById('admin-ordem-empty');
         
         if (!numeroOP) {
-            alert('Digite o número da OP');
+            alert('Digite o número da OP para buscar');
             return;
         }
         
         try {
-            adminCurrentOrderDoc = null;
-            if (detalhesDiv) detalhesDiv.classList.add('hidden');
-            if (btnAjustar) btnAjustar.disabled = true;
+            adminOrdemAtual = null;
             
-            // Buscar ordem
-            const snapshot = await db.collection('production_orders')
+            // Buscar ordem - tentar vários formatos
+            let foundDoc = null;
+            
+            // Busca exata string
+            const snapshot1 = await db.collection('production_orders')
                 .where('order_number', '==', numeroOP)
                 .limit(1)
                 .get();
             
-            if (snapshot.empty) {
-                // Tentar busca numérica
+            if (!snapshot1.empty) {
+                foundDoc = snapshot1.docs[0];
+            }
+            
+            // Tentar busca numérica
+            if (!foundDoc) {
                 const numerico = parseInt(numeroOP);
                 if (!isNaN(numerico)) {
                     const snapshot2 = await db.collection('production_orders')
@@ -22103,121 +22376,194 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                         .get();
                     
                     if (!snapshot2.empty) {
-                        adminCurrentOrderDoc = snapshot2.docs[0];
+                        foundDoc = snapshot2.docs[0];
                     }
                 }
-            } else {
-                adminCurrentOrderDoc = snapshot.docs[0];
             }
             
-            if (!adminCurrentOrderDoc) {
-                alert(`Ordem ${numeroOP} não encontrada`);
+            if (!foundDoc) {
+                alert(`OP ${numeroOP} não encontrada`);
+                adminOrdemLog(`❌ OP ${numeroOP} não encontrada`, 'error');
                 return;
             }
             
-            const data = adminCurrentOrderDoc.data();
+            adminOrdemAtual = { id: foundDoc.id, ...foundDoc.data() };
+            const data = adminOrdemAtual;
             
-            // Preencher detalhes
-            document.getElementById('admin-ordem-info-op').textContent = data.order_number || '-';
-            document.getElementById('admin-ordem-info-produto').textContent = data.product_name || data.product_code || '-';
-            document.getElementById('admin-ordem-info-maquina').textContent = data.machine_id || '-';
-            document.getElementById('admin-ordem-info-status').textContent = data.status || '-';
-            document.getElementById('admin-ordem-info-planejada').textContent = data.planned_quantity || '-';
-            document.getElementById('admin-ordem-info-executada').textContent = data.executed_quantity || 0;
+            // IMPORTANTE: Usar os MESMOS campos que os cards de máquina usam
+            // Cards usam: order_lot_size || lot_size para planejado
+            // Cards usam: total_produzido para executado
+            const planejado = Number(data.order_lot_size ?? data.lot_size ?? data.planned_quantity) || 0;
+            const executado = Number(data.total_produzido ?? data.totalProduced ?? data.total_produced) || 0;
+            const faltante = Math.max(0, planejado - executado);
+            const progresso = planejado > 0 ? (executado / planejado * 100) : 0;
             
-            const progresso = data.planned_quantity > 0 
-                ? ((data.executed_quantity || 0) / data.planned_quantity * 100).toFixed(1) + '%'
-                : '-';
-            document.getElementById('admin-ordem-info-progresso').textContent = progresso;
+            // Resolver nome do produto (igual ao card de máquina)
+            let productName = data.product || data.product_name || data.part_code || data.product_code || 'Produto não definido';
             
-            if (detalhesDiv) detalhesDiv.classList.remove('hidden');
-            if (btnAjustar) btnAjustar.disabled = false;
+            // Preencher card
+            document.getElementById('admin-op-numero').textContent = data.order_number || '-';
+            document.getElementById('admin-op-produto').textContent = productName;
+            document.getElementById('admin-op-maquina').textContent = data.machine_id ? `Máquina: ${data.machine_id}` : '';
+            document.getElementById('admin-op-status').textContent = (data.status || 'planejada').toUpperCase();
             
-            // Log
-            if (logDiv) {
-                const entry = document.createElement('div');
-                entry.className = 'text-blue-400 py-0.5';
-                entry.textContent = `[${new Date().toLocaleTimeString()}] OP ${numeroOP} encontrada - Executada atual: ${data.executed_quantity || 0}`;
-                logDiv.appendChild(entry);
+            // Indicadores (mesmos valores dos cards)
+            document.getElementById('admin-op-planejado').textContent = planejado.toLocaleString('pt-BR');
+            document.getElementById('admin-op-executado').textContent = executado.toLocaleString('pt-BR');
+            document.getElementById('admin-op-faltante').textContent = faltante.toLocaleString('pt-BR');
+            
+            // Progresso
+            document.getElementById('admin-op-progresso-pct').textContent = progresso.toFixed(1) + '%';
+            document.getElementById('admin-op-progresso-bar').style.width = Math.min(progresso, 100) + '%';
+            
+            // Cor da barra de progresso
+            const barEl = document.getElementById('admin-op-progresso-bar');
+            if (progresso >= 100) {
+                barEl.className = 'h-4 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 transition-all duration-500';
+            } else if (progresso >= 50) {
+                barEl.className = 'h-4 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-500';
+            } else {
+                barEl.className = 'h-4 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 transition-all duration-500';
             }
+            
+            // Pré-preencher campo de edição
+            document.getElementById('admin-op-nova-qtd').value = executado;
+            document.getElementById('admin-op-preview').classList.add('hidden');
+            
+            // Mostrar card, esconder empty state
+            if (cardOrdem) cardOrdem.classList.remove('hidden');
+            if (emptyState) emptyState.classList.add('hidden');
+            
+            // Recriar ícones
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            
+            adminOrdemLog(`✅ OP ${data.order_number} carregada - Exec: ${executado.toLocaleString('pt-BR')} / Plan: ${planejado.toLocaleString('pt-BR')}`, 'success');
             
         } catch (error) {
             console.error('[ADMIN] Erro ao buscar ordem:', error);
             alert('Erro ao buscar ordem: ' + error.message);
+            adminOrdemLog(`❌ Erro: ${error.message}`, 'error');
         }
     }
     
-    async function adminAjustarQuantidadeOrdem() {
-        if (!adminCurrentOrderDoc) {
-            alert('Nenhuma ordem selecionada');
+    function adminPreviewAlteracao() {
+        if (!adminOrdemAtual) return;
+        
+        const novaQtd = parseInt(document.getElementById('admin-op-nova-qtd')?.value) || 0;
+        const executadoAtual = Number(adminOrdemAtual.total_produzido ?? adminOrdemAtual.totalProduced ?? adminOrdemAtual.total_produced) || 0;
+        const previewDiv = document.getElementById('admin-op-preview');
+        
+        if (novaQtd !== executadoAtual) {
+            previewDiv.classList.remove('hidden');
+            document.getElementById('admin-op-preview-atual').textContent = executadoAtual.toLocaleString('pt-BR');
+            document.getElementById('admin-op-preview-novo').textContent = novaQtd.toLocaleString('pt-BR');
+            
+            const diff = novaQtd - executadoAtual;
+            const diffEl = document.getElementById('admin-op-preview-diff');
+            diffEl.textContent = (diff > 0 ? '+' : '') + diff.toLocaleString('pt-BR');
+            diffEl.className = diff > 0 ? 'text-lg font-bold text-green-600' : diff < 0 ? 'text-lg font-bold text-red-600' : 'text-lg font-bold text-gray-600';
+        } else {
+            previewDiv.classList.add('hidden');
+        }
+    }
+    
+    async function adminSalvarOrdemSimplificado() {
+        if (!adminOrdemAtual) {
+            alert('Nenhuma ordem selecionada. Busque uma OP primeiro.');
             return;
         }
         
-        const novaQuantidade = parseInt(document.getElementById('admin-ordem-quantidade')?.value);
-        const logDiv = document.getElementById('admin-ordem-log');
+        const novaQtd = parseInt(document.getElementById('admin-op-nova-qtd')?.value);
         
-        if (isNaN(novaQuantidade) || novaQuantidade < 0) {
+        if (isNaN(novaQtd) || novaQtd < 0) {
             alert('Digite uma quantidade válida');
             return;
         }
         
-        const data = adminCurrentOrderDoc.data();
-        const quantidadeAnterior = data.executed_quantity || 0;
+        const executadoAtual = Number(adminOrdemAtual.total_produzido ?? adminOrdemAtual.totalProduced ?? adminOrdemAtual.total_produced) || 0;
+        const planejado = Number(adminOrdemAtual.order_lot_size ?? adminOrdemAtual.lot_size ?? adminOrdemAtual.planned_quantity) || 0;
         
-        if (!confirm(`Confirma alteração da quantidade executada?\n\nOP: ${data.order_number}\nAnterior: ${quantidadeAnterior}\nNova: ${novaQuantidade}`)) {
+        if (novaQtd === executadoAtual) {
+            alert('A quantidade não foi alterada.');
+            return;
+        }
+        
+        const diff = novaQtd - executadoAtual;
+        const diffTexto = diff > 0 ? `+${diff.toLocaleString('pt-BR')}` : diff.toLocaleString('pt-BR');
+        
+        if (!confirm(`Confirma alteração?\n\nOP: ${adminOrdemAtual.order_number}\n\nExecutado atual: ${executadoAtual.toLocaleString('pt-BR')}\nNovo valor: ${novaQtd.toLocaleString('pt-BR')}\nDiferença: ${diffTexto}`)) {
             return;
         }
         
         try {
-            await db.collection('production_orders').doc(adminCurrentOrderDoc.id).update({
-                executed_quantity: novaQuantidade,
+            // Atualizar ordem - usando os MESMOS campos que o sistema usa
+            await db.collection('production_orders').doc(adminOrdemAtual.id).update({
+                total_produzido: novaQtd,
+                totalProduced: novaQtd,
                 last_manual_adjustment: firebase.firestore.FieldValue.serverTimestamp(),
                 adjusted_by: getActiveUser()?.name || 'Admin'
             });
             
-            // Registrar log do sistema
-            await registrarLogSistema(
-                `AJUSTE MANUAL: OP ${data.order_number} - Quantidade: ${quantidadeAnterior} → ${novaQuantidade}`,
-                'admin_adjustment',
-                {
-                    order_number: data.order_number,
-                    machine_id: data.machine_id,
-                    previous_quantity: quantidadeAnterior,
-                    new_quantity: novaQuantidade
+            // Atualizar planejamentos vinculados
+            try {
+                const plannings = await db.collection('daily_planning')
+                    .where('order_id', '==', adminOrdemAtual.id)
+                    .get();
+                
+                if (!plannings.empty) {
+                    const batch = db.batch();
+                    plannings.forEach(doc => {
+                        batch.update(doc.ref, {
+                            total_produzido: novaQtd,
+                            lastSyncedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                    });
+                    await batch.commit();
+                    adminOrdemLog(`📋 ${plannings.size} planejamento(s) atualizado(s)`, 'info');
                 }
-            );
+            } catch (e) {
+                console.warn('Erro ao sincronizar planejamentos:', e);
+            }
+            
+            // Registrar log
+            if (typeof registrarLogSistema === 'function') {
+                await registrarLogSistema(
+                    `AJUSTE MANUAL: OP ${adminOrdemAtual.order_number} - ${executadoAtual} → ${novaQtd}`,
+                    'admin_adjustment',
+                    {
+                        order_id: adminOrdemAtual.id,
+                        order_number: adminOrdemAtual.order_number,
+                        previous: executadoAtual,
+                        new_value: novaQtd,
+                        difference: diff
+                    }
+                );
+            }
             
             // Atualizar UI
-            document.getElementById('admin-ordem-info-executada').textContent = novaQuantidade;
+            adminOrdemAtual.total_produzido = novaQtd;
+            adminOrdemAtual.totalProduced = novaQtd;
             
-            const progresso = data.planned_quantity > 0 
-                ? (novaQuantidade / data.planned_quantity * 100).toFixed(1) + '%'
-                : '-';
-            document.getElementById('admin-ordem-info-progresso').textContent = progresso;
+            const faltante = Math.max(0, planejado - novaQtd);
+            const progresso = planejado > 0 ? (novaQtd / planejado * 100) : 0;
             
-            // Log visual
-            if (logDiv) {
-                const entry = document.createElement('div');
-                entry.className = 'text-green-400 py-0.5';
-                entry.textContent = `[${new Date().toLocaleTimeString()}] ✅ OP ${data.order_number} atualizada: ${quantidadeAnterior} → ${novaQuantidade}`;
-                logDiv.appendChild(entry);
-            }
+            document.getElementById('admin-op-executado').textContent = novaQtd.toLocaleString('pt-BR');
+            document.getElementById('admin-op-faltante').textContent = faltante.toLocaleString('pt-BR');
+            document.getElementById('admin-op-progresso-pct').textContent = progresso.toFixed(1) + '%';
+            document.getElementById('admin-op-progresso-bar').style.width = Math.min(progresso, 100) + '%';
+            document.getElementById('admin-op-preview').classList.add('hidden');
             
-            alert('Quantidade atualizada com sucesso!');
+            adminOrdemLog(`✅ OP ${adminOrdemAtual.order_number} atualizada: ${executadoAtual.toLocaleString('pt-BR')} → ${novaQtd.toLocaleString('pt-BR')} (${diffTexto})`, 'success');
+            
+            showNotification('Quantidade atualizada com sucesso!', 'success');
             
         } catch (error) {
-            console.error('[ADMIN] Erro ao ajustar ordem:', error);
-            alert('Erro ao ajustar: ' + error.message);
-            
-            if (logDiv) {
-                const entry = document.createElement('div');
-                entry.className = 'text-red-400 py-0.5';
-                entry.textContent = `[${new Date().toLocaleTimeString()}] ❌ Erro: ${error.message}`;
-                logDiv.appendChild(entry);
-            }
+            console.error('[ADMIN] Erro ao salvar:', error);
+            alert('Erro ao salvar: ' + error.message);
+            adminOrdemLog(`❌ Erro: ${error.message}`, 'error');
         }
     }
-    
+
     // ===== Funções de Produção (melhoradas) =====
     async function adminBuscarProducao() {
         const data = document.getElementById('admin-producao-data')?.value;
@@ -29964,7 +30310,7 @@ function sendDowntimeNotification() {
         
         // Calcular dados combinados de todos os planos
         // CORREÇÃO: Usar total_produzido acumulado da OP (não apenas produção do dia)
-        // Isso garante consistência com a aba de Ordens
+        // Isso garante consistência com a aba Admin > Dados > Ordens
         let totalPlannedQty = 0;
         let totalProducedAllPlans = 0;
         const plansWithData = plans.map(p => {
@@ -29973,39 +30319,35 @@ function sendDowntimeNotification() {
             const plannedQtyFallback = parseOptionalNumber(p.lot_size);
             const plannedQty = Math.round(plannedQtyPrimary ?? plannedQtyFallback ?? 0);
             
-            // CORREÇÃO ESTABILIDADE: Usar o MAIOR valor entre:
-            // 1. total_produzido armazenado no planning (acumulado da OP)
-            // 2. Produção calculada do dia (soma dos lançamentos)
-            // 3. Valor em cache do render anterior (anti-oscilação)
-            const storedTotal = coerceToNumber(p.total_produzido, 0);
-            const producedToday = Math.round(planData.totalProduced ?? 0);
-            const cachedValue = machineCardProductionCache.get(p.id) || 0;
+            // CORREÇÃO CONSISTÊNCIA COM ADMIN:
+            // Usar APENAS o total_produzido armazenado no planning/ordem
+            // Esse é o mesmo valor exibido em Admin > Dados > Ordens
+            const storedTotal = coerceToNumber(p.total_produzido ?? p.totalProduced, 0);
+            const produced = Math.round(storedTotal);
             
-            // Usar o maior valor para evitar quedas temporárias durante atualizações
-            const produced = Math.max(storedTotal, producedToday, cachedValue);
-            
-            // Atualizar cache com o valor mais alto já visto
+            // Atualizar cache (mantido para referência, mas não usado na lógica principal)
             machineCardProductionCache.set(p.id, produced);
             
             const lossKg = Math.round(planData.totalLossesKg ?? 0);
             const pieceWeight = coerceToNumber(p.piece_weight, 0);
             const scrapPcs = pieceWeight > 0 ? Math.round((lossKg * 1000) / pieceWeight) : 0;
-            const goodProd = Math.max(0, produced - scrapPcs);
-            const progressPct = plannedQty > 0 ? (goodProd / plannedQty) * 100 : 0;
+            
+            // MUDANÇA: Usar 'produced' diretamente para cálculos (igual ao Admin)
+            // Não subtrair refugo aqui - o Admin mostra o total_produzido bruto
+            const progressPct = plannedQty > 0 ? (produced / plannedQty) * 100 : 0;
             
             totalPlannedQty += plannedQty;
-            totalProducedAllPlans += goodProd;
+            totalProducedAllPlans += produced; // Usar produced direto, não goodProd
             
             return {
                 ...p,
                 displayName: resolveProductName(p),
                 plannedQty,
                 produced,
-                producedToday, // Produção apenas do dia (para referência)
-                goodProd,
+                goodProd: produced, // Manter igual a produced para consistência
                 lossKg,
                 progressPct,
-                isCompleted: plannedQty > 0 && goodProd >= plannedQty
+                isCompleted: plannedQty > 0 && produced >= plannedQty
             };
         });
         
@@ -30117,14 +30459,6 @@ function sendDowntimeNotification() {
                 </div>
                 
                 ${generateMultiProductSection()}
-                
-                <!-- OEE centralizado -->
-                <div class="flex items-center justify-center mb-2">
-                    <div class="text-center">
-                        <span class="text-lg font-bold ${oeeColorClass}">${oeePercentText}%</span>
-                        <span class="text-[10px] text-slate-400 uppercase ml-1">OEE</span>
-                    </div>
-                </div>
 
                 <!-- Indicadores principais em linha -->
                 <div class="grid grid-cols-2 gap-2 mb-3">
@@ -30160,16 +30494,13 @@ function sendDowntimeNotification() {
                     </div>
                 </div>
 
-                <!-- Indicador de Parada Longa (NOVO) -->
+                <!-- Indicador de Parada Longa -->
                 ${(() => {
                     const hasMachineDowntime = machinesDowntime && machinesDowntime[machine];
                     if (hasMachineDowntime) {
                         const typeLabel = getDowntimeTypeLabel(hasMachineDowntime.type);
                         const typeColor = getDowntimeTypeColor(hasMachineDowntime.type);
-                        const startDate = new Date(hasMachineDowntime.startDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
-                        const endDate = hasMachineDowntime.endDate ? new Date(hasMachineDowntime.endDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : '∞';
-                        const duration = getDowntimeDuration(hasMachineDowntime.startDate);
-                        const recordId = hasMachineDowntime.recordId || '';  // ID do documento Firestore
+                        const recordId = hasMachineDowntime.recordId || '';
                         return `
                             <div class="mb-2 p-2 rounded-lg bg-amber-50 border border-amber-200">
                                 <div class="flex items-center justify-between mb-1">
@@ -30177,11 +30508,7 @@ function sendDowntimeNotification() {
                                         <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600"></i>
                                         <span class="text-xs font-bold text-amber-700">PARADA ATIVA</span>
                                     </div>
-                                    <span class="inline-block px-2 py-0.5 text-xs font-mono font-bold text-amber-700 bg-amber-100 rounded">⏱️ ${duration}</span>
-                                </div>
-                                <div class="flex items-center gap-2 mb-2">
                                     <span class="inline-block px-2 py-0.5 text-xs font-semibold rounded ${typeColor}">${typeLabel}</span>
-                                    <span class="text-xs text-amber-700">Desde ${startDate}</span>
                                 </div>
                                 <p class="text-xs text-amber-600 mb-2">${hasMachineDowntime.reason}</p>
                                 <button type="button" 

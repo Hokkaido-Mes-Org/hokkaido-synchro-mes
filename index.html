@@ -785,47 +785,49 @@
 
                 <!-- PÁGINA: Ordens de Produção -->
                 <div id="ordens-page" class="page-content hidden space-y-3 p-2">
-                    <!-- KPIs de Resumo das Ordens -->
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl shadow-sm border border-blue-200 p-4 hover:shadow-md transition">
-                            <div class="flex items-center justify-between mb-2">
-                                <p class="text-xs font-medium text-blue-700">Total de OPs</p>
-                                <div class="p-1.5 bg-blue-200 rounded-lg">
-                                    <i data-lucide="layers" class="w-3.5 h-3.5 text-blue-600"></i>
-                                </div>
+                    <!-- KPIs de Resumo das Ordens - Reestruturado -->
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                        <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl shadow-sm border border-blue-200 p-3 hover:shadow-md transition">
+                            <div class="flex items-center justify-between mb-1">
+                                <p class="text-xs font-medium text-blue-700">Total OPs</p>
+                                <i data-lucide="layers" class="w-4 h-4 text-blue-500"></i>
                             </div>
-                            <p id="orders-kpi-total" class="text-2xl font-bold text-blue-600">0</p>
-                            <p class="text-xs text-blue-600 opacity-70 mt-1">ordens</p>
+                            <p id="orders-kpi-total" class="text-xl font-bold text-blue-600">0</p>
                         </div>
-                        <div class="bg-gradient-to-br from-amber-50 to-amber-100 rounded-2xl shadow-sm border border-amber-200 p-4 hover:shadow-md transition">
-                            <div class="flex items-center justify-between mb-2">
-                                <p class="text-xs font-medium text-amber-700">Em Andamento</p>
-                                <div class="p-1.5 bg-amber-200 rounded-lg">
-                                    <i data-lucide="play-circle" class="w-3.5 h-3.5 text-amber-600"></i>
-                                </div>
+                        <div class="bg-gradient-to-br from-amber-50 to-amber-100 rounded-2xl shadow-sm border border-amber-200 p-3 hover:shadow-md transition">
+                            <div class="flex items-center justify-between mb-1">
+                                <p class="text-xs font-medium text-amber-700">Ativas</p>
+                                <i data-lucide="play-circle" class="w-4 h-4 text-amber-500"></i>
                             </div>
-                            <p id="orders-kpi-active" class="text-2xl font-bold text-amber-600">0</p>
-                            <p class="text-xs text-amber-600 opacity-70 mt-1">ativas</p>
+                            <p id="orders-kpi-active" class="text-xl font-bold text-amber-600">0</p>
                         </div>
-                        <div class="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-2xl shadow-sm border border-emerald-200 p-4 hover:shadow-md transition">
-                            <div class="flex items-center justify-between mb-2">
+                        <div class="bg-gradient-to-br from-orange-50 to-orange-100 rounded-2xl shadow-sm border border-orange-200 p-3 hover:shadow-md transition">
+                            <div class="flex items-center justify-between mb-1">
+                                <p class="text-xs font-medium text-orange-700">Suspensas</p>
+                                <i data-lucide="pause-circle" class="w-4 h-4 text-orange-500"></i>
+                            </div>
+                            <p id="orders-kpi-suspended" class="text-xl font-bold text-orange-600">0</p>
+                        </div>
+                        <div class="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-2xl shadow-sm border border-emerald-200 p-3 hover:shadow-md transition">
+                            <div class="flex items-center justify-between mb-1">
                                 <p class="text-xs font-medium text-emerald-700">Concluídas</p>
-                                <div class="p-1.5 bg-emerald-200 rounded-lg">
-                                    <i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-emerald-600"></i>
-                                </div>
+                                <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500"></i>
                             </div>
-                            <p id="orders-kpi-completed" class="text-2xl font-bold text-emerald-600">0</p>
-                            <p class="text-xs text-emerald-600 opacity-70 mt-1">finalizadas</p>
+                            <p id="orders-kpi-completed" class="text-xl font-bold text-emerald-600">0</p>
                         </div>
-                        <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl shadow-sm border border-purple-200 p-4 hover:shadow-md transition">
-                            <div class="flex items-center justify-between mb-2">
-                                <p class="text-xs font-medium text-purple-700">Progresso Médio</p>
-                                <div class="p-1.5 bg-purple-200 rounded-lg">
-                                    <i data-lucide="trending-up" class="w-3.5 h-3.5 text-purple-600"></i>
-                                </div>
+                        <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-2xl shadow-sm border border-green-200 p-3 hover:shadow-md transition">
+                            <div class="flex items-center justify-between mb-1">
+                                <p class="text-xs font-medium text-green-700">Produção Total</p>
+                                <i data-lucide="package" class="w-4 h-4 text-green-500"></i>
                             </div>
-                            <p id="orders-kpi-avg-progress" class="text-2xl font-bold text-purple-600">0%</p>
-                            <p class="text-xs text-purple-600 opacity-70 mt-1">do total</p>
+                            <p id="orders-kpi-total-produced" class="text-xl font-bold text-green-600">0</p>
+                        </div>
+                        <div class="bg-gradient-to-br from-red-50 to-red-100 rounded-2xl shadow-sm border border-red-200 p-3 hover:shadow-md transition">
+                            <div class="flex items-center justify-between mb-1">
+                                <p class="text-xs font-medium text-red-700">Perdas Total</p>
+                                <i data-lucide="alert-triangle" class="w-4 h-4 text-red-500"></i>
+                            </div>
+                            <p id="orders-kpi-total-losses" class="text-xl font-bold text-red-600">0</p>
                         </div>
                     </div>
 
@@ -839,14 +841,10 @@
                                 </div>
                                 <div>
                                     <h2 class="text-lg font-semibold text-gray-800">Gestão de Ordens de Produção</h2>
-                                    <p class="text-xs text-gray-500">Cadastre, importe e gerencie todas as OPs</p>
+                                    <p class="text-xs text-gray-500">Gerencie, rastreie e acompanhe todas as OPs</p>
                                 </div>
                             </div>
                             <div class="flex flex-wrap gap-2">
-                                <button onclick="openNewOrderModal()" class="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all text-sm">
-                                    <i data-lucide="plus-circle" class="w-4 h-4"></i>
-                                    Nova OP
-                                </button>
                                 <button onclick="openImportOrdersModal()" class="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all text-sm">
                                     <i data-lucide="upload" class="w-4 h-4"></i>
                                     Importar Excel
@@ -854,6 +852,10 @@
                                 <button id="btn-new-product" onclick="openNewProductModal()" class="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all text-sm">
                                     <i data-lucide="package-plus" class="w-4 h-4"></i>
                                     Novo Produto
+                                </button>
+                                <button onclick="recalculateAllOrdersTotals()" class="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-700 hover:to-cyan-800 text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all text-sm" title="Recalcular totais de todas as ordens">
+                                    <i data-lucide="calculator" class="w-4 h-4"></i>
+                                    Recalcular
                                 </button>
                             </div>
                         </div>
@@ -874,6 +876,7 @@
                                         <option value="planejada">📋 Planejada</option>
                                         <option value="ativa">▶️ Ativa</option>
                                         <option value="em_andamento">🔄 Em Andamento</option>
+                                        <option value="suspensa">⏸️ Suspensa</option>
                                         <option value="concluida">✅ Concluída</option>
                                         <option value="cancelada">❌ Cancelada</option>
                                     </select>
@@ -933,7 +936,9 @@
                                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Nº OP</th>
                                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Produto</th>
                                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Máquina</th>
-                                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wide">Lote</th>
+                                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wide">Planejado</th>
+                                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wide">Produzido</th>
+                                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wide">Perdas</th>
                                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wide">Progresso</th>
                                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wide">Status</th>
                                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wide">Ações</th>
@@ -951,7 +956,63 @@
                                 <i data-lucide="inbox" class="w-10 h-10 text-gray-400"></i>
                             </div>
                             <h3 class="text-lg font-semibold text-gray-700 mb-2">Nenhuma ordem encontrada</h3>
-                            <p class="text-sm text-gray-500 mb-4">Cadastre uma nova OP ou importe do Excel</p>
+                            <p class="text-sm text-gray-500 mb-4">Importe ordens via Excel ou aguarde o PCP</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal de Rastreabilidade da Ordem -->
+                <div id="order-traceability-modal" class="fixed inset-0 z-50 hidden overflow-y-auto">
+                    <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center">
+                        <div class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity" onclick="closeModal('order-traceability-modal')"></div>
+                        <div class="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full mx-auto overflow-hidden transform transition-all">
+                            <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-3">
+                                        <div class="p-2 bg-white/20 rounded-lg">
+                                            <i data-lucide="file-search" class="w-5 h-5 text-white"></i>
+                                        </div>
+                                        <div>
+                                            <h3 class="text-lg font-bold text-white">Rastreabilidade da Ordem</h3>
+                                            <p id="order-trace-number" class="text-blue-100 text-sm">OP #</p>
+                                        </div>
+                                    </div>
+                                    <button onclick="closeModal('order-traceability-modal')" class="text-white/80 hover:text-white p-1">
+                                        <i data-lucide="x" class="w-6 h-6"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="p-6">
+                                <!-- Resumo da Ordem -->
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                                    <div class="bg-blue-50 rounded-xl p-4 text-center">
+                                        <p class="text-xs text-blue-600 font-medium mb-1">Planejado</p>
+                                        <p id="order-trace-planned" class="text-2xl font-bold text-blue-700">0</p>
+                                    </div>
+                                    <div class="bg-green-50 rounded-xl p-4 text-center">
+                                        <p class="text-xs text-green-600 font-medium mb-1">Produzido</p>
+                                        <p id="order-trace-produced" class="text-2xl font-bold text-green-700">0</p>
+                                    </div>
+                                    <div class="bg-red-50 rounded-xl p-4 text-center">
+                                        <p class="text-xs text-red-600 font-medium mb-1">Perdas/Refugo</p>
+                                        <p id="order-trace-losses" class="text-2xl font-bold text-red-700">0</p>
+                                    </div>
+                                    <div class="bg-purple-50 rounded-xl p-4 text-center">
+                                        <p class="text-xs text-purple-600 font-medium mb-1">Progresso</p>
+                                        <p id="order-trace-progress" class="text-2xl font-bold text-purple-700">0%</p>
+                                    </div>
+                                </div>
+                                <!-- Histórico de Lançamentos -->
+                                <div class="border rounded-xl overflow-hidden">
+                                    <div class="bg-gray-50 px-4 py-3 border-b flex items-center justify-between">
+                                        <h4 class="font-semibold text-gray-700">Histórico de Lançamentos</h4>
+                                        <span id="order-trace-entries-count" class="text-sm text-gray-500">0 registros</span>
+                                    </div>
+                                    <div id="order-trace-entries" class="max-h-64 overflow-y-auto">
+                                        <!-- Lançamentos serão carregados aqui -->
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1989,72 +2050,129 @@
 
                             <!-- Aba: Ordens de Produção -->
                             <div id="admin-tab-ordens" class="admin-tab-content hidden">
-                                <div class="mb-6">
-                                    <h3 class="text-lg font-semibold mb-3 flex items-center gap-2">
-                                        <i data-lucide="package" class="w-5 h-5 text-purple-600"></i>
-                                        Ajustar Quantidade Executada de OP
-                                    </h3>
-                                    <p class="text-sm text-gray-600 mb-4">Permite corrigir a quantidade executada de ordens de produção diretamente no banco de dados.</p>
-                                    
-                                    <div class="flex flex-wrap items-end gap-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
-                                        <div class="flex-1 min-w-[200px]">
-                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Nº da OP</label>
-                                            <input type="text" id="admin-ordem-numero" placeholder="Ex: 123456" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500">
+                                <!-- Busca Simples -->
+                                <div class="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+                                    <div class="flex flex-wrap items-end gap-3">
+                                        <div class="flex-1 min-w-[250px]">
+                                            <label class="block text-xs font-semibold text-gray-600 mb-1">Buscar Ordem de Produção</label>
+                                            <div class="relative">
+                                                <input type="text" id="admin-ordem-busca" placeholder="Digite o Nº da OP..." 
+                                                    class="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white transition">
+                                                <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                                            </div>
                                         </div>
-                                        <div class="flex-1 min-w-[150px]">
-                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Nova Quantidade</label>
-                                            <input type="number" id="admin-ordem-quantidade" placeholder="Ex: 1500" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500">
-                                        </div>
-                                        <button id="admin-btn-buscar-ordem" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2.5 rounded-lg font-semibold transition flex items-center gap-2">
+                                        <button id="admin-btn-buscar-op" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition flex items-center gap-2">
                                             <i data-lucide="search" class="w-4 h-4"></i>
-                                            Buscar OP
-                                        </button>
-                                        <button id="admin-btn-ajustar-ordem" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2.5 rounded-lg font-semibold transition flex items-center gap-2" disabled>
-                                            <i data-lucide="save" class="w-4 h-4"></i>
-                                            Ajustar
+                                            Buscar
                                         </button>
                                     </div>
                                 </div>
 
-                                <!-- Detalhes da ordem encontrada -->
-                                <div id="admin-ordem-detalhes" class="hidden p-4 bg-purple-50 rounded-lg border border-purple-200">
-                                    <h4 class="font-semibold text-purple-800 mb-2">Detalhes da Ordem</h4>
-                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                        <div>
-                                            <span class="text-gray-500">OP:</span>
-                                            <span id="admin-ordem-info-op" class="font-semibold">-</span>
+                                <!-- Card da Ordem (aparece após busca) -->
+                                <div id="admin-ordem-card" class="hidden">
+                                    <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-200 overflow-hidden">
+                                        <!-- Header -->
+                                        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-4">
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex items-center gap-3">
+                                                    <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                                                        <i data-lucide="package" class="w-6 h-6 text-white"></i>
+                                                    </div>
+                                                    <div>
+                                                        <h3 class="text-xl font-bold text-white">OP <span id="admin-op-numero">-</span></h3>
+                                                        <p id="admin-op-produto" class="text-blue-100 text-sm truncate max-w-xs">Produto</p>
+                                                    </div>
+                                                </div>
+                                                <div class="text-right">
+                                                    <span id="admin-op-status" class="inline-block px-3 py-1 bg-white/20 text-white text-sm font-semibold rounded-full">Status</span>
+                                                    <p id="admin-op-maquina" class="text-blue-100 text-sm mt-1">Máquina</p>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <span class="text-gray-500">Produto:</span>
-                                            <span id="admin-ordem-info-produto" class="font-semibold">-</span>
-                                        </div>
-                                        <div>
-                                            <span class="text-gray-500">Máquina:</span>
-                                            <span id="admin-ordem-info-maquina" class="font-semibold">-</span>
-                                        </div>
-                                        <div>
-                                            <span class="text-gray-500">Status:</span>
-                                            <span id="admin-ordem-info-status" class="font-semibold">-</span>
-                                        </div>
-                                        <div>
-                                            <span class="text-gray-500">Qtd Planejada:</span>
-                                            <span id="admin-ordem-info-planejada" class="font-semibold">-</span>
-                                        </div>
-                                        <div>
-                                            <span class="text-gray-500">Qtd Executada (atual):</span>
-                                            <span id="admin-ordem-info-executada" class="font-semibold text-purple-600">-</span>
-                                        </div>
-                                        <div>
-                                            <span class="text-gray-500">Progresso:</span>
-                                            <span id="admin-ordem-info-progresso" class="font-semibold">-</span>
+
+                                        <!-- Indicadores (mesmo estilo dos cards de máquina) -->
+                                        <div class="p-5">
+                                            <div class="grid grid-cols-3 gap-4 mb-5">
+                                                <div class="bg-white rounded-xl p-4 text-center shadow-sm border border-blue-100">
+                                                    <div class="text-xs text-gray-500 uppercase font-semibold mb-1">Planejado (Lote)</div>
+                                                    <div id="admin-op-planejado" class="text-2xl font-bold text-blue-600">0</div>
+                                                </div>
+                                                <div class="bg-white rounded-xl p-4 text-center shadow-sm border border-green-100">
+                                                    <div class="text-xs text-gray-500 uppercase font-semibold mb-1">Executado</div>
+                                                    <div id="admin-op-executado" class="text-2xl font-bold text-green-600">0</div>
+                                                </div>
+                                                <div class="bg-white rounded-xl p-4 text-center shadow-sm border border-amber-100">
+                                                    <div class="text-xs text-gray-500 uppercase font-semibold mb-1">Faltante</div>
+                                                    <div id="admin-op-faltante" class="text-2xl font-bold text-amber-600">0</div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Barra de Progresso -->
+                                            <div class="mb-5">
+                                                <div class="flex items-center justify-between text-sm mb-2">
+                                                    <span class="text-gray-600 font-medium">Progresso da OP</span>
+                                                    <span id="admin-op-progresso-pct" class="font-bold text-blue-600">0%</span>
+                                                </div>
+                                                <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                                                    <div id="admin-op-progresso-bar" class="h-4 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-500" style="width: 0%"></div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Editor de Quantidade -->
+                                            <div class="bg-amber-50 rounded-xl p-4 border border-amber-200">
+                                                <h4 class="font-semibold text-amber-800 mb-3 flex items-center gap-2">
+                                                    <i data-lucide="edit-3" class="w-4 h-4"></i>
+                                                    Ajustar Quantidade Executada
+                                                </h4>
+                                                <div class="flex items-center gap-3">
+                                                    <div class="flex-1">
+                                                        <label class="block text-xs text-amber-700 font-medium mb-1">Nova quantidade (física real):</label>
+                                                        <input type="number" id="admin-op-nova-qtd" min="0" placeholder="Digite a quantidade correta..."
+                                                            class="w-full px-4 py-3 text-lg font-semibold bg-white border-2 border-amber-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
+                                                    </div>
+                                                    <button id="admin-btn-salvar-op" class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition flex items-center gap-2 self-end">
+                                                        <i data-lucide="save" class="w-5 h-5"></i>
+                                                        Salvar
+                                                    </button>
+                                                </div>
+                                                
+                                                <!-- Preview da alteração -->
+                                                <div id="admin-op-preview" class="hidden mt-4 p-3 bg-white rounded-lg border border-amber-200">
+                                                    <div class="flex items-center justify-center gap-4">
+                                                        <div class="text-center">
+                                                            <div class="text-xs text-gray-500">Atual</div>
+                                                            <div id="admin-op-preview-atual" class="text-xl font-bold text-gray-600">0</div>
+                                                        </div>
+                                                        <div class="text-2xl text-amber-500">→</div>
+                                                        <div class="text-center">
+                                                            <div class="text-xs text-gray-500">Novo</div>
+                                                            <div id="admin-op-preview-novo" class="text-xl font-bold text-green-600">0</div>
+                                                        </div>
+                                                        <div class="text-center ml-2 px-3 py-1 rounded-lg bg-gray-100">
+                                                            <div class="text-xs text-gray-500">Diferença</div>
+                                                            <div id="admin-op-preview-diff" class="text-lg font-bold">0</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
+                                </div>
+
+                                <!-- Estado vazio -->
+                                <div id="admin-ordem-empty" class="text-center py-12 text-gray-400">
+                                    <i data-lucide="search" class="w-16 h-16 mx-auto mb-4 opacity-50"></i>
+                                    <p class="text-lg">Digite o número da OP para buscar</p>
+                                    <p class="text-sm">As informações exibidas serão as mesmas dos cards de máquina</p>
                                 </div>
 
                                 <!-- Log de alterações -->
-                                <div class="mt-4 bg-gray-900 rounded-lg overflow-hidden">
-                                    <div class="bg-gray-800 px-4 py-2 font-semibold text-white text-sm">📋 Log de Alterações de Ordens</div>
-                                    <div id="admin-ordem-log" class="h-48 overflow-y-auto p-2 font-mono text-xs"></div>
+                                <div class="mt-4 bg-gray-900 rounded-xl overflow-hidden">
+                                    <div class="bg-gray-800 px-4 py-2 flex items-center justify-between">
+                                        <span class="text-white text-sm font-medium">📋 Histórico de Alterações</span>
+                                        <button onclick="document.getElementById('admin-ordem-log').innerHTML=''" class="text-xs text-gray-400 hover:text-white transition">Limpar</button>
+                                    </div>
+                                    <div id="admin-ordem-log" class="h-32 overflow-y-auto p-3 font-mono text-xs"></div>
                                 </div>
                             </div>
 
