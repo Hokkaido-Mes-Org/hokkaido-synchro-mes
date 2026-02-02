@@ -1030,7 +1030,7 @@ var userDatabase = [
     { cod: 279, nomeUsuario: "DANIEL P.", nomeCompleto: "DANIEL DE PAULA DIAS" },
     { cod: 280, nomeUsuario: "ANALYTICS", nomeCompleto: "Não Informado" },
     { cod: 281, nomeUsuario: "ANALYTICS1", nomeCompleto: "Não Informado" },
-    { cod: 282, nomeUsuario: "GABRIEL F.", nomeCompleto: "GABRIEL FIRMINO DE LIMA SOUZA" }
+    { cod: 282, nomeUsuario: "GABRIEL F.", nomeCompleto: "GABRIEL FIRMINO DE LIMA SOUZA" },
     { cod: 283, nomeUsuario: "FRANCISCA", nomeCompleto: "FRANCISCA ZACARIAS" }
 ];
 
