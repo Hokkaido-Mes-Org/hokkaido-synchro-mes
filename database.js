@@ -205,6 +205,7 @@ var productDatabase = [
     { "cod": 5646, "client": "SILGAN", "name": "ANEL TRAVA P2000 STD TEXT AZUL CB300 PP DPB038 - 1.01.03.005.948", "cavities": 16, "cycle": 13.4, "weight": 0.85, "pieces_per_hour_goal": 4299, "mp": "" },
     { "cod": 5807, "client": "SILGAN", "name": "SUPORTE PLASTICO SERIE R260 (SEM ABA) - 283600939 REC", "cavities": 4, "cycle": 50, "weight": 50, "pieces_per_hour_goal": 288, "mp": "" },
     { "cod": 5855, "client": "SILGAN", "name": "ROSCA MKIV MD 22 415 ESTRIADA OURO CB112 PP 09PD06007 -1.01.01.005.039", "cavities": 44, "cycle": 40, "weight": 2.35, "pieces_per_hour_goal": 3366, "mp": "" },
+    { "cod": 6322, "client": "SILGAN", "name": "ROSCA MKIV MD 24 410 LISA AZUL CB314 PP 13PD06007 - 1.01.01.005.568", "cavities": 44, "cycle": 40, "weight": 2.35, "pieces_per_hour_goal": 3960, "mp": "" },
     // --- APTAR ---
     { "cod": 226, "client": "APTAR", "name": "FIXACAO-GS-28/410CUST-28--THREAD-HDPE-WH - 29032088", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
     { "cod": 436, "client": "APTAR", "name": "CLIP PLASTICO PP-RND DS25 K2/F3 OURO (MODIF) - 29029923", "cavities": 15, "cycle": 16, "weight": 0.45, "pieces_per_hour_goal": 3375, "mp": "" },
