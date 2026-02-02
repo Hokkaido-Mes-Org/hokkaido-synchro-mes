@@ -4918,8 +4918,8 @@
                     }
                     
                     // Compras = Marrom
-                    // Inclui: "FALTA DE MATÉRIA PRIMA", "FALTA DE SACO PLÁSTICO", "FALTA DE CAIXA DE PAPELÃO", "FALTA DE MASTER"
-                    if (reason.includes('compra') || 
+                    // Inclui: "FALTA DE MATÉRIA PRIMA", "FALTA DE SACO PLÁSTICO", "FALTA DE CAIXA DE PAPELÃO", "FALTA DE MASTER", "ANÁLISE ADMINISTRATIVA", "LEAD TIME"
+                    if (reason.includes('compra') || reason.includes('lead time') || reason.includes('análise administrativa') ||
                         (reason.includes('falta') && (reason.includes('matéria') || reason.includes('materia') || 
                         reason.includes('prima') || reason.includes('saco') || reason.includes('caixa') || reason.includes('master')))) {
                         return 'compras';

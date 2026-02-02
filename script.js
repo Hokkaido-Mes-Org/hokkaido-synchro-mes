@@ -3285,16 +3285,18 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         return {
             "FERRAMENTARIA": ["CORRETIVA DE MOLDE", "PREVENTIVA DE MOLDE", "TROCA DE VERSÃO"],
-            "PROCESSO": ["ABERTURA DE CAVIDADE", "AJUSTE DE PROCESSO", "TRY OUT"],
-            "COMPRAS": ["FALTA DE INSUMO PLANEJADA", "FALTA DE INSUMO NÃO PLANEJADA", "LEAD TIME"],
-            "PREPARAÇÃO": ["AGUARDANDO PREPARAÇÃO DE MATERIAL"],
-            "QUALIDADE": ["AGUARDANDO CLIENTE/FORNECEDOR", "LIBERAÇÃO"],
+            "PROCESSO": ["ABERTURA DE CAVIDADE", "AJUSTE DE PROCESSO", "FECHAMENTO DE CAVIDADE", "TRY OUT","PRENDENDO GALHO", "PRENDENDO PEÇAS"],
+            "COMPRAS": ["FALTA DE MATÉRIA PRIMA","FALTA DE SACO PLÁSTICO", "FALTA DE CAIXA DE PAPELÃO","FALTA DE MASTER", "ANÁLISE ADMINISTRATIVA", "LEAD TIME"],
+            "PREPARAÇÃO": ["AGUARDANDO PREPARAÇÃO DE MATERIAL", "AGUARDANDO ESTUFAGEM DE M.P", "FORA DE COR", "TESTE DE COR", "MATERIAL CONTAMINADO"],
+            "QUALIDADE": ["AGUARDANDO CLIENTE/FORNECEDOR", "LIBERAÇÃO INÍCIAL","AGUARDANDO DISPOSIÇÃO DA QUALIDADE"],
             "MANUTENÇÃO": ["MANUTENÇÃO CORRETIVA", "MANUTENÇÃO PREVENTIVA", "MANUTENÇÃO EXTERNA"],
-            "PRODUÇÃO": ["FALTA DE OPERADOR", "TROCA DE COR", "PRENDENDO GALHO"],
-            "SETUP": ["INSTALAÇÃO DE MOLDE", "RETIRADA DE MOLDE"],
+            "PRODUÇÃO": ["FALTA DE OPERADOR", "TROCA DE COR", "F.O REVEZAMENTO ALMOÇO", "F.O REVEZAMENTO JANTA","INICIO/REINICIO"],
+            "SETUP": ["INSTALAÇÃO DE MOLDE", "RETIRADA DE MOLDE", "INSTALAÇÃO DE PERÍFÉRICOS", "AGUARDANDO SETUP"],
             "ADMINISTRATIVO": ["FALTA DE ENERGIA"],
-            "PCP": ["SEM PROGRAMAÇÃO"],
-            "COMERCIAL": ["SEM PEDIDO"]
+            "PCP": ["SEM PROGRAMAÇÃO", "SEM PROGRAMAÇÃO-FIM DE SEMANA", "ESTRATÉGIA PCP" ],
+            "COMERCIAL": ["SEM PEDIDO"],
+            "OUTROS": ["VAZAMENTO DO BICO", "QUEIMA DE RESISTÊNCIA"],
+            "HOKKAIDO": ["HOKKAIDO"]
         };
     }
     
@@ -19273,14 +19275,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
         
         openModal('quick-production-modal');
-        
-        // ✅ AUTO-PREENCHER: Buscar operador escalado após modal estar visível
-        // Delay para evitar problemas de scroll durante abertura
-        if (selectedMachineData?.machine) {
-            setTimeout(() => {
-                autoPreencherOperadorPorEscala('quick-production-user', selectedMachineData.machine);
-            }, 150);
-        }
     }
     
     function openLossesModal() {
@@ -19357,13 +19351,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
         
         openModal('quick-losses-modal');
-        
-        // ✅ AUTO-PREENCHER: Buscar operador escalado após modal estar visível
-        if (selectedMachineData?.machine) {
-            setTimeout(() => {
-                autoPreencherOperadorPorEscala('quick-losses-user', selectedMachineData.machine);
-            }, 150);
-        }
     }
     
     // Atualizar feedback em tempo real do input de peso
@@ -19549,16 +19536,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
 
         openModal('manual-production-modal');
-        
-        // ✅ AUTO-PREENCHER: Buscar operador escalado após modal estar visível
-        if (selectedMachineData?.machine) {
-            setTimeout(() => {
-                // Usar turno selecionado no modal se disponível
-                const selectedShift = shiftSelect?.value ? parseInt(shiftSelect.value) : null;
-                const selectedDate = dateInput?.value || null;
-                autoPreencherOperadorPorEscala('manual-production-user', selectedMachineData.machine, selectedShift, selectedDate);
-            }, 150);
-        }
     }
 
     function openManualLossesModal() {
@@ -19621,15 +19598,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
 
         openModal('manual-losses-modal');
-        
-        // ✅ AUTO-PREENCHER: Buscar operador escalado após modal estar visível
-        if (selectedMachineData?.machine) {
-            setTimeout(() => {
-                const selectedShift = shiftSelect?.value ? parseInt(shiftSelect.value) : null;
-                const selectedDate = dateInput?.value || null;
-                autoPreencherOperadorPorEscala('manual-losses-user', selectedMachineData.machine, selectedShift, selectedDate);
-            }, 150);
-        }
     }
 
     function openManualBorraModal() {
@@ -19900,13 +19868,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         openModal('manual-downtime-modal');
         console.log('[TRACE][openManualDowntimeModal] completed');
-        
-        // ✅ AUTO-PREENCHER: Buscar operador escalado após modal estar visível
-        if (selectedMachineData?.machine) {
-            setTimeout(() => {
-                autoPreencherOperadorPorEscala('manual-downtime-user', selectedMachineData.machine);
-            }, 150);
-        }
     }
     
     // ========================================
@@ -20044,13 +20005,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         console.log('[TRACE][openDowntimeReasonModal] abrindo modal quick-downtime-modal');
         openModal('quick-downtime-modal');
-        
-        // ✅ AUTO-PREENCHER: Buscar operador escalado após modal estar visível
-        if (selectedMachineData?.machine) {
-            setTimeout(() => {
-                autoPreencherOperadorPorEscala('quick-downtime-user', selectedMachineData.machine);
-            }, 150);
-        }
     }
     
     /**
@@ -22504,25 +22458,74 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 adjusted_by: getActiveUser()?.name || 'Admin'
             });
             
-            // Atualizar planejamentos vinculados
+            // CORREÇÃO: Os cards de máquina usam a collection 'planning', não 'daily_planning'
+            // Atualizar planejamentos na collection PLANNING (usada pelos cards de máquina)
+            let planningsAtualizados = 0;
             try {
-                const plannings = await db.collection('daily_planning')
+                // Buscar por order_id
+                let planningDocs = await db.collection('planning')
                     .where('order_id', '==', adminOrdemAtual.id)
                     .get();
                 
-                if (!plannings.empty) {
+                // Se não encontrar, tentar por production_order_id
+                if (planningDocs.empty) {
+                    planningDocs = await db.collection('planning')
+                        .where('production_order_id', '==', adminOrdemAtual.id)
+                        .get();
+                }
+                
+                // Se não encontrar, tentar pelo order_number
+                if (planningDocs.empty && adminOrdemAtual.order_number) {
+                    planningDocs = await db.collection('planning')
+                        .where('order_number', '==', adminOrdemAtual.order_number)
+                        .get();
+                }
+                
+                if (!planningDocs.empty) {
                     const batch = db.batch();
-                    plannings.forEach(doc => {
+                    planningDocs.forEach(doc => {
+                        batch.update(doc.ref, {
+                            total_produzido: novaQtd,
+                            totalProduced: novaQtd,
+                            lastSyncedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                    });
+                    await batch.commit();
+                    planningsAtualizados = planningDocs.size;
+                    adminOrdemLog(`📋 ${planningDocs.size} planning(s) atualizado(s)`, 'info');
+                    
+                    // Limpar cache dos cards
+                    if (typeof machineCardProductionCache !== 'undefined' && machineCardProductionCache instanceof Map) {
+                        planningDocs.forEach(doc => {
+                            machineCardProductionCache.delete(doc.id);
+                        });
+                    }
+                } else {
+                    adminOrdemLog(`⚠️ Nenhum planning encontrado para a OP`, 'warn');
+                }
+            } catch (e) {
+                console.warn('Erro ao sincronizar planning:', e);
+                adminOrdemLog(`⚠️ Erro ao sincronizar planning: ${e.message}`, 'warn');
+            }
+            
+            // Também atualizar daily_planning (para consistência)
+            try {
+                const dailyPlannings = await db.collection('daily_planning')
+                    .where('order_id', '==', adminOrdemAtual.id)
+                    .get();
+                
+                if (!dailyPlannings.empty) {
+                    const batch = db.batch();
+                    dailyPlannings.forEach(doc => {
                         batch.update(doc.ref, {
                             total_produzido: novaQtd,
                             lastSyncedAt: firebase.firestore.FieldValue.serverTimestamp()
                         });
                     });
                     await batch.commit();
-                    adminOrdemLog(`📋 ${plannings.size} planejamento(s) atualizado(s)`, 'info');
                 }
             } catch (e) {
-                console.warn('Erro ao sincronizar planejamentos:', e);
+                console.warn('Erro ao sincronizar daily_planning:', e);
             }
             
             // Registrar log
@@ -22556,6 +22559,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             adminOrdemLog(`✅ OP ${adminOrdemAtual.order_number} atualizada: ${executadoAtual.toLocaleString('pt-BR')} → ${novaQtd.toLocaleString('pt-BR')} (${diffTexto})`, 'success');
             
             showNotification('Quantidade atualizada com sucesso!', 'success');
+            
+            // Informar que os cards serão atualizados pelos listeners
+            adminOrdemLog(`🔄 Cards de máquina serão atualizados automaticamente`, 'info');
             
         } catch (error) {
             console.error('[ADMIN] Erro ao salvar:', error);
