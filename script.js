@@ -3286,10 +3286,10 @@ document.addEventListener('DOMContentLoaded', function() {
         return {
             "FERRAMENTARIA": ["CORRETIVA DE MOLDE", "PREVENTIVA DE MOLDE", "TROCA DE VERSÃO"],
             "PROCESSO": ["ABERTURA DE CAVIDADE", "AJUSTE DE PROCESSO", "TRY OUT"],
-            "COMPRAS": ["FALTA DE INSUMO PLANEJADA", "FALTA DE INSUMO NÃO PLANEJADA"],
+            "COMPRAS": ["FALTA DE INSUMO PLANEJADA", "FALTA DE INSUMO NÃO PLANEJADA", "LEAD TIME"],
             "PREPARAÇÃO": ["AGUARDANDO PREPARAÇÃO DE MATERIAL"],
             "QUALIDADE": ["AGUARDANDO CLIENTE/FORNECEDOR", "LIBERAÇÃO"],
-            "MANUTENÇÃO": ["MANUTENÇÃO CORRETIVA", "MANUTENÇÃO PREVENTIVA"],
+            "MANUTENÇÃO": ["MANUTENÇÃO CORRETIVA", "MANUTENÇÃO PREVENTIVA", "MANUTENÇÃO EXTERNA"],
             "PRODUÇÃO": ["FALTA DE OPERADOR", "TROCA DE COR", "PRENDENDO GALHO"],
             "SETUP": ["INSTALAÇÃO DE MOLDE", "RETIRADA DE MOLDE"],
             "ADMINISTRATIVO": ["FALTA DE ENERGIA"],
@@ -5143,9 +5143,22 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
             group.scrapKg += scrapKg;
         });
 
+        // Obter categorias excluídas do OEE (ex: HOKKAIDO)
+        const oeeExcludedCategories = window.databaseModule?.oeeExcludedCategories || [];
+
         downtimeData.forEach(item => {
             const group = getOrCreateGroup(item);
             if (!group) return;
+            
+            // Verificar se a categoria deve ser excluída do cálculo de OEE
+            const reason = item.reason || '';
+            const category = getDowntimeCategory(reason);
+            if (oeeExcludedCategories.includes(category)) {
+                // Parada de categoria excluída - NÃO contabilizar no OEE
+                console.log('[TRACE][aggregateOeeMetrics] Parada excluída do OEE:', category, reason);
+                return;
+            }
+            
             group.downtimeMin += item.duration || 0;
         });
 
@@ -6466,6 +6479,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             'ADMINISTRATIVO': 'bg-orange-100 text-orange-800',
             'PCP': 'bg-lime-100 text-lime-800',
             'COMERCIAL': 'bg-cyan-100 text-cyan-800',
+            'HOKKAIDO': 'bg-gray-200 text-gray-700',
             'OUTROS': 'bg-gray-100 text-gray-800'
         };
         
@@ -9689,6 +9703,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const isMobile = window.innerWidth < 768;
         
         // Cores para cada categoria - Sincronizadas com status do Dashboard TV
+        // Usar cores do database.js se disponíveis
+        const dbColors = window.databaseModule?.downtimeReasonColors || {};
         const categoryColors = {
             'FERRAMENTARIA': '#ff1744',      // Status Critical - Vermelho
             'PROCESSO': '#7c4dff',            // Status Maintenance - Roxo
@@ -9701,6 +9717,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             'ADMINISTRATIVO': '#78909c',      // Status Idle - Cinza
             'PCP': '#78909c',                 // Status Idle - Cinza
             'COMERCIAL': '#78909c',           // Status Idle - Cinza
+            'HOKKAIDO': dbColors['HOKKAIDO'] || '#e5e7eb',  // Cinza claro
             'OUTROS': '#78909c'               // Status Idle - Cinza
         };
 
@@ -10671,9 +10688,19 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             dataByDate[date].planned += item.planned || item.quantity || 0;
         });
 
+        // Obter categorias excluídas do OEE
+        const oeeExcludedCategoriesTimeline = window.databaseModule?.oeeExcludedCategories || [];
+
         downtimeData.forEach(item => {
             const date = item.date || '';
             if (dataByDate[date]) {
+                // Verificar se a categoria deve ser excluída do cálculo de OEE
+                const reason = item.reason || '';
+                const category = getDowntimeCategory(reason);
+                if (oeeExcludedCategoriesTimeline.includes(category)) {
+                    // Parada de categoria excluída - NÃO contabilizar no OEE
+                    return;
+                }
                 dataByDate[date].downtime += item.duration || 0;
             }
         });
@@ -20185,7 +20212,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             'MANUTENÇÃO': ['MANUTENÇÃO PREVENTIVA GERAL', 'PARADA PROGRAMADA', 'MANUTENÇÃO DE INFRAESTRUTURA'],
             'COMPRAS': ['FALTA DE MATÉRIA PRIMA GERAL', 'ATRASO NO FORNECEDOR'],
             'PCP': ['SEM PROGRAMAÇÃO', 'SEM PROGRAMAÇÃO-FIM DE SEMANA', 'ESTRATÉGIA PCP'],
-            'COMERCIAL': ['SEM PEDIDO', 'BAIXA DEMANDA']
+            'COMERCIAL': ['SEM PEDIDO', 'BAIXA DEMANDA'],
+            'HOKKAIDO': ['HOKKAIDO']
         };
         
         // Preencher grid de máquinas
@@ -24471,7 +24499,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             'SETUP': 'bg-purple-100 text-purple-700',
             'ADMINISTRATIVO': 'bg-slate-100 text-slate-700',
             'PCP': 'bg-teal-100 text-teal-700',
-            'COMERCIAL': 'bg-amber-100 text-amber-700'
+            'COMERCIAL': 'bg-amber-100 text-amber-700',
+            'HOKKAIDO': 'bg-gray-200 text-gray-700'
         };
         const categoryColor = categoryColors[category] || 'bg-gray-100 text-gray-600';
         const categoryBadge = category ? `<span class="text-xs px-2 py-0.5 rounded font-medium ${categoryColor}">${category}</span>` : '';
@@ -24808,7 +24837,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             'SETUP': ['INSTALAÇÃO DE MOLDE', 'RETIRADA DE MOLDE', 'TROCA DE MOLDE', 'AQUECIMENTO'],
             'ADMINISTRATIVO': ['FALTA DE ENERGIA', 'FALTA DE ÁGUA', 'QUEDA DE ENERGIA', 'FERIADO', 'FIM DE SEMANA'],
             'PCP': ['SEM PROGRAMAÇÃO', 'SEM PROGRAMAÇÃO-FIM DE SEMANA', 'ESTRATÉGIA PCP', 'AGUARDANDO OP'],
-            'COMERCIAL': ['SEM PEDIDO', 'BAIXA DEMANDA', 'PARADA COMERCIAL']
+            'COMERCIAL': ['SEM PEDIDO', 'BAIXA DEMANDA', 'PARADA COMERCIAL'],
+            'HOKKAIDO': ['HOKKAIDO']
         };
         
         const motivos = motivosPorCategoria[category] || [];
@@ -30929,7 +30959,19 @@ function sendDowntimeNotification() {
                 const entries = productions.filter(p => p.planId === plan.id && p.turno === turno);
                 const produzido = entries.reduce((sum, item) => sum + item.produzido, 0);
                 
-                const machineDowntimes = downtimes.filter(d => d.machine === plan.machine);
+                // Obter categorias excluídas do OEE
+                const oeeExcludedCategoriesResumo = window.databaseModule?.oeeExcludedCategories || [];
+                
+                const machineDowntimes = downtimes.filter(d => {
+                    if (d.machine !== plan.machine) return false;
+                    // Excluir paradas de categorias que não devem afetar OEE (ex: HOKKAIDO)
+                    const reason = d.reason || '';
+                    const category = getDowntimeCategory(reason);
+                    if (oeeExcludedCategoriesResumo.includes(category)) {
+                        return false;
+                    }
+                    return true;
+                });
                 const totalParadas = machineDowntimes.reduce((sum, item) => {
                     const start = new Date(`${item.date}T${item.startTime}`);
                     const end = new Date(`${item.date}T${item.endTime}`);

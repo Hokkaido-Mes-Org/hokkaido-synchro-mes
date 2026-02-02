@@ -1240,6 +1240,13 @@
             color: #424242;
         }
 
+        /* HOKKAIDO = Cinza Claro */
+        .machine-status-card.hokkaido {
+            background: rgba(229, 231, 235, 0.8);
+            border-color: #e5e7eb;
+            color: #374151;
+        }
+
         /* Outros/Sem status */
         .machine-status-card.outros {
             background: rgba(120, 144, 156, 0.2);
@@ -4972,6 +4979,11 @@
                         return 'administrativo';
                     }
                     
+                    // HOKKAIDO = Cinza Claro
+                    if (reason.includes('hokkaido')) {
+                        return 'hokkaido';
+                    }
+                    
                     // Outros
                     // Inclui: "VAZAMENTO DO BICO", "QUEIMA DE RESISTÊNCIA"
                     if (reason.includes('vazamento') || reason.includes('queima de resist')) {
@@ -5007,6 +5019,7 @@
                     'comercial': 'Comercial',
                     'setup': 'Setup',
                     'administrativo': 'Energia',
+                    'hokkaido': 'Hokkaido',
                     'outros': 'Outros'
                 };
                 return labels[statusClass] || 'Outros';

@@ -33,7 +33,7 @@ var productDatabase = [
     { "cod": 78, "client": "SILGAN", "name": "ATUADOR P2000 SATIN OURO CB149 PP DPB039 - 1.01.01.005.228", "cavities": 23, "cycle": 19, "weight": 1.54, "pieces_per_hour_goal": 4358, "mp": "" },
     { "cod": 79, "client": "SILGAN", "name": "ATUADOR P2000 SATIN PRATA CB132 PP DPB039 - 1.01.01.005.213", "cavities": 23, "cycle": 19, "weight": 1.54, "pieces_per_hour_goal": 4358, "mp": "" },
     { "cod": 80, "client": "SILGAN", "name": "ATUADOR P2000 SATIN PRETO 17 PP DPB039 - 1.01.01.005.016", "cavities": 23, "cycle": 19, "weight": 1.54, "pieces_per_hour_goal": 4358, "mp": "" },
-    { "cod": 91, "client": "SILGAN", "name": "BUCHA P2000 2ML NATURAL PP", "cavities": 29, "cycle": 16, "weight": 0.55, "pieces_per_hour_goal": 6525, "mp": "" },
+    { "cod": 91, "client": "SILGAN", "name": "BUCHA P2000 2ML NATURAL PP", "cavities": 29, "cycle": 16, "weight": 0.87, "pieces_per_hour_goal": 6525, "mp": "" },
     { "cod": 92, "client": "SILGAN", "name": "ACUMULADOR P2000 28MM NAT PP EF045", "cavities": 32, "cycle": 19, "weight": 1.25, "pieces_per_hour_goal": 6063, "mp": "" },
     { "cod": 93, "client": "SILGAN", "name": "ACUMULADOR P2000 JUNTA-A NATURAL EF045", "cavities": 32, "cycle": 19, "weight": 1.25, "pieces_per_hour_goal": 6063, "mp": "" },
     { "cod": 94, "client": "SILGAN", "name": "TAMPA MKIV MD STD NATURAL PP PD06001", "cavities": 14, "cycle": 10.5, "weight": 0.95, "pieces_per_hour_goal": 4800, "mp": "" },
@@ -81,7 +81,7 @@ var productDatabase = [
     { "cod": 180, "client": "SILGAN", "name": "ROSCA M300 GL18 ESTRIADO AMARELO CB131 PP DPB072 - 5181113", "cavities": 29, "cycle": 33, "weight": 2.04, "pieces_per_hour_goal": 3164, "mp": "" },
     { "cod": 181, "client": "SILGAN", "name": "ROSCA M300 GL18 ESTRIADO BEGE CB143 PP DPB072 - 5181164", "cavities": 29, "cycle": 33, "weight": 2.04, "pieces_per_hour_goal": 3164, "mp": "" },
     { "cod": 182, "client": "SILGAN", "name": "ROSCA M300 GL18 ESTRIADO BRANCO 767 PP DPB072 - 5179146", "cavities": 29, "cycle": 33, "weight": 2.04, "pieces_per_hour_goal": 3164, "mp": "" },
-        { "cod": 183, "client": "SILGAN", "name": "ROSCA M300 GL18 ESTRIADO LARANJA CB80 PP DPB072 - 5180919", "cavities": 29, "cycle": 39, "weight": 2.04, "pieces_per_hour_goal": 3164, "mp": "" },
+    { "cod": 183, "client": "SILGAN", "name": "ROSCA M300 GL18 ESTRIADO LARANJA CB80 PP DPB072 - 5180919", "cavities": 29, "cycle": 33, "weight": 2.04, "pieces_per_hour_goal": 3164, "mp": "" },
     { "cod": 184, "client": "SILGAN", "name": "ROSCA M300 GL18 ESTRIADO LARANJA CB097 PP DPB072 - 5183693", "cavities": 29, "cycle": 33, "weight": 2.04, "pieces_per_hour_goal": 3164, "mp": "" },
     { "cod": 185, "client": "SILGAN", "name": "ROSCA M300 GL18 ESTRIADO LARANJA CB146 PPDPB072 - 5181180", "cavities": 29, "cycle": 33, "weight": 2.04, "pieces_per_hour_goal": 3164, "mp": "" },
     { "cod": 188, "client": "SILGAN", "name": "ROSCA M300 GL18 ESTRIADO LILÁS CB151 PP DPB072 - 5181227", "cavities": 29, "cycle": 33, "weight": 2.04, "pieces_per_hour_goal": 3164, "mp": "" },
@@ -91,7 +91,7 @@ var productDatabase = [
     { "cod": 192, "client": "SILGAN", "name": "ROSCA M300 GL18 ESTRIADO VERMELHO CB140 PP DPB 072 - 5181141", "cavities": 29, "cycle": 33, "weight": 2.04, "pieces_per_hour_goal": 3164, "mp": "" },
     { "cod": 193, "client": "SILGAN", "name": "ROSCA M300 GL18 ESTRIADO VERMELHO CB77 PP DPB072 - 5181022", "cavities": 29, "cycle": 33, "weight": 2.04, "pieces_per_hour_goal": 3164, "mp": "" },
     { "cod": 194, "client": "SILGAN", "name": "ATUADOR M300 AMARELO CB131 STD PP DPB007 - FT120 - 5181114", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
-        { "cod": 195, "client": "SILGAN", "name": "ATUADOR M300 BEGE CB143 STD PP DPB007 - FT120 - 5181165", "cavities": 0, "cycle": 39, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
+    { "cod": 195, "client": "SILGAN", "name": "ATUADOR M300 BEGE CB143 STD PP DPB007 - FT120 - 5181165", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 196, "client": "SILGAN", "name": "ATUADOR M300 BRANCO CB48 STD PP DPB007 - FT120 - 5179149", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 197, "client": "SILGAN", "name": "ATUADOR M300 LARANJA CB146 STD PP DPB007 - FT120 - 5181179", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 198, "client": "SILGAN", "name": "ATUADOR M300 LILÁS CB151 STD PP DPB007 - FT120 - 5181228", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
@@ -205,7 +205,6 @@ var productDatabase = [
     { "cod": 5646, "client": "SILGAN", "name": "ANEL TRAVA P2000 STD TEXT AZUL CB300 PP DPB038 - 1.01.03.005.948", "cavities": 16, "cycle": 13.4, "weight": 0.85, "pieces_per_hour_goal": 4299, "mp": "" },
     { "cod": 5807, "client": "SILGAN", "name": "SUPORTE PLASTICO SERIE R260 (SEM ABA) - 283600939 REC", "cavities": 4, "cycle": 50, "weight": 50, "pieces_per_hour_goal": 288, "mp": "" },
     { "cod": 5855, "client": "SILGAN", "name": "ROSCA MKIV MD 22 415 ESTRIADA OURO CB112 PP 09PD06007 -1.01.01.005.039", "cavities": 44, "cycle": 40, "weight": 2.35, "pieces_per_hour_goal": 3366, "mp": "" },
-    { "cod": 6322, "client": "SILGAN", "name": "ROSCA MKIV MD 24 410 LISA AZUL CB314 PP 13PD06007 - 1.01.01.005.568 (SILGAN VALINHOS DISP SYSTEMS BRAZIL)", "cavities": 44, "cycle": 40, "weight": 2.35, "pieces_per_hour_goal": 3366, "mp": "" },
     // --- APTAR ---
     { "cod": 226, "client": "APTAR", "name": "FIXACAO-GS-28/410CUST-28--THREAD-HDPE-WH - 29032088", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
     { "cod": 436, "client": "APTAR", "name": "CLIP PLASTICO PP-RND DS25 K2/F3 OURO (MODIF) - 29029923", "cavities": 15, "cycle": 16, "weight": 0.45, "pieces_per_hour_goal": 3375, "mp": "" },
@@ -733,17 +732,27 @@ var groupedLossReasons = {
 var groupedDowntimeReasons = {
     "FERRAMENTARIA": ["CORRETIVA DE MOLDE", "PREVENTIVA DE MOLDE", "TROCA DE VERSÃO"],
     "PROCESSO": ["ABERTURA DE CAVIDADE", "AJUSTE DE PROCESSO", "FECHAMENTO DE CAVIDADE", "TRY OUT","PRENDENDO GALHO", "PRENDENDO PEÇAS"],
-    "COMPRAS": ["FALTA DE MATÉRIA PRIMA","FALTA DE SACO PLÁSTICO", "FALTA DE CAIXA DE PAPELÃO","FALTA DE MASTER", "ANÁLISE ADMINISTRATIVA"],
+    "COMPRAS": ["FALTA DE MATÉRIA PRIMA","FALTA DE SACO PLÁSTICO", "FALTA DE CAIXA DE PAPELÃO","FALTA DE MASTER", "ANÁLISE ADMINISTRATIVA", "LEAD TIME"],
     "PREPARAÇÃO": ["AGUARDANDO PREPARAÇÃO DE MATERIAL", "AGUARDANDO ESTUFAGEM DE M.P", "FORA DE COR", "TESTE DE COR", "MATERIAL CONTAMINADO"],
     "QUALIDADE": ["AGUARDANDO CLIENTE/FORNECEDOR", "LIBERAÇÃO INÍCIAL","AGUARDANDO DISPOSIÇÃO DA QUALIDADE"],
-    "MANUTENÇÃO": ["MANUTENÇÃO CORRETIVA", "MANUTENÇÃO PREVENTIVA"],
+    "MANUTENÇÃO": ["MANUTENÇÃO CORRETIVA", "MANUTENÇÃO PREVENTIVA", "MANUTENÇÃO EXTERNA"],
     "PRODUÇÃO": ["FALTA DE OPERADOR", "TROCA DE COR", "F.O REVEZAMENTO ALMOÇO", "F.O REVEZAMENTO JANTA","INICIO/REINICIO"],
     "SETUP": ["INSTALAÇÃO DE MOLDE", "RETIRADA DE MOLDE", "INSTALAÇÃO DE PERÍFÉRICOS", "AGUARDANDO SETUP"],
     "ADMINISTRATIVO": ["FALTA DE ENERGIA"],
     "PCP": ["SEM PROGRAMAÇÃO", "SEM PROGRAMAÇÃO-FIM DE SEMANA", "ESTRATÉGIA PCP" ],
     "COMERCIAL": ["SEM PEDIDO"],
-    "OUTROS": ["VAZAMENTO DO BICO", "QUEIMA DE RESISTÊNCIA"]
+    "OUTROS": ["VAZAMENTO DO BICO", "QUEIMA DE RESISTÊNCIA"],
+    "HOKKAIDO": ["HOKKAIDO"]
 };
+
+// Mapeamento de cor para categorias de parada (para status de máquina)
+var downtimeReasonColors = {
+    "HOKKAIDO": "#e5e7eb" // cinza claro (tailwind gray-200)
+};
+
+// Categorias de parada que NÃO devem ser contabilizadas no cálculo de OEE
+// Estas paradas aparecem nos gráficos/análises mas não afetam a disponibilidade
+var oeeExcludedCategories = ["HOKKAIDO"];
 
 // ================================
 // BASE DE DADOS DE USUÁRIOS
@@ -779,7 +788,6 @@ var userDatabase = [
     { cod: 27, nomeUsuario: "WESLEY", nomeCompleto: "WESLEY DA SILVA VASCONCELOS" },
     { cod: 28, nomeUsuario: "PAMELA", nomeCompleto: "PAMELA MUTA" },
     { cod: 29, nomeUsuario: "DAIANE.A", nomeCompleto: "Daiane Andrade Reis" },
-    { cod: 283, nomeUsuario: "FRANCISCA", nomeCompleto: "FRANCISCA ZACARIAS SILVA" },
     { cod: 30, nomeUsuario: "MONICA", nomeCompleto: "MONICA PINHEIRO AMAZONAS" },
     { cod: 31, nomeUsuario: "THAIS", nomeCompleto: "THAIS ARAGÃO ROS DE MOURA" },
     { cod: 32, nomeUsuario: "ROGER", nomeCompleto: "ROGER BERNARDES COSTA" },
@@ -1744,6 +1752,8 @@ if (typeof window !== 'undefined') {
     window.machineById = machineById;
     window.groupedLossReasons = groupedLossReasons;
     window.groupedDowntimeReasons = groupedDowntimeReasons;
+    window.downtimeReasonColors = downtimeReasonColors;
+    window.oeeExcludedCategories = oeeExcludedCategories;
     window.userDatabase = userDatabase;
     window.userByCode = userByCode;
     window.getUserByCode = getUserByCode;
@@ -1776,6 +1786,8 @@ if (typeof window !== 'undefined') {
         tareBoxesDatabase,
         groupedLossReasons,
         groupedDowntimeReasons,
+        downtimeReasonColors,
+        oeeExcludedCategories,
         // Expor os índices para busca rápida
         productByCode,
         productByClient,
