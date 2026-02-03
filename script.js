@@ -37211,6 +37211,7 @@ function setupNovaEscalaModal() {
     const closeBtn = document.getElementById('nova-escala-close');
     const cancelBtn = document.getElementById('nova-escala-cancel');
     const saveBtn = document.getElementById('nova-escala-save');
+    const saveContinueBtn = document.getElementById('nova-escala-save-continue');
     const codOperadorInput = document.getElementById('nova-escala-cod-operador');
     const selectAllBtn = document.getElementById('nova-escala-select-all');
     const clearAllBtn = document.getElementById('nova-escala-clear-all');
@@ -37228,8 +37229,11 @@ function setupNovaEscalaModal() {
     if (closeBtn) closeBtn.addEventListener('click', closeNovaEscalaModal);
     if (cancelBtn) cancelBtn.addEventListener('click', closeNovaEscalaModal);
 
-    // Salvar escala
-    if (saveBtn) saveBtn.addEventListener('click', salvarNovaEscala);
+    // Salvar escala (fechar após salvar)
+    if (saveBtn) saveBtn.addEventListener('click', () => salvarNovaEscala(false));
+    
+    // Salvar e continuar adicionando
+    if (saveContinueBtn) saveContinueBtn.addEventListener('click', () => salvarNovaEscala(true));
 
     // Selecionar/Limpar todas
     if (selectAllBtn) {
@@ -37312,12 +37316,17 @@ function buscarOperadorEscala() {
     }
 }
 
+// Contador de escalas adicionadas na sessão
+let escalasAdicionadasSessao = 0;
+
 function openNovaEscalaModal() {
     const modal = document.getElementById('nova-escala-modal');
     if (!modal) return;
 
-    // Limpar modo de edição
+    // Limpar modo de edição e resetar contador
     escalaEmEdicao = null;
+    escalasAdicionadasSessao = 0;
+    atualizarContadorEscalasSessao();
     
     // Atualizar título do modal
     const modalTitle = modal.querySelector('h3');
@@ -37354,9 +37363,55 @@ function openNovaEscalaModal() {
 
     modal.classList.remove('hidden');
     
+    // Focar no campo de código do operador
+    setTimeout(() => {
+        document.getElementById('nova-escala-cod-operador')?.focus();
+    }, 100);
+    
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();
     }
+}
+
+// Função para atualizar o contador de escalas na sessão
+function atualizarContadorEscalasSessao() {
+    const infoEl = document.getElementById('nova-escala-sessao-info');
+    const contadorEl = document.getElementById('nova-escala-contador');
+    
+    if (infoEl && contadorEl) {
+        if (escalasAdicionadasSessao > 0) {
+            infoEl.classList.remove('hidden');
+            contadorEl.textContent = escalasAdicionadasSessao;
+        } else {
+            infoEl.classList.add('hidden');
+        }
+    }
+}
+
+// Função para limpar apenas operador e máquinas (fluxo contínuo)
+function limparFormularioParaProximaEscala() {
+    // Limpar código e nome do operador
+    const codInput = document.getElementById('nova-escala-cod-operador');
+    const nomeInput = document.getElementById('nova-escala-nome-operador');
+    const infoEl = document.getElementById('nova-escala-operador-info');
+    const erroEl = document.getElementById('nova-escala-operador-erro');
+    const obsInput = document.getElementById('nova-escala-obs');
+    
+    if (codInput) codInput.value = '';
+    if (nomeInput) nomeInput.value = '';
+    if (infoEl) infoEl.classList.add('hidden');
+    if (erroEl) erroEl.classList.add('hidden');
+    if (obsInput) obsInput.value = '';
+    
+    // Limpar seleção de máquinas
+    const checkboxes = document.querySelectorAll('#nova-escala-maquinas-grid input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = false);
+    updateMaquinasCount();
+    
+    // Focar no campo de código
+    setTimeout(() => {
+        document.getElementById('nova-escala-cod-operador')?.focus();
+    }, 100);
 }
 
 // Função para editar uma escala existente
@@ -37426,9 +37481,15 @@ function closeNovaEscalaModal() {
     const modal = document.getElementById('nova-escala-modal');
     if (modal) modal.classList.add('hidden');
     escalaEmEdicao = null; // Limpar modo de edição ao fechar
+    
+    // Se adicionou escalas, atualizar a lista
+    if (escalasAdicionadasSessao > 0) {
+        loadEscalas();
+    }
+    escalasAdicionadasSessao = 0;
 }
 
-async function salvarNovaEscala() {
+async function salvarNovaEscala(continuarAdicionando = false) {
     const dataInput = document.getElementById('nova-escala-data');
     const turnoInput = document.getElementById('nova-escala-turno');
     const codOperadorInput = document.getElementById('nova-escala-cod-operador');
@@ -37506,10 +37567,17 @@ async function salvarNovaEscala() {
                     data: dataInput.value
                 });
             }
+            closeNovaEscalaModal();
+            loadEscalas();
         } else {
             // Modo criação - adicionar novo documento
             await db.collection('escalas_operadores').add(escalaData);
-            liderancaShowToast(`Escala salva com sucesso! ${operador.nomeUsuario} → ${maquinasSelecionadas.join(', ')}`, 'success');
+            
+            // Incrementar contador da sessão
+            escalasAdicionadasSessao++;
+            atualizarContadorEscalasSessao();
+            
+            liderancaShowToast(`✓ Escala salva! ${operador.nomeUsuario} → ${maquinasSelecionadas.join(', ')}`, 'success');
             
             // Registrar no histórico
             if (typeof registrarHistorico === 'function') {
@@ -37521,10 +37589,15 @@ async function salvarNovaEscala() {
                     data: dataInput.value
                 });
             }
+            
+            // Fluxo contínuo ou fechar
+            if (continuarAdicionando) {
+                limparFormularioParaProximaEscala();
+            } else {
+                closeNovaEscalaModal();
+                loadEscalas();
+            }
         }
-        
-        closeNovaEscalaModal();
-        loadEscalas();
 
     } catch (error) {
         console.error('[Liderança] Erro ao salvar escala:', error);
@@ -37788,13 +37861,49 @@ const TIPOS_AUSENCIA = {
     'atestado': { label: 'Atestado Médico', color: '#eab308', bgColor: 'bg-yellow-100 text-yellow-700' },
     'hokkaido_day': { label: 'Hokkaido Day', color: '#3b82f6', bgColor: 'bg-blue-100 text-blue-700' },
     'folga_aniversario': { label: 'Folga Aniversário', color: '#a855f7', bgColor: 'bg-purple-100 text-purple-700' },
+    'ferias': { label: 'Férias', color: '#10b981', bgColor: 'bg-emerald-100 text-emerald-700' },
     'atraso': { label: 'Atraso', color: '#f97316', bgColor: 'bg-orange-100 text-orange-700' },
     'outros': { label: 'Outros', color: '#6b7280', bgColor: 'bg-gray-100 text-gray-700' }
 };
 
+// Usuários autorizados a acessar o módulo de Absenteísmo
+const USUARIOS_ABSENTEISMO_AUTORIZADOS = [
+    'leandro.camargo', 'leandro camargo', 'leandro de camargo',
+    'linaldo',
+    'luciano',
+    'tiago.oliveira', 'tiago oliveira',
+    'michelle.benjamin', 'michelle benjamim', 'michelle benjamin'
+];
+
+// Verificar se usuário tem acesso ao absenteísmo
+function verificarAcessoAbsenteismo() {
+    try {
+        const userSession = localStorage.getItem('synchro_user') || sessionStorage.getItem('synchro_user');
+        if (!userSession) return false;
+        
+        const user = JSON.parse(userSession);
+        const userName = (user.name || user.username || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const userLogin = (user.username || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        
+        return USUARIOS_ABSENTEISMO_AUTORIZADOS.some(autorizado => {
+            const autNorm = autorizado.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            return userName.includes(autNorm) || userLogin.includes(autNorm) || autNorm.includes(userLogin);
+        });
+    } catch (e) {
+        console.error('[Absenteísmo] Erro ao verificar acesso:', e);
+        return false;
+    }
+}
+
 // Função para alternar tabs principais da Liderança
 function switchLiderancaTab(tab) {
     console.log('[Liderança] Alternando para tab:', tab);
+    
+    // Verificar permissão para aba de absenteísmo
+    if (tab === 'absenteismo' && !verificarAcessoAbsenteismo()) {
+        liderancaShowToast('Você não tem permissão para acessar o módulo de Absenteísmo', 'error');
+        return;
+    }
     
     // Remover classes ativas de todas as tabs
     document.querySelectorAll('.lideranca-tab').forEach(t => {
@@ -37882,12 +37991,23 @@ function initAbsenteismoModule() {
         dataInput.value = getLiderancaDateString();
     }
 
-    // Mostrar/ocultar campo de tempo de atraso
+    // Mostrar/ocultar campo de tempo de atraso e férias
     document.querySelectorAll('input[name="abs-tipo"]').forEach(radio => {
         radio.addEventListener('change', (e) => {
             const atrasoContainer = document.getElementById('abs-atraso-container');
+            const feriasContainer = document.getElementById('abs-ferias-container');
+            const dataContainer = document.getElementById('abs-data')?.parentElement;
+            
             if (atrasoContainer) {
                 atrasoContainer.classList.toggle('hidden', e.target.value !== 'atraso');
+            }
+            if (feriasContainer) {
+                feriasContainer.classList.toggle('hidden', e.target.value !== 'ferias');
+            }
+            // Ocultar data individual quando for férias (usa período próprio)
+            if (dataContainer) {
+                dataContainer.style.opacity = e.target.value === 'ferias' ? '0.5' : '1';
+                dataContainer.querySelector('input').disabled = e.target.value === 'ferias';
             }
         });
     });
@@ -37904,9 +38024,17 @@ function initAbsenteismoModule() {
             const nomeInput = document.getElementById('abs-nome-operador');
             const erroEl = document.getElementById('abs-operador-erro');
             const atrasoContainer = document.getElementById('abs-atraso-container');
+            const feriasContainer = document.getElementById('abs-ferias-container');
+            const dataContainer = document.getElementById('abs-data')?.parentElement;
+            
             if (nomeInput) nomeInput.value = '';
             if (erroEl) erroEl.classList.add('hidden');
             if (atrasoContainer) atrasoContainer.classList.add('hidden');
+            if (feriasContainer) feriasContainer.classList.add('hidden');
+            if (dataContainer) {
+                dataContainer.style.opacity = '1';
+                dataContainer.querySelector('input').disabled = false;
+            }
         });
     }
 
@@ -37952,6 +38080,8 @@ async function registrarAbsenteismo() {
     const tipoRadio = document.querySelector('input[name="abs-tipo"]:checked');
     const tempoAtraso = document.getElementById('abs-tempo-atraso')?.value;
     const observacoes = document.getElementById('abs-observacoes').value.trim();
+    const feriasInicio = document.getElementById('abs-ferias-inicio')?.value;
+    const feriasFim = document.getElementById('abs-ferias-fim')?.value;
 
     // Validações
     if (!codOperador || !nomeOperador) {
@@ -37959,12 +38089,36 @@ async function registrarAbsenteismo() {
         return;
     }
 
-    if (!data || !turno || !tipoRadio) {
-        liderancaShowToast('Preencha todos os campos obrigatórios', 'error');
+    if (!tipoRadio) {
+        liderancaShowToast('Selecione o tipo de ausência', 'error');
         return;
     }
 
     const tipo = tipoRadio.value;
+
+    // Validações específicas para férias
+    if (tipo === 'ferias') {
+        if (!feriasInicio || !feriasFim) {
+            liderancaShowToast('Informe o período de férias (início e fim)', 'error');
+            return;
+        }
+        if (feriasInicio > feriasFim) {
+            liderancaShowToast('Data de início deve ser anterior à data de fim', 'error');
+            return;
+        }
+        if (!turno) {
+            liderancaShowToast('Selecione o turno', 'error');
+            return;
+        }
+        await registrarFeriasMultiplosDias(codOperador, nomeOperador, turno, feriasInicio, feriasFim, observacoes);
+        return;
+    }
+
+    // Validação para outros tipos
+    if (!data || !turno) {
+        liderancaShowToast('Preencha todos os campos obrigatórios', 'error');
+        return;
+    }
 
     try {
         const db = firebase.firestore();
@@ -38007,6 +38161,95 @@ async function registrarAbsenteismo() {
         console.error('[Absenteísmo] Erro ao registrar:', error);
         liderancaShowToast('Erro ao registrar ausência', 'error');
     }
+}
+
+// Registrar férias para múltiplos dias
+async function registrarFeriasMultiplosDias(codOperador, nomeOperador, turno, dataInicio, dataFim, observacoes) {
+    try {
+        const db = firebase.firestore();
+        const batch = db.batch();
+        
+        const inicio = new Date(dataInicio + 'T00:00:00');
+        const fim = new Date(dataFim + 'T00:00:00');
+        const diasRegistrados = [];
+        const diasExistentes = [];
+        
+        const currentDate = new Date(inicio);
+        
+        while (currentDate <= fim) {
+            // Pular fins de semana (0 = domingo, 6 = sábado)
+            const diaSemana = currentDate.getDay();
+            if (diaSemana !== 0 && diaSemana !== 6) {
+                const dataStr = currentDate.toISOString().split('T')[0];
+                
+                // Verificar se já existe registro
+                const existente = await db.collection('absenteismo')
+                    .where('operadorCod', '==', codOperador)
+                    .where('data', '==', dataStr)
+                    .where('turno', '==', parseInt(turno))
+                    .get();
+                
+                if (existente.empty) {
+                    const docRef = db.collection('absenteismo').doc();
+                    batch.set(docRef, {
+                        operadorCod: codOperador,
+                        operadorNome: nomeOperador,
+                        data: dataStr,
+                        turno: parseInt(turno),
+                        tipo: 'ferias',
+                        tipoLabel: TIPOS_AUSENCIA['ferias'].label,
+                        feriasInicio: dataInicio,
+                        feriasFim: dataFim,
+                        observacoes: observacoes || `Férias de ${formatarDataBR(dataInicio)} a ${formatarDataBR(dataFim)}`,
+                        registradoPor: getLiderancaCurrentUserName(),
+                        criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+                        atualizadoEm: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    diasRegistrados.push(dataStr);
+                } else {
+                    diasExistentes.push(dataStr);
+                }
+            }
+            
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+        
+        if (diasRegistrados.length > 0) {
+            await batch.commit();
+        }
+        
+        // Feedback
+        let mensagem = '';
+        if (diasRegistrados.length > 0) {
+            mensagem = `Férias registradas para ${diasRegistrados.length} dia(s) útil(eis)`;
+        }
+        if (diasExistentes.length > 0) {
+            mensagem += mensagem ? '. ' : '';
+            mensagem += `${diasExistentes.length} dia(s) já possuíam registro`;
+        }
+        
+        if (diasRegistrados.length > 0) {
+            liderancaShowToast(mensagem, 'success');
+        } else {
+            liderancaShowToast('Nenhum dia foi registrado (todos já possuem registro)', 'warning');
+        }
+
+        // Limpar formulário
+        document.getElementById('form-absenteismo').reset();
+        document.getElementById('abs-data').value = getLiderancaDateString();
+        document.getElementById('abs-ferias-container')?.classList.add('hidden');
+
+    } catch (error) {
+        console.error('[Absenteísmo] Erro ao registrar férias:', error);
+        liderancaShowToast('Erro ao registrar férias', 'error');
+    }
+}
+
+// Formatar data para BR
+function formatarDataBR(dataStr) {
+    if (!dataStr) return '';
+    const [ano, mes, dia] = dataStr.split('-');
+    return `${dia}/${mes}/${ano}`;
 }
 
 // Inicializar filtros do histórico
@@ -38169,14 +38412,35 @@ async function excluirAbsenteismo(id) {
 
 // Atualizar dashboard de absenteísmo
 async function atualizarDashboardAbsenteismo() {
-    const periodo = parseInt(document.getElementById('abs-dash-periodo')?.value || 30);
+    const periodoSelect = document.getElementById('abs-dash-periodo')?.value;
+    const filtroTurno = document.getElementById('abs-dash-turno')?.value;
+    const filtroTipo = document.getElementById('abs-dash-tipo')?.value;
     
-    const dataFim = new Date();
-    const dataInicio = new Date();
-    dataInicio.setDate(dataInicio.getDate() - periodo);
-
-    const dataInicioStr = getLiderancaDateString(dataInicio);
-    const dataFimStr = getLiderancaDateString(dataFim);
+    let dataInicioStr, dataFimStr;
+    let periodo;
+    
+    // Período personalizado ou predefinido
+    if (periodoSelect === 'custom') {
+        dataInicioStr = document.getElementById('abs-dash-custom-inicio')?.value;
+        dataFimStr = document.getElementById('abs-dash-custom-fim')?.value;
+        
+        if (!dataInicioStr || !dataFimStr) {
+            liderancaShowToast('Selecione as datas do período personalizado', 'error');
+            return;
+        }
+        
+        const inicio = new Date(dataInicioStr);
+        const fim = new Date(dataFimStr);
+        periodo = Math.ceil((fim - inicio) / (1000 * 60 * 60 * 24)) + 1;
+    } else {
+        periodo = parseInt(periodoSelect || 30);
+        const dataFim = new Date();
+        const dataInicio = new Date();
+        dataInicio.setDate(dataInicio.getDate() - periodo);
+        
+        dataInicioStr = getLiderancaDateString(dataInicio);
+        dataFimStr = getLiderancaDateString(dataFim);
+    }
 
     try {
         const db = firebase.firestore();
@@ -38186,8 +38450,18 @@ async function atualizarDashboardAbsenteismo() {
             .orderBy('data', 'asc')
             .get();
 
-        const registros = [];
+        let registros = [];
         snapshot.forEach(doc => registros.push({ id: doc.id, ...doc.data() }));
+
+        // Aplicar filtro por turno (client-side)
+        if (filtroTurno) {
+            registros = registros.filter(r => r.turno === parseInt(filtroTurno));
+        }
+        
+        // Aplicar filtro por tipo (client-side)
+        if (filtroTipo) {
+            registros = registros.filter(r => r.tipo === filtroTipo);
+        }
 
         // Calcular métricas
         const totalOperadores = (window.userDatabase || []).length;
@@ -38204,7 +38478,7 @@ async function atualizarDashboardAbsenteismo() {
 
         // Gerar gráficos
         gerarGraficoPorTipo(registros);
-        gerarGraficoEvolucao(registros, periodo);
+        gerarGraficoEvolucao(registros, periodo, dataInicioStr);
         gerarGraficoPorTurno(registros);
         gerarGraficoDiaSemana(registros);
         gerarTopOperadores(registros);
@@ -38214,6 +38488,24 @@ async function atualizarDashboardAbsenteismo() {
         liderancaShowToast('Erro ao carregar dashboard', 'error');
     }
 }
+
+// Toggle período personalizado
+function togglePeriodoPersonalizado() {
+    const periodo = document.getElementById('abs-dash-periodo')?.value;
+    const inicioContainer = document.getElementById('abs-dash-custom-inicio-container');
+    const fimContainer = document.getElementById('abs-dash-custom-fim-container');
+    
+    const isCustom = periodo === 'custom';
+    
+    if (inicioContainer) inicioContainer.classList.toggle('hidden', !isCustom);
+    if (fimContainer) fimContainer.classList.toggle('hidden', !isCustom);
+    
+    // Auto-atualizar se não for personalizado
+    if (!isCustom) {
+        atualizarDashboardAbsenteismo();
+    }
+}
+window.togglePeriodoPersonalizado = togglePeriodoPersonalizado;
 
 // Gráfico de pizza - Distribuição por tipo
 function gerarGraficoPorTipo(registros) {
@@ -38272,7 +38564,7 @@ function gerarGraficoPorTipo(registros) {
 }
 
 // Gráfico de linha - Evolução temporal
-function gerarGraficoEvolucao(registros, periodo) {
+function gerarGraficoEvolucao(registros, periodo, dataInicioStr = null) {
     const ctx = document.getElementById('abs-chart-evolucao');
     if (!ctx) return;
 
@@ -38282,13 +38574,19 @@ function gerarGraficoEvolucao(registros, periodo) {
         contagemDiaria[r.data] = (contagemDiaria[r.data] || 0) + 1;
     });
 
-    // Gerar labels para últimos N dias
+    // Gerar labels para o período
     const labels = [];
     const data = [];
     
-    for (let i = periodo - 1; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
+    const startDate = dataInicioStr ? new Date(dataInicioStr + 'T00:00:00') : (() => {
+        const d = new Date();
+        d.setDate(d.getDate() - periodo + 1);
+        return d;
+    })();
+    
+    for (let i = 0; i < periodo; i++) {
+        const date = new Date(startDate);
+        date.setDate(startDate.getDate() + i);
         const dateStr = getLiderancaDateString(date);
         const displayDate = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
         labels.push(displayDate);
@@ -38467,6 +38765,22 @@ window.switchAbsenteismoSubTab = switchAbsenteismoSubTab;
 window.buscarHistoricoAbsenteismo = buscarHistoricoAbsenteismo;
 window.excluirAbsenteismo = excluirAbsenteismo;
 window.atualizarDashboardAbsenteismo = atualizarDashboardAbsenteismo;
+window.togglePeriodoPersonalizado = togglePeriodoPersonalizado;
+window.verificarAcessoAbsenteismo = verificarAcessoAbsenteismo;
+
+// Ocultar aba de absenteísmo para usuários não autorizados
+function ocultarAbaAbsenteismoNaoAutorizado() {
+    const tabAbsenteismo = document.getElementById('tab-absenteismo');
+    if (tabAbsenteismo && !verificarAcessoAbsenteismo()) {
+        tabAbsenteismo.style.display = 'none';
+        console.log('[Absenteísmo] Aba ocultada - usuário sem permissão');
+    }
+}
+
+// Inicializar verificação de acesso ao absenteísmo quando DOM estiver pronto
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(ocultarAbaAbsenteismoNaoAutorizado, 500);
+});
 
 // ================================
 // FIM DO MÓDULO LIDERANÇA PRODUÇÃO

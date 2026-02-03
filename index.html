@@ -1984,27 +1984,27 @@
                                 </div>
 
                                 <!-- Estatísticas da busca -->
-                                <div class="grid grid-cols-4 gap-3 mb-4">
-                                    <div class="bg-blue-50 rounded-lg p-3 text-center border border-blue-100">
-                                        <div id="admin-prod-total" class="text-xl font-bold text-blue-600">0</div>
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 mb-4">
+                                    <div class="bg-blue-50 rounded-lg p-2 md:p-3 text-center border border-blue-100">
+                                        <div id="admin-prod-total" class="text-lg md:text-xl font-bold text-blue-600">0</div>
                                         <div class="text-xs text-blue-700">Total Registros</div>
                                     </div>
-                                    <div class="bg-green-50 rounded-lg p-3 text-center border border-green-100">
-                                        <div id="admin-prod-pecas" class="text-xl font-bold text-green-600">0</div>
+                                    <div class="bg-green-50 rounded-lg p-2 md:p-3 text-center border border-green-100">
+                                        <div id="admin-prod-pecas" class="text-lg md:text-xl font-bold text-green-600">0</div>
                                         <div class="text-xs text-green-700">Total Peças</div>
                                     </div>
-                                    <div class="bg-amber-50 rounded-lg p-3 text-center border border-amber-100">
-                                        <div id="admin-prod-peso" class="text-xl font-bold text-amber-600">0</div>
+                                    <div class="bg-amber-50 rounded-lg p-2 md:p-3 text-center border border-amber-100">
+                                        <div id="admin-prod-peso" class="text-lg md:text-xl font-bold text-amber-600">0</div>
                                         <div class="text-xs text-amber-700">Peso Total (kg)</div>
                                     </div>
-                                    <div class="bg-red-50 rounded-lg p-3 text-center border border-red-100">
-                                        <div id="admin-prod-refugo" class="text-xl font-bold text-red-600">0</div>
+                                    <div class="bg-red-50 rounded-lg p-2 md:p-3 text-center border border-red-100">
+                                        <div id="admin-prod-refugo" class="text-lg md:text-xl font-bold text-red-600">0</div>
                                         <div class="text-xs text-red-700">Refugo (kg)</div>
                                     </div>
                                 </div>
 
                                 <!-- Lista de registros -->
-                                <div id="admin-producao-lista" class="space-y-2 max-h-[400px] overflow-y-auto border rounded-lg p-2 bg-white">
+                                <div id="admin-producao-lista" class="space-y-2 max-h-[50vh] md:max-h-[400px] overflow-y-auto border rounded-lg p-2 bg-gray-50">
                                     <div class="text-center py-8 text-gray-400">
                                         <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
                                         <p>Selecione filtros e clique em "Buscar"</p>
@@ -2694,17 +2694,39 @@
                                     </div>
                                     <div>
                                         <h2 class="text-xl font-bold text-white">Liderança Produção</h2>
-                                        <p class="text-purple-200 text-sm">Escala de máquinas e operadores por turno</p>
+                                        <p class="text-purple-200 text-sm">Gestão de equipe e controle de absenteísmo</p>
                                     </div>
                                 </div>
-                                <button id="btn-nova-escala" class="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition flex items-center gap-2 font-semibold">
+                            </div>
+                        </div>
+
+                        <!-- Tabs de Navegação -->
+                        <div class="border-b border-gray-200 bg-gray-50">
+                            <nav class="flex space-x-1 px-4 pt-2" aria-label="Tabs">
+                                <button id="tab-escala" onclick="switchLiderancaTab('escala')" class="lideranca-tab px-4 py-2.5 text-sm font-semibold rounded-t-lg border-b-2 border-violet-600 text-violet-600 bg-white -mb-px">
+                                    <i data-lucide="calendar-days" class="w-4 h-4 inline mr-1"></i>
+                                    Escala de Operadores
+                                </button>
+                                <button id="tab-absenteismo" onclick="switchLiderancaTab('absenteismo')" class="lideranca-tab px-4 py-2.5 text-sm font-medium rounded-t-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100">
+                                    <i data-lucide="user-x" class="w-4 h-4 inline mr-1"></i>
+                                    Absenteísmo
+                                </button>
+                            </nav>
+                        </div>
+
+                        <!-- ========================= -->
+                        <!-- CONTEÚDO ABA: ESCALA -->
+                        <!-- ========================= -->
+                        <div id="content-escala" class="lideranca-content">
+                            <!-- Botão Nova Escala -->
+                            <div class="p-4 bg-gray-50 border-b border-gray-200 flex justify-end">
+                                <button id="btn-nova-escala" class="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg transition flex items-center gap-2 font-semibold">
                                     <i data-lucide="plus-circle" class="w-4 h-4"></i>
                                     Nova Escala
                                 </button>
                             </div>
-                        </div>
 
-                        <!-- Filtros de data e turno -->
+                            <!-- Filtros de data e turno -->
                         <div class="border-b border-gray-200 p-4 bg-gray-50">
                             <div class="flex flex-wrap items-end gap-4">
                                 <div class="flex-1 min-w-[200px]">
@@ -2771,6 +2793,448 @@
                                 </div>
                             </div>
                         </div>
+                        </div><!-- Fim content-escala -->
+
+                        <!-- ========================= -->
+                        <!-- CONTEÚDO ABA: ABSENTEÍSMO -->
+                        <!-- ========================= -->
+                        <div id="content-absenteismo" class="lideranca-content hidden">
+                            <!-- Sub-tabs Absenteísmo -->
+                            <div class="border-b border-gray-200 bg-gray-50 px-4 pt-2">
+                                <nav class="flex space-x-2" aria-label="Sub-tabs">
+                                    <button id="subtab-registro" onclick="switchAbsenteismoSubTab('registro')" class="absenteismo-subtab px-3 py-2 text-sm font-medium rounded-t-lg border-b-2 border-orange-500 text-orange-600 bg-white -mb-px">
+                                        <i data-lucide="file-plus" class="w-4 h-4 inline mr-1"></i>
+                                        Registrar Ausência
+                                    </button>
+                                    <button id="subtab-historico" onclick="switchAbsenteismoSubTab('historico')" class="absenteismo-subtab px-3 py-2 text-sm font-medium rounded-t-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100">
+                                        <i data-lucide="history" class="w-4 h-4 inline mr-1"></i>
+                                        Histórico
+                                    </button>
+                                    <button id="subtab-dashboard" onclick="switchAbsenteismoSubTab('dashboard')" class="absenteismo-subtab px-3 py-2 text-sm font-medium rounded-t-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100">
+                                        <i data-lucide="bar-chart-3" class="w-4 h-4 inline mr-1"></i>
+                                        Dashboard
+                                    </button>
+                                </nav>
+                            </div>
+
+                            <!-- SUB-TAB: Registrar Ausência -->
+                            <div id="subcontent-registro" class="absenteismo-subcontent p-4">
+                                <div class="max-w-2xl mx-auto">
+                                    <div class="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-6 border border-orange-200">
+                                        <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                            <div class="p-2 bg-orange-100 rounded-lg">
+                                                <i data-lucide="user-x" class="w-5 h-5 text-orange-600"></i>
+                                            </div>
+                                            Registrar Nova Ausência
+                                        </h3>
+                                        
+                                        <form id="form-absenteismo" class="space-y-4">
+                                            <!-- Código do Operador -->
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label class="block text-sm font-semibold text-gray-700 mb-1">
+                                                        <i data-lucide="hash" class="w-4 h-4 inline mr-1"></i>
+                                                        Código do Operador *
+                                                    </label>
+                                                    <input type="number" id="abs-cod-operador" required placeholder="Ex: 65"
+                                                           class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+                                                </div>
+                                                <div>
+                                                    <label class="block text-sm font-semibold text-gray-700 mb-1">
+                                                        <i data-lucide="user" class="w-4 h-4 inline mr-1"></i>
+                                                        Nome do Operador
+                                                    </label>
+                                                    <input type="text" id="abs-nome-operador" readonly placeholder="Preencha o código..."
+                                                           class="w-full p-2.5 border border-gray-200 rounded-lg bg-gray-100 text-gray-700">
+                                                    <p id="abs-operador-erro" class="text-xs text-red-500 mt-1 hidden">
+                                                        <i data-lucide="alert-circle" class="w-3 h-3 inline"></i> Operador não encontrado
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <!-- Data e Turno -->
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label class="block text-sm font-semibold text-gray-700 mb-1">
+                                                        <i data-lucide="calendar" class="w-4 h-4 inline mr-1"></i>
+                                                        Data da Ausência *
+                                                    </label>
+                                                    <input type="date" id="abs-data" required
+                                                           class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
+                                                </div>
+                                                <div>
+                                                    <label class="block text-sm font-semibold text-gray-700 mb-1">
+                                                        <i data-lucide="clock" class="w-4 h-4 inline mr-1"></i>
+                                                        Turno *
+                                                    </label>
+                                                    <select id="abs-turno" required
+                                                            class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
+                                                        <option value="">Selecione o turno</option>
+                                                        <option value="1">1º Turno (06:30 - 14:59)</option>
+                                                        <option value="2">2º Turno (15:00 - 23:19)</option>
+                                                        <option value="3">3º Turno (23:20 - 06:29)</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <!-- Tipo de Ausência -->
+                                            <div>
+                                                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                                    <i data-lucide="tag" class="w-4 h-4 inline mr-1"></i>
+                                                    Tipo de Ausência *
+                                                </label>
+                                                <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                                    <label class="flex items-center gap-2 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-red-50 hover:border-red-300 transition has-[:checked]:bg-red-100 has-[:checked]:border-red-500">
+                                                        <input type="radio" name="abs-tipo" value="falta_nao_justificada" required class="text-red-600 focus:ring-red-500">
+                                                        <span class="text-sm font-medium">Falta não justificada</span>
+                                                    </label>
+                                                    <label class="flex items-center gap-2 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-yellow-50 hover:border-yellow-300 transition has-[:checked]:bg-yellow-100 has-[:checked]:border-yellow-500">
+                                                        <input type="radio" name="abs-tipo" value="atestado" class="text-yellow-600 focus:ring-yellow-500">
+                                                        <span class="text-sm font-medium">Atestado Médico</span>
+                                                    </label>
+                                                    <label class="flex items-center gap-2 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition has-[:checked]:bg-blue-100 has-[:checked]:border-blue-500">
+                                                        <input type="radio" name="abs-tipo" value="hokkaido_day" class="text-blue-600 focus:ring-blue-500">
+                                                        <span class="text-sm font-medium">Hokkaido Day</span>
+                                                    </label>
+                                                    <label class="flex items-center gap-2 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-purple-50 hover:border-purple-300 transition has-[:checked]:bg-purple-100 has-[:checked]:border-purple-500">
+                                                        <input type="radio" name="abs-tipo" value="folga_aniversario" class="text-purple-600 focus:ring-purple-500">
+                                                        <span class="text-sm font-medium">Folga Aniversário</span>
+                                                    </label>
+                                                    <label class="flex items-center gap-2 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-emerald-50 hover:border-emerald-300 transition has-[:checked]:bg-emerald-100 has-[:checked]:border-emerald-500">
+                                                        <input type="radio" name="abs-tipo" value="ferias" class="text-emerald-600 focus:ring-emerald-500">
+                                                        <span class="text-sm font-medium">Férias</span>
+                                                    </label>
+                                                    <label class="flex items-center gap-2 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition has-[:checked]:bg-orange-100 has-[:checked]:border-orange-500">
+                                                        <input type="radio" name="abs-tipo" value="atraso" class="text-orange-600 focus:ring-orange-500">
+                                                        <span class="text-sm font-medium">Atraso</span>
+                                                    </label>
+                                                    <label class="flex items-center gap-2 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-400 transition has-[:checked]:bg-gray-200 has-[:checked]:border-gray-500">
+                                                        <input type="radio" name="abs-tipo" value="outros" class="text-gray-600 focus:ring-gray-500">
+                                                        <span class="text-sm font-medium">Outros</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+
+                                            <!-- Período de Férias (condicional) -->
+                                            <div id="abs-ferias-container" class="hidden">
+                                                <div class="bg-emerald-50 rounded-lg p-4 border border-emerald-200">
+                                                    <label class="block text-sm font-semibold text-emerald-700 mb-3">
+                                                        <i data-lucide="calendar-range" class="w-4 h-4 inline mr-1"></i>
+                                                        Período de Férias
+                                                    </label>
+                                                    <div class="grid grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label class="block text-xs text-gray-600 mb-1">Data Início</label>
+                                                            <input type="date" id="abs-ferias-inicio" 
+                                                                   class="w-full p-2.5 border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500">
+                                                        </div>
+                                                        <div>
+                                                            <label class="block text-xs text-gray-600 mb-1">Data Fim</label>
+                                                            <input type="date" id="abs-ferias-fim" 
+                                                                   class="w-full p-2.5 border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500">
+                                                        </div>
+                                                    </div>
+                                                    <p class="text-xs text-emerald-600 mt-2">
+                                                        <i data-lucide="info" class="w-3 h-3 inline"></i>
+                                                        Serão criados registros para todos os dias úteis do período
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <!-- Tempo do Atraso (condicional) -->
+                                            <div id="abs-atraso-container" class="hidden">
+                                                <label class="block text-sm font-semibold text-gray-700 mb-1">
+                                                    <i data-lucide="timer" class="w-4 h-4 inline mr-1"></i>
+                                                    Tempo de Atraso (minutos)
+                                                </label>
+                                                <input type="number" id="abs-tempo-atraso" min="1" max="480" placeholder="Ex: 30"
+                                                       class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
+                                            </div>
+
+                                            <!-- Observações -->
+                                            <div>
+                                                <label class="block text-sm font-semibold text-gray-700 mb-1">
+                                                    <i data-lucide="message-square" class="w-4 h-4 inline mr-1"></i>
+                                                    Observações
+                                                </label>
+                                                <textarea id="abs-observacoes" rows="3" placeholder="Informações adicionais sobre a ausência..."
+                                                          class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 resize-none"></textarea>
+                                            </div>
+
+                                            <!-- Botões -->
+                                            <div class="flex gap-3 pt-2">
+                                                <button type="submit" class="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-lg transition flex items-center justify-center gap-2">
+                                                    <i data-lucide="save" class="w-5 h-5"></i>
+                                                    Registrar Ausência
+                                                </button>
+                                                <button type="reset" class="px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-100 transition">
+                                                    Limpar
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- SUB-TAB: Histórico -->
+                            <div id="subcontent-historico" class="absenteismo-subcontent hidden p-4">
+                                <!-- Filtros -->
+                                <div class="bg-gray-50 rounded-lg p-4 mb-4 border border-gray-200">
+                                    <div class="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+                                        <div>
+                                            <label class="block text-xs font-semibold text-gray-600 mb-1">Data Início</label>
+                                            <input type="date" id="abs-hist-data-inicio" class="w-full p-2 border border-gray-300 rounded text-sm">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-semibold text-gray-600 mb-1">Data Fim</label>
+                                            <input type="date" id="abs-hist-data-fim" class="w-full p-2 border border-gray-300 rounded text-sm">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-semibold text-gray-600 mb-1">Tipo</label>
+                                            <select id="abs-hist-tipo" class="w-full p-2 border border-gray-300 rounded text-sm">
+                                                <option value="">Todos os tipos</option>
+                                                <option value="falta_nao_justificada">Falta não justificada</option>
+                                                <option value="atestado">Atestado Médico</option>
+                                                <option value="hokkaido_day">Hokkaido Day</option>
+                                                <option value="folga_aniversario">Folga Aniversário</option>
+                                                <option value="ferias">Férias</option>
+                                                <option value="atraso">Atraso</option>
+                                                <option value="outros">Outros</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-semibold text-gray-600 mb-1">Cód. Operador</label>
+                                            <input type="number" id="abs-hist-cod" placeholder="Código" class="w-full p-2 border border-gray-300 rounded text-sm">
+                                        </div>
+                                        <button onclick="buscarHistoricoAbsenteismo()" class="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded font-semibold transition flex items-center justify-center gap-2">
+                                            <i data-lucide="search" class="w-4 h-4"></i>
+                                            Buscar
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Estatísticas do Período -->
+                                <div class="grid grid-cols-2 md:grid-cols-7 gap-3 mb-4">
+                                    <div class="bg-red-50 rounded-lg p-3 text-center border border-red-100">
+                                        <p class="text-xl font-bold text-red-600" id="abs-stat-falta">0</p>
+                                        <p class="text-xs text-red-700">Faltas</p>
+                                    </div>
+                                    <div class="bg-yellow-50 rounded-lg p-3 text-center border border-yellow-100">
+                                        <p class="text-xl font-bold text-yellow-600" id="abs-stat-atestado">0</p>
+                                        <p class="text-xs text-yellow-700">Atestados</p>
+                                    </div>
+                                    <div class="bg-blue-50 rounded-lg p-3 text-center border border-blue-100">
+                                        <p class="text-xl font-bold text-blue-600" id="abs-stat-hokkaido">0</p>
+                                        <p class="text-xs text-blue-700">Hokkaido Day</p>
+                                    </div>
+                                    <div class="bg-purple-50 rounded-lg p-3 text-center border border-purple-100">
+                                        <p class="text-xl font-bold text-purple-600" id="abs-stat-aniversario">0</p>
+                                        <p class="text-xs text-purple-700">Aniversário</p>
+                                    </div>
+                                    <div class="bg-emerald-50 rounded-lg p-3 text-center border border-emerald-100">
+                                        <p class="text-xl font-bold text-emerald-600" id="abs-stat-ferias">0</p>
+                                        <p class="text-xs text-emerald-700">Férias</p>
+                                    </div>
+                                    <div class="bg-orange-50 rounded-lg p-3 text-center border border-orange-100">
+                                        <p class="text-xl font-bold text-orange-600" id="abs-stat-atraso">0</p>
+                                        <p class="text-xs text-orange-700">Atrasos</p>
+                                    </div>
+                                    <div class="bg-gray-100 rounded-lg p-3 text-center border border-gray-200">
+                                        <p class="text-xl font-bold text-gray-700" id="abs-stat-total">0</p>
+                                        <p class="text-xs text-gray-600">Total</p>
+                                    </div>
+                                </div>
+
+                                <!-- Lista de Registros -->
+                                <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                                    <div class="max-h-96 overflow-y-auto">
+                                        <table class="w-full text-sm">
+                                            <thead class="bg-gray-50 sticky top-0">
+                                                <tr>
+                                                    <th class="text-left p-3 font-semibold text-gray-700">Data</th>
+                                                    <th class="text-left p-3 font-semibold text-gray-700">Operador</th>
+                                                    <th class="text-left p-3 font-semibold text-gray-700">Turno</th>
+                                                    <th class="text-left p-3 font-semibold text-gray-700">Tipo</th>
+                                                    <th class="text-left p-3 font-semibold text-gray-700">Observações</th>
+                                                    <th class="text-center p-3 font-semibold text-gray-700">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="abs-historico-lista">
+                                                <tr>
+                                                    <td colspan="6" class="text-center py-12 text-gray-400">
+                                                        <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                                                        <p>Selecione o período para visualizar o histórico</p>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- SUB-TAB: Dashboard -->
+                            <div id="subcontent-dashboard" class="absenteismo-subcontent hidden p-4">
+                                <!-- Filtros do Dashboard -->
+                                <div class="bg-gray-50 rounded-lg p-4 mb-4 border border-gray-200">
+                                    <div class="grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
+                                        <div>
+                                            <label class="block text-xs font-semibold text-gray-600 mb-1">Período</label>
+                                            <select id="abs-dash-periodo" class="w-full p-2 border border-gray-300 rounded text-sm" onchange="togglePeriodoPersonalizado()">
+                                                <option value="7">Últimos 7 dias</option>
+                                                <option value="30" selected>Últimos 30 dias</option>
+                                                <option value="90">Últimos 90 dias</option>
+                                                <option value="365">Último ano</option>
+                                                <option value="custom">Personalizado</option>
+                                            </select>
+                                        </div>
+                                        <div id="abs-dash-custom-inicio-container" class="hidden">
+                                            <label class="block text-xs font-semibold text-gray-600 mb-1">Data Início</label>
+                                            <input type="date" id="abs-dash-custom-inicio" class="w-full p-2 border border-gray-300 rounded text-sm">
+                                        </div>
+                                        <div id="abs-dash-custom-fim-container" class="hidden">
+                                            <label class="block text-xs font-semibold text-gray-600 mb-1">Data Fim</label>
+                                            <input type="date" id="abs-dash-custom-fim" class="w-full p-2 border border-gray-300 rounded text-sm">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-semibold text-gray-600 mb-1">Turno</label>
+                                            <select id="abs-dash-turno" class="w-full p-2 border border-gray-300 rounded text-sm">
+                                                <option value="">Todos os turnos</option>
+                                                <option value="1">1º Turno</option>
+                                                <option value="2">2º Turno</option>
+                                                <option value="3">3º Turno</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-semibold text-gray-600 mb-1">Tipo</label>
+                                            <select id="abs-dash-tipo" class="w-full p-2 border border-gray-300 rounded text-sm">
+                                                <option value="">Todos os tipos</option>
+                                                <option value="falta_nao_justificada">Falta não justificada</option>
+                                                <option value="atestado">Atestado Médico</option>
+                                                <option value="hokkaido_day">Hokkaido Day</option>
+                                                <option value="folga_aniversario">Folga Aniversário</option>
+                                                <option value="ferias">Férias</option>
+                                                <option value="atraso">Atraso</option>
+                                                <option value="outros">Outros</option>
+                                            </select>
+                                        </div>
+                                        <button onclick="atualizarDashboardAbsenteismo()" class="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded font-semibold transition flex items-center gap-2">
+                                            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                                            Atualizar
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Cards de Resumo -->
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                                    <div class="bg-gradient-to-br from-red-500 to-red-600 rounded-xl p-4 text-white shadow-lg">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <p class="text-red-100 text-sm">Taxa de Absenteísmo</p>
+                                                <p class="text-3xl font-bold" id="abs-dash-taxa">0%</p>
+                                            </div>
+                                            <i data-lucide="trending-down" class="w-10 h-10 text-red-200"></i>
+                                        </div>
+                                    </div>
+                                    <div class="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-4 text-white shadow-lg">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <p class="text-orange-100 text-sm">Total de Ocorrências</p>
+                                                <p class="text-3xl font-bold" id="abs-dash-total">0</p>
+                                            </div>
+                                            <i data-lucide="user-x" class="w-10 h-10 text-orange-200"></i>
+                                        </div>
+                                    </div>
+                                    <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 text-white shadow-lg">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <p class="text-blue-100 text-sm">Colaboradores Afetados</p>
+                                                <p class="text-3xl font-bold" id="abs-dash-colaboradores">0</p>
+                                            </div>
+                                            <i data-lucide="users" class="w-10 h-10 text-blue-200"></i>
+                                        </div>
+                                    </div>
+                                    <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-4 text-white shadow-lg">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <p class="text-green-100 text-sm">Média Diária</p>
+                                                <p class="text-3xl font-bold" id="abs-dash-media">0</p>
+                                            </div>
+                                            <i data-lucide="calculator" class="w-10 h-10 text-green-200"></i>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Gráficos -->
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    <!-- Gráfico por Tipo -->
+                                    <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                                        <h4 class="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                            <i data-lucide="pie-chart" class="w-5 h-5 text-violet-600"></i>
+                                            Distribuição por Tipo
+                                        </h4>
+                                        <div class="h-64">
+                                            <canvas id="abs-chart-tipo"></canvas>
+                                        </div>
+                                    </div>
+
+                                    <!-- Gráfico Evolução Temporal -->
+                                    <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                                        <h4 class="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                            <i data-lucide="line-chart" class="w-5 h-5 text-violet-600"></i>
+                                            Evolução no Período
+                                        </h4>
+                                        <div class="h-64">
+                                            <canvas id="abs-chart-evolucao"></canvas>
+                                        </div>
+                                    </div>
+
+                                    <!-- Gráfico por Turno -->
+                                    <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                                        <h4 class="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                            <i data-lucide="bar-chart" class="w-5 h-5 text-violet-600"></i>
+                                            Absenteísmo por Turno
+                                        </h4>
+                                        <div class="h-64">
+                                            <canvas id="abs-chart-turno"></canvas>
+                                        </div>
+                                    </div>
+
+                                    <!-- Top Operadores com mais ausências -->
+                                    <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                                        <h4 class="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                            <i data-lucide="list-ordered" class="w-5 h-5 text-violet-600"></i>
+                                            Top 10 - Operadores com Mais Ausências
+                                        </h4>
+                                        <div class="max-h-64 overflow-y-auto">
+                                            <table class="w-full text-sm" id="abs-top-operadores">
+                                                <thead class="bg-gray-50 sticky top-0">
+                                                    <tr>
+                                                        <th class="text-left p-2 font-medium text-gray-600">#</th>
+                                                        <th class="text-left p-2 font-medium text-gray-600">Operador</th>
+                                                        <th class="text-center p-2 font-medium text-gray-600">Ausências</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr><td colspan="3" class="text-center py-8 text-gray-400">Carregando...</td></tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Gráfico por Dia da Semana -->
+                                <div class="mt-6 bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                                    <h4 class="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                        <i data-lucide="calendar-days" class="w-5 h-5 text-violet-600"></i>
+                                        Absenteísmo por Dia da Semana
+                                    </h4>
+                                    <div class="h-64">
+                                        <canvas id="abs-chart-diasemana"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div><!-- Fim content-absenteismo -->
+
                     </div>
                 </div>
 
@@ -6826,14 +7290,29 @@
             </div>
 
             <!-- Footer -->
-            <div class="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-                <button type="button" id="nova-escala-cancel" class="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium text-sm transition-colors">
-                    Cancelar
-                </button>
-                <button type="button" id="nova-escala-save" class="px-4 py-2.5 bg-gradient-to-r from-violet-600 to-purple-700 hover:shadow-lg text-white rounded-lg font-semibold text-sm shadow-md transition-all flex items-center gap-2">
-                    <i data-lucide="save" class="w-4 h-4"></i>
-                    Salvar Escala
-                </button>
+            <div class="bg-gray-50 px-6 py-4 border-t border-gray-200">
+                <!-- Contador de escalas adicionadas na sessão -->
+                <div id="nova-escala-sessao-info" class="hidden mb-3 p-2 bg-green-50 border border-green-200 rounded-lg">
+                    <div class="flex items-center gap-2 text-green-700 text-sm">
+                        <i data-lucide="check-circle" class="w-4 h-4"></i>
+                        <span><strong id="nova-escala-contador">0</strong> escala(s) adicionada(s) nesta sessão</span>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center">
+                    <button type="button" id="nova-escala-cancel" class="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium text-sm transition-colors">
+                        Fechar
+                    </button>
+                    <div class="flex gap-2">
+                        <button type="button" id="nova-escala-save-continue" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm shadow-md transition-all flex items-center gap-2">
+                            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                            Salvar e Adicionar Mais
+                        </button>
+                        <button type="button" id="nova-escala-save" class="px-4 py-2.5 bg-gradient-to-r from-violet-600 to-purple-700 hover:shadow-lg text-white rounded-lg font-semibold text-sm shadow-md transition-all flex items-center gap-2">
+                            <i data-lucide="save" class="w-4 h-4"></i>
+                            Salvar e Fechar
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
