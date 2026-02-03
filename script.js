@@ -37846,7 +37846,7 @@ async function saveMachinePriority(machineId, priority) {
 
 // Obter prioridade de uma máquina
 function getMachinePriority(machineId) {
-    return pcpState.machinePriorities[machineId] || 0;
+    return pcpState.machinePriorities[machineId];
 }
 
 // Configurar modal de prioridade
@@ -37976,34 +37976,34 @@ function closePCPPriorityModal() {
 function renderPriorityBadge(priority) {
     const priorityNum = parseInt(priority);
     
-    // Se não tem prioridade definida (null, undefined, NaN ou 0)
-    if (isNaN(priorityNum) || priorityNum === 0) {
+    // Se não tem prioridade definida (null, undefined, NaN)
+    if (isNaN(priorityNum)) {
         return '';
     }
     
-    // Cores baseadas na prioridade (INVERTIDO: 1 = urgente, 5 = baixa)
+    // Cores baseadas na prioridade (INVERTIDO: 0 = urgente, 5 = baixa)
     let bgColor, textColor, borderColor, label;
-    if (priorityNum === 1) {
+    if (priorityNum === 0) {
         bgColor = 'bg-red-100';
         textColor = 'text-red-700';
         borderColor = 'border-red-300';
         label = 'URGENTE';
-    } else if (priorityNum === 2) {
+    } else if (priorityNum === 1) {
         bgColor = 'bg-orange-100';
         textColor = 'text-orange-700';
         borderColor = 'border-orange-300';
         label = 'Alta';
-    } else if (priorityNum === 3) {
+    } else if (priorityNum === 2) {
         bgColor = 'bg-amber-100';
         textColor = 'text-amber-700';
         borderColor = 'border-amber-300';
         label = 'Média-Alta';
-    } else if (priorityNum === 4) {
+    } else if (priorityNum === 3) {
         bgColor = 'bg-yellow-100';
         textColor = 'text-yellow-700';
         borderColor = 'border-yellow-300';
         label = 'Média';
-    } else if (priorityNum === 5) {
+    } else if (priorityNum === 4) {
         bgColor = 'bg-lime-100';
         textColor = 'text-lime-700';
         borderColor = 'border-lime-300';
