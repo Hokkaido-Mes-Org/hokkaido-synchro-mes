@@ -1259,6 +1259,100 @@
             50% { opacity: 0.7; }
         }
 
+        /* ==================== BOTÃO EXPANDIR FOOTER ==================== */
+        .footer-expand-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: rgba(0, 180, 216, 0.15);
+            border: 1px solid var(--accent-primary);
+            border-radius: 4px;
+            color: var(--accent-primary);
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .footer-expand-btn:hover {
+            background: rgba(0, 180, 216, 0.25);
+            box-shadow: 0 0 10px rgba(0, 180, 216, 0.3);
+        }
+
+        .footer-expand-btn i {
+            width: 14px;
+            height: 14px;
+            transition: transform 0.3s ease;
+        }
+
+        .footer-expand-btn.expanded i {
+            transform: rotate(180deg);
+        }
+
+        /* MODO EXPANDIDO DO FOOTER */
+        .industrial-footer.expanded {
+            position: fixed;
+            top: 60px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 100;
+            min-height: auto;
+            border-radius: 0;
+            animation: footer-expand 0.3s ease;
+        }
+
+        @keyframes footer-expand {
+            from {
+                opacity: 0.8;
+                transform: translateY(50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .industrial-footer.expanded .machine-status-grid {
+            grid-template-columns: repeat(7, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+            gap: 16px;
+            padding: 24px;
+            align-content: stretch;
+        }
+
+        .industrial-footer.expanded .machine-status-card {
+            min-width: auto;
+            padding: 16px 12px;
+            border-radius: 12px;
+            border-width: 3px;
+        }
+
+        .industrial-footer.expanded .machine-status-card .machine-number {
+            font-size: 28px;
+        }
+
+        .industrial-footer.expanded .machine-status-card .machine-label {
+            font-size: 12px;
+            margin-top: 6px;
+        }
+
+        .industrial-footer.expanded .footer-legend {
+            gap: 16px;
+        }
+
+        .industrial-footer.expanded .legend-item {
+            font-size: 11px;
+        }
+
+        .industrial-footer.expanded .legend-color {
+            width: 14px;
+            height: 14px;
+        }
+
         /* Ticker legacy styles (kept for compatibility) */
         .ticker-item .highlight-good {
             color: var(--status-running);
@@ -2489,23 +2583,30 @@
         <div id="machinesGrid" style="display: none;\"></div>
 
         <!-- FOOTER - STATUS GRID DE TODAS AS MÁQUINAS (Estilo Lançamento) -->
-        <footer class="industrial-footer">
+        <footer class="industrial-footer" id="machineFooter">
             <div class="footer-header">
                 <div class="footer-label">
                     <i data-lucide="cpu"></i>
                     <span>Status das Máquinas</span>
+                    <span style="font-size: 10px; color: var(--text-tertiary); font-weight: 400; margin-left: 8px;">(26 máquinas)</span>
                 </div>
-                <div class="footer-legend">
-                    <span class="legend-item"><span class="legend-color" style="background: #00e676;"></span>OK</span>
-                    <span class="legend-item"><span class="legend-color" style="background: #03A9F4;"></span>Setup</span>
-                    <span class="legend-item"><span class="legend-color" style="background: #795548;"></span>Compras</span>
-                    <span class="legend-item"><span class="legend-color" style="background: #FF9800;"></span>Ferram.</span>
-                    <span class="legend-item"><span class="legend-color" style="background: #9C27B0;"></span>Processo</span>
-                    <span class="legend-item"><span class="legend-color" style="background: #FFEB3B;"></span>Manut.</span>
-                    <span class="legend-item"><span class="legend-color" style="background: #F44336;"></span>Qualid.</span>
-                    <span class="legend-item"><span class="legend-color" style="background: #E91E63;"></span>PMP</span>
-                    <span class="legend-item"><span class="legend-color" style="background: #616161;"></span>Comerc.</span>
-                    <span class="legend-item"><span class="legend-color" style="background: #212121;"></span>PCP</span>
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <div class="footer-legend">
+                        <span class="legend-item"><span class="legend-color" style="background: #00e676;"></span>OK</span>
+                        <span class="legend-item"><span class="legend-color" style="background: #03A9F4;"></span>Setup</span>
+                        <span class="legend-item"><span class="legend-color" style="background: #795548;"></span>Compras</span>
+                        <span class="legend-item"><span class="legend-color" style="background: #FF9800;"></span>Ferram.</span>
+                        <span class="legend-item"><span class="legend-color" style="background: #9C27B0;"></span>Processo</span>
+                        <span class="legend-item"><span class="legend-color" style="background: #FFEB3B;"></span>Manut.</span>
+                        <span class="legend-item"><span class="legend-color" style="background: #F44336;"></span>Qualid.</span>
+                        <span class="legend-item"><span class="legend-color" style="background: #E91E63;"></span>PMP</span>
+                        <span class="legend-item"><span class="legend-color" style="background: #616161;"></span>Comerc.</span>
+                        <span class="legend-item"><span class="legend-color" style="background: #212121;"></span>PCP</span>
+                    </div>
+                    <button class="footer-expand-btn" id="footerExpandBtn" title="Expandir/Recolher painel de máquinas">
+                        <i data-lucide="maximize-2"></i>
+                        <span>Expandir</span>
+                    </button>
                 </div>
             </div>
             <div class="machine-status-grid" id="machineStatusGrid">
@@ -2589,6 +2690,55 @@
                         console.error(`[Dashboard TV] Erro ao sair de fullscreen: ${err.message}`);
                     });
                 }
+            }
+            
+            // ==================== CONTROLE DE EXPANSÃO DO PAINEL DE MÁQUINAS ====================
+            const footerExpandBtn = document.getElementById('footerExpandBtn');
+            const machineFooter = document.getElementById('machineFooter');
+            
+            if (footerExpandBtn && machineFooter) {
+                footerExpandBtn.addEventListener('click', toggleFooterExpand);
+                
+                // Atalho de teclado: M para expandir/recolher máquinas
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'm' || e.key === 'M') {
+                        // Evitar quando digitando em inputs
+                        if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
+                        toggleFooterExpand();
+                    }
+                    // ESC para fechar se expandido
+                    if (e.key === 'Escape' && machineFooter.classList.contains('expanded')) {
+                        toggleFooterExpand();
+                    }
+                });
+            }
+            
+            function toggleFooterExpand() {
+                const footer = document.getElementById('machineFooter');
+                const btn = document.getElementById('footerExpandBtn');
+                if (!footer || !btn) return;
+                
+                footer.classList.toggle('expanded');
+                
+                const isExpanded = footer.classList.contains('expanded');
+                btn.classList.toggle('expanded', isExpanded);
+                
+                // Atualizar ícone e texto do botão
+                const icon = btn.querySelector('i');
+                const text = btn.querySelector('span');
+                
+                if (isExpanded) {
+                    if (icon) icon.setAttribute('data-lucide', 'minimize-2');
+                    if (text) text.textContent = 'Recolher';
+                    console.log('[Dashboard TV] Painel de máquinas expandido');
+                } else {
+                    if (icon) icon.setAttribute('data-lucide', 'maximize-2');
+                    if (text) text.textContent = 'Expandir';
+                    console.log('[Dashboard TV] Painel de máquinas recolhido');
+                }
+                
+                // Recriar ícones Lucide
+                if (typeof lucide !== 'undefined') lucide.createIcons();
             }
             
             // ==================== CONTROLE DE FILTRO DE DATA ====================
