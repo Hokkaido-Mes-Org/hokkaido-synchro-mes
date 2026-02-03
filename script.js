@@ -37772,6 +37772,703 @@ async function excluirEscala(escalaId) {
 window.excluirEscala = excluirEscala;
 
 // ================================
+// MÓDULO: ABSENTEÍSMO
+// Controle de ausências de operadores
+// ================================
+
+let absenteismoInitialized = false;
+let absChartTipo = null;
+let absChartEvolucao = null;
+let absChartTurno = null;
+let absChartDiaSemana = null;
+
+// Tipos de ausência com labels e cores
+const TIPOS_AUSENCIA = {
+    'falta_nao_justificada': { label: 'Falta não justificada', color: '#ef4444', bgColor: 'bg-red-100 text-red-700' },
+    'atestado': { label: 'Atestado Médico', color: '#eab308', bgColor: 'bg-yellow-100 text-yellow-700' },
+    'hokkaido_day': { label: 'Hokkaido Day', color: '#3b82f6', bgColor: 'bg-blue-100 text-blue-700' },
+    'folga_aniversario': { label: 'Folga Aniversário', color: '#a855f7', bgColor: 'bg-purple-100 text-purple-700' },
+    'atraso': { label: 'Atraso', color: '#f97316', bgColor: 'bg-orange-100 text-orange-700' },
+    'outros': { label: 'Outros', color: '#6b7280', bgColor: 'bg-gray-100 text-gray-700' }
+};
+
+// Função para alternar tabs principais da Liderança
+function switchLiderancaTab(tab) {
+    console.log('[Liderança] Alternando para tab:', tab);
+    
+    // Remover classes ativas de todas as tabs
+    document.querySelectorAll('.lideranca-tab').forEach(t => {
+        t.classList.remove('border-violet-600', 'text-violet-600', 'bg-white', '-mb-px', 'border-b-2');
+        t.classList.add('text-gray-500');
+    });
+
+    // Ocultar todos os conteúdos
+    document.querySelectorAll('.lideranca-content').forEach(c => c.classList.add('hidden'));
+
+    // Ativar tab selecionada
+    const activeTab = document.getElementById(`tab-${tab}`);
+    if (activeTab) {
+        activeTab.classList.add('border-b-2', 'border-violet-600', 'text-violet-600', 'bg-white', '-mb-px');
+        activeTab.classList.remove('text-gray-500');
+    }
+
+    // Mostrar conteúdo selecionado
+    const content = document.getElementById(`content-${tab}`);
+    if (content) {
+        content.classList.remove('hidden');
+        console.log('[Liderança] Conteúdo exibido:', content.id);
+    } else {
+        console.error('[Liderança] Conteúdo não encontrado: content-' + tab);
+    }
+
+    // Inicializar absenteísmo se necessário
+    if (tab === 'absenteismo' && !absenteismoInitialized) {
+        initAbsenteismoModule();
+    }
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// Função para alternar sub-tabs do Absenteísmo
+function switchAbsenteismoSubTab(subtab) {
+    console.log('[Absenteísmo] Alternando para sub-tab:', subtab);
+    
+    // Remover classes ativas
+    document.querySelectorAll('.absenteismo-subtab').forEach(t => {
+        t.classList.remove('border-orange-500', 'text-orange-600', 'bg-white', '-mb-px', 'border-b-2');
+        t.classList.add('text-gray-500');
+    });
+
+    // Ocultar conteúdos
+    document.querySelectorAll('.absenteismo-subcontent').forEach(c => c.classList.add('hidden'));
+
+    // Ativar sub-tab
+    const activeSubTab = document.getElementById(`subtab-${subtab}`);
+    if (activeSubTab) {
+        activeSubTab.classList.add('border-b-2', 'border-orange-500', 'text-orange-600', 'bg-white', '-mb-px');
+        activeSubTab.classList.remove('text-gray-500');
+    }
+
+    // Mostrar conteúdo
+    const subcontent = document.getElementById(`subcontent-${subtab}`);
+    if (subcontent) {
+        subcontent.classList.remove('hidden');
+    }
+
+    // Carregar dados específicos
+    if (subtab === 'historico') {
+        initHistoricoFiltros();
+    } else if (subtab === 'dashboard') {
+        atualizarDashboardAbsenteismo();
+    }
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// Inicializar módulo de absenteísmo
+function initAbsenteismoModule() {
+    console.log('[Absenteísmo] Inicializando módulo...');
+
+    // Configurar busca de operador por código
+    const codInput = document.getElementById('abs-cod-operador');
+    if (codInput) {
+        codInput.addEventListener('input', liderancaDebounce(buscarOperadorAbsenteismo, 300));
+        codInput.addEventListener('change', buscarOperadorAbsenteismo);
+    }
+
+    // Data padrão = hoje
+    const dataInput = document.getElementById('abs-data');
+    if (dataInput) {
+        dataInput.value = getLiderancaDateString();
+    }
+
+    // Mostrar/ocultar campo de tempo de atraso
+    document.querySelectorAll('input[name="abs-tipo"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            const atrasoContainer = document.getElementById('abs-atraso-container');
+            if (atrasoContainer) {
+                atrasoContainer.classList.toggle('hidden', e.target.value !== 'atraso');
+            }
+        });
+    });
+
+    // Configurar formulário de registro
+    const form = document.getElementById('form-absenteismo');
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await registrarAbsenteismo();
+        });
+
+        form.addEventListener('reset', () => {
+            const nomeInput = document.getElementById('abs-nome-operador');
+            const erroEl = document.getElementById('abs-operador-erro');
+            const atrasoContainer = document.getElementById('abs-atraso-container');
+            if (nomeInput) nomeInput.value = '';
+            if (erroEl) erroEl.classList.add('hidden');
+            if (atrasoContainer) atrasoContainer.classList.add('hidden');
+        });
+    }
+
+    absenteismoInitialized = true;
+    console.log('[Absenteísmo] Módulo inicializado');
+}
+
+// Buscar operador por código
+function buscarOperadorAbsenteismo() {
+    const codInput = document.getElementById('abs-cod-operador');
+    const nomeInput = document.getElementById('abs-nome-operador');
+    const erroEl = document.getElementById('abs-operador-erro');
+
+    if (!codInput || !nomeInput || !erroEl) return;
+
+    const codigo = parseInt(codInput.value);
+
+    if (isNaN(codigo) || codigo <= 0) {
+        nomeInput.value = '';
+        erroEl.classList.add('hidden');
+        return;
+    }
+
+    // Buscar no userDatabase
+    const users = window.userDatabase || [];
+    const operador = users.find(u => u.cod === codigo);
+
+    if (operador) {
+        nomeInput.value = operador.nomeCompleto || operador.nomeUsuario;
+        erroEl.classList.add('hidden');
+    } else {
+        nomeInput.value = '';
+        erroEl.classList.remove('hidden');
+    }
+}
+
+// Registrar nova ausência
+async function registrarAbsenteismo() {
+    const codOperador = parseInt(document.getElementById('abs-cod-operador').value);
+    const nomeOperador = document.getElementById('abs-nome-operador').value;
+    const data = document.getElementById('abs-data').value;
+    const turno = document.getElementById('abs-turno').value;
+    const tipoRadio = document.querySelector('input[name="abs-tipo"]:checked');
+    const tempoAtraso = document.getElementById('abs-tempo-atraso')?.value;
+    const observacoes = document.getElementById('abs-observacoes').value.trim();
+
+    // Validações
+    if (!codOperador || !nomeOperador) {
+        liderancaShowToast('Operador inválido ou não encontrado', 'error');
+        return;
+    }
+
+    if (!data || !turno || !tipoRadio) {
+        liderancaShowToast('Preencha todos os campos obrigatórios', 'error');
+        return;
+    }
+
+    const tipo = tipoRadio.value;
+
+    try {
+        const db = firebase.firestore();
+
+        // Verificar se já existe registro para este operador na mesma data/turno
+        const existente = await db.collection('absenteismo')
+            .where('operadorCod', '==', codOperador)
+            .where('data', '==', data)
+            .where('turno', '==', parseInt(turno))
+            .get();
+
+        if (!existente.empty) {
+            liderancaShowToast('Já existe registro de ausência para este operador nesta data/turno', 'error');
+            return;
+        }
+
+        const registro = {
+            operadorCod: codOperador,
+            operadorNome: nomeOperador,
+            data: data,
+            turno: parseInt(turno),
+            tipo: tipo,
+            tipoLabel: TIPOS_AUSENCIA[tipo]?.label || tipo,
+            tempoAtraso: tipo === 'atraso' ? (parseInt(tempoAtraso) || 0) : null,
+            observacoes: observacoes || null,
+            registradoPor: getLiderancaCurrentUserName(),
+            criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+            atualizadoEm: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        await db.collection('absenteismo').add(registro);
+
+        liderancaShowToast('Ausência registrada com sucesso!', 'success');
+
+        // Limpar formulário
+        document.getElementById('form-absenteismo').reset();
+        document.getElementById('abs-data').value = getLiderancaDateString();
+
+    } catch (error) {
+        console.error('[Absenteísmo] Erro ao registrar:', error);
+        liderancaShowToast('Erro ao registrar ausência', 'error');
+    }
+}
+
+// Inicializar filtros do histórico
+function initHistoricoFiltros() {
+    const dataInicio = document.getElementById('abs-hist-data-inicio');
+    const dataFim = document.getElementById('abs-hist-data-fim');
+
+    if (dataInicio && dataFim) {
+        const hoje = new Date();
+        const trintaDiasAtras = new Date();
+        trintaDiasAtras.setDate(hoje.getDate() - 30);
+
+        dataFim.value = getLiderancaDateString(hoje);
+        dataInicio.value = getLiderancaDateString(trintaDiasAtras);
+    }
+}
+
+// Buscar histórico de absenteísmo
+async function buscarHistoricoAbsenteismo() {
+    const dataInicio = document.getElementById('abs-hist-data-inicio').value;
+    const dataFim = document.getElementById('abs-hist-data-fim').value;
+    const tipo = document.getElementById('abs-hist-tipo').value;
+    const codOperador = document.getElementById('abs-hist-cod').value;
+
+    if (!dataInicio || !dataFim) {
+        liderancaShowToast('Selecione o período', 'error');
+        return;
+    }
+
+    try {
+        const db = firebase.firestore();
+        let query = db.collection('absenteismo')
+            .where('data', '>=', dataInicio)
+            .where('data', '<=', dataFim)
+            .orderBy('data', 'desc');
+
+        const snapshot = await query.get();
+        let registros = [];
+
+        snapshot.forEach(doc => {
+            const data = { id: doc.id, ...doc.data() };
+            
+            // Filtrar por tipo (client-side)
+            if (tipo && data.tipo !== tipo) return;
+            
+            // Filtrar por código (client-side)
+            if (codOperador && data.operadorCod !== parseInt(codOperador)) return;
+            
+            registros.push(data);
+        });
+
+        // Atualizar estatísticas
+        atualizarEstatisticasHistorico(registros);
+
+        // Renderizar lista
+        renderizarListaHistorico(registros);
+
+    } catch (error) {
+        console.error('[Absenteísmo] Erro ao buscar histórico:', error);
+        liderancaShowToast('Erro ao buscar histórico', 'error');
+    }
+}
+
+// Atualizar estatísticas do histórico
+function atualizarEstatisticasHistorico(registros) {
+    const stats = {
+        falta: 0,
+        atestado: 0,
+        hokkaido: 0,
+        aniversario: 0,
+        atraso: 0,
+        total: registros.length
+    };
+
+    registros.forEach(r => {
+        switch (r.tipo) {
+            case 'falta_nao_justificada': stats.falta++; break;
+            case 'atestado': stats.atestado++; break;
+            case 'hokkaido_day': stats.hokkaido++; break;
+            case 'folga_aniversario': stats.aniversario++; break;
+            case 'atraso': stats.atraso++; break;
+        }
+    });
+
+    document.getElementById('abs-stat-falta').textContent = stats.falta;
+    document.getElementById('abs-stat-atestado').textContent = stats.atestado;
+    document.getElementById('abs-stat-hokkaido').textContent = stats.hokkaido;
+    document.getElementById('abs-stat-aniversario').textContent = stats.aniversario;
+    document.getElementById('abs-stat-atraso').textContent = stats.atraso;
+    document.getElementById('abs-stat-total').textContent = stats.total;
+}
+
+// Renderizar lista do histórico
+function renderizarListaHistorico(registros) {
+    const tbody = document.getElementById('abs-historico-lista');
+    if (!tbody) return;
+
+    if (registros.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center py-12 text-gray-400">
+                    <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                    <p>Nenhum registro encontrado para o período</p>
+                </td>
+            </tr>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        return;
+    }
+
+    const turnoLabels = { 1: '1º Turno', 2: '2º Turno', 3: '3º Turno' };
+
+    tbody.innerHTML = registros.map(r => {
+        const tipoInfo = TIPOS_AUSENCIA[r.tipo] || { label: r.tipo, bgColor: 'bg-gray-100 text-gray-700' };
+        const dataFormatada = r.data.split('-').reverse().join('/');
+        
+        return `
+            <tr class="border-b border-gray-100 hover:bg-gray-50">
+                <td class="p-3 font-medium">${dataFormatada}</td>
+                <td class="p-3">
+                    <div class="font-medium text-gray-800">${r.operadorNome}</div>
+                    <div class="text-xs text-gray-500">Cód: ${r.operadorCod}</div>
+                </td>
+                <td class="p-3 text-sm">${turnoLabels[r.turno] || r.turno}</td>
+                <td class="p-3">
+                    <span class="px-2 py-1 text-xs font-medium rounded-full ${tipoInfo.bgColor}">
+                        ${tipoInfo.label}
+                    </span>
+                    ${r.tipo === 'atraso' && r.tempoAtraso ? `<span class="ml-1 text-xs text-gray-500">(${r.tempoAtraso} min)</span>` : ''}
+                </td>
+                <td class="p-3 text-sm text-gray-600 max-w-xs truncate">${r.observacoes || '-'}</td>
+                <td class="p-3 text-center">
+                    <button onclick="excluirAbsenteismo('${r.id}')" class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Excluir">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// Excluir registro de absenteísmo
+async function excluirAbsenteismo(id) {
+    if (!confirm('Tem certeza que deseja excluir este registro?')) return;
+
+    try {
+        const db = firebase.firestore();
+        await db.collection('absenteismo').doc(id).delete();
+        
+        liderancaShowToast('Registro excluído com sucesso', 'success');
+        buscarHistoricoAbsenteismo();
+
+    } catch (error) {
+        console.error('[Absenteísmo] Erro ao excluir:', error);
+        liderancaShowToast('Erro ao excluir registro', 'error');
+    }
+}
+
+// Atualizar dashboard de absenteísmo
+async function atualizarDashboardAbsenteismo() {
+    const periodo = parseInt(document.getElementById('abs-dash-periodo')?.value || 30);
+    
+    const dataFim = new Date();
+    const dataInicio = new Date();
+    dataInicio.setDate(dataInicio.getDate() - periodo);
+
+    const dataInicioStr = getLiderancaDateString(dataInicio);
+    const dataFimStr = getLiderancaDateString(dataFim);
+
+    try {
+        const db = firebase.firestore();
+        const snapshot = await db.collection('absenteismo')
+            .where('data', '>=', dataInicioStr)
+            .where('data', '<=', dataFimStr)
+            .orderBy('data', 'asc')
+            .get();
+
+        const registros = [];
+        snapshot.forEach(doc => registros.push({ id: doc.id, ...doc.data() }));
+
+        // Calcular métricas
+        const totalOperadores = (window.userDatabase || []).length;
+        const colaboradoresAfetados = new Set(registros.map(r => r.operadorCod)).size;
+        const totalOcorrencias = registros.length;
+        const mediaDiaria = periodo > 0 ? (totalOcorrencias / periodo).toFixed(1) : 0;
+        const taxaAbsenteismo = totalOperadores > 0 ? ((colaboradoresAfetados / totalOperadores) * 100).toFixed(1) : 0;
+
+        // Atualizar cards
+        document.getElementById('abs-dash-taxa').textContent = `${taxaAbsenteismo}%`;
+        document.getElementById('abs-dash-total').textContent = totalOcorrencias;
+        document.getElementById('abs-dash-colaboradores').textContent = colaboradoresAfetados;
+        document.getElementById('abs-dash-media').textContent = mediaDiaria;
+
+        // Gerar gráficos
+        gerarGraficoPorTipo(registros);
+        gerarGraficoEvolucao(registros, periodo);
+        gerarGraficoPorTurno(registros);
+        gerarGraficoDiaSemana(registros);
+        gerarTopOperadores(registros);
+
+    } catch (error) {
+        console.error('[Absenteísmo] Erro ao atualizar dashboard:', error);
+        liderancaShowToast('Erro ao carregar dashboard', 'error');
+    }
+}
+
+// Gráfico de pizza - Distribuição por tipo
+function gerarGraficoPorTipo(registros) {
+    const ctx = document.getElementById('abs-chart-tipo');
+    if (!ctx) return;
+
+    // Contar por tipo
+    const contagem = {};
+    Object.keys(TIPOS_AUSENCIA).forEach(tipo => contagem[tipo] = 0);
+    registros.forEach(r => {
+        if (contagem.hasOwnProperty(r.tipo)) contagem[r.tipo]++;
+    });
+
+    const labels = [];
+    const data = [];
+    const colors = [];
+
+    Object.entries(TIPOS_AUSENCIA).forEach(([key, info]) => {
+        if (contagem[key] > 0) {
+            labels.push(info.label);
+            data.push(contagem[key]);
+            colors.push(info.color);
+        }
+    });
+
+    // Destruir gráfico existente
+    if (absChartTipo) absChartTipo.destroy();
+
+    if (data.length === 0) {
+        ctx.parentElement.innerHTML = '<div class="h-64 flex items-center justify-center text-gray-400">Sem dados para o período</div>';
+        return;
+    }
+
+    absChartTipo = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colors,
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: { font: { size: 11 } }
+                }
+            }
+        }
+    });
+}
+
+// Gráfico de linha - Evolução temporal
+function gerarGraficoEvolucao(registros, periodo) {
+    const ctx = document.getElementById('abs-chart-evolucao');
+    if (!ctx) return;
+
+    // Agrupar por data
+    const contagemDiaria = {};
+    registros.forEach(r => {
+        contagemDiaria[r.data] = (contagemDiaria[r.data] || 0) + 1;
+    });
+
+    // Gerar labels para últimos N dias
+    const labels = [];
+    const data = [];
+    
+    for (let i = periodo - 1; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        const dateStr = getLiderancaDateString(date);
+        const displayDate = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        labels.push(displayDate);
+        data.push(contagemDiaria[dateStr] || 0);
+    }
+
+    if (absChartEvolucao) absChartEvolucao.destroy();
+
+    absChartEvolucao = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Ausências',
+                data: data,
+                borderColor: '#8b5cf6',
+                backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: periodo > 30 ? 0 : 3,
+                pointHoverRadius: 5
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    ticks: {
+                        maxTicksLimit: 15,
+                        font: { size: 10 }
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: { stepSize: 1 }
+                }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+}
+
+// Gráfico de barras - Por turno
+function gerarGraficoPorTurno(registros) {
+    const ctx = document.getElementById('abs-chart-turno');
+    if (!ctx) return;
+
+    const contagem = { 1: 0, 2: 0, 3: 0 };
+    registros.forEach(r => {
+        if (contagem.hasOwnProperty(r.turno)) contagem[r.turno]++;
+    });
+
+    if (absChartTurno) absChartTurno.destroy();
+
+    absChartTurno = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['1º Turno', '2º Turno', '3º Turno'],
+            datasets: [{
+                label: 'Ausências',
+                data: [contagem[1], contagem[2], contagem[3]],
+                backgroundColor: ['#fbbf24', '#3b82f6', '#8b5cf6'],
+                borderRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { stepSize: 1 }
+                }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+}
+
+// Gráfico de barras - Por dia da semana
+function gerarGraficoDiaSemana(registros) {
+    const ctx = document.getElementById('abs-chart-diasemana');
+    if (!ctx) return;
+
+    const diasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+    const contagem = [0, 0, 0, 0, 0, 0, 0];
+
+    registros.forEach(r => {
+        const [ano, mes, dia] = r.data.split('-').map(Number);
+        const date = new Date(ano, mes - 1, dia);
+        const diaSemana = date.getDay();
+        contagem[diaSemana]++;
+    });
+
+    if (absChartDiaSemana) absChartDiaSemana.destroy();
+
+    absChartDiaSemana = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: diasSemana,
+            datasets: [{
+                label: 'Ausências',
+                data: contagem,
+                backgroundColor: [
+                    '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899'
+                ],
+                borderRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { stepSize: 1 }
+                }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+}
+
+// Gerar tabela top operadores
+function gerarTopOperadores(registros) {
+    const table = document.getElementById('abs-top-operadores');
+    if (!table) return;
+
+    // Contar por operador
+    const contagem = {};
+    registros.forEach(r => {
+        const key = r.operadorCod;
+        if (!contagem[key]) {
+            contagem[key] = { cod: r.operadorCod, nome: r.operadorNome, total: 0 };
+        }
+        contagem[key].total++;
+    });
+
+    // Ordenar e pegar top 10
+    const ranking = Object.values(contagem)
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 10);
+
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+
+    if (ranking.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center py-8 text-gray-400">Sem dados para o período</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = ranking.map((op, idx) => `
+        <tr class="border-b border-gray-100 hover:bg-gray-50">
+            <td class="p-2 font-bold ${idx < 3 ? 'text-red-500' : 'text-gray-500'}">${idx + 1}º</td>
+            <td class="p-2">
+                <div class="font-medium text-gray-800">${op.nome}</div>
+                <div class="text-xs text-gray-500">Cód: ${op.cod}</div>
+            </td>
+            <td class="p-2 text-center">
+                <span class="px-3 py-1 bg-red-100 text-red-700 font-bold rounded-full">${op.total}</span>
+            </td>
+        </tr>
+    `).join('');
+}
+
+// Expor funções globalmente para onclick
+window.switchLiderancaTab = switchLiderancaTab;
+window.switchAbsenteismoSubTab = switchAbsenteismoSubTab;
+window.buscarHistoricoAbsenteismo = buscarHistoricoAbsenteismo;
+window.excluirAbsenteismo = excluirAbsenteismo;
+window.atualizarDashboardAbsenteismo = atualizarDashboardAbsenteismo;
+
+// ================================
 // FIM DO MÓDULO LIDERANÇA PRODUÇÃO
 // ================================
 
