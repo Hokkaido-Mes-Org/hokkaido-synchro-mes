@@ -2507,6 +2507,10 @@
                                             <option value="3" class="text-gray-900">Turno 3 (23:30-06:30)</option>
                                         </select>
                                     </div>
+                                    <button id="btn-pcp-priority" class="bg-amber-500/80 hover:bg-amber-500 text-white px-4 py-2 rounded-lg transition flex items-center gap-2 font-semibold">
+                                        <i data-lucide="star" class="w-4 h-4"></i>
+                                        <span class="hidden sm:inline">Prioridade</span>
+                                    </button>
                                     <button id="btn-pcp-refresh" class="bg-indigo-500/80 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg transition flex items-center gap-2 font-semibold">
                                         <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                                         <span class="hidden sm:inline">Atualizar</span>
@@ -2572,6 +2576,7 @@
                                     <thead class="bg-slate-700 text-white sticky top-0">
                                         <tr>
                                             <th class="px-2 py-2 text-center font-semibold whitespace-nowrap border border-slate-600">Máquina</th>
+                                            <th class="px-2 py-2 text-center font-semibold whitespace-nowrap border border-slate-600">Prioridade</th>
                                             <th class="px-2 py-2 text-center font-semibold whitespace-nowrap border border-slate-600">Cavidade</th>
                                             <th class="px-2 py-2 text-center font-semibold whitespace-nowrap border border-slate-600">Ciclo (s)</th>
                                             <th class="px-2 py-2 text-center font-semibold whitespace-nowrap border border-slate-600">Status</th>
@@ -2593,6 +2598,85 @@
                                 </div>
                                 <h3 class="text-lg font-semibold text-gray-700 mb-2">Nenhum planejamento encontrado</h3>
                                 <p class="text-sm text-gray-500">Não há planejamento cadastrado para a data selecionada.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Modal Prioridade de Máquinas -->
+                    <div id="modal-pcp-priority" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                            <div class="bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-4">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-3">
+                                        <div class="p-2 bg-white/20 rounded-lg">
+                                            <i data-lucide="star" class="w-5 h-5 text-white"></i>
+                                        </div>
+                                        <div>
+                                            <h3 class="text-lg font-bold text-white">Prioridade de Máquinas</h3>
+                                            <p class="text-amber-100 text-xs">Defina a prioridade de 0 a 5</p>
+                                        </div>
+                                    </div>
+                                    <button id="btn-close-priority-modal" class="text-white/80 hover:text-white transition">
+                                        <i data-lucide="x" class="w-6 h-6"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="p-6 space-y-4">
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                        <i data-lucide="settings-2" class="w-4 h-4 inline mr-1"></i> Selecione a Máquina
+                                    </label>
+                                    <select id="pcp-priority-machine" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
+                                        <option value="">-- Selecione uma máquina --</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                        <i data-lucide="trending-up" class="w-4 h-4 inline mr-1"></i> Prioridade
+                                    </label>
+                                    <div class="grid grid-cols-6 gap-2">
+                                        <button class="priority-btn p-3 rounded-lg border-2 border-gray-200 hover:border-red-400 text-center font-bold transition" data-priority="0">
+                                            <span class="text-lg text-red-600">0</span>
+                                            <p class="text-[10px] text-red-500">Urgente</p>
+                                        </button>
+                                        <button class="priority-btn p-3 rounded-lg border-2 border-gray-200 hover:border-orange-400 text-center font-bold transition" data-priority="1">
+                                            <span class="text-lg text-orange-600">1</span>
+                                            <p class="text-[10px] text-orange-500">Alta</p>
+                                        </button>
+                                        <button class="priority-btn p-3 rounded-lg border-2 border-gray-200 hover:border-amber-400 text-center font-bold transition" data-priority="2">
+                                            <span class="text-lg text-amber-600">2</span>
+                                            <p class="text-[10px] text-amber-500">Méd-Alta</p>
+                                        </button>
+                                        <button class="priority-btn p-3 rounded-lg border-2 border-gray-200 hover:border-yellow-400 text-center font-bold transition" data-priority="3">
+                                            <span class="text-lg text-yellow-600">3</span>
+                                            <p class="text-[10px] text-yellow-600">Média</p>
+                                        </button>
+                                        <button class="priority-btn p-3 rounded-lg border-2 border-gray-200 hover:border-lime-400 text-center font-bold transition" data-priority="4">
+                                            <span class="text-lg text-lime-600">4</span>
+                                            <p class="text-[10px] text-lime-600">Baixa</p>
+                                        </button>
+                                        <button class="priority-btn p-3 rounded-lg border-2 border-gray-200 hover:border-gray-400 text-center font-bold transition" data-priority="5">
+                                            <span class="text-lg text-gray-500">5</span>
+                                            <p class="text-[10px] text-gray-400">Mínima</p>
+                                        </button>
+                                    </div>
+                                    <input type="hidden" id="pcp-priority-value" value="">
+                                </div>
+                                <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                    <p class="text-xs text-amber-700">
+                                        <i data-lucide="info" class="w-3 h-3 inline mr-1"></i>
+                                        <strong>Dica:</strong> Prioridade 0 = Urgência máxima (vermelho). Prioridade 5 = Mínima (cinza).
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3">
+                                <button id="btn-cancel-priority" class="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium transition">
+                                    Cancelar
+                                </button>
+                                <button id="btn-save-priority" class="bg-amber-500 hover:bg-amber-600 text-white px-6 py-2 rounded-lg font-semibold transition flex items-center gap-2">
+                                    <i data-lucide="save" class="w-4 h-4"></i>
+                                    Salvar
+                                </button>
                             </div>
                         </div>
                     </div>

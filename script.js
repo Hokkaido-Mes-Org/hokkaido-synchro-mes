@@ -37676,7 +37676,8 @@ let ferramentariaState = {
 let pcpState = {
     initialized: false,
     currentDate: null,
-    data: []
+    data: [],
+    machinePriorities: {} // Armazenar prioridades das máquinas
 };
 
 // Função auxiliar para obter data de produção (considera turno noturno até 6:30)
@@ -37756,6 +37757,20 @@ function setupPCPPage() {
             });
         }
         
+        // Configurar botão de prioridade
+        const btnPriority = document.getElementById('btn-pcp-priority');
+        if (btnPriority) {
+            btnPriority.addEventListener('click', () => {
+                openPCPPriorityModal();
+            });
+        }
+        
+        // Configurar modal de prioridade
+        setupPCPPriorityModal();
+        
+        // Carregar prioridades salvas
+        loadMachinePriorities();
+        
         // Renderizar ícones lucide
         if (typeof lucide !== 'undefined') {
             lucide.createIcons();
@@ -37786,6 +37801,224 @@ function getCurrentShift() {
     if (currentMinutes >= 900 && currentMinutes < 1410) return '2';
     return '3';
 }
+
+// ============ SISTEMA DE PRIORIDADE DE MÁQUINAS =====================
+
+// Carregar prioridades das máquinas do Firestore
+async function loadMachinePriorities() {
+    try {
+        console.log('[PCP] Carregando prioridades das máquinas...');
+        const snapshot = await db.collection('machine_priorities').get();
+        
+        pcpState.machinePriorities = {};
+        snapshot.forEach(doc => {
+            pcpState.machinePriorities[doc.id] = doc.data().priority || 0;
+        });
+        
+        console.log('[PCP] Prioridades carregadas:', Object.keys(pcpState.machinePriorities).length, 'máquinas');
+    } catch (error) {
+        console.error('[PCP] Erro ao carregar prioridades:', error);
+        pcpState.machinePriorities = {};
+    }
+}
+
+// Salvar prioridade de uma máquina no Firestore
+async function saveMachinePriority(machineId, priority) {
+    try {
+        console.log('[PCP] Salvando prioridade:', machineId, '=', priority);
+        
+        await db.collection('machine_priorities').doc(machineId).set({
+            priority: priority,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedBy: window.authSystem?.getCurrentUser?.()?.name || 'Sistema'
+        }, { merge: true });
+        
+        // Atualizar estado local
+        pcpState.machinePriorities[machineId] = priority;
+        
+        console.log('[PCP] Prioridade salva com sucesso!');
+        return true;
+    } catch (error) {
+        console.error('[PCP] Erro ao salvar prioridade:', error);
+        return false;
+    }
+}
+
+// Obter prioridade de uma máquina
+function getMachinePriority(machineId) {
+    return pcpState.machinePriorities[machineId] || 0;
+}
+
+// Configurar modal de prioridade
+function setupPCPPriorityModal() {
+    const modal = document.getElementById('modal-pcp-priority');
+    if (!modal) return;
+    
+    // Botões de fechar
+    const btnClose = document.getElementById('btn-close-priority-modal');
+    const btnCancel = document.getElementById('btn-cancel-priority');
+    const btnSave = document.getElementById('btn-save-priority');
+    
+    if (btnClose) {
+        btnClose.addEventListener('click', closePCPPriorityModal);
+    }
+    if (btnCancel) {
+        btnCancel.addEventListener('click', closePCPPriorityModal);
+    }
+    
+    // Botões de prioridade
+    const priorityBtns = modal.querySelectorAll('.priority-btn');
+    priorityBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            // Remover seleção anterior
+            priorityBtns.forEach(b => {
+                b.classList.remove('border-amber-500', 'bg-amber-50');
+                b.classList.add('border-gray-200');
+            });
+            // Selecionar atual
+            btn.classList.remove('border-gray-200');
+            btn.classList.add('border-amber-500', 'bg-amber-50');
+            
+            // Atualizar valor
+            document.getElementById('pcp-priority-value').value = btn.dataset.priority;
+        });
+    });
+    
+    // Botão salvar
+    if (btnSave) {
+        btnSave.addEventListener('click', async () => {
+            const machineSelect = document.getElementById('pcp-priority-machine');
+            const priorityValue = document.getElementById('pcp-priority-value').value;
+            
+            if (!machineSelect.value) {
+                alert('Selecione uma máquina!');
+                return;
+            }
+            if (priorityValue === '') {
+                alert('Selecione uma prioridade!');
+                return;
+            }
+            
+            btnSave.disabled = true;
+            btnSave.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Salvando...';
+            
+            const success = await saveMachinePriority(machineSelect.value, parseInt(priorityValue));
+            
+            if (success) {
+                closePCPPriorityModal();
+                // Recarregar dados da tabela
+                const date = document.getElementById('pcp-date-selector')?.value || getProductionDateString();
+                const shiftFilter = document.getElementById('pcp-shift-selector')?.value || 'current';
+                loadPCPData(date, shiftFilter);
+            } else {
+                alert('Erro ao salvar prioridade. Tente novamente.');
+            }
+            
+            btnSave.disabled = false;
+            btnSave.innerHTML = '<i data-lucide="save" class="w-4 h-4"></i> Salvar';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        });
+    }
+    
+    // Fechar ao clicar fora
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closePCPPriorityModal();
+        }
+    });
+}
+
+// Abrir modal de prioridade
+function openPCPPriorityModal() {
+    const modal = document.getElementById('modal-pcp-priority');
+    if (!modal) return;
+    
+    // Preencher select de máquinas com as máquinas do database
+    const machineSelect = document.getElementById('pcp-priority-machine');
+    if (machineSelect) {
+        // Gerar lista de máquinas (H01 a H31)
+        let optionsHTML = '<option value="">-- Selecione uma máquina --</option>';
+        for (let i = 1; i <= 31; i++) {
+            const machineId = `H${i.toString().padStart(2, '0')}`;
+            const currentPriority = getMachinePriority(machineId);
+            const priorityLabel = currentPriority > 0 ? ` (Prioridade: ${currentPriority})` : '';
+            optionsHTML += `<option value="${machineId}">${machineId}${priorityLabel}</option>`;
+        }
+        machineSelect.innerHTML = optionsHTML;
+    }
+    
+    // Resetar seleção de prioridade
+    const priorityBtns = modal.querySelectorAll('.priority-btn');
+    priorityBtns.forEach(btn => {
+        btn.classList.remove('border-amber-500', 'bg-amber-50');
+        btn.classList.add('border-gray-200');
+    });
+    document.getElementById('pcp-priority-value').value = '';
+    
+    // Mostrar modal
+    modal.classList.remove('hidden');
+    
+    // Renderizar ícones
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+// Fechar modal de prioridade
+function closePCPPriorityModal() {
+    const modal = document.getElementById('modal-pcp-priority');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+// Renderizar badge de prioridade (0 = mais alta, 5 = mais baixa)
+function renderPriorityBadge(priority) {
+    const priorityNum = parseInt(priority);
+    
+    // Se não tem prioridade definida (null, undefined, NaN ou 0)
+    if (isNaN(priorityNum) || priorityNum === 0) {
+        return '';
+    }
+    
+    // Cores baseadas na prioridade (INVERTIDO: 1 = urgente, 5 = baixa)
+    let bgColor, textColor, borderColor, label;
+    if (priorityNum === 1) {
+        bgColor = 'bg-red-100';
+        textColor = 'text-red-700';
+        borderColor = 'border-red-300';
+        label = 'URGENTE';
+    } else if (priorityNum === 2) {
+        bgColor = 'bg-orange-100';
+        textColor = 'text-orange-700';
+        borderColor = 'border-orange-300';
+        label = 'Alta';
+    } else if (priorityNum === 3) {
+        bgColor = 'bg-amber-100';
+        textColor = 'text-amber-700';
+        borderColor = 'border-amber-300';
+        label = 'Média-Alta';
+    } else if (priorityNum === 4) {
+        bgColor = 'bg-yellow-100';
+        textColor = 'text-yellow-700';
+        borderColor = 'border-yellow-300';
+        label = 'Média';
+    } else if (priorityNum === 5) {
+        bgColor = 'bg-lime-100';
+        textColor = 'text-lime-700';
+        borderColor = 'border-lime-300';
+        label = 'Baixa';
+    } else {
+        bgColor = 'bg-gray-100';
+        textColor = 'text-gray-600';
+        borderColor = 'border-gray-300';
+        label = 'Mínima';
+    }
+    
+    return `<span class="inline-flex items-center justify-center px-2 py-0.5 rounded border ${bgColor} ${textColor} ${borderColor} font-semibold text-sm" title="Prioridade ${priorityNum} - ${label}">${priorityNum}</span>`;
+}
+
+// ============ FIM SISTEMA DE PRIORIDADE =====================
 
 // Carregar dados do PCP
 async function loadPCPData(date, shiftFilter = 'current') {
@@ -38306,9 +38539,14 @@ function renderPCPTable(data) {
         const cicloTitle = cicloPlanNum > 0 ? `Planejado: ${cicloPlanNum.toFixed(1)}s | Atual: ${cicloNum > 0 ? cicloNum.toFixed(1) + 's' : '-'}` : '';
         const cavTitle = cavPlanNum > 0 ? `Planejado: ${cavPlanNum} | Atual: ${cavNum > 0 ? cavNum : '-'}` : '';
         
+        // Obter prioridade da máquina
+        const machinePriority = getMachinePriority(row.machine);
+        const priorityBadge = renderPriorityBadge(machinePriority);
+        
         return `
             <tr class="border-b border-gray-200 hover:bg-gray-100">
                 <td class="px-2 py-2 text-center font-bold text-gray-900 whitespace-nowrap border border-gray-300">${row.machine}</td>
+                <td class="px-2 py-2 text-center border border-gray-300">${priorityBadge}</td>
                 <td class="px-2 py-2 text-center border border-gray-300 ${cavidadesClass}" title="${cavTitle}">${cavidadesDisplay}</td>
                 <td class="px-2 py-2 text-center border border-gray-300 ${cicloClass}" title="${cicloTitle}">${cicloDisplay}</td>
                 <td class="px-2 py-2 text-center font-semibold border border-gray-300" style="background-color: ${statusColors.bg}; color: ${statusColors.text}; border-color: ${statusColors.border};">
@@ -38466,21 +38704,22 @@ function exportPCPToExcel() {
     <body>
         <table>
             <tr>
-                <td colspan="7" class="title">PCP Dashboard - Produção | Data: ${date} | Turno: ${shiftName}</td>
+                <td colspan="8" class="title">PCP Dashboard - Produção | Data: ${date} | Turno: ${shiftName}</td>
             </tr>
             <tr>
-                <td colspan="2" class="kpi-header">Máquinas Planejadas</td>
+                <td colspan="3" class="kpi-header">Máquinas Planejadas</td>
                 <td colspan="2" class="kpi-header">Produzindo</td>
                 <td colspan="3" class="kpi-header">Paradas</td>
             </tr>
             <tr>
-                <td colspan="2" class="kpi-value kpi-machines">${totalMachines}</td>
+                <td colspan="3" class="kpi-value kpi-machines">${totalMachines}</td>
                 <td colspan="2" class="kpi-value kpi-producing">${producingMachines}</td>
                 <td colspan="3" class="kpi-value kpi-stopped">${stoppedMachines}</td>
             </tr>
-            <tr><td colspan="7"></td></tr>
+            <tr><td colspan="8"></td></tr>
             <tr>
                 <th>Máquina</th>
+                <th>Prioridade</th>
                 <th>Cavidade</th>
                 <th>Ciclo (s)</th>
                 <th>Status</th>
@@ -38495,33 +38734,45 @@ function exportPCPToExcel() {
         const trs = tbody.querySelectorAll('tr');
         trs.forEach(tr => {
             const tds = tr.querySelectorAll('td');
-            if (tds.length >= 7) {
+            if (tds.length >= 8) {
                 const maquina = tds[0].textContent.trim();
-                const cavidade = tds[1].textContent.trim();
-                const ciclo = tds[2].textContent.trim();
-                const statusCell = tds[3];
+                const prioridade = tds[1].textContent.trim();
+                const cavidade = tds[2].textContent.trim();
+                const ciclo = tds[3].textContent.trim();
+                const statusCell = tds[4];
                 const statusText = statusCell.textContent.trim();
-                const cliente = tds[4].textContent.trim();
-                const produto = tds[5].textContent.trim();
-                const motivoParada = tds[6].textContent.trim();
+                const cliente = tds[5].textContent.trim();
+                const produto = tds[6].textContent.trim();
+                const motivoParada = tds[7].textContent.trim();
                 
                 // Obter cores do status da célula original
                 const bgColor = statusCell.style.backgroundColor || 'transparent';
                 const textColor = statusCell.style.color || '#000';
                 
                 // Verificar classes de cor nas células de cavidade e ciclo
-                const cavClass = tds[1].classList.contains('text-red-600') ? 'text-red' : 
-                                 tds[1].classList.contains('text-green-600') ? 'text-green' : '';
-                const cicloClass = tds[2].classList.contains('text-red-600') ? 'text-red' : 
-                                   tds[2].classList.contains('text-amber-600') ? 'text-amber' :
-                                   tds[2].classList.contains('text-green-600') ? 'text-green' : '';
+                const cavClass = tds[2].classList.contains('text-red-600') ? 'text-red' : 
+                                 tds[2].classList.contains('text-green-600') ? 'text-green' : '';
+                const cicloClass = tds[3].classList.contains('text-red-600') ? 'text-red' : 
+                                   tds[3].classList.contains('text-amber-600') ? 'text-amber' :
+                                   tds[3].classList.contains('text-green-600') ? 'text-green' : '';
+                
+                // Cor para prioridade (INVERTIDO: 0 = urgente, 5 = mínima)
+                const prioridadeNum = parseInt(prioridade);
+                let prioridadeStyle = '';
+                if (prioridadeNum === 0) prioridadeStyle = 'background-color: #FEE2E2; color: #B91C1C; font-weight: bold;';
+                else if (prioridadeNum === 1) prioridadeStyle = 'background-color: #FFEDD5; color: #C2410C; font-weight: bold;';
+                else if (prioridadeNum === 2) prioridadeStyle = 'background-color: #FEF3C7; color: #B45309; font-weight: bold;';
+                else if (prioridadeNum === 3) prioridadeStyle = 'background-color: #FEF9C3; color: #A16207; font-weight: bold;';
+                else if (prioridadeNum === 4) prioridadeStyle = 'background-color: #ECFCCB; color: #65A30D;';
+                else if (prioridadeNum === 5) prioridadeStyle = 'background-color: #F3F4F6; color: #6B7280;';
                 
                 // Classe para motivo de parada
-                const motivoClass = tds[6].classList.contains('text-red-600') ? 'text-red' : '';
+                const motivoClass = tds[7].classList.contains('text-red-600') ? 'text-red' : '';
                 
                 html += `
             <tr>
                 <td style="font-weight: bold;">${maquina}</td>
+                <td style="${prioridadeStyle}">${prioridade || '-'}</td>
                 <td class="${cavClass}">${cavidade}</td>
                 <td class="${cicloClass}">${ciclo}</td>
                 <td style="background-color: ${bgColor}; color: ${textColor}; font-weight: bold;">${statusText}</td>
@@ -38537,7 +38788,7 @@ function exportPCPToExcel() {
         </table>
         <br/>
         <table>
-            <tr><td colspan="7" style="font-size: 10px; color: #666;">Legenda de Status:</td></tr>
+            <tr><td colspan="8" style="font-size: 10px; color: #666;">Legenda de Status:</td></tr>
             <tr>
                 <td style="background-color: rgba(34, 197, 94, 0.3); color: #16A34A; font-weight: bold;">Produzindo</td>
                 <td style="background-color: rgba(233, 30, 99, 0.25); color: #E91E63; font-weight: bold;">Preparação</td>
@@ -38546,6 +38797,7 @@ function exportPCPToExcel() {
                 <td style="background-color: rgba(156, 39, 176, 0.25); color: #9C27B0; font-weight: bold;">Processo</td>
                 <td style="background-color: rgba(255, 235, 59, 0.3); color: #F59E0B; font-weight: bold;">Manutenção</td>
                 <td style="background-color: rgba(244, 67, 54, 0.25); color: #F44336; font-weight: bold;">Qualidade</td>
+                <td></td>
             </tr>
             <tr>
                 <td style="background-color: rgba(187, 247, 208, 0.5); color: #064e3b; font-weight: bold;">Produção</td>
@@ -38554,7 +38806,20 @@ function exportPCPToExcel() {
                 <td style="background-color: rgba(33, 33, 33, 0.8); color: #BDBDBD; font-weight: bold;">PCP</td>
                 <td style="background-color: rgba(158, 158, 158, 0.3); color: #424242; font-weight: bold;">Admin.</td>
                 <td style="background-color: rgba(120, 144, 156, 0.25); color: #78909C; font-weight: bold;">Outros</td>
-                <td></td>
+                <td colspan="2"></td>
+            </tr>
+        </table>
+        <br/>
+        <table>
+            <tr><td colspan="8" style="font-size: 10px; color: #666;">Legenda de Prioridade:</td></tr>
+            <tr>
+                <td style="background-color: #FEE2E2; color: #B91C1C; font-weight: bold;">5 - Urgência Máxima</td>
+                <td style="background-color: #FFEDD5; color: #C2410C; font-weight: bold;">4 - Alta</td>
+                <td style="background-color: #FEF3C7; color: #B45309; font-weight: bold;">3 - Média</td>
+                <td style="background-color: #FEF9C3; color: #A16207; font-weight: bold;">2 - Baixa</td>
+                <td style="background-color: #F3F4F6; color: #4B5563;">1 - Mínima</td>
+                <td style="color: #9CA3AF;">0 - Sem prioridade</td>
+                <td colspan="2"></td>
             </tr>
         </table>
         <br/>
