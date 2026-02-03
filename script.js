@@ -1,4 +1,30 @@
-﻿// Popular o select de MP no cadastro de ordem de produção
+﻿// Função global para fechar modais (disponível imediatamente)
+window.closeModal = function(modalId) {
+    const modal = document.getElementById(modalId);
+    if (!modal) {
+        console.warn('[closeModal] Modal não encontrado:', modalId);
+        return;
+    }
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+    modal.removeAttribute('data-modal-open');
+    
+    // Limpar estilos aplicados pelo modalManager se existir
+    if (window.__modalManager) {
+        window.__modalManager.clearStyles(modal);
+        const modalContent = modal.querySelector('.bg-white, .modal-content, [class*="bg-white"]');
+        if (modalContent) {
+            window.__modalManager.clearContentStyles(modalContent);
+        }
+    }
+    
+    // Limpar formulários associados ao modal fechado
+    const form = modal.querySelector('form');
+    if (form) form.reset();
+    console.log('[closeModal] Modal fechado:', modalId);
+};
+
+// Popular o select de MP no cadastro de ordem de produção
 document.addEventListener('DOMContentLoaded', async function() {
     // Aguardar database estar carregado (máximo 3 segundos)
     let attempts = 0;
@@ -11796,13 +11822,15 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             // Buscar lançamentos de produção - tentar múltiplas queries para cobrir todos os casos
             let entries = [];
             
-            // Query 1: Buscar por orderId
+            console.log('[TRACE] Buscando lançamentos para orderId:', orderId);
+            
+            // Query 1: Buscar por orderId (sem orderBy para evitar necessidade de índice)
             try {
                 const snapshot1 = await db.collection('production_entries')
                     .where('orderId', '==', orderId)
-                    .orderBy('timestamp', 'desc')
-                    .limit(200)
+                    .limit(500)
                     .get();
+                console.log('[TRACE] Query orderId retornou:', snapshot1.size, 'documentos');
                 snapshot1.forEach(doc => {
                     entries.push({ id: doc.id, ...doc.data() });
                 });
@@ -11815,9 +11843,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 try {
                     const snapshot2 = await db.collection('production_entries')
                         .where('order_id', '==', orderId)
-                        .orderBy('timestamp', 'desc')
-                        .limit(200)
+                        .limit(500)
                         .get();
+                    console.log('[TRACE] Query order_id retornou:', snapshot2.size, 'documentos');
                     snapshot2.forEach(doc => {
                         if (!entries.find(e => e.id === doc.id)) {
                             entries.push({ id: doc.id, ...doc.data() });
@@ -11831,12 +11859,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             // Query 3: Se ainda não encontrou, buscar pelo número da OP via planejamento
             if (entries.length === 0 && order.order_number) {
                 try {
+                    console.log('[TRACE] Buscando planejamentos para order_number:', order.order_number);
                     // Buscar planejamentos vinculados a esta OP
                     const planSnapshot = await db.collection('planning')
                         .where('order_number', '==', order.order_number)
                         .get();
                     
                     const planIds = planSnapshot.docs.map(d => d.id);
+                    console.log('[TRACE] Encontrados', planIds.length, 'planejamentos');
                     
                     if (planIds.length > 0) {
                         // Buscar lançamentos por planId (em chunks de 10)
@@ -11844,9 +11874,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                             const chunk = planIds.slice(i, i + 10);
                             const snapshot3 = await db.collection('production_entries')
                                 .where('planId', 'in', chunk)
-                                .orderBy('timestamp', 'desc')
-                                .limit(200)
+                                .limit(500)
                                 .get();
+                            console.log('[TRACE] Query planId chunk retornou:', snapshot3.size, 'documentos');
                             snapshot3.forEach(doc => {
                                 if (!entries.find(e => e.id === doc.id)) {
                                     entries.push({ id: doc.id, ...doc.data() });
@@ -12007,8 +12037,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     
                     entriesSnapshot.forEach(entryDoc => {
                         const data = entryDoc.data();
-                        totalProduced += Number(data.quantity || data.qty || data.produced) || 0;
-                        totalLosses += Number(data.losses || data.refugo || data.scrap || data.perdas) || 0;
+                        totalProduced += Number(data.produzido || data.quantity || data.qty) || 0;
+                        totalLosses += Number(data.refugo_kg || data.refugo_qty || data.refugo || data.losses) || 0;
                     });
                     
                     // Atualizar ordem
@@ -19812,6 +19842,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             currentEditContext = null;
         }
     }
+    
+    // Expor closeModal globalmente para uso em onclick
+    window.closeModal = closeModal;
 
     // Preenche o contexto (máquina/produto) em um modal, se existir o bloco .modal-context
     function fillModalContext(modalEl, context = null) {
