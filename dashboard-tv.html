@@ -3190,9 +3190,9 @@
                     plan: planData.length
                 });
                 
-                // Lista de máquinas válidas do sistema (27 máquinas conforme machineDatabase)
+                // Lista de máquinas válidas do sistema (26 máquinas conforme machineDatabase)
                 const validMachineIdsForData = new Set(['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
-                                                         'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                                                         'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
                                                          'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32']);
                 
                 // Converter para formato do cache (compatível com funções existentes)
@@ -3230,9 +3230,9 @@
                     plan: planData.filter(p => isPlanActive(p.raw))
                 };
                 
-                // Lista de máquinas válidas do sistema (27 máquinas conforme machineDatabase)
+                // Lista de máquinas válidas do sistema (26 máquinas conforme machineDatabase)
                 const validMachineIdsForDowntimes = new Set(['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
-                                                             'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                                                             'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
                                                              'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32']);
                 
                 // Buscar paradas longas ativas (extended_downtime_logs) - FILTRAR APENAS MÁQUINAS VÁLIDAS
@@ -3446,9 +3446,9 @@
             
             if (!alertEl || !alertText) return;
             
-            // Lista de máquinas válidas do sistema (27 máquinas conforme machineDatabase)
+            // Lista de máquinas válidas do sistema (26 máquinas conforme machineDatabase)
             const validMachineIds = new Set(['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
-                                             'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                                             'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
                                              'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32']);
             
             // Contar paradas ativas (extended downtimes com status = 'active' OU active_downtimes live)
@@ -3498,9 +3498,9 @@
                 console.log('[Dashboard TV] Atualizando paradas ativas em tempo real...');
                 const today = getFilteredDateForData();
                 
-                // Lista de máquinas válidas do sistema (27 máquinas conforme machineDatabase)
+                // Lista de máquinas válidas do sistema (26 máquinas conforme machineDatabase)
                 const validMachineIds = new Set(['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
-                                                 'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                                                 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
                                                  'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32']);
                 
                 // Buscar paradas LIVE ativas (active_downtimes)
@@ -3631,9 +3631,9 @@
             console.log('[Dashboard TV] Paradas ativas encontradas:', Object.keys(activeDowntimesMap));
             console.log('[Dashboard TV] Detalhes das paradas:', activeDowntimesMap);
             
-            // Lista de máquinas VÁLIDAS do sistema (27 máquinas conforme machineDatabase)
+            // Lista de máquinas VÁLIDAS do sistema (26 máquinas conforme machineDatabase)
             const validMachineIds = new Set(['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
-                                             'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                                             'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
                                              'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32']);
             
             // Agrupar produção por máquina (do planejamento) - APENAS máquinas válidas
@@ -4732,9 +4732,9 @@
             const tagEl = document.getElementById('stoppedMachinesTag');
             if (!listEl) return;
             
-            // Lista de máquinas válidas do sistema (27 máquinas conforme machineDatabase)
+            // Lista de máquinas válidas do sistema (26 máquinas conforme machineDatabase)
             const validMachineIds = new Set(['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
-                                             'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                                             'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
                                              'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32']);
             
             // Buscar paradas ativas do cache (já deduplicado) - FILTRAR APENAS MÁQUINAS VÁLIDAS
@@ -4837,9 +4837,9 @@
             const gridEl = document.getElementById('machineStatusGrid');
             if (!gridEl) return;
             
-            // Definir todas as máquinas do sistema (conforme database.js)
+            // Definir todas as máquinas do sistema (conforme database.js - 26 máquinas)
             const allMachineIds = ['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
-                                   'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                                   'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
                                    'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32'];
             
             // Criar mapa de paradas ativas para cada máquina
@@ -5214,9 +5214,9 @@
             });
             
             // Encontrar máquinas paradas AGORA
-            // Lista de máquinas válidas para contagem (27 máquinas do sistema)
+            // Lista de máquinas válidas para contagem (26 máquinas do sistema)
             const validMachineIdsSet = new Set(['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
-                                                 'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                                                 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
                                                  'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32']);
             
             // Obter data filtrada ou workDay atual para comparar paradas

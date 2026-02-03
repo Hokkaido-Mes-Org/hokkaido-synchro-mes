@@ -1166,7 +1166,7 @@ document.addEventListener('DOMContentLoaded', function() {
         ? window.databaseModule.machineDatabase.map(m => normalizeMachineId(m.id))
         : [
             "H01", "H02", "H03", "H04", "H05", "H06", "H07", "H08", "H09", "H10",
-            "H11", "H12", "H13", "H14", "H15", "H16", "H17", "H18", "H19", "H20",
+            "H12", "H13", "H14", "H15", "H16", "H17", "H18", "H19", "H20",
             "H26", "H27", "H28", "H29", "H30", "H31", "H32"
         ];
 
@@ -20389,9 +20389,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 form: !!form
             });
             
-            // Lista de máquinas válidas
+            // Lista de máquinas válidas (26 máquinas)
             const validMachines = ['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
-                                   'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                                   'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
                                    'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32'];
         
         // Motivos por categoria (para uso em lote - eventos que afetam múltiplas máquinas)
@@ -22570,64 +22570,190 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         }
     }
 
-    // ===== Funções de Produção (melhoradas) =====
+    // ===== Funções de Produção (CORRIGIDAS E MELHORADAS) =====
     async function adminBuscarProducao() {
-        const data = document.getElementById('admin-producao-data')?.value;
+        const dataFiltro = document.getElementById('admin-producao-data')?.value;
         const maquina = document.getElementById('admin-producao-maquina')?.value;
         const turno = document.getElementById('admin-producao-turno')?.value;
         const listaDiv = document.getElementById('admin-producao-lista');
         
-        if (!data) {
+        if (!dataFiltro) {
             alert('Selecione uma data');
             return;
         }
         
+        console.log('[ADMIN-PRODUCAO] Buscando registros:', { dataFiltro, maquina, turno });
+        
         try {
-            listaDiv.innerHTML = '<div class="text-center py-4 text-gray-500"><i class="animate-spin">⏳</i> Carregando...</div>';
+            listaDiv.innerHTML = '<div class="text-center py-4 text-gray-500"><div class="animate-spin inline-block w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full mb-2"></div><p>Carregando registros...</p></div>';
             
-            // Query simples sem orderBy para evitar necessidade de índice composto
-            let query = db.collection('production_entries').where('date', '==', data);
+            // CORREÇÃO: Os registros podem usar campo "date" OU "data" (português)
+            // Fazer duas queries paralelas para cobrir ambos os casos
+            const [snapshotDate, snapshotData] = await Promise.all([
+                db.collection('production_entries').where('date', '==', dataFiltro).limit(500).get(),
+                db.collection('production_entries').where('data', '==', dataFiltro).limit(500).get()
+            ]);
             
-            const snapshot = await query.limit(500).get();
+            console.log('[ADMIN-PRODUCAO] Documentos com field "date":', snapshotDate.size);
+            console.log('[ADMIN-PRODUCAO] Documentos com field "data":', snapshotData.size);
             
-            if (snapshot.empty) {
-                listaDiv.innerHTML = '<div class="text-center py-8 text-gray-400">Nenhum registro encontrado para esta data.</div>';
+            // Combinar resultados e remover duplicatas
+            const allDocs = new Map();
+            
+            snapshotDate.docs.forEach(doc => {
+                allDocs.set(doc.id, { id: doc.id, ...doc.data() });
+            });
+            
+            snapshotData.docs.forEach(doc => {
+                if (!allDocs.has(doc.id)) {
+                    allDocs.set(doc.id, { id: doc.id, ...doc.data() });
+                }
+            });
+            
+            console.log('[ADMIN-PRODUCAO] Total combinado (sem duplicatas):', allDocs.size);
+            
+            // ===== CORREÇÃO: Buscar dados de produto e OP das coleções vinculadas =====
+            // Coletar todos os orderIds e planIds únicos
+            const orderIds = new Set();
+            const planIds = new Set();
+            
+            allDocs.forEach(d => {
+                const orderId = d.orderId || d.order_id || d.production_order_id;
+                const planId = d.planId || d.plan_id;
+                if (orderId) orderIds.add(orderId);
+                if (planId) planIds.add(planId);
+            });
+            
+            console.log('[ADMIN-PRODUCAO] Order IDs únicos:', orderIds.size, 'Plan IDs únicos:', planIds.size);
+            
+            // Buscar dados das OPs em lote
+            const ordersCache = new Map();
+            if (orderIds.size > 0) {
+                const orderIdsArray = Array.from(orderIds);
+                // Firestore limita "in" a 10 itens, então dividir em chunks
+                const chunks = [];
+                for (let i = 0; i < orderIdsArray.length; i += 10) {
+                    chunks.push(orderIdsArray.slice(i, i + 10));
+                }
+                
+                for (const chunk of chunks) {
+                    try {
+                        const ordersSnap = await db.collection('production_orders').where(firebase.firestore.FieldPath.documentId(), 'in', chunk).get();
+                        ordersSnap.docs.forEach(doc => {
+                            ordersCache.set(doc.id, doc.data());
+                        });
+                    } catch (err) {
+                        console.warn('[ADMIN-PRODUCAO] Erro ao buscar OPs:', err);
+                    }
+                }
+            }
+            console.log('[ADMIN-PRODUCAO] OPs carregadas no cache:', ordersCache.size);
+            
+            // Buscar dados dos planejamentos em lote
+            const plansCache = new Map();
+            if (planIds.size > 0) {
+                const planIdsArray = Array.from(planIds);
+                const chunks = [];
+                for (let i = 0; i < planIdsArray.length; i += 10) {
+                    chunks.push(planIdsArray.slice(i, i + 10));
+                }
+                
+                for (const chunk of chunks) {
+                    try {
+                        const plansSnap = await db.collection('planning').where(firebase.firestore.FieldPath.documentId(), 'in', chunk).get();
+                        plansSnap.docs.forEach(doc => {
+                            plansCache.set(doc.id, doc.data());
+                        });
+                    } catch (err) {
+                        console.warn('[ADMIN-PRODUCAO] Erro ao buscar planejamentos:', err);
+                    }
+                }
+            }
+            console.log('[ADMIN-PRODUCAO] Planejamentos carregados no cache:', plansCache.size);
+            
+            // Enriquecer os documentos com dados de produto e OP
+            allDocs.forEach((d, docId) => {
+                const orderId = d.orderId || d.order_id || d.production_order_id;
+                const planId = d.planId || d.plan_id;
+                
+                // Tentar obter dados da OP
+                if (orderId && ordersCache.has(orderId)) {
+                    const orderData = ordersCache.get(orderId);
+                    d._order_number = orderData.op || orderData.order_number || orderData.op_number || '';
+                    d._product_name = orderData.product_name || orderData.productName || orderData.descricao || '';
+                    d._product_code = orderData.product_code || orderData.productCode || orderData.codigo || orderData.part_code || '';
+                }
+                
+                // Se não encontrou na OP, tentar no planejamento
+                if (planId && plansCache.has(planId)) {
+                    const planData = plansCache.get(planId);
+                    if (!d._order_number) d._order_number = planData.op || planData.order_number || '';
+                    if (!d._product_name) d._product_name = planData.product_name || planData.productName || planData.description || planData.descricao || '';
+                    if (!d._product_code) d._product_code = planData.product_code || planData.productCode || planData.part_code || planData.codigo || '';
+                }
+                
+                allDocs.set(docId, d);
+            });
+            
+            if (allDocs.size === 0) {
+                listaDiv.innerHTML = `
+                    <div class="text-center py-8 text-gray-400">
+                        <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                        <p class="font-semibold">Nenhum registro encontrado</p>
+                        <p class="text-sm">Data: ${dataFiltro}</p>
+                    </div>`;
                 document.getElementById('admin-prod-total').textContent = '0';
                 document.getElementById('admin-prod-pecas').textContent = '0';
                 document.getElementById('admin-prod-peso').textContent = '0';
                 document.getElementById('admin-prod-refugo').textContent = '0';
+                if (typeof lucide !== 'undefined') lucide.createIcons();
                 return;
             }
             
-            // Converter para array e aplicar filtros/ordenação no cliente
-            let docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // Converter Map para array
+            let docs = Array.from(allDocs.values());
             
-            // Filtrar por máquina se especificado
+            // Filtrar por máquina se especificado (normalizado)
             if (maquina) {
-                docs = docs.filter(d => d.machine_id === maquina);
+                const maquinaNorm = normalizeMachineId(maquina);
+                docs = docs.filter(d => {
+                    const docMachine = normalizeMachineId(d.machine_id || d.machine || '');
+                    return docMachine === maquinaNorm;
+                });
             }
             
-            // Filtrar por turno se especificado
+            // Filtrar por turno se especificado (campo pode ser 'shift' ou 'turno')
             if (turno) {
-                docs = docs.filter(d => String(d.shift) === turno);
+                docs = docs.filter(d => {
+                    const docTurno = String(d.shift || d.turno || '');
+                    return docTurno === turno;
+                });
             }
             
             // Ordenar por timestamp decrescente (mais recente primeiro)
             docs.sort((a, b) => {
-                const tsA = a.timestamp?.toMillis ? a.timestamp.toMillis() : 0;
-                const tsB = b.timestamp?.toMillis ? b.timestamp.toMillis() : 0;
+                const tsA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp?.seconds || 0) * 1000;
+                const tsB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp?.seconds || 0) * 1000;
                 return tsB - tsA;
             });
             
             // Limitar a 100 registros
             docs = docs.slice(0, 100);
             
+            console.log('[ADMIN-PRODUCAO] Registros após filtros:', docs.length);
+            
             if (docs.length === 0) {
-                listaDiv.innerHTML = '<div class="text-center py-8 text-gray-400">Nenhum registro encontrado para os filtros selecionados.</div>';
+                listaDiv.innerHTML = `
+                    <div class="text-center py-8 text-gray-400">
+                        <i data-lucide="filter-x" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                        <p class="font-semibold">Nenhum registro para os filtros selecionados</p>
+                        <p class="text-sm">Data: ${dataFiltro}${maquina ? `, Máquina: ${maquina}` : ''}${turno ? `, Turno: ${turno}` : ''}</p>
+                    </div>`;
                 document.getElementById('admin-prod-total').textContent = '0';
                 document.getElementById('admin-prod-pecas').textContent = '0';
                 document.getElementById('admin-prod-peso').textContent = '0';
                 document.getElementById('admin-prod-refugo').textContent = '0';
+                if (typeof lucide !== 'undefined') lucide.createIcons();
                 return;
             }
             
@@ -22638,32 +22764,52 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             
             // Usar o array docs já filtrado e ordenado
             docs.forEach(d => {
-                const hora = d.timestamp?.toDate ? d.timestamp.toDate().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : d.hora || '-';
+                const hora = d.timestamp?.toDate ? d.timestamp.toDate().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : (d.horaInformada || d.hora || '-');
                 const qtd = d.quantity || d.produzido || 0;
-                const peso = (d.peso_kg || d.weight_kg || 0);
+                const peso = (d.peso_kg || d.peso_bruto || d.weight_kg || 0);
                 const refugo = (d.refugo_kg || d.refugo || 0);
+                const orderId = d.order_id || d.orderId || d.production_order_id || '';
+                // CORREÇÃO: Usar campos enriquecidos do cache (_order_number, _product_name, _product_code)
+                const orderNumber = d._order_number || d.order_number || d.op || '';
+                const productName = d._product_name || d.product_name || d.product || '';
+                const productCode = d._product_code || d.product_code || d.codigo || '';
+                const turnoDoc = d.shift || d.turno || '-';
+                const operador = d.operador || d.user_name || d.registradoPorNome || d.nomeUsuario || '-';
+                const maquinaDoc = d.machine_id || d.machine || '-';
                 
                 totalPecas += Number(qtd) || 0;
                 totalPeso += Number(peso) || 0;
                 totalRefugo += Number(refugo) || 0;
 
                 html += `
-                    <div class="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition">
+                    <div class="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition" data-doc-id="${d.id}">
                         <div class="flex items-center justify-between mb-2">
-                            <div class="flex items-center gap-3">
-                                <span class="font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">${d.machine_id || '-'}</span>
-                                <span class="text-sm text-gray-600 truncate max-w-[150px]" title="${d.product_name || d.product_code || '-'}">${d.product_name || d.product_code || '-'}</span>
-                                <span class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600">T${d.shift || '-'}</span>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded text-sm">${maquinaDoc}</span>
+                                ${orderNumber ? `<span class="text-xs px-2 py-0.5 rounded bg-purple-100 text-purple-700 font-semibold">OP ${orderNumber}</span>` : ''}
+                                <span class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600">T${turnoDoc}</span>
                                 <span class="text-xs text-gray-400">${hora}</span>
                             </div>
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-1">
+                                <button class="admin-btn-view-producao text-gray-500 hover:text-gray-700 p-1.5 rounded hover:bg-gray-100 transition" data-id="${d.id}" title="Ver detalhes">
+                                    <i data-lucide="eye" class="w-4 h-4"></i>
+                                </button>
                                 <button class="admin-btn-edit-producao text-blue-500 hover:text-blue-700 p-1.5 rounded hover:bg-blue-50 transition" data-id="${d.id}" title="Editar">
                                     <i data-lucide="edit-2" class="w-4 h-4"></i>
                                 </button>
-                                <button class="admin-btn-delete-producao text-red-500 hover:text-red-700 p-1.5 rounded hover:bg-red-50 transition" data-id="${d.id}" data-machine="${d.machine_id}" data-qty="${qtd}" title="Excluir">
+                                <button class="admin-btn-delete-producao text-red-500 hover:text-red-700 p-1.5 rounded hover:bg-red-50 transition" 
+                                    data-id="${d.id}" 
+                                    data-machine="${maquinaDoc}" 
+                                    data-qty="${qtd}"
+                                    data-order-id="${orderId}"
+                                    title="Excluir">
                                     <i data-lucide="trash-2" class="w-4 h-4"></i>
                                 </button>
                             </div>
+                        </div>
+                        <div class="text-sm text-gray-600 mb-2 truncate" title="${productName || productCode || '-'}">
+                            <span class="font-medium">${productName || productCode || 'Produto não definido'}</span>
+                            ${productCode && productName ? `<span class="text-xs text-gray-400 ml-1">(${productCode})</span>` : ''}
                         </div>
                         <div class="grid grid-cols-4 gap-2 text-xs">
                             <div class="bg-green-50 rounded p-2 text-center">
@@ -22679,7 +22825,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                                 <div class="text-red-700">Refugo (kg)</div>
                             </div>
                             <div class="bg-gray-50 rounded p-2 text-center">
-                                <div class="font-bold text-gray-600">${d.operador || d.user_name || '-'}</div>
+                                <div class="font-bold text-gray-600 truncate" title="${operador}">${operador}</div>
                                 <div class="text-gray-500">Operador</div>
                             </div>
                         </div>
@@ -22687,11 +22833,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 `;
             });
             
-            if (docs.length === 0) {
-                listaDiv.innerHTML = '<div class="text-center py-8 text-gray-400">Nenhum registro encontrado para os filtros selecionados.</div>';
-            } else {
-                listaDiv.innerHTML = html;
-            }
+            listaDiv.innerHTML = html;
             
             // Atualizar estatísticas
             document.getElementById('admin-prod-total').textContent = docs.length;
@@ -22699,7 +22841,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             document.getElementById('admin-prod-peso').textContent = totalPeso.toFixed(2);
             document.getElementById('admin-prod-refugo').textContent = totalRefugo.toFixed(2);
             
-            lucide.createIcons();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            
+            // Attach handlers de visualização
+            listaDiv.querySelectorAll('.admin-btn-view-producao').forEach(btn => {
+                btn.addEventListener('click', () => adminVisualizarProducao(btn.dataset.id));
+            });
             
             // Attach handlers de edição
             listaDiv.querySelectorAll('.admin-btn-edit-producao').forEach(btn => {
@@ -22708,28 +22855,291 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             
             // Attach handlers de exclusão
             listaDiv.querySelectorAll('.admin-btn-delete-producao').forEach(btn => {
-                btn.addEventListener('click', async () => {
-                    const docId = btn.dataset.id;
-                    const machine = btn.dataset.machine;
-                    const qty = btn.dataset.qty;
-                    
-                    if (!confirm(`Excluir registro de produção?\n\nMáquina: ${machine}\nQuantidade: ${qty}`)) return;
-                    
-                    try {
-                        await db.collection('production_entries').doc(docId).delete();
-                        btn.closest('div.bg-white').remove();
-                        showNotification('Registro excluído com sucesso', 'success');
-                        // Recarregar lista
-                        adminBuscarProducao();
-                    } catch (err) {
-                        alert('Erro ao excluir: ' + err.message);
-                    }
-                });
+                btn.addEventListener('click', () => adminExcluirProducao(btn));
             });
             
         } catch (error) {
-            console.error('[ADMIN] Erro ao buscar produção:', error);
-            listaDiv.innerHTML = `<div class="text-center py-4 text-red-500">Erro: ${error.message}</div>`;
+            console.error('[ADMIN-PRODUCAO] Erro ao buscar:', error);
+            listaDiv.innerHTML = `
+                <div class="text-center py-8 text-red-500">
+                    <i data-lucide="alert-circle" class="w-12 h-12 mx-auto mb-2 opacity-70"></i>
+                    <p class="font-semibold">Erro ao carregar registros</p>
+                    <p class="text-sm">${error.message}</p>
+                </div>`;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+    }
+
+    // Função para visualizar detalhes completos de um registro
+    async function adminVisualizarProducao(docId) {
+        try {
+            const docRef = db.collection('production_entries').doc(docId);
+            const docSnap = await docRef.get();
+            
+            if (!docSnap.exists) {
+                alert('Registro não encontrado');
+                return;
+            }
+            
+            const d = docSnap.data();
+            
+            // ===== CORREÇÃO: Buscar dados de produto e OP das coleções vinculadas =====
+            const orderId = d.orderId || d.order_id || d.production_order_id;
+            const planId = d.planId || d.plan_id;
+            
+            let orderNumber = d.order_number || d.op || '';
+            let produtoDoc = d.product_name || d.product || '';
+            let codigoDoc = d.product_code || d.codigo || '';
+            
+            // Buscar dados da OP se existe orderId
+            if (orderId) {
+                try {
+                    const orderSnap = await db.collection('production_orders').doc(orderId).get();
+                    if (orderSnap.exists) {
+                        const orderData = orderSnap.data();
+                        if (!orderNumber) orderNumber = orderData.op || orderData.order_number || orderData.op_number || '';
+                        if (!produtoDoc || produtoDoc === '-') produtoDoc = orderData.product_name || orderData.productName || orderData.descricao || '';
+                        if (!codigoDoc || codigoDoc === '-') codigoDoc = orderData.product_code || orderData.productCode || orderData.codigo || orderData.part_code || '';
+                    }
+                } catch (err) {
+                    console.warn('[ADMIN-PRODUCAO] Erro ao buscar OP:', err);
+                }
+            }
+            
+            // Se ainda não encontrou, buscar do planejamento
+            if (planId && (!produtoDoc || produtoDoc === '-')) {
+                try {
+                    const planSnap = await db.collection('planning').doc(planId).get();
+                    if (planSnap.exists) {
+                        const planData = planSnap.data();
+                        if (!orderNumber) orderNumber = planData.op || planData.order_number || '';
+                        if (!produtoDoc || produtoDoc === '-') produtoDoc = planData.product_name || planData.productName || planData.description || planData.descricao || '';
+                        if (!codigoDoc || codigoDoc === '-') codigoDoc = planData.product_code || planData.productCode || planData.part_code || planData.codigo || '';
+                    }
+                } catch (err) {
+                    console.warn('[ADMIN-PRODUCAO] Erro ao buscar planejamento:', err);
+                }
+            }
+            
+            // Extrair campos com fallbacks para português/inglês
+            const maquinaDoc = d.machine_id || d.machine || '-';
+            const dataDoc = d.date || d.data || '-';
+            const turnoDoc = d.shift || d.turno || '-';
+            const qtdDoc = Number(d.quantity || d.produzido || 0);
+            const pesoDoc = Number(d.peso_kg || d.peso_bruto || d.weight_kg || 0);
+            const refugoDoc = Number(d.refugo_kg || d.refugo || 0);
+            const operadorDoc = d.operador || d.user_name || d.registradoPorNome || d.nomeUsuario || '-';
+            produtoDoc = produtoDoc || '-';
+            codigoDoc = codigoDoc || '-';
+            const obsDoc = d.observations || d.observacoes || d.obs || '';
+            
+            // Criar modal de visualização
+            const modal = document.createElement('div');
+            modal.id = 'admin-view-producao-modal';
+            modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4';
+            
+            // Formatar timestamp
+            let timestampStr = '-';
+            if (d.timestamp?.toDate) {
+                timestampStr = d.timestamp.toDate().toLocaleString('pt-BR');
+            } else if (d.createdAt?.toDate) {
+                timestampStr = d.createdAt.toDate().toLocaleString('pt-BR');
+            }
+            
+            modal.innerHTML = `
+                <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col">
+                    <div class="bg-gradient-to-r from-gray-700 to-gray-800 px-5 py-4 flex-shrink-0">
+                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i data-lucide="eye" class="w-5 h-5"></i>
+                            Detalhes do Registro
+                        </h3>
+                        <p class="text-gray-300 text-sm">ID: ${docId.substring(0, 20)}...</p>
+                    </div>
+                    <div class="p-5 overflow-y-auto flex-1">
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div class="bg-gray-50 p-3 rounded-lg">
+                                <div class="text-xs text-gray-500 uppercase font-semibold">Máquina</div>
+                                <div class="font-bold text-gray-800">${maquinaDoc}</div>
+                            </div>
+                            <div class="bg-gray-50 p-3 rounded-lg">
+                                <div class="text-xs text-gray-500 uppercase font-semibold">Data</div>
+                                <div class="font-bold text-gray-800">${dataDoc}</div>
+                            </div>
+                            <div class="bg-gray-50 p-3 rounded-lg">
+                                <div class="text-xs text-gray-500 uppercase font-semibold">Turno</div>
+                                <div class="font-bold text-gray-800">${turnoDoc}º Turno</div>
+                            </div>
+                            <div class="bg-gray-50 p-3 rounded-lg">
+                                <div class="text-xs text-gray-500 uppercase font-semibold">Timestamp</div>
+                                <div class="font-bold text-gray-800 text-xs">${timestampStr}</div>
+                            </div>
+                            <div class="bg-green-50 p-3 rounded-lg">
+                                <div class="text-xs text-green-600 uppercase font-semibold">Quantidade</div>
+                                <div class="font-bold text-green-700">${qtdDoc.toLocaleString('pt-BR')} pç</div>
+                            </div>
+                            <div class="bg-amber-50 p-3 rounded-lg">
+                                <div class="text-xs text-amber-600 uppercase font-semibold">Peso</div>
+                                <div class="font-bold text-amber-700">${pesoDoc.toFixed(2)} kg</div>
+                            </div>
+                            <div class="bg-red-50 p-3 rounded-lg">
+                                <div class="text-xs text-red-600 uppercase font-semibold">Refugo</div>
+                                <div class="font-bold text-red-700">${refugoDoc.toFixed(2)} kg</div>
+                            </div>
+                            <div class="bg-blue-50 p-3 rounded-lg">
+                                <div class="text-xs text-blue-600 uppercase font-semibold">Operador</div>
+                                <div class="font-bold text-blue-700">${operadorDoc}</div>
+                            </div>
+                            <div class="col-span-2 bg-purple-50 p-3 rounded-lg">
+                                <div class="text-xs text-purple-600 uppercase font-semibold">Produto</div>
+                                <div class="font-bold text-purple-700">${produtoDoc}</div>
+                                <div class="text-xs text-purple-500">Código: ${codigoDoc}</div>
+                            </div>
+                            ${orderNumber || orderId ? `
+                            <div class="col-span-2 bg-indigo-50 p-3 rounded-lg">
+                                <div class="text-xs text-indigo-600 uppercase font-semibold">Ordem de Produção</div>
+                                <div class="font-bold text-indigo-700">${orderNumber ? `OP ${orderNumber}` : 'N/A'}</div>
+                                <div class="text-xs text-indigo-500">ID: ${orderId || '-'}</div>
+                            </div>
+                            ` : ''}
+                            ${obsDoc ? `
+                            <div class="col-span-2 bg-gray-50 p-3 rounded-lg">
+                                <div class="text-xs text-gray-500 uppercase font-semibold">Observações</div>
+                                <div class="text-gray-700">${obsDoc}</div>
+                            </div>
+                            ` : ''}
+                            ${d.last_edited_at ? `
+                            <div class="col-span-2 bg-yellow-50 p-3 rounded-lg">
+                                <div class="text-xs text-yellow-600 uppercase font-semibold">Última Edição</div>
+                                <div class="text-yellow-700 text-sm">${d.last_edited_at?.toDate ? d.last_edited_at.toDate().toLocaleString('pt-BR') : '-'}</div>
+                                <div class="text-xs text-yellow-600">Por: ${d.edited_by || '-'}</div>
+                            </div>
+                            ` : ''}
+                            ${d.manual ? `
+                            <div class="col-span-2 bg-cyan-50 p-3 rounded-lg">
+                                <div class="text-xs text-cyan-600 uppercase font-semibold">Tipo de Lançamento</div>
+                                <div class="font-bold text-cyan-700">Manual</div>
+                                <div class="text-xs text-cyan-500">Registrado por: ${d.registradoPorNome || d.registradoPor || '-'}</div>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                    <div class="flex gap-3 p-4 border-t bg-gray-50 flex-shrink-0">
+                        <button type="button" class="admin-view-close flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2.5 rounded-lg transition">
+                            Fechar
+                        </button>
+                        <button type="button" class="admin-view-edit flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition">
+                            <i data-lucide="edit-2" class="w-4 h-4 inline mr-1"></i>
+                            Editar
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            
+            // Fechar modal
+            modal.querySelector('.admin-view-close').addEventListener('click', () => modal.remove());
+            modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+            
+            // Editar
+            modal.querySelector('.admin-view-edit').addEventListener('click', () => {
+                modal.remove();
+                adminEditarProducao(docId);
+            });
+            
+        } catch (error) {
+            console.error('[ADMIN-PRODUCAO] Erro ao visualizar:', error);
+            alert('Erro ao carregar detalhes: ' + error.message);
+        }
+    }
+
+    // Função para excluir registro com atualização de OP
+    async function adminExcluirProducao(btn) {
+        const docId = btn.dataset.id;
+        const machine = btn.dataset.machine;
+        const qty = parseInt(btn.dataset.qty) || 0;
+        const orderId = btn.dataset.orderId;
+        
+        // Buscar dados completos do registro antes de excluir
+        let entryData = null;
+        try {
+            const docSnap = await db.collection('production_entries').doc(docId).get();
+            if (docSnap.exists) {
+                entryData = docSnap.data();
+            }
+        } catch (e) {
+            console.warn('[ADMIN-PRODUCAO] Erro ao buscar dados para exclusão:', e);
+        }
+        
+        const confirmMsg = `⚠️ EXCLUIR REGISTRO DE PRODUÇÃO?\n\nMáquina: ${machine}\nQuantidade: ${qty} peças\n${orderId ? `OP vinculada: ${entryData?.order_number || orderId}\n` : ''}\n⚠️ Esta ação não pode ser desfeita!`;
+        
+        if (!confirm(confirmMsg)) return;
+        
+        try {
+            // Se houver OP vinculada, atualizar o total
+            const linkedOrderId = entryData?.order_id || entryData?.orderId || orderId;
+            if (linkedOrderId && qty > 0) {
+                try {
+                    // Decrementar total da OP
+                    const orderRef = db.collection('production_orders').doc(linkedOrderId);
+                    const orderSnap = await orderRef.get();
+                    
+                    if (orderSnap.exists) {
+                        const orderData = orderSnap.data();
+                        const currentTotal = Number(orderData.total_produzido || orderData.totalProduced || 0);
+                        const newTotal = Math.max(0, currentTotal - qty);
+                        
+                        await orderRef.update({
+                            total_produzido: newTotal,
+                            totalProduced: newTotal,
+                            last_adjustment: firebase.firestore.FieldValue.serverTimestamp(),
+                            adjustment_reason: `Exclusão de registro de produção (${qty} peças) via Admin`
+                        });
+                        
+                        console.log('[ADMIN-PRODUCAO] OP atualizada:', linkedOrderId, currentTotal, '→', newTotal);
+                    }
+                } catch (orderError) {
+                    console.warn('[ADMIN-PRODUCAO] Erro ao atualizar OP:', orderError);
+                    // Continua com a exclusão mesmo se falhar a atualização da OP
+                }
+            }
+            
+            // Excluir o registro
+            await db.collection('production_entries').doc(docId).delete();
+            
+            // Registrar log
+            if (typeof registrarLogSistema === 'function') {
+                await registrarLogSistema(
+                    `EXCLUSÃO ADMIN: Registro de produção excluído - Máquina: ${machine}, Qtd: ${qty}`,
+                    'admin_delete',
+                    {
+                        doc_id: docId,
+                        machine: machine,
+                        quantity: qty,
+                        order_id: linkedOrderId || null,
+                        deleted_by: getActiveUser()?.name || 'Admin'
+                    }
+                );
+            }
+            
+            // Remover card da lista
+            const cardElement = btn.closest('[data-doc-id]');
+            if (cardElement) {
+                cardElement.style.transition = 'all 0.3s ease';
+                cardElement.style.opacity = '0';
+                cardElement.style.transform = 'translateX(-100%)';
+                setTimeout(() => cardElement.remove(), 300);
+            }
+            
+            showNotification('Registro excluído com sucesso', 'success');
+            
+            // Recarregar lista após um pequeno delay para atualizar estatísticas
+            setTimeout(() => adminBuscarProducao(), 500);
+            
+        } catch (err) {
+            console.error('[ADMIN-PRODUCAO] Erro ao excluir:', err);
+            alert('Erro ao excluir: ' + err.message);
         }
     }
 
@@ -22744,32 +23154,111 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             }
             
             const data = docSnap.data();
+            const oldQty = Number(data.quantity || data.produzido || 0);
+            
+            // ===== CORREÇÃO: Buscar dados de produto e OP das coleções vinculadas =====
+            const orderId = data.orderId || data.order_id || data.production_order_id || '';
+            const planId = data.planId || data.plan_id || '';
+            
+            let orderNumber = data.order_number || data.op || '';
+            let produtoEdit = data.product_name || data.product || '';
+            let codigoEdit = data.product_code || data.codigo || '';
+            
+            // Buscar dados da OP se existe orderId
+            if (orderId) {
+                try {
+                    const orderSnap = await db.collection('production_orders').doc(orderId).get();
+                    if (orderSnap.exists) {
+                        const orderData = orderSnap.data();
+                        if (!orderNumber) orderNumber = orderData.op || orderData.order_number || orderData.op_number || '';
+                        if (!produtoEdit) produtoEdit = orderData.product_name || orderData.productName || orderData.descricao || '';
+                        if (!codigoEdit) codigoEdit = orderData.product_code || orderData.productCode || orderData.codigo || orderData.part_code || '';
+                    }
+                } catch (err) {
+                    console.warn('[ADMIN-PRODUCAO] Erro ao buscar OP:', err);
+                }
+            }
+            
+            // Se ainda não encontrou, buscar do planejamento
+            if (planId && !produtoEdit) {
+                try {
+                    const planSnap = await db.collection('planning').doc(planId).get();
+                    if (planSnap.exists) {
+                        const planData = planSnap.data();
+                        if (!orderNumber) orderNumber = planData.op || planData.order_number || '';
+                        if (!produtoEdit) produtoEdit = planData.product_name || planData.productName || planData.description || planData.descricao || '';
+                        if (!codigoEdit) codigoEdit = planData.product_code || planData.productCode || planData.part_code || planData.codigo || '';
+                    }
+                } catch (err) {
+                    console.warn('[ADMIN-PRODUCAO] Erro ao buscar planejamento:', err);
+                }
+            }
+            
+            // Gerar opções de máquinas
+            let machineOptions = '';
+            if (window.databaseModule?.machineDatabase) {
+                window.databaseModule.machineDatabase.forEach(m => {
+                    const id = normalizeMachineId(m.id);
+                    const currentMachine = normalizeMachineId(data.machine_id || data.machine || '');
+                    const selected = id === currentMachine ? 'selected' : '';
+                    machineOptions += `<option value="${id}" ${selected}>${id}</option>`;
+                });
+            }
             
             // Criar modal de edição
             const modal = document.createElement('div');
             modal.id = 'admin-edit-producao-modal';
-            modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+            modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4';
+            
+            // Extrair campos com fallbacks
+            const maquinaEdit = data.machine_id || data.machine || '';
+            const dataEdit = data.date || data.data || '';
+            const turnoEdit = String(data.shift || data.turno || '1');
+            const qtdEdit = data.quantity || data.produzido || 0;
+            const pesoEdit = data.peso_kg || data.peso_bruto || data.weight_kg || 0;
+            const refugoEdit = data.refugo_kg || data.refugo || 0;
+            const obsEdit = data.observations || data.observacoes || data.obs || '';
+            
             modal.innerHTML = `
-                <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
-                    <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-5 py-4">
+                <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col">
+                    <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-5 py-4 flex-shrink-0">
                         <h3 class="text-lg font-bold text-white flex items-center gap-2">
                             <i data-lucide="edit-3" class="w-5 h-5"></i>
                             Editar Lançamento de Produção
                         </h3>
-                        <p class="text-blue-200 text-sm">${data.machine_id || '-'} - ${data.date || '-'}</p>
+                        <p class="text-blue-200 text-sm">${maquinaEdit || '-'} - ${dataEdit || '-'} - T${turnoEdit}</p>
                     </div>
-                    <form id="admin-edit-producao-form" class="p-5 space-y-4">
+                    <form id="admin-edit-producao-form" class="p-5 space-y-4 overflow-y-auto flex-1">
                         <input type="hidden" id="admin-edit-prod-id" value="${docId}">
+                        <input type="hidden" id="admin-edit-prod-old-qty" value="${oldQty}">
+                        <input type="hidden" id="admin-edit-prod-order-id" value="${orderId}">
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Máquina</label>
+                                <select id="admin-edit-prod-machine" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                    ${machineOptions || `<option value="${maquinaEdit}">${maquinaEdit || '-'}</option>`}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Turno</label>
+                                <select id="admin-edit-prod-turno" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                    <option value="1" ${turnoEdit === '1' ? 'selected' : ''}>1º Turno</option>
+                                    <option value="2" ${turnoEdit === '2' ? 'selected' : ''}>2º Turno</option>
+                                    <option value="3" ${turnoEdit === '3' ? 'selected' : ''}>3º Turno</option>
+                                </select>
+                            </div>
+                        </div>
                         
                         <div class="grid grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Quantidade (peças)</label>
-                                <input type="number" id="admin-edit-prod-qty" value="${data.quantity || data.produzido || 0}" 
-                                    class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                <input type="number" id="admin-edit-prod-qty" value="${qtdEdit}" min="0"
+                                    class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-lg font-semibold">
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Peso (kg)</label>
-                                <input type="number" step="0.01" id="admin-edit-prod-peso" value="${data.peso_kg || data.weight_kg || 0}" 
+                                <input type="number" step="0.01" id="admin-edit-prod-peso" value="${pesoEdit}" min="0"
                                     class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                             </div>
                         </div>
@@ -22777,77 +23266,141 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                         <div class="grid grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Refugo (kg)</label>
-                                <input type="number" step="0.01" id="admin-edit-prod-refugo" value="${data.refugo_kg || data.refugo || 0}" 
+                                <input type="number" step="0.01" id="admin-edit-prod-refugo" value="${refugoEdit}" min="0"
                                     class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Turno</label>
-                                <select id="admin-edit-prod-turno" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                                    <option value="1" ${String(data.shift) === '1' ? 'selected' : ''}>1º Turno</option>
-                                    <option value="2" ${String(data.shift) === '2' ? 'selected' : ''}>2º Turno</option>
-                                    <option value="3" ${String(data.shift) === '3' ? 'selected' : ''}>3º Turno</option>
-                                </select>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Data</label>
+                                <input type="date" id="admin-edit-prod-date" value="${dataEdit}"
+                                    class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                             </div>
                         </div>
                         
                         <div>
-                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Observações</label>
-                            <textarea id="admin-edit-prod-obs" rows="2" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">${data.observations || data.obs || ''}</textarea>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Produto</label>
+                            <input type="text" id="admin-edit-prod-product" value="${produtoEdit}" 
+                                class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Nome do produto">
+                            ${codigoEdit ? `<p class="text-xs text-gray-500 mt-1">Código: ${codigoEdit}</p>` : ''}
                         </div>
                         
-                        <div class="flex gap-3 pt-4 border-t">
-                            <button type="button" id="admin-edit-prod-cancel" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2.5 rounded-lg transition">
-                                Cancelar
-                            </button>
-                            <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition">
-                                Salvar Alterações
-                            </button>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Observações</label>
+                            <textarea id="admin-edit-prod-obs" rows="2" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Observações sobre a edição...">${obsEdit}</textarea>
                         </div>
+                        
+                        ${orderId || orderNumber ? `
+                        <div class="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                            <div class="flex items-center gap-2 text-purple-700 text-sm">
+                                <i data-lucide="link" class="w-4 h-4"></i>
+                                <span class="font-semibold">OP Vinculada: ${orderNumber || orderId}</span>
+                            </div>
+                            <p class="text-xs text-purple-600 mt-1">O total da OP será ajustado automaticamente se a quantidade for alterada.</p>
+                        </div>
+                        ` : ''}
                     </form>
+                    <div class="flex gap-3 p-4 border-t bg-gray-50 flex-shrink-0">
+                        <button type="button" id="admin-edit-prod-cancel" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2.5 rounded-lg transition">
+                            Cancelar
+                        </button>
+                        <button type="button" id="admin-edit-prod-save" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition flex items-center justify-center gap-2">
+                            <i data-lucide="save" class="w-4 h-4"></i>
+                            Salvar Alterações
+                        </button>
+                    </div>
                 </div>
             `;
             
             document.body.appendChild(modal);
-            lucide.createIcons();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
             
             // Fechar modal
             document.getElementById('admin-edit-prod-cancel').addEventListener('click', () => modal.remove());
             modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
             
             // Salvar alterações
-            document.getElementById('admin-edit-producao-form').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                
+            document.getElementById('admin-edit-prod-save').addEventListener('click', async () => {
                 const novaQtd = parseInt(document.getElementById('admin-edit-prod-qty').value) || 0;
                 const novoPeso = parseFloat(document.getElementById('admin-edit-prod-peso').value) || 0;
                 const novoRefugo = parseFloat(document.getElementById('admin-edit-prod-refugo').value) || 0;
                 const novoTurno = document.getElementById('admin-edit-prod-turno').value;
+                const novaMaquina = document.getElementById('admin-edit-prod-machine').value;
+                const novaData = document.getElementById('admin-edit-prod-date').value;
+                const novoProduto = document.getElementById('admin-edit-prod-product').value.trim();
                 const novaObs = document.getElementById('admin-edit-prod-obs').value.trim();
+                const oldQtyValue = parseInt(document.getElementById('admin-edit-prod-old-qty').value) || 0;
+                const orderIdSave = document.getElementById('admin-edit-prod-order-id').value;
                 
                 try {
-                    await docRef.update({
+                    // Preparar dados para atualização (mantendo tanto campos em inglês quanto português)
+                    const updateData = {
+                        // Campos em inglês
                         quantity: novaQtd,
-                        produzido: novaQtd,
                         peso_kg: novoPeso,
                         weight_kg: novoPeso,
                         refugo_kg: novoRefugo,
-                        refugo: novoRefugo,
                         shift: parseInt(novoTurno),
+                        machine_id: novaMaquina,
+                        machine: novaMaquina,
                         observations: novaObs,
+                        // Campos em português (mantidos para compatibilidade)
+                        produzido: novaQtd,
+                        turno: parseInt(novoTurno),
+                        peso_bruto: novoPeso,
+                        refugo: novoRefugo,
+                        observacoes: novaObs,
+                        // Metadados
                         last_edited_at: firebase.firestore.FieldValue.serverTimestamp(),
                         edited_by: getActiveUser()?.name || 'Admin'
-                    });
+                    };
+                    
+                    if (novaData) {
+                        updateData.date = novaData;
+                        updateData.data = novaData;  // Campo em português também
+                    }
+                    if (novoProduto) {
+                        updateData.product_name = novoProduto;
+                        updateData.product = novoProduto;
+                    }
+                    
+                    await docRef.update(updateData);
+                    
+                    // Se a quantidade mudou e há OP vinculada, atualizar
+                    if (orderIdSave && novaQtd !== oldQtyValue) {
+                        try {
+                            const diff = novaQtd - oldQtyValue;
+                            const orderRef = db.collection('production_orders').doc(orderId);
+                            const orderSnap = await orderRef.get();
+                            
+                            if (orderSnap.exists) {
+                                const orderData = orderSnap.data();
+                                const currentTotal = Number(orderData.total_produzido || orderData.totalProduced || 0);
+                                const newTotal = Math.max(0, currentTotal + diff);
+                                
+                                await orderRef.update({
+                                    total_produzido: newTotal,
+                                    totalProduced: newTotal,
+                                    last_adjustment: firebase.firestore.FieldValue.serverTimestamp()
+                                });
+                                
+                                console.log('[ADMIN-PRODUCAO] OP atualizada após edição:', orderId, currentTotal, '→', newTotal);
+                            }
+                        } catch (orderError) {
+                            console.warn('[ADMIN-PRODUCAO] Erro ao atualizar OP após edição:', orderError);
+                        }
+                    }
                     
                     modal.remove();
                     showNotification('Registro atualizado com sucesso!', 'success');
                     adminBuscarProducao();
                     
                 } catch (err) {
+                    console.error('[ADMIN-PRODUCAO] Erro ao atualizar:', err);
                     alert('Erro ao atualizar: ' + err.message);
                 }
             });
             
         } catch (error) {
+            console.error('[ADMIN-PRODUCAO] Erro ao carregar registro:', error);
             alert('Erro ao carregar registro: ' + error.message);
         }
     }
@@ -25164,7 +25717,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (!machineSelect) return;
         
         const validMachines = ['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
-                               'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                               'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
                                'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32'];
         
         machineSelect.innerHTML = '<option value="">Selecione a máquina...</option>' +
@@ -33198,9 +33751,9 @@ window.forceOpenModal = function(modalId) {
     window.debugActiveDowntimes = async function() {
         console.log('🔍 [DEBUG] Verificando active_downtimes...');
         
-        // Lista de máquinas válidas
+        // Lista de máquinas válidas (26 máquinas)
         const validMachineIds = new Set(['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
-                                         'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                                         'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
                                          'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32']);
         
         const snapshot = await db.collection('active_downtimes').get();
@@ -39666,9 +40219,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const btnFechar = document.getElementById('btn-fechar-parada-lote');
         const form = document.getElementById('parada-lote-form');
         
-        // Lista de máquinas válidas
+        // Lista de máquinas válidas (26 máquinas)
         const validMachines = ['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
-                               'H11', 'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
+                               'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
                                'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32'];
         
         // Motivos por categoria

@@ -666,7 +666,6 @@ var machineDatabase = [
     { id: "H08", model: "REED 200 TG II" },
     { id: "H09", model: "REED 200 TG II" },
     { id: "H10", model: "HAITIAN MA 3200" },
-    { id: "H11", model: "ROMI 300 TGR" },
     { id: "H12", model: "BORCHE BH 120" },
     { id: "H13", model: "HAITIAN MA 2000 770G" },
     { id: "H14", model: "SANDRETTO SB UNO" },
