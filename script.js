@@ -11793,25 +11793,117 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (typeof lucide !== 'undefined') lucide.createIcons();
         
         try {
-            // Buscar lançamentos de produção
-            const productionSnapshot = await db.collection('production_entries')
-                .where('orderId', '==', orderId)
-                .orderBy('timestamp', 'desc')
-                .limit(100)
-                .get();
+            // Buscar lançamentos de produção - tentar múltiplas queries para cobrir todos os casos
+            let entries = [];
             
+            // Query 1: Buscar por orderId
+            try {
+                const snapshot1 = await db.collection('production_entries')
+                    .where('orderId', '==', orderId)
+                    .orderBy('timestamp', 'desc')
+                    .limit(200)
+                    .get();
+                snapshot1.forEach(doc => {
+                    entries.push({ id: doc.id, ...doc.data() });
+                });
+            } catch (e) {
+                console.warn('[TRACE] Query orderId falhou:', e);
+            }
+            
+            // Query 2: Buscar por order_id (alternativo)
+            if (entries.length === 0) {
+                try {
+                    const snapshot2 = await db.collection('production_entries')
+                        .where('order_id', '==', orderId)
+                        .orderBy('timestamp', 'desc')
+                        .limit(200)
+                        .get();
+                    snapshot2.forEach(doc => {
+                        if (!entries.find(e => e.id === doc.id)) {
+                            entries.push({ id: doc.id, ...doc.data() });
+                        }
+                    });
+                } catch (e) {
+                    console.warn('[TRACE] Query order_id falhou:', e);
+                }
+            }
+            
+            // Query 3: Se ainda não encontrou, buscar pelo número da OP via planejamento
+            if (entries.length === 0 && order.order_number) {
+                try {
+                    // Buscar planejamentos vinculados a esta OP
+                    const planSnapshot = await db.collection('planning')
+                        .where('order_number', '==', order.order_number)
+                        .get();
+                    
+                    const planIds = planSnapshot.docs.map(d => d.id);
+                    
+                    if (planIds.length > 0) {
+                        // Buscar lançamentos por planId (em chunks de 10)
+                        for (let i = 0; i < planIds.length; i += 10) {
+                            const chunk = planIds.slice(i, i + 10);
+                            const snapshot3 = await db.collection('production_entries')
+                                .where('planId', 'in', chunk)
+                                .orderBy('timestamp', 'desc')
+                                .limit(200)
+                                .get();
+                            snapshot3.forEach(doc => {
+                                if (!entries.find(e => e.id === doc.id)) {
+                                    entries.push({ id: doc.id, ...doc.data() });
+                                }
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[TRACE] Query planId falhou:', e);
+                }
+            }
+            
+            // Remover duplicatas e ordenar
+            const uniqueEntries = [];
+            const seenIds = new Set();
+            entries.forEach(e => {
+                if (!seenIds.has(e.id)) {
+                    seenIds.add(e.id);
+                    uniqueEntries.push(e);
+                }
+            });
+            
+            // Ordenar por timestamp (mais recente primeiro)
+            uniqueEntries.sort((a, b) => {
+                const tsA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp?.seconds || 0) * 1000;
+                const tsB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp?.seconds || 0) * 1000;
+                return tsB - tsA;
+            });
+            
+            // Processar lançamentos - CORRIGIDO: usar campos corretos
             let totalProduced = 0;
             let totalLosses = 0;
-            const entries = [];
+            const processedEntries = [];
             
-            productionSnapshot.forEach(doc => {
-                const data = doc.data();
-                const qty = Number(data.quantity || data.qty || data.produced) || 0;
-                const loss = Number(data.losses || data.refugo || data.scrap || data.perdas) || 0;
-                totalProduced += qty;
+            uniqueEntries.forEach(data => {
+                // Quantidade produzida - campos usados no sistema
+                const qty = Number(data.produzido || data.quantity || data.qty || 0);
+                // Perdas/Refugo - campos usados no sistema
+                const lossKg = Number(data.refugo_kg || data.refugo || 0);
+                const lossQty = Number(data.refugo_qty || 0);
+                const loss = lossQty > 0 ? lossQty : lossKg; // Preferir quantidade, senão peso
+                
+                // Só considerar se tem produção (ignorar lançamentos só de perda)
+                if (qty > 0) {
+                    totalProduced += qty;
+                }
                 totalLosses += loss;
-                entries.push({ id: doc.id, ...data, qty, loss });
+                
+                processedEntries.push({
+                    ...data,
+                    qty: qty,
+                    loss: loss,
+                    lossKg: lossKg
+                });
             });
+            
+            console.log('[TRACE] Encontrados', uniqueEntries.length, 'lançamentos. Total:', totalProduced, 'peças,', totalLosses, 'perdas');
             
             // Atualizar resumo
             const lotSize = Number(order.lot_size) || 0;
@@ -11827,31 +11919,55 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             if (producedEl) producedEl.textContent = totalProduced.toLocaleString('pt-BR');
             if (lossesEl) lossesEl.textContent = totalLosses.toLocaleString('pt-BR');
             if (progressEl) progressEl.textContent = Math.round(progress) + '%';
-            if (countEl) countEl.textContent = entries.length + ' registro(s)';
+            if (countEl) countEl.textContent = processedEntries.length + ' registro(s)';
             
             // Renderizar lançamentos
-            if (entries.length === 0) {
+            if (processedEntries.length === 0) {
                 entriesContainer.innerHTML = '<div class="p-8 text-center text-gray-400"><i data-lucide="inbox" class="w-12 h-12 mx-auto mb-3"></i><p>Nenhum lançamento encontrado para esta ordem</p></div>';
             } else {
-                entriesContainer.innerHTML = entries.map(entry => {
-                    const timestamp = entry.timestamp?.toDate?.() || new Date();
+                entriesContainer.innerHTML = processedEntries.map(entry => {
+                    let timestamp;
+                    if (entry.timestamp?.toDate) {
+                        timestamp = entry.timestamp.toDate();
+                    } else if (entry.timestamp?.seconds) {
+                        timestamp = new Date(entry.timestamp.seconds * 1000);
+                    } else if (entry.createdAt?.toDate) {
+                        timestamp = entry.createdAt.toDate();
+                    } else {
+                        timestamp = new Date();
+                    }
+                    
                     const dateStr = timestamp.toLocaleDateString('pt-BR');
                     const timeStr = timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                    const turno = entry.turno || entry.shift || '-';
+                    const operador = entry.nomeUsuario || entry.operador || entry.operator || entry.registradoPorNome || 'N/A';
+                    const maquina = entry.machine || entry.machine_id || entry.machineId || 'N/A';
+                    
+                    // Determinar tipo de lançamento
+                    let icon = 'package-check';
+                    let bgColor = 'bg-green-100';
+                    let iconColor = 'text-green-600';
+                    let tipoLabel = 'Produção';
+                    
+                    if (entry.qty <= 0 && entry.loss > 0) {
+                        icon = 'trash-2';
+                        bgColor = 'bg-red-100';
+                        iconColor = 'text-red-600';
+                        tipoLabel = 'Perda';
+                    }
                     
                     return '<div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 hover:bg-gray-50">' +
                         '<div class="flex items-center gap-3">' +
-                            '<div class="p-2 bg-blue-100 rounded-lg"><i data-lucide="package-check" class="w-4 h-4 text-blue-600"></i></div>' +
+                            '<div class="p-2 ' + bgColor + ' rounded-lg"><i data-lucide="' + icon + '" class="w-4 h-4 ' + iconColor + '"></i></div>' +
                             '<div>' +
-                                '<p class="text-sm font-medium text-gray-800">' + (entry.machine_id || entry.machineId || 'N/A') + '</p>' +
-                                '<p class="text-xs text-gray-500">' + dateStr + ' às ' + timeStr + ' - ' + (entry.operator || entry.operador || 'Operador N/A') + '</p>' +
+                                '<p class="text-sm font-medium text-gray-800">' + maquina + ' <span class="text-xs text-gray-400">T' + turno + '</span></p>' +
+                                '<p class="text-xs text-gray-500">' + dateStr + ' às ' + timeStr + '</p>' +
+                                '<p class="text-xs text-gray-400">' + operador + '</p>' +
                             '</div>' +
                         '</div>' +
                         '<div class="flex items-center gap-4 text-sm">' +
-                            '<div class="text-right">' +
-                                '<span class="font-semibold text-green-600">+' + entry.qty.toLocaleString('pt-BR') + '</span>' +
-                                '<p class="text-xs text-gray-500">Produzido</p>' +
-                            '</div>' +
-                            (entry.loss > 0 ? '<div class="text-right"><span class="font-semibold text-red-600">-' + entry.loss.toLocaleString('pt-BR') + '</span><p class="text-xs text-gray-500">Perdas</p></div>' : '') +
+                            (entry.qty > 0 ? '<div class="text-right"><span class="font-semibold text-green-600">+' + entry.qty.toLocaleString('pt-BR') + '</span><p class="text-xs text-gray-500">Peças</p></div>' : '') +
+                            (entry.loss > 0 ? '<div class="text-right"><span class="font-semibold text-red-600">-' + entry.loss.toLocaleString('pt-BR') + '</span><p class="text-xs text-gray-500">' + (entry.lossKg > 0 ? 'kg' : 'pç') + '</p></div>' : '') +
                         '</div>' +
                     '</div>';
                 }).join('');
@@ -11861,7 +11977,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             
         } catch (error) {
             console.error('Erro ao carregar rastreabilidade:', error);
-            entriesContainer.innerHTML = '<div class="p-8 text-center text-red-500"><i data-lucide="alert-circle" class="w-12 h-12 mx-auto mb-3"></i><p>Erro ao carregar dados de rastreabilidade</p></div>';
+            entriesContainer.innerHTML = '<div class="p-8 text-center text-red-500"><i data-lucide="alert-circle" class="w-12 h-12 mx-auto mb-3"></i><p>Erro ao carregar dados de rastreabilidade</p><p class="text-xs mt-2">' + error.message + '</p></div>';
             if (typeof lucide !== 'undefined') lucide.createIcons();
         }
     };
