@@ -18430,7 +18430,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 if (!card) return;
                 const machine = card.dataset.machine;
                 if (!machine) return;
-                await onMachineSelected(machine);
+                // Scroll automático apenas quando usuário clica diretamente no card
+                await onMachineSelected(machine, { scrollToPanel: true });
             });
             machineCardGrid.dataset.listenerAttached = 'true';
         }
@@ -20753,47 +20754,62 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (typeof lucide !== 'undefined') lucide.createIcons();
 
         try {
-            // Buscar todos os 3 turnos
-            const turnosParaBuscar = [1, 2, 3];
-            
             // Estrutura: { maquina: { t1: hokkaido, t2: hokkaido, t3: hokkaido } }
             const producaoPorMaquina = new Map();
+            
+            // Usar um Set para evitar duplicatas por docId
+            const docsProcessados = new Set();
 
-            for (const t of turnosParaBuscar) {
-                // Buscar por 'turno'
-                const snapshot = await db.collection('production_entries')
-                    .where('data', '==', data)
-                    .where('turno', '==', t)
-                    .get();
+            // Buscar registros com campo 'data' (português)
+            const snapshotData = await db.collection('production_entries')
+                .where('data', '==', data)
+                .get();
+                
+            console.log('[ACOMPANHAMENTO] Documentos encontrados com campo "data":', snapshotData.size);
+            
+            // Buscar também com campo 'date' (inglês) para cobrir registros antigos
+            const snapshotDate = await db.collection('production_entries')
+                .where('date', '==', data)
+                .get();
+                
+            console.log('[ACOMPANHAMENTO] Documentos encontrados com campo "date":', snapshotDate.size);
 
-                snapshot.docs.forEach(doc => {
-                    const d = doc.data();
-                    const machine = d.machine || d.machine_id || d.maquina || 'N/A';
-                    const quantidade = parseFloat(d.produzido || d.quantity || d.peso_liquido || 0);
+            // Função para processar um documento
+            const processarDoc = (doc) => {
+                // Evitar processar o mesmo doc duas vezes
+                if (docsProcessados.has(doc.id)) return;
+                docsProcessados.add(doc.id);
+                
+                const d = doc.data();
+                const machine = normalizeMachineId(d.machine || d.machine_id || d.maquina || '');
+                if (!machine || machine === 'N/A') return;
+                
+                // CORREÇÃO: Pegar APENAS quantidade produzida (peças), NÃO peso
+                // O campo correto é 'produzido' ou 'quantity' - ambos são peças
+                // 'peso_liquido' e 'peso_bruto' são KG e não devem ser somados aqui
+                const quantidade = parseInt(d.produzido || d.quantity || 0, 10);
+                
+                // Pegar turno - pode estar em 'turno' ou 'shift'
+                const turno = parseInt(d.turno || d.shift || 0, 10);
+                
+                // Ignorar registros sem turno válido ou que são apenas perdas
+                if (turno < 1 || turno > 3) return;
+                
+                // Ignorar registros que são apenas perdas (sem produção)
+                if (quantidade <= 0) return;
 
-                    if (!producaoPorMaquina.has(machine)) {
-                        producaoPorMaquina.set(machine, { t1: 0, t2: 0, t3: 0 });
-                    }
-                    producaoPorMaquina.get(machine)[`t${t}`] += quantidade;
-                });
+                if (!producaoPorMaquina.has(machine)) {
+                    producaoPorMaquina.set(machine, { t1: 0, t2: 0, t3: 0 });
+                }
+                producaoPorMaquina.get(machine)[`t${turno}`] += quantidade;
+            };
 
-                // Buscar por 'shift' também
-                const snapshotShift = await db.collection('production_entries')
-                    .where('data', '==', data)
-                    .where('shift', '==', t)
-                    .get();
-
-                snapshotShift.docs.forEach(doc => {
-                    const d = doc.data();
-                    const machine = d.machine || d.machine_id || d.maquina || 'N/A';
-                    const quantidade = parseFloat(d.produzido || d.quantity || d.peso_liquido || 0);
-
-                    if (!producaoPorMaquina.has(machine)) {
-                        producaoPorMaquina.set(machine, { t1: 0, t2: 0, t3: 0 });
-                    }
-                    producaoPorMaquina.get(machine)[`t${t}`] += quantidade;
-                });
-            }
+            // Processar todos os documentos
+            snapshotData.docs.forEach(processarDoc);
+            snapshotDate.docs.forEach(processarDoc);
+            
+            console.log('[ACOMPANHAMENTO] Total de docs processados (sem duplicatas):', docsProcessados.size);
+            console.log('[ACOMPANHAMENTO] Máquinas com produção:', producaoPorMaquina.size);
 
             // Renderizar tabela
             tbody.innerHTML = '';
@@ -20852,7 +20868,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                                data-maquina="${maquina}" data-turno="1" placeholder="0" value="${salvoT1.cedoc || ''}">
                     </td>
                     <td class="px-1 py-2 text-center bg-blue-50/30">
-                        <span class="text-xs font-semibold acompanhamento-hokkaido" data-turno="1">${Math.round(hokkaidos.t1)}</span>
+                        <span class="text-xs font-semibold acompanhamento-hokkaido" data-turno="1">${hokkaidos.t1}</span>
                     </td>
                     <td class="px-1 py-2 text-center border-r border-gray-200 bg-blue-50/30">
                         <span class="acompanhamento-diferenca text-xs font-bold" data-maquina="${maquina}" data-turno="1">0</span>
@@ -20864,7 +20880,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                                data-maquina="${maquina}" data-turno="2" placeholder="0" value="${salvoT2.cedoc || ''}">
                     </td>
                     <td class="px-1 py-2 text-center bg-purple-50/30">
-                        <span class="text-xs font-semibold acompanhamento-hokkaido" data-turno="2">${Math.round(hokkaidos.t2)}</span>
+                        <span class="text-xs font-semibold acompanhamento-hokkaido" data-turno="2">${hokkaidos.t2}</span>
                     </td>
                     <td class="px-1 py-2 text-center border-r border-gray-200 bg-purple-50/30">
                         <span class="acompanhamento-diferenca text-xs font-bold" data-maquina="${maquina}" data-turno="2">0</span>
@@ -20876,7 +20892,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                                data-maquina="${maquina}" data-turno="3" placeholder="0" value="${salvoT3.cedoc || ''}">
                     </td>
                     <td class="px-1 py-2 text-center bg-orange-50/30">
-                        <span class="text-xs font-semibold acompanhamento-hokkaido" data-turno="3">${Math.round(hokkaidos.t3)}</span>
+                        <span class="text-xs font-semibold acompanhamento-hokkaido" data-turno="3">${hokkaidos.t3}</span>
                     </td>
                     <td class="px-1 py-2 text-center bg-orange-50/30">
                         <span class="acompanhamento-diferenca text-xs font-bold" data-maquina="${maquina}" data-turno="3">0</span>
@@ -32050,8 +32066,82 @@ function sendDowntimeNotification() {
         currentShiftDisplay.textContent = `T${currentShift}`;
     }
     
+    // ========== SISTEMA DE SCROLL LOCK PARA PAINEL DE APONTAMENTO ==========
+    let scrollLockActive = false;
+    let scrollLockTimeout = null;
+    let scrollLockPosition = null;
+    
+    // Função para ativar o lock de scroll (mantém a posição atual)
+    function activateScrollLock(duration = 3000) {
+        scrollLockActive = true;
+        scrollLockPosition = window.pageYOffset;
+        
+        // Limpar timeout anterior se existir
+        if (scrollLockTimeout) {
+            clearTimeout(scrollLockTimeout);
+        }
+        
+        // Listener para manter a posição durante o lock
+        const maintainPosition = () => {
+            if (scrollLockActive && scrollLockPosition !== null) {
+                // Verificar se a página tentou subir (scroll < posição travada)
+                if (window.pageYOffset < scrollLockPosition - 50) {
+                    window.scrollTo({
+                        top: scrollLockPosition,
+                        behavior: 'instant'
+                    });
+                }
+            }
+        };
+        
+        // Adicionar listener temporário
+        window.addEventListener('scroll', maintainPosition, { passive: true });
+        
+        // Desativar após o tempo especificado
+        scrollLockTimeout = setTimeout(() => {
+            scrollLockActive = false;
+            scrollLockPosition = null;
+            window.removeEventListener('scroll', maintainPosition);
+            console.log('[SCROLL-LOCK] Desbloqueado após', duration, 'ms');
+        }, duration);
+        
+        console.log('[SCROLL-LOCK] Ativado por', duration, 'ms na posição', scrollLockPosition);
+    }
+    
+    // Função para fazer scroll para o painel de apontamento e ativar lock
+    function scrollToPanelWithLock() {
+        const scrollTarget = document.getElementById('production-control-panel');
+        if (!scrollTarget) return;
+        
+        // Calcular posição ideal (deixar um pequeno espaço no topo)
+        const targetRect = scrollTarget.getBoundingClientRect();
+        const absoluteTop = window.pageYOffset + targetRect.top;
+        const offsetTop = Math.max(0, absoluteTop - 80); // 80px de margem no topo
+        
+        // Scroll suave para a posição calculada
+        window.scrollTo({
+            top: offsetTop,
+            behavior: 'smooth'
+        });
+        
+        // Adicionar destaque visual temporário
+        scrollTarget.classList.add('ring-2', 'ring-blue-400', 'ring-offset-2');
+        setTimeout(() => {
+            scrollTarget.classList.remove('ring-2', 'ring-blue-400', 'ring-offset-2');
+        }, 1500);
+        
+        // Aguardar o scroll terminar e então ativar o lock
+        setTimeout(() => {
+            activateScrollLock(4000); // Lock por 4 segundos após o scroll
+        }, 500); // Aguardar 500ms para o scroll suave terminar
+    }
+    // ========== FIM SISTEMA DE SCROLL LOCK ==========
+
     // Função para quando uma máquina é selecionada
-    async function onMachineSelected(machine) {
+    // @param {string} machine - ID da máquina
+    // @param {object} options - Opções: { scrollToPanel: boolean } - se true, faz scroll para o painel de apontamento
+    async function onMachineSelected(machine, options = {}) {
+        const { scrollToPanel = false } = options;
         const previousMachine = selectedMachineData ? selectedMachineData.machine : null;
         // machineCardData agora é array - pegar primeiro plano para compatibilidade
         const machineDataArray = machineCardData[machine];
@@ -32106,23 +32196,15 @@ function sendDowntimeNotification() {
         // Mostrar painel
         productionControlPanel.classList.remove('hidden');
         
-        // NOVO: Scroll automático para o painel de lançamento de produção
-        setTimeout(() => {
-            const scrollTarget = document.getElementById('production-control-panel');
-            if (scrollTarget) {
-                // Adicionar destaque visual
-                scrollTarget.classList.add('production-panel-highlight');
-                
-                scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                
-                // Remover classe de destaque após animação
-                setTimeout(() => {
-                    scrollTarget.classList.remove('production-panel-highlight');
-                }, 2000);
-            }
-        }, 100);
+        // Scroll automático para o painel de apontamento (apenas quando solicitado - click direto no card)
+        if (scrollToPanel) {
+            // Usar requestAnimationFrame para garantir que o DOM foi atualizado
+            requestAnimationFrame(() => {
+                scrollToPanelWithLock();
+            });
+        }
         
-        // NOVO: Verificar e alertar sobre paradas longas
+        // Verificar e alertar sobre paradas longas
         const downtime = await getActiveMachineDowntime(machine);
         if (downtime) {
             const typeLabel = getDowntimeTypeLabel(downtime.type);
