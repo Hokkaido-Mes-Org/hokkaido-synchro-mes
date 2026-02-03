@@ -22036,6 +22036,24 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const btnBuscarProducao = document.getElementById('admin-btn-buscar-producao');
         if (btnBuscarProducao) btnBuscarProducao.addEventListener('click', adminBuscarProducao);
 
+        // ===== Aba Perdas - setup =====
+        const dataPerdas = document.getElementById('admin-perdas-data');
+        if (dataPerdas) dataPerdas.value = getProductionDateString();
+        
+        // Popular select de máquinas (Perdas)
+        const selectMaquinaPerdas = document.getElementById('admin-perdas-maquina');
+        if (selectMaquinaPerdas && window.databaseModule?.machineDatabase) {
+            let options = '<option value="">Todas</option>';
+            window.databaseModule.machineDatabase.forEach(m => {
+                const id = normalizeMachineId(m.id);
+                options += `<option value="${id}">${id}</option>`;
+            });
+            selectMaquinaPerdas.innerHTML = options;
+        }
+        
+        const btnBuscarPerdas = document.getElementById('admin-btn-buscar-perdas');
+        if (btnBuscarPerdas) btnBuscarPerdas.addEventListener('click', adminBuscarPerdas);
+
         // Aba Planejamento - setup
         const dataPlanejamento = document.getElementById('admin-planejamento-data');
         if (dataPlanejamento) dataPlanejamento.value = getProductionDateString();
@@ -23402,6 +23420,644 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         } catch (error) {
             console.error('[ADMIN-PRODUCAO] Erro ao carregar registro:', error);
             alert('Erro ao carregar registro: ' + error.message);
+        }
+    }
+
+    // ===== Funções de Perdas (Lançamentos de usuários) =====
+    async function adminBuscarPerdas() {
+        const dataFiltro = document.getElementById('admin-perdas-data')?.value;
+        const maquina = document.getElementById('admin-perdas-maquina')?.value;
+        const turno = document.getElementById('admin-perdas-turno')?.value;
+        const tipo = document.getElementById('admin-perdas-tipo')?.value;
+        const listaDiv = document.getElementById('admin-perdas-lista');
+        
+        if (!dataFiltro) {
+            alert('Selecione uma data');
+            return;
+        }
+        
+        console.log('[ADMIN-PERDAS] Buscando registros:', { dataFiltro, maquina, turno, tipo });
+        
+        try {
+            listaDiv.innerHTML = '<div class="text-center py-4 text-gray-500"><div class="animate-spin inline-block w-6 h-6 border-2 border-red-500 border-t-transparent rounded-full mb-2"></div><p>Carregando perdas...</p></div>';
+            
+            // Buscar APENAS registros de produção com refugo/perdas (lançados via aba Lançamento)
+            // Registros de perdas têm refugo_kg > 0 ou refugo_qty > 0
+            const [snapshotDate, snapshotData] = await Promise.all([
+                db.collection('production_entries').where('date', '==', dataFiltro).limit(500).get(),
+                db.collection('production_entries').where('data', '==', dataFiltro).limit(500).get()
+            ]);
+            
+            console.log('[ADMIN-PERDAS] Documentos com field "date":', snapshotDate.size);
+            console.log('[ADMIN-PERDAS] Documentos com field "data":', snapshotData.size);
+            
+            // Combinar resultados e filtrar apenas os que têm perdas
+            const allDocs = new Map();
+            
+            const addIfHasLosses = (doc) => {
+                const d = doc.data();
+                const refugoKg = Number(d.refugo_kg || 0);
+                const refugoQty = Number(d.refugo_qty || 0);
+                const motivoPerda = d.perdas || '';
+                
+                // Considerar como perda se tem refugo_kg > 0 OU refugo_qty > 0 E tem motivo
+                if ((refugoKg > 0 || refugoQty > 0) && motivoPerda) {
+                    allDocs.set(doc.id, { id: doc.id, ...d });
+                }
+            };
+            
+            snapshotDate.docs.forEach(addIfHasLosses);
+            snapshotData.docs.forEach(doc => {
+                if (!allDocs.has(doc.id)) {
+                    addIfHasLosses(doc);
+                }
+            });
+            
+            console.log('[ADMIN-PERDAS] Total com perdas (sem duplicatas):', allDocs.size);
+            
+            if (allDocs.size === 0) {
+                listaDiv.innerHTML = `
+                    <div class="text-center py-8 text-gray-400">
+                        <i data-lucide="trash-2" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                        <p class="font-semibold">Nenhuma perda encontrada</p>
+                        <p class="text-sm">Data: ${dataFiltro}</p>
+                    </div>`;
+                adminAtualizarEstatisticasPerdas([]);
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+                return;
+            }
+            
+            // Converter Map para array
+            let docs = Array.from(allDocs.values());
+            
+            // Filtrar por máquina se especificado
+            if (maquina) {
+                const maquinaNorm = normalizeMachineId(maquina);
+                docs = docs.filter(d => {
+                    const docMachine = normalizeMachineId(d.machine_id || d.machine || '');
+                    return docMachine === maquinaNorm;
+                });
+            }
+            
+            // Filtrar por turno se especificado
+            if (turno) {
+                docs = docs.filter(d => {
+                    const docTurno = String(d.shift || d.turno || '');
+                    return docTurno === turno;
+                });
+            }
+            
+            // Filtrar por tipo se especificado
+            if (tipo) {
+                docs = docs.filter(d => {
+                    const motivo = (d.perdas || '').toLowerCase();
+                    if (tipo === 'borra') return motivo.includes('borra');
+                    if (tipo === 'refugo') return motivo.includes('refugo') || motivo.includes('setup') || motivo.includes('ajuste') || motivo.includes('qualidade');
+                    if (tipo === 'sucata') return motivo.includes('sucata') || motivo.includes('descarte');
+                    return true;
+                });
+            }
+            
+            // Ordenar por timestamp decrescente
+            docs.sort((a, b) => {
+                const tsA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp?.seconds || 0) * 1000;
+                const tsB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp?.seconds || 0) * 1000;
+                return tsB - tsA;
+            });
+            
+            // Limitar a 100 registros
+            docs = docs.slice(0, 100);
+            
+            console.log('[ADMIN-PERDAS] Registros após filtros:', docs.length);
+            
+            if (docs.length === 0) {
+                listaDiv.innerHTML = `
+                    <div class="text-center py-8 text-gray-400">
+                        <i data-lucide="filter-x" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                        <p class="font-semibold">Nenhuma perda para os filtros selecionados</p>
+                        <p class="text-sm">Data: ${dataFiltro}${maquina ? `, Máquina: ${maquina}` : ''}${turno ? `, Turno: ${turno}` : ''}${tipo ? `, Tipo: ${tipo}` : ''}</p>
+                    </div>`;
+                adminAtualizarEstatisticasPerdas([]);
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+                return;
+            }
+            
+            let html = '';
+            
+            docs.forEach(d => {
+                const hora = d.timestamp?.toDate ? d.timestamp.toDate().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : (d.horaInformada || d.hora || '-');
+                const pesoKg = Number(d.refugo_kg || 0);
+                const qtdPecas = Number(d.refugo_qty || 0);
+                const motivo = d.perdas || 'Não informado';
+                const turnoDoc = d.shift || d.turno || '-';
+                const operador = d.nomeUsuario || d.operador || d.user_name || '-';
+                const maquinaDoc = d.machine_id || d.machine || '-';
+                const obs = d.observacoes || d.observations || '';
+                const mp = d.mp || '';
+                const tipoMP = d.tipoMateriaPrima || '';
+                
+                // Determinar cor do tipo de perda
+                const motivoLower = motivo.toLowerCase();
+                let tipoBadge = '';
+                if (motivoLower.includes('borra')) {
+                    tipoBadge = '<span class="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold">Borra</span>';
+                } else if (motivoLower.includes('sucata') || motivoLower.includes('descarte')) {
+                    tipoBadge = '<span class="text-xs px-2 py-0.5 rounded bg-purple-100 text-purple-700 font-semibold">Sucata</span>';
+                } else {
+                    tipoBadge = '<span class="text-xs px-2 py-0.5 rounded bg-orange-100 text-orange-700 font-semibold">Refugo</span>';
+                }
+
+                html += `
+                    <div class="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition" data-doc-id="${d.id}">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="font-bold text-red-600 bg-red-50 px-2 py-1 rounded text-sm">${maquinaDoc}</span>
+                                ${tipoBadge}
+                                <span class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600">T${turnoDoc}</span>
+                                <span class="text-xs text-gray-400">${hora}</span>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <button class="admin-btn-view-perda text-gray-500 hover:text-gray-700 p-1.5 rounded hover:bg-gray-100 transition" data-id="${d.id}" title="Ver detalhes">
+                                    <i data-lucide="eye" class="w-4 h-4"></i>
+                                </button>
+                                <button class="admin-btn-edit-perda text-blue-500 hover:text-blue-700 p-1.5 rounded hover:bg-blue-50 transition" data-id="${d.id}" title="Editar">
+                                    <i data-lucide="edit-2" class="w-4 h-4"></i>
+                                </button>
+                                <button class="admin-btn-delete-perda text-red-500 hover:text-red-700 p-1.5 rounded hover:bg-red-50 transition" 
+                                    data-id="${d.id}" 
+                                    data-machine="${maquinaDoc}" 
+                                    data-peso="${pesoKg}"
+                                    data-motivo="${motivo}"
+                                    title="Excluir">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="text-sm text-gray-700 mb-2">
+                            <span class="font-medium">Motivo: ${motivo}</span>
+                        </div>
+                        ${obs ? `<div class="text-xs text-gray-500 mb-2 truncate" title="${obs}">📝 ${obs}</div>` : ''}
+                        <div class="grid grid-cols-4 gap-2 text-xs">
+                            <div class="bg-red-50 rounded p-2 text-center">
+                                <div class="font-bold text-red-600">${pesoKg.toFixed(3)}</div>
+                                <div class="text-red-700">Peso (kg)</div>
+                            </div>
+                            <div class="bg-orange-50 rounded p-2 text-center">
+                                <div class="font-bold text-orange-600">${qtdPecas.toLocaleString('pt-BR')}</div>
+                                <div class="text-orange-700">Qtd (pç)</div>
+                            </div>
+                            <div class="bg-amber-50 rounded p-2 text-center">
+                                <div class="font-bold text-amber-600 truncate" title="${tipoMP || mp || '-'}">${tipoMP || mp || '-'}</div>
+                                <div class="text-amber-700">MP</div>
+                            </div>
+                            <div class="bg-gray-50 rounded p-2 text-center">
+                                <div class="font-bold text-gray-600 truncate" title="${operador}">${operador}</div>
+                                <div class="text-gray-500">Operador</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            listaDiv.innerHTML = html;
+            
+            // Atualizar estatísticas
+            adminAtualizarEstatisticasPerdas(docs);
+            
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            
+            // Attach handlers
+            listaDiv.querySelectorAll('.admin-btn-view-perda').forEach(btn => {
+                btn.addEventListener('click', () => adminVisualizarPerda(btn.dataset.id));
+            });
+            
+            listaDiv.querySelectorAll('.admin-btn-edit-perda').forEach(btn => {
+                btn.addEventListener('click', () => adminEditarPerda(btn.dataset.id));
+            });
+            
+            listaDiv.querySelectorAll('.admin-btn-delete-perda').forEach(btn => {
+                btn.addEventListener('click', () => adminExcluirPerda(btn));
+            });
+            
+        } catch (error) {
+            console.error('[ADMIN-PERDAS] Erro ao buscar:', error);
+            listaDiv.innerHTML = `
+                <div class="text-center py-8 text-red-500">
+                    <i data-lucide="alert-circle" class="w-12 h-12 mx-auto mb-2 opacity-70"></i>
+                    <p class="font-semibold">Erro ao carregar perdas</p>
+                    <p class="text-sm">${error.message}</p>
+                </div>`;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+    }
+    
+    function adminAtualizarEstatisticasPerdas(docs) {
+        let totalPeso = 0;
+        let pesoBorra = 0;
+        let pesoRefugo = 0;
+        let pesoSucata = 0;
+        
+        docs.forEach(d => {
+            const peso = Number(d.refugo_kg || 0);
+            const motivo = (d.perdas || '').toLowerCase();
+            
+            totalPeso += peso;
+            
+            if (motivo.includes('borra')) {
+                pesoBorra += peso;
+            } else if (motivo.includes('sucata') || motivo.includes('descarte')) {
+                pesoSucata += peso;
+            } else {
+                pesoRefugo += peso;
+            }
+        });
+        
+        document.getElementById('admin-perdas-total').textContent = docs.length;
+        document.getElementById('admin-perdas-peso').textContent = totalPeso.toFixed(2);
+        document.getElementById('admin-perdas-borra').textContent = pesoBorra.toFixed(2);
+        document.getElementById('admin-perdas-refugo').textContent = pesoRefugo.toFixed(2);
+        document.getElementById('admin-perdas-sucata').textContent = pesoSucata.toFixed(2);
+    }
+    
+    async function adminVisualizarPerda(docId) {
+        try {
+            const docRef = db.collection('production_entries').doc(docId);
+            const docSnap = await docRef.get();
+            
+            if (!docSnap.exists) {
+                alert('Registro não encontrado');
+                return;
+            }
+            
+            const d = docSnap.data();
+            
+            // Extrair campos
+            const maquinaDoc = d.machine_id || d.machine || '-';
+            const dataDoc = d.date || d.data || '-';
+            const turnoDoc = d.shift || d.turno || '-';
+            const pesoKg = Number(d.refugo_kg || 0);
+            const qtdPecas = Number(d.refugo_qty || 0);
+            const motivo = d.perdas || 'Não informado';
+            const operadorDoc = d.nomeUsuario || d.operador || d.user_name || '-';
+            const obsDoc = d.observacoes || d.observations || '';
+            const mpDoc = d.mp || '-';
+            const tipoMPDoc = d.tipoMateriaPrima || '-';
+            const orderNumber = d.orderNumber || d.order_number || '';
+            
+            // Formatar timestamp
+            let timestampStr = '-';
+            if (d.timestamp?.toDate) {
+                timestampStr = d.timestamp.toDate().toLocaleString('pt-BR');
+            } else if (d.createdAt?.toDate) {
+                timestampStr = d.createdAt.toDate().toLocaleString('pt-BR');
+            }
+            
+            // Criar modal de visualização
+            const modal = document.createElement('div');
+            modal.id = 'admin-view-perda-modal';
+            modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4';
+            
+            modal.innerHTML = `
+                <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col">
+                    <div class="bg-gradient-to-r from-red-600 to-red-700 px-5 py-4 flex-shrink-0">
+                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i data-lucide="eye" class="w-5 h-5"></i>
+                            Detalhes da Perda
+                        </h3>
+                        <p class="text-red-200 text-sm">ID: ${docId.substring(0, 20)}...</p>
+                    </div>
+                    <div class="p-5 overflow-y-auto flex-1">
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div class="bg-gray-50 p-3 rounded-lg">
+                                <div class="text-xs text-gray-500 uppercase font-semibold">Máquina</div>
+                                <div class="font-bold text-gray-800">${maquinaDoc}</div>
+                            </div>
+                            <div class="bg-gray-50 p-3 rounded-lg">
+                                <div class="text-xs text-gray-500 uppercase font-semibold">Data</div>
+                                <div class="font-bold text-gray-800">${dataDoc}</div>
+                            </div>
+                            <div class="bg-gray-50 p-3 rounded-lg">
+                                <div class="text-xs text-gray-500 uppercase font-semibold">Turno</div>
+                                <div class="font-bold text-gray-800">${turnoDoc}º Turno</div>
+                            </div>
+                            <div class="bg-gray-50 p-3 rounded-lg">
+                                <div class="text-xs text-gray-500 uppercase font-semibold">Timestamp</div>
+                                <div class="font-bold text-gray-800 text-xs">${timestampStr}</div>
+                            </div>
+                            <div class="col-span-2 bg-red-50 p-3 rounded-lg">
+                                <div class="text-xs text-red-600 uppercase font-semibold">Motivo da Perda</div>
+                                <div class="font-bold text-red-700">${motivo}</div>
+                            </div>
+                            <div class="bg-red-50 p-3 rounded-lg">
+                                <div class="text-xs text-red-600 uppercase font-semibold">Peso</div>
+                                <div class="font-bold text-red-700">${pesoKg.toFixed(3)} kg</div>
+                            </div>
+                            <div class="bg-orange-50 p-3 rounded-lg">
+                                <div class="text-xs text-orange-600 uppercase font-semibold">Quantidade</div>
+                                <div class="font-bold text-orange-700">${qtdPecas.toLocaleString('pt-BR')} pç</div>
+                            </div>
+                            <div class="bg-amber-50 p-3 rounded-lg">
+                                <div class="text-xs text-amber-600 uppercase font-semibold">Cód. MP</div>
+                                <div class="font-bold text-amber-700">${mpDoc}</div>
+                            </div>
+                            <div class="bg-amber-50 p-3 rounded-lg">
+                                <div class="text-xs text-amber-600 uppercase font-semibold">Tipo MP</div>
+                                <div class="font-bold text-amber-700">${tipoMPDoc}</div>
+                            </div>
+                            <div class="col-span-2 bg-blue-50 p-3 rounded-lg">
+                                <div class="text-xs text-blue-600 uppercase font-semibold">Operador</div>
+                                <div class="font-bold text-blue-700">${operadorDoc}</div>
+                            </div>
+                            ${orderNumber ? `
+                            <div class="col-span-2 bg-purple-50 p-3 rounded-lg">
+                                <div class="text-xs text-purple-600 uppercase font-semibold">Ordem de Produção</div>
+                                <div class="font-bold text-purple-700">OP ${orderNumber}</div>
+                            </div>
+                            ` : ''}
+                            ${obsDoc ? `
+                            <div class="col-span-2 bg-gray-50 p-3 rounded-lg">
+                                <div class="text-xs text-gray-500 uppercase font-semibold">Observações</div>
+                                <div class="text-gray-700">${obsDoc}</div>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                    <div class="flex gap-3 p-4 border-t bg-gray-50 flex-shrink-0">
+                        <button type="button" class="admin-view-close flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2.5 rounded-lg transition">
+                            Fechar
+                        </button>
+                        <button type="button" class="admin-view-edit flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition">
+                            <i data-lucide="edit-2" class="w-4 h-4 inline mr-1"></i>
+                            Editar
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            
+            // Fechar modal
+            modal.querySelector('.admin-view-close').addEventListener('click', () => modal.remove());
+            modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+            
+            // Editar
+            modal.querySelector('.admin-view-edit').addEventListener('click', () => {
+                modal.remove();
+                adminEditarPerda(docId);
+            });
+            
+        } catch (error) {
+            console.error('[ADMIN-PERDAS] Erro ao visualizar:', error);
+            alert('Erro ao carregar detalhes: ' + error.message);
+        }
+    }
+    
+    async function adminEditarPerda(docId) {
+        try {
+            const docRef = db.collection('production_entries').doc(docId);
+            const docSnap = await docRef.get();
+            
+            if (!docSnap.exists) {
+                alert('Registro não encontrado');
+                return;
+            }
+            
+            const data = docSnap.data();
+            
+            // Gerar opções de máquinas
+            let machineOptions = '';
+            if (window.databaseModule?.machineDatabase) {
+                window.databaseModule.machineDatabase.forEach(m => {
+                    const id = normalizeMachineId(m.id);
+                    const currentMachine = normalizeMachineId(data.machine_id || data.machine || '');
+                    const selected = id === currentMachine ? 'selected' : '';
+                    machineOptions += `<option value="${id}" ${selected}>${id}</option>`;
+                });
+            }
+            
+            // Extrair campos
+            const maquinaEdit = data.machine_id || data.machine || '';
+            const dataEdit = data.date || data.data || '';
+            const turnoEdit = String(data.shift || data.turno || '1');
+            const pesoKgEdit = data.refugo_kg || 0;
+            const qtdEdit = data.refugo_qty || 0;
+            const motivoEdit = data.perdas || '';
+            const obsEdit = data.observacoes || data.observations || '';
+            
+            // Lista de motivos comuns
+            const motivosComuns = [
+                'Borra',
+                'Setup',
+                'Ajuste de Processo',
+                'Qualidade/Visual',
+                'Dimensional',
+                'Contaminação',
+                'Sucata',
+                'Descarte',
+                'Manutenção',
+                'Outros'
+            ];
+            
+            let motivoOptions = '';
+            motivosComuns.forEach(m => {
+                const selected = motivoEdit.toLowerCase().includes(m.toLowerCase()) ? 'selected' : '';
+                motivoOptions += `<option value="${m}" ${selected}>${m}</option>`;
+            });
+            if (!motivosComuns.some(m => motivoEdit.toLowerCase().includes(m.toLowerCase()))) {
+                motivoOptions += `<option value="${motivoEdit}" selected>${motivoEdit}</option>`;
+            }
+            
+            // Criar modal de edição
+            const modal = document.createElement('div');
+            modal.id = 'admin-edit-perda-modal';
+            modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4';
+            
+            modal.innerHTML = `
+                <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col">
+                    <div class="bg-gradient-to-r from-red-600 to-red-700 px-5 py-4 flex-shrink-0">
+                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i data-lucide="edit-3" class="w-5 h-5"></i>
+                            Editar Lançamento de Perda
+                        </h3>
+                        <p class="text-red-200 text-sm">${maquinaEdit || '-'} - ${dataEdit || '-'} - T${turnoEdit}</p>
+                    </div>
+                    <form id="admin-edit-perda-form" class="p-5 space-y-4 overflow-y-auto flex-1">
+                        <input type="hidden" id="admin-edit-perda-id" value="${docId}">
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Máquina</label>
+                                <select id="admin-edit-perda-machine" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500">
+                                    ${machineOptions || `<option value="${maquinaEdit}">${maquinaEdit || '-'}</option>`}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Turno</label>
+                                <select id="admin-edit-perda-turno" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500">
+                                    <option value="1" ${turnoEdit === '1' ? 'selected' : ''}>1º Turno</option>
+                                    <option value="2" ${turnoEdit === '2' ? 'selected' : ''}>2º Turno</option>
+                                    <option value="3" ${turnoEdit === '3' ? 'selected' : ''}>3º Turno</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Motivo da Perda</label>
+                            <select id="admin-edit-perda-motivo" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500">
+                                ${motivoOptions}
+                            </select>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Peso (kg)</label>
+                                <input type="number" step="0.001" id="admin-edit-perda-peso" value="${pesoKgEdit}" min="0"
+                                    class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-lg font-semibold">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Quantidade (peças)</label>
+                                <input type="number" id="admin-edit-perda-qty" value="${qtdEdit}" min="0"
+                                    class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500">
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Data</label>
+                            <input type="date" id="admin-edit-perda-date" value="${dataEdit}"
+                                class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Observações</label>
+                            <textarea id="admin-edit-perda-obs" rows="2" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500" placeholder="Observações sobre a edição...">${obsEdit}</textarea>
+                        </div>
+                    </form>
+                    <div class="flex gap-3 p-4 border-t bg-gray-50 flex-shrink-0">
+                        <button type="button" id="admin-edit-perda-cancel" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2.5 rounded-lg transition">
+                            Cancelar
+                        </button>
+                        <button type="button" id="admin-edit-perda-save" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 rounded-lg transition flex items-center justify-center gap-2">
+                            <i data-lucide="save" class="w-4 h-4"></i>
+                            Salvar Alterações
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            
+            // Fechar modal
+            document.getElementById('admin-edit-perda-cancel').addEventListener('click', () => modal.remove());
+            modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+            
+            // Salvar alterações
+            document.getElementById('admin-edit-perda-save').addEventListener('click', async () => {
+                const novoPeso = parseFloat(document.getElementById('admin-edit-perda-peso').value) || 0;
+                const novaQtd = parseInt(document.getElementById('admin-edit-perda-qty').value) || 0;
+                const novoTurno = document.getElementById('admin-edit-perda-turno').value;
+                const novaMaquina = document.getElementById('admin-edit-perda-machine').value;
+                const novaData = document.getElementById('admin-edit-perda-date').value;
+                const novoMotivo = document.getElementById('admin-edit-perda-motivo').value;
+                const novaObs = document.getElementById('admin-edit-perda-obs').value.trim();
+                
+                if (novoPeso <= 0 && novaQtd <= 0) {
+                    alert('Informe peso ou quantidade da perda');
+                    return;
+                }
+                
+                if (!novoMotivo) {
+                    alert('Selecione o motivo da perda');
+                    return;
+                }
+                
+                try {
+                    const updateData = {
+                        refugo_kg: novoPeso,
+                        refugo_qty: novaQtd,
+                        perdas: novoMotivo,
+                        shift: parseInt(novoTurno),
+                        turno: parseInt(novoTurno),
+                        machine_id: novaMaquina,
+                        machine: novaMaquina,
+                        observations: novaObs,
+                        observacoes: novaObs,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        edited_by: getActiveUser()?.name || 'Admin'
+                    };
+                    
+                    if (novaData) {
+                        updateData.date = novaData;
+                        updateData.data = novaData;
+                    }
+                    
+                    await docRef.update(updateData);
+                    
+                    modal.remove();
+                    showNotification('Perda atualizada com sucesso!', 'success');
+                    adminBuscarPerdas();
+                    
+                    // Registrar log
+                    if (typeof registrarLogSistema === 'function') {
+                        await registrarLogSistema(
+                            `EDIÇÃO ADMIN: Perda editada - Máquina: ${novaMaquina}, Motivo: ${novoMotivo}`,
+                            'admin_edit',
+                            { doc_id: docId, machine: novaMaquina, motivo: novoMotivo, peso: novoPeso }
+                        );
+                    }
+                    
+                } catch (err) {
+                    console.error('[ADMIN-PERDAS] Erro ao atualizar:', err);
+                    alert('Erro ao atualizar: ' + err.message);
+                }
+            });
+            
+        } catch (error) {
+            console.error('[ADMIN-PERDAS] Erro ao carregar registro:', error);
+            alert('Erro ao carregar registro: ' + error.message);
+        }
+    }
+    
+    async function adminExcluirPerda(btn) {
+        const docId = btn.dataset.id;
+        const machine = btn.dataset.machine;
+        const peso = btn.dataset.peso;
+        const motivo = btn.dataset.motivo;
+        
+        const confirmMsg = `⚠️ EXCLUIR REGISTRO DE PERDA?\n\nMáquina: ${machine}\nPeso: ${peso} kg\nMotivo: ${motivo}\n\n⚠️ Esta ação não pode ser desfeita!`;
+        
+        if (!confirm(confirmMsg)) return;
+        
+        try {
+            await db.collection('production_entries').doc(docId).delete();
+            
+            // Registrar log
+            if (typeof registrarLogSistema === 'function') {
+                await registrarLogSistema(
+                    `EXCLUSÃO ADMIN: Perda excluída - Máquina: ${machine}, Peso: ${peso}kg, Motivo: ${motivo}`,
+                    'admin_delete',
+                    { doc_id: docId, machine, peso, motivo, deleted_by: getActiveUser()?.name || 'Admin' }
+                );
+            }
+            
+            // Remover card da lista
+            const cardElement = btn.closest('[data-doc-id]');
+            if (cardElement) {
+                cardElement.style.transition = 'all 0.3s ease';
+                cardElement.style.opacity = '0';
+                cardElement.style.transform = 'translateX(-100%)';
+                setTimeout(() => cardElement.remove(), 300);
+            }
+            
+            showNotification('Perda excluída com sucesso', 'success');
+            
+            // Recarregar lista após um pequeno delay para atualizar estatísticas
+            setTimeout(() => adminBuscarPerdas(), 500);
+            
+        } catch (err) {
+            console.error('[ADMIN-PERDAS] Erro ao excluir:', err);
+            alert('Erro ao excluir: ' + err.message);
         }
     }
 
