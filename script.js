@@ -17669,28 +17669,37 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
         const render = async () => {
             // CORREÇÃO CONSISTÊNCIA: Enriquecer plannings com total_produzido da OP vinculada
-            // Isso garante que os cards das máquinas mostrem o mesmo valor que a aba Ordens
+            // Isso garante que os cards das máquinas mostrem o MESMO valor que a aba Admin > Dados > Ordens
+            // IMPORTANTE: Sempre usar o valor da OP como fonte de verdade
             for (const plan of planningItems) {
                 const orderId = plan.production_order_id || plan.production_order || plan.order_id;
-                if (orderId && !orderTotalCache.has(orderId)) {
+                if (orderId) {
                     try {
+                        // Buscar sempre da OP (ignorar cache para garantir valor atualizado)
                         const orderDoc = await db.collection('production_orders').doc(orderId).get();
                         if (orderDoc.exists) {
                             const orderData = orderDoc.data() || {};
                             const orderTotal = coerceToNumber(orderData.total_produzido ?? orderData.totalProduced, 0);
                             orderTotalCache.set(orderId, orderTotal);
                             
-                            // Se o planning tem menos que a OP, atualizar em background
                             const planTotal = coerceToNumber(plan.total_produzido, 0);
-                            if (orderTotal > planTotal) {
-                                console.log(`[SYNC-CONSISTENCIA] Planning ${plan.id} tem total_produzido (${planTotal}) menor que OP ${orderId} (${orderTotal}). Sincronizando...`);
-                                // Atualizar cache local imediatamente
+                            
+                            // SEMPRE usar o valor da OP como fonte de verdade
+                            // O Admin mostra o valor da OP, então os cards devem mostrar o mesmo
+                            if (orderTotal !== planTotal) {
+                                console.log(`[SYNC-CONSISTENCIA] Planning ${plan.id} tem total_produzido (${planTotal}) diferente da OP ${orderId} (${orderTotal}). Sincronizando...`);
+                                // Atualizar cache local imediatamente com valor da OP
                                 plan.total_produzido = orderTotal;
+                                plan.totalProduced = orderTotal;
                                 // Atualizar Firebase em background (não esperar)
                                 db.collection('planning').doc(plan.id).update({
                                     total_produzido: orderTotal,
                                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                                 }).catch(e => console.warn('[SYNC-CONSISTENCIA] Falha ao sincronizar planning:', e));
+                            } else {
+                                // Valores já estão sincronizados
+                                plan.total_produzido = orderTotal;
+                                plan.totalProduced = orderTotal;
                             }
                         } else {
                             orderTotalCache.set(orderId, 0);
@@ -17716,14 +17725,24 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 // CORREÇÃO: Calcular produção do dia (para referência)
                 const producao_dia = shifts.T1 + shifts.T2 + shifts.T3;
                 
-                // CORREÇÃO ESTABILIDADE + CONSISTÊNCIA: Usar o MAIOR valor entre:
-                // 1. total_produzido armazenado no planning
-                // 2. total_produzido da OP vinculada (do cache)
-                // 3. produção calculada do dia
+                // CORREÇÃO CONSISTÊNCIA COM ADMIN:
+                // O Admin mostra o total_produzido da OP (production_orders)
+                // Os cards devem mostrar o MESMO valor para evitar divergências
+                // Prioridade: 1) valor da OP (orderTotal), 2) valor do planning (storedTotal), 3) produção do dia
                 const storedTotal = coerceToNumber(plan.total_produzido, 0);
                 const orderId = plan.production_order_id || plan.production_order || plan.order_id;
                 const orderTotal = orderId ? (orderTotalCache.get(orderId) || 0) : 0;
-                const total_produzido_final = Math.max(storedTotal, orderTotal, producao_dia);
+                
+                // Se existe OP vinculada, usar o valor dela (igual ao Admin)
+                // Senão, usar o valor do planning ou produção do dia (o que for maior)
+                let total_produzido_final;
+                if (orderId && orderTotal > 0) {
+                    // Tem OP vinculada - usar valor da OP (mesmo que Admin)
+                    total_produzido_final = orderTotal;
+                } else {
+                    // Sem OP vinculada - usar maior entre planning e produção do dia
+                    total_produzido_final = Math.max(storedTotal, producao_dia);
+                }
 
                 return {
                     ...plan,
@@ -17740,11 +17759,14 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             
             renderPlanningTable(combinedData);
             renderLeaderPanel(planningItems);
-            const activePlans = planningItems.filter(isPlanActive);
+            
+            // CORREÇÃO: Usar combinedData ao invés de planningItems para garantir
+            // que os cards das máquinas tenham o total_produzido correto (igual ao Admin)
+            const activePlansEnriched = combinedData.filter(isPlanActive);
             
             // NOVO: Carregar paradas ativas para mostrar no painel de máquinas
             const machinesDowntime = await getAllMachinesDowntimeStatus();
-            renderMachineCards(activePlans, productionEntries, downtimeEntries, activeDowntimeSet, machinesDowntime);
+            renderMachineCards(activePlansEnriched, productionEntries, downtimeEntries, activeDowntimeSet, machinesDowntime);
             showLoadingState('leader-panel', false, planningItems.length === 0);
             
             // Atualizar contagem no painel
@@ -32116,9 +32138,17 @@ function sendDowntimeNotification() {
                     const resolvedOrderTotal = coerceToNumber(resolvedOrder.total_produzido ?? resolvedOrder.totalProduced, 0);
                     const planAccumulated = coerceToNumber(plan.total_produzido, 0);
                     
-                    // CORREÇÃO: Usar o MAIOR valor entre o armazenado na OP e o acumulado dos lançamentos
-                    // Isso garante que após edição manual, novos lançamentos continuem incrementando
-                    plan.total_produzido = Math.max(resolvedOrderTotal, accumulated, planAccumulated);
+                    // CORREÇÃO CONSISTÊNCIA COM ADMIN:
+                    // O Admin mostra APENAS o total_produzido da OP
+                    // Usar o mesmo valor para garantir que cards e Admin mostrem o mesmo número
+                    // Prioridade: valor da OP > soma dos entries > valor do planning
+                    if (resolvedOrderTotal > 0) {
+                        plan.total_produzido = resolvedOrderTotal;
+                    } else if (accumulated > 0) {
+                        plan.total_produzido = accumulated;
+                    } else {
+                        plan.total_produzido = planAccumulated;
+                    }
 
                     console.log('[MachineCard][OP]', {
                         machine: plan.machine,
@@ -40495,8 +40525,9 @@ async function loadPCPData(date, shiftFilter = 'current') {
             .where('date', '==', date)
             .get();
         
-        // Agrupar planejamentos por máquina para evitar duplicação
-        const planningByMachine = new Map();
+        // CORREÇÃO MULTI-PRODUTO: Manter TODOS os planejamentos por máquina (não agrupar)
+        // Isso permite mostrar múltiplos produtos em moldes multi-produto
+        const planningByMachine = new Map(); // Map<machineId, Array<planning>>
         const machinesWithPlanning = new Set();
         
         planningSnapshot.forEach(doc => {
@@ -40509,45 +40540,50 @@ async function loadPCPData(date, shiftFilter = 'current') {
             // Determinar o turno do planejamento
             const planShift = String(data.shift || data.turno || '1');
             
-            // Se filtro é "all", agrupar todos os turnos por máquina
-            // Se filtro é um turno específico, só adicionar planejamentos daquele turno
+            // Inicializar array se não existe
+            if (!planningByMachine.has(machineId)) {
+                planningByMachine.set(machineId, []);
+            }
+            
+            // Se filtro é "all", adicionar todos os planejamentos
+            // Se filtro é um turno específico, adicionar se for do turno ou como fallback
             if (shiftFilter === 'all') {
-                // Agrupar: priorizar o planejamento do turno atual ou o mais recente
-                const existing = planningByMachine.get(machineId);
-                const currentShiftNow = getCurrentShift();
-                
-                if (!existing) {
-                    planningByMachine.set(machineId, data);
-                } else {
-                    // Priorizar o turno atual
-                    const existingShift = String(existing.shift || existing.turno || '1');
-                    if (planShift === currentShiftNow && existingShift !== currentShiftNow) {
-                        planningByMachine.set(machineId, data);
-                    }
-                }
+                planningByMachine.get(machineId).push(data);
             } else {
-                // Filtrar: só adicionar se for do turno selecionado
+                // Filtrar: adicionar se for do turno selecionado
                 if (planShift === effectiveShift) {
-                    planningByMachine.set(machineId, data);
-                } else if (!planningByMachine.has(machineId)) {
-                    // Se não tem planejamento do turno selecionado, guardar como fallback
-                    planningByMachine.set(machineId, { ...data, _isFallback: true });
+                    // Marcar como planejamento do turno correto
+                    planningByMachine.get(machineId).push({ ...data, _isCorrectShift: true });
+                } else {
+                    // Guardar como fallback se não existir nenhum do turno correto
+                    planningByMachine.get(machineId).push({ ...data, _isFallback: true });
                 }
             }
         });
         
-        // Converter para array, removendo fallbacks se existir planejamento do turno correto
+        // Converter para array mantendo TODOS os planejamentos (multi-produto)
+        // Se houver planejamentos do turno correto, remover os fallbacks
         const planningItems = [];
-        planningByMachine.forEach((data, machineId) => {
-            // Se não é "all" e é fallback, ainda incluir mas marcar
-            if (shiftFilter !== 'all' && data._isFallback) {
-                // Incluir mesmo assim para não perder a máquina, mas sinalizar
-                console.log(`[PCP] Máquina ${machineId} não tem planejamento para turno ${effectiveShift}, usando fallback`);
+        planningByMachine.forEach((plans, machineId) => {
+            // Verificar se tem planejamento do turno correto
+            const correctShiftPlans = plans.filter(p => p._isCorrectShift);
+            const fallbackPlans = plans.filter(p => p._isFallback);
+            const normalPlans = plans.filter(p => !p._isCorrectShift && !p._isFallback);
+            
+            if (shiftFilter === 'all') {
+                // Adicionar todos os planejamentos normais
+                normalPlans.forEach(p => planningItems.push(p));
+            } else if (correctShiftPlans.length > 0) {
+                // Tem planejamentos do turno correto - usar esses
+                correctShiftPlans.forEach(p => planningItems.push(p));
+            } else if (fallbackPlans.length > 0) {
+                // Só tem fallback - usar o primeiro como referência
+                console.log(`[PCP] Máquina ${machineId} não tem planejamento para turno ${effectiveShift}, usando ${fallbackPlans.length} fallback(s)`);
+                fallbackPlans.forEach(p => planningItems.push(p));
             }
-            planningItems.push(data);
         });
         
-        console.log('[PCP] Planejamentos após agrupamento:', planningItems.length, 'máquinas únicas:', machinesWithPlanning.size);
+        console.log('[PCP] Planejamentos após processamento:', planningItems.length, 'máquinas únicas:', machinesWithPlanning.size);
         
         // 2. Buscar paradas ativas (active_downtimes) - PRIORIDADE 1
         const activeDowntimesSnapshot = await db.collection('active_downtimes').get();
@@ -40921,8 +40957,18 @@ async function loadPCPData(date, shiftFilter = 'current') {
 
 // Atualizar KPIs do PCP
 function updatePCPKPIs(tableData, activeDowntimes) {
-    const totalMachines = tableData.length;
-    const stoppedMachines = tableData.filter(d => d.status !== 'Produzindo').length;
+    // Contar máquinas ÚNICAS (não linhas, para suportar multi-produto)
+    const uniqueMachines = new Set(tableData.map(d => d.machine));
+    const totalMachines = uniqueMachines.size;
+    
+    // Contar máquinas paradas (considerar que se qualquer produto da máquina está parado, a máquina está parada)
+    const stoppedMachinesSet = new Set();
+    tableData.forEach(d => {
+        if (d.status !== 'Produzindo') {
+            stoppedMachinesSet.add(d.machine);
+        }
+    });
+    const stoppedMachines = stoppedMachinesSet.size;
     const producingMachines = totalMachines - stoppedMachines;
     
     document.getElementById('pcp-kpi-machines').textContent = totalMachines.toLocaleString('pt-BR');
@@ -40935,9 +40981,25 @@ function renderPCPTable(data) {
     const tableBody = document.getElementById('pcp-table-body');
     if (!tableBody) return;
     
+    // Agrupar dados por máquina para identificar multi-produto
+    const machineCount = new Map();
+    data.forEach(row => {
+        const count = machineCount.get(row.machine) || 0;
+        machineCount.set(row.machine, count + 1);
+    });
+    
+    // Rastrear qual índice de produto para cada máquina (para multi-produto)
+    const machineProductIndex = new Map();
+    
     tableBody.innerHTML = data.map(row => {
         // Determinar cor do status baseado no motivo (igual ao Dashboard TV)
         const statusColors = getPCPStatusColor(row.status, row.motivoParada);
+        
+        // Verificar se é molde multi-produto
+        const productCount = machineCount.get(row.machine) || 1;
+        const isMultiProduct = productCount > 1;
+        const currentIndex = (machineProductIndex.get(row.machine) || 0) + 1;
+        machineProductIndex.set(row.machine, currentIndex);
         
         // Formatar ciclo (pode ser número ou '-')
         const cicloDisplay = (typeof row.ciclo === 'number' && row.ciclo > 0) ? row.ciclo.toFixed(1) : '-';
@@ -40994,9 +41056,20 @@ function renderPCPTable(data) {
         const machinePriority = getMachinePriority(row.machine);
         const priorityBadge = renderPriorityBadge(machinePriority);
         
+        // Estilo especial para linhas multi-produto
+        const multiProductStyle = isMultiProduct ? 'bg-purple-50' : '';
+        const multiProductBadge = isMultiProduct 
+            ? `<span class="ml-1 px-1 py-0.5 text-[9px] font-bold bg-purple-200 text-purple-700 rounded">${currentIndex}/${productCount}</span>` 
+            : '';
+        
+        // Para o primeiro produto da máquina multi-produto, mostrar indicação especial
+        const machineDisplay = isMultiProduct && currentIndex === 1
+            ? `${row.machine} <span class="text-purple-600 text-xs font-semibold">(Multi)</span>`
+            : row.machine;
+        
         return `
-            <tr class="border-b border-gray-200 hover:bg-gray-100">
-                <td class="px-2 py-2 text-center font-bold text-gray-900 whitespace-nowrap border border-gray-300">${row.machine}</td>
+            <tr class="border-b border-gray-200 hover:bg-gray-100 ${multiProductStyle}">
+                <td class="px-2 py-2 text-center font-bold text-gray-900 whitespace-nowrap border border-gray-300">${machineDisplay}</td>
                 <td class="px-2 py-2 text-center border border-gray-300">${priorityBadge}</td>
                 <td class="px-2 py-2 text-center border border-gray-300 ${cavidadesClass}" title="${cavTitle}">${cavidadesDisplay}</td>
                 <td class="px-2 py-2 text-center border border-gray-300 ${cicloClass}" title="${cicloTitle}">${cicloDisplay}</td>
@@ -41004,7 +41077,7 @@ function renderPCPTable(data) {
                     ${statusColors.label}
                 </td>
                 <td class="px-2 py-2 text-left text-gray-700 whitespace-nowrap border border-gray-300">${row.cliente}</td>
-                <td class="px-2 py-2 text-left text-gray-700 border border-gray-300">${row.produto}</td>
+                <td class="px-2 py-2 text-left text-gray-700 border border-gray-300">${row.produto}${multiProductBadge}</td>
                 <td class="px-2 py-2 text-left border border-gray-300 ${row.status !== 'Produzindo' ? 'text-red-600 font-semibold' : 'text-gray-500'}">${row.motivoParada}</td>
             </tr>
         `;
