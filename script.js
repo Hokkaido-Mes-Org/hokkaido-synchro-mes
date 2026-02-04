@@ -41010,15 +41010,17 @@ async function loadPCPData(date, shiftFilter = 'current') {
             const normalPlans = plans.filter(p => !p._isCorrectShift && !p._isFallback);
             
             if (shiftFilter === 'all') {
-                // Adicionar todos os planejamentos normais
+                // CORREÇÃO: Para visualização "Todos os turnos", agrupar planejamentos por turno+produto
+                // para identificar multi-produto corretamente, mas permitir visualização de todos os turnos
                 normalPlans.forEach(p => planningItems.push(p));
             } else if (correctShiftPlans.length > 0) {
                 // Tem planejamentos do turno correto - usar esses
                 correctShiftPlans.forEach(p => planningItems.push(p));
             } else if (fallbackPlans.length > 0) {
-                // Só tem fallback - usar o primeiro como referência
-                console.log(`[PCP] Máquina ${machineId} não tem planejamento para turno ${effectiveShift}, usando ${fallbackPlans.length} fallback(s)`);
-                fallbackPlans.forEach(p => planningItems.push(p));
+                // CORREÇÃO: Só tem fallback - usar apenas UM como referência (o mais recente/primeiro)
+                // Não adicionar todos os fallbacks para evitar duplicação incorreta
+                console.log(`[PCP] Máquina ${machineId} não tem planejamento para turno ${effectiveShift}, usando 1 fallback de ${fallbackPlans.length} disponíveis`);
+                planningItems.push(fallbackPlans[0]); // Usar apenas o primeiro fallback
             }
         });
         
@@ -41420,25 +41422,51 @@ function renderPCPTable(data) {
     const tableBody = document.getElementById('pcp-table-body');
     if (!tableBody) return;
     
-    // Agrupar dados por máquina para identificar multi-produto
-    const machineCount = new Map();
+    // CORREÇÃO: Agrupar dados por máquina E turno para identificar multi-produto REAL
+    // Multi-produto só ocorre quando há PRODUTOS DIFERENTES no MESMO TURNO na mesma máquina
+    // Planejamentos em turnos diferentes NÃO são multi-produto
+    const machineShiftProducts = new Map(); // Map<machineId_turno, Set<produto>>
+    const machineShiftCount = new Map(); // Map<machineId_turno, count>
+    
     data.forEach(row => {
-        const count = machineCount.get(row.machine) || 0;
-        machineCount.set(row.machine, count + 1);
+        const key = `${row.machine}_${row.turno || '1'}`;
+        
+        // Contar entradas por máquina+turno
+        const count = machineShiftCount.get(key) || 0;
+        machineShiftCount.set(key, count + 1);
+        
+        // Rastrear produtos únicos por máquina+turno
+        if (!machineShiftProducts.has(key)) {
+            machineShiftProducts.set(key, new Set());
+        }
+        machineShiftProducts.get(key).add(row.produto || '-');
     });
     
-    // Rastrear qual índice de produto para cada máquina (para multi-produto)
-    const machineProductIndex = new Map();
+    // Rastrear qual índice de produto para cada máquina+turno (para multi-produto)
+    const machineShiftIndex = new Map();
+    
+    // DEBUG: Log das máquinas que serão marcadas como multi-produto
+    machineShiftProducts.forEach((products, key) => {
+        const count = machineShiftCount.get(key) || 0;
+        if (count > 1 || products.size > 1) {
+            console.log(`[PCP-MULTI] ${key}: ${count} entradas, ${products.size} produtos únicos: [${[...products].join(', ')}] -> ${count > 1 && products.size > 1 ? 'MULTI-PRODUTO' : 'NÃO é multi-produto'}`);
+        }
+    });
     
     tableBody.innerHTML = data.map(row => {
         // Determinar cor do status baseado no motivo (igual ao Dashboard TV)
         const statusColors = getPCPStatusColor(row.status, row.motivoParada);
         
-        // Verificar se é molde multi-produto
-        const productCount = machineCount.get(row.machine) || 1;
-        const isMultiProduct = productCount > 1;
-        const currentIndex = (machineProductIndex.get(row.machine) || 0) + 1;
-        machineProductIndex.set(row.machine, currentIndex);
+        // CORREÇÃO: Verificar se é molde multi-produto REAL (produtos diferentes no MESMO turno)
+        const key = `${row.machine}_${row.turno || '1'}`;
+        const productSet = machineShiftProducts.get(key) || new Set();
+        const productCount = machineShiftCount.get(key) || 1;
+        
+        // Só é multi-produto se há mais de uma entrada E mais de um produto único no mesmo turno
+        const isMultiProduct = productCount > 1 && productSet.size > 1;
+        
+        const currentIndex = (machineShiftIndex.get(key) || 0) + 1;
+        machineShiftIndex.set(key, currentIndex);
         
         // Formatar ciclo (pode ser número ou '-')
         const cicloDisplay = (typeof row.ciclo === 'number' && row.ciclo > 0) ? row.ciclo.toFixed(1) : '-';
