@@ -534,6 +534,381 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Expor CacheManager globalmente
     window.CacheManager = CacheManager;
+
+    // ========== DATASTORE CENTRALIZADO ==========
+    // Armazena dados de listeners em memória para evitar leituras repetidas
+    const DataStore = {
+        _data: {
+            planning: null,
+            productionOrders: null,
+            productionEntries: null,
+            activeDowntimes: null,
+            extendedDowntimeLogs: null,
+            downtimeEntries: null
+        },
+        _timestamps: {},
+        _subscribers: new Map(),
+        _readCounts: {
+            total: 0,
+            byCollection: {}
+        },
+        
+        // Obter dados (sempre retorna do store, nunca do Firebase diretamente)
+        get(collection) {
+            return this._data[collection] || null;
+        },
+        
+        // Atualizar dados (chamado pelos listeners)
+        set(collection, data) {
+            this._data[collection] = data;
+            this._timestamps[collection] = Date.now();
+            
+            // Notificar subscribers
+            const subs = this._subscribers.get(collection);
+            if (subs) {
+                subs.forEach(callback => {
+                    try {
+                        callback(data);
+                    } catch (e) {
+                        console.warn(`Erro no subscriber de ${collection}:`, e);
+                    }
+                });
+            }
+        },
+        
+        // Verificar se dados estão "frescos" (recentes)
+        isFresh(collection, maxAgeMs = 30000) {
+            const ts = this._timestamps[collection];
+            if (!ts) return false;
+            return Date.now() - ts < maxAgeMs;
+        },
+        
+        // Obter timestamp da última atualização
+        getTimestamp(collection) {
+            return this._timestamps[collection] || 0;
+        },
+        
+        // Registrar subscriber para atualizações
+        subscribe(collection, callback) {
+            if (!this._subscribers.has(collection)) {
+                this._subscribers.set(collection, new Set());
+            }
+            this._subscribers.get(collection).add(callback);
+            
+            // Retorna função de unsubscribe
+            return () => {
+                const subs = this._subscribers.get(collection);
+                if (subs) subs.delete(callback);
+            };
+        },
+        
+        // Contar leitura para monitoramento
+        trackRead(collection, source = 'unknown') {
+            this._readCounts.total++;
+            this._readCounts.byCollection[collection] = (this._readCounts.byCollection[collection] || 0) + 1;
+        },
+        
+        // Obter estatísticas de leitura
+        getStats() {
+            return {
+                ...this._readCounts,
+                lastUpdates: { ...this._timestamps }
+            };
+        },
+        
+        // Resetar contadores
+        resetStats() {
+            this._readCounts = { total: 0, byCollection: {} };
+        },
+        
+        // Buscar do Firebase com cache inteligente
+        async fetchIfNeeded(collection, queryBuilder = null, forceRefresh = false) {
+            // Se dados existem e são frescos, usar do cache
+            if (!forceRefresh && this.isFresh(collection, 60000) && this._data[collection]) {
+                console.log(`📦 DataStore: usando cache de ${collection}`);
+                return this._data[collection];
+            }
+            
+            // Buscar do Firebase
+            this.trackRead(collection, 'fetchIfNeeded');
+            console.log(`🔥 DataStore: buscando ${collection} do Firebase`);
+            
+            let query = db.collection(collection);
+            if (queryBuilder) {
+                query = queryBuilder(query);
+            }
+            
+            const snapshot = await query.get();
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            this.set(collection, data);
+            return data;
+        },
+        
+        // Encontrar item por ID (busca no store primeiro)
+        findById(collection, id) {
+            const data = this._data[collection];
+            if (!data) return null;
+            return data.find(item => item.id === id) || null;
+        },
+        
+        // Filtrar dados do store (sem buscar do Firebase)
+        filter(collection, predicate) {
+            const data = this._data[collection];
+            if (!data) return [];
+            return data.filter(predicate);
+        }
+    };
+    
+    // Expor DataStore globalmente
+    window.DataStore = DataStore;
+
+    // ========== BATCH QUERY MANAGER ==========
+    // Agrupa queries para reduzir número de leituras
+    const BatchQueryManager = {
+        _pendingQueries: new Map(),
+        _batchDelay: 50, // ms para agrupar queries
+        
+        // Adiciona query ao batch
+        async query(collection, docId) {
+            return new Promise((resolve, reject) => {
+                if (!this._pendingQueries.has(collection)) {
+                    this._pendingQueries.set(collection, {
+                        docIds: new Set(),
+                        resolvers: []
+                    });
+                    
+                    // Executar batch após delay
+                    setTimeout(() => this._executeBatch(collection), this._batchDelay);
+                }
+                
+                const batch = this._pendingQueries.get(collection);
+                batch.docIds.add(docId);
+                batch.resolvers.push({ docId, resolve, reject });
+            });
+        },
+        
+        // Executar batch de queries
+        async _executeBatch(collection) {
+            const batch = this._pendingQueries.get(collection);
+            if (!batch) return;
+            
+            this._pendingQueries.delete(collection);
+            
+            const docIds = Array.from(batch.docIds);
+            console.log(`📦 Batch query: ${collection} (${docIds.length} docs)`);
+            
+            // Firebase limita a 10 itens por 'in' query
+            const chunks = [];
+            for (let i = 0; i < docIds.length; i += 10) {
+                chunks.push(docIds.slice(i, i + 10));
+            }
+            
+            const allDocs = new Map();
+            
+            for (const chunk of chunks) {
+                try {
+                    const snapshot = await db.collection(collection)
+                        .where(firebase.firestore.FieldPath.documentId(), 'in', chunk)
+                        .get();
+                    
+                    snapshot.docs.forEach(doc => {
+                        allDocs.set(doc.id, { id: doc.id, ...doc.data() });
+                    });
+                } catch (error) {
+                    console.error(`Erro no batch query ${collection}:`, error);
+                }
+            }
+            
+            // Resolver todas as promises
+            batch.resolvers.forEach(({ docId, resolve }) => {
+                resolve(allDocs.get(docId) || null);
+            });
+        }
+    };
+    
+    window.BatchQueryManager = BatchQueryManager;
+
+    // ========== FIREBASE USAGE MONITOR ==========
+    // Monitor de uso do Firebase para acompanhar economia de leituras
+    const FirebaseMonitor = {
+        _startTime: Date.now(),
+        _reads: 0,
+        _writes: 0,
+        _cacheHits: 0,
+        _estimatedSavings: 0,
+        
+        trackRead(collection, wasFromCache = false) {
+            if (wasFromCache) {
+                this._cacheHits++;
+                this._estimatedSavings++;
+            } else {
+                this._reads++;
+            }
+        },
+        
+        trackWrite(collection) {
+            this._writes++;
+        },
+        
+        getStats() {
+            const runtime = Math.round((Date.now() - this._startTime) / 60000);
+            const totalRequests = this._reads + this._cacheHits;
+            const hitRate = totalRequests > 0 ? Math.round((this._cacheHits / totalRequests) * 100) : 0;
+            
+            return {
+                runtime: `${runtime} min`,
+                reads: this._reads,
+                writes: this._writes,
+                cacheHits: this._cacheHits,
+                estimatedSavings: this._estimatedSavings,
+                hitRate: `${hitRate}%`
+            };
+        },
+        
+        printStats() {
+            const stats = this.getStats();
+            console.log('%c📊 FIREBASE USAGE STATS', 'color: #00b4d8; font-weight: bold; font-size: 14px');
+            console.log(`   ⏱️ Tempo de execução: ${stats.runtime}`);
+            console.log(`   🔥 Leituras Firebase: ${stats.reads}`);
+            console.log(`   📦 Hits de cache: ${stats.cacheHits}`);
+            console.log(`   💰 Leituras economizadas: ${stats.estimatedSavings}`);
+            console.log(`   📈 Taxa de cache: ${stats.hitRate}`);
+            console.log(`   ✏️ Escritas: ${stats.writes}`);
+            return stats;
+        },
+        
+        reset() {
+            this._startTime = Date.now();
+            this._reads = 0;
+            this._writes = 0;
+            this._cacheHits = 0;
+            this._estimatedSavings = 0;
+        }
+    };
+    
+    window.FirebaseMonitor = FirebaseMonitor;
+    
+    // Comando rápido no console: digite fbstats() para ver estatísticas
+    window.fbstats = () => FirebaseMonitor.printStats();
+
+    // ========== HELPER FUNCTIONS - LEITURAS OTIMIZADAS ==========
+    // Funções para buscar dados de collections com cache/DataStore
+
+    /**
+     * Busca production_orders do DataStore/Cache antes de ir ao Firebase
+     * @param {boolean} forceRefresh - Forçar atualização do Firebase
+     * @returns {Promise<Array>} - Lista de production_orders
+     */
+    async function getProductionOrdersCached(forceRefresh = false) {
+        // Primeiro, verificar se temos no productionOrdersCache (variável local)
+        if (!forceRefresh && typeof productionOrdersCache !== 'undefined' && productionOrdersCache && productionOrdersCache.length > 0) {
+            console.log('📦 Usando productionOrdersCache local');
+            return productionOrdersCache;
+        }
+        
+        // Segundo, verificar DataStore
+        if (!forceRefresh && window.DataStore) {
+            const cached = window.DataStore.get('productionOrders');
+            if (cached && cached.length > 0) {
+                console.log('📦 Usando DataStore.productionOrders');
+                if (window.FirebaseMonitor) window.FirebaseMonitor.trackRead('production_orders', true);
+                return cached;
+            }
+        }
+        
+        // Terceiro, verificar CacheManager
+        const cacheKey = 'production_orders:all';
+        if (!forceRefresh && window.CacheManager) {
+            const cached = window.CacheManager.get(cacheKey);
+            if (cached) {
+                console.log('📦 Usando CacheManager.production_orders');
+                if (window.FirebaseMonitor) window.FirebaseMonitor.trackRead('production_orders', true);
+                return cached;
+            }
+        }
+        
+        // Se não encontrou em nenhum cache, buscar do Firebase
+        console.log('🔥 Buscando production_orders do Firebase');
+        if (window.FirebaseMonitor) window.FirebaseMonitor.trackRead('production_orders', false);
+        const snapshot = await db.collection('production_orders').get();
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        // Armazenar em todos os caches
+        if (window.DataStore) {
+            window.DataStore.set('productionOrders', data);
+        }
+        if (window.CacheManager) {
+            window.CacheManager.set(cacheKey, data);
+        }
+        
+        return data;
+    }
+    
+    /**
+     * Busca planning do DataStore/Cache antes de ir ao Firebase
+     * @param {string} date - Data opcional para filtrar
+     * @param {boolean} forceRefresh - Forçar atualização do Firebase
+     * @returns {Promise<Array>} - Lista de plannings
+     */
+    async function getPlanningCached(date = null, forceRefresh = false) {
+        // Se não precisa filtrar por data e temos no DataStore
+        if (!forceRefresh && window.DataStore) {
+            const cached = window.DataStore.get('planning');
+            if (cached && cached.length > 0) {
+                if (!date) {
+                    console.log('📦 Usando DataStore.planning');
+                    if (window.FirebaseMonitor) window.FirebaseMonitor.trackRead('planning', true);
+                    return cached;
+                }
+                // Filtrar por data localmente
+                const filtered = cached.filter(p => p.date === date);
+                if (filtered.length > 0) {
+                    console.log('📦 Usando DataStore.planning (filtrado por data)');
+                    if (window.FirebaseMonitor) window.FirebaseMonitor.trackRead('planning', true);
+                    return filtered;
+                }
+            }
+        }
+        
+        // Buscar do Firebase
+        console.log('🔥 Buscando planning do Firebase');
+        if (window.FirebaseMonitor) window.FirebaseMonitor.trackRead('planning', false);
+        let query = db.collection('planning');
+        if (date) {
+            query = query.where('date', '==', date);
+        }
+        const snapshot = await query.get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
+    
+    /**
+     * Encontra uma production_order por ID usando cache
+     * @param {string} orderId - ID do documento ou número da OP
+     * @returns {Promise<Object|null>}
+     */
+    async function findProductionOrderCached(orderId) {
+        const allOrders = await getProductionOrdersCached();
+        
+        // Buscar por ID do documento
+        let order = allOrders.find(o => o.id === orderId);
+        if (order) return order;
+        
+        // Buscar por número da ordem
+        const normalized = String(orderId).toUpperCase().trim();
+        order = allOrders.find(o => 
+            String(o.order_number || '').toUpperCase().trim() === normalized ||
+            String(o.orderNumber || '').toUpperCase().trim() === normalized
+        );
+        
+        return order || null;
+    }
+    
+    // Expor globalmente
+    window.getProductionOrdersCached = getProductionOrdersCached;
+    window.getPlanningCached = getPlanningCached;
+    window.findProductionOrderCached = findProductionOrderCached;
+    
     
     try {
         if (!firebase.apps.length) {
@@ -2036,13 +2411,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Carregar OPs abertas para o cache (usado na busca)
     async function loadPlanningOrders() {
         try {
-            const snapshot = await db.collection('production_orders').get();
-            const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // Usar função cacheada para economizar leituras do Firebase
+            const orders = await getProductionOrdersCached();
             
             // Salvar no cache para uso posterior
             productionOrdersCache = orders;
             
-            console.log(`[Planejamento] ${orders.length} OPs carregadas no cache`);
+            console.log(`[Planejamento] ${orders.length} OPs carregadas (cache/Firebase)`);
         } catch (err) {
             console.error('Erro ao carregar OPs:', err);
         }
@@ -4166,26 +4541,17 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadOrdersAnalysis() {
         console.log('📋 Carregando análise de ordens de produção');
 
+        // Usar cache otimizado para reduzir leituras do Firebase
         let ordersDataset = Array.isArray(productionOrdersCache) ? [...productionOrdersCache] : [];
 
         if (ordersDataset.length === 0) {
             try {
-                const snapshot = await db.collection('production_orders').orderBy('createdAt', 'desc').get();
-                ordersDataset = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                // Usar função cacheada para economizar leituras
+                ordersDataset = await getProductionOrdersCached();
                 productionOrdersCache = ordersDataset;
-                console.log('📋 Ordens carregadas do Firebase:', ordersDataset.length, ordersDataset);
+                console.log('📋 Ordens carregadas (cache/Firebase):', ordersDataset.length);
             } catch (error) {
                 console.error('Erro ao recuperar ordens de produção para análise:', error);
-                // Tentar sem ordenação caso o índice não exista
-                try {
-                    console.log('📋 Tentando carregar sem ordenação...');
-                    const snapshot2 = await db.collection('production_orders').get();
-                    ordersDataset = snapshot2.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    productionOrdersCache = ordersDataset;
-                    console.log('📋 Ordens carregadas (sem ordem):', ordersDataset.length);
-                } catch (err2) {
-                    console.error('Erro ao recuperar ordens:', err2);
-                }
             }
         } else {
             console.log('📋 Usando cache de ordens:', ordersDataset.length);
@@ -11358,9 +11724,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const countEl = document.getElementById('orders-count');
         
         try {
-            const snapshot = await db.collection('production_orders').get();
-            ordersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            console.log('[Ordens] ' + ordersCache.length + ' ordens carregadas');
+            // Usar função cacheada para economizar leituras do Firebase
+            ordersCache = await getProductionOrdersCached();
+            console.log('[Ordens] ' + ordersCache.length + ' ordens carregadas (cache/Firebase)');
             
             // Atualizar KPIs
             updateOrdersKPIs(ordersCache);
@@ -12019,11 +12385,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         showNotification('Recalculando totais...', 'info');
         
         try {
-            const ordersSnapshot = await db.collection('production_orders').get();
+            // Usar função cacheada mas forçar refresh pois é operação crítica
+            const ordersData = await getProductionOrdersCached(true);
             let updated = 0;
             let errors = 0;
             
-            for (const orderDoc of ordersSnapshot.docs) {
+            for (const orderDoc of ordersData) {
                 const orderId = orderDoc.id;
                 
                 try {
@@ -12054,6 +12421,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     errors++;
                 }
             }
+            
+            // Invalidar cache após atualização
+            if (window.DataStore) window.DataStore.set('productionOrders', null);
+            productionOrdersCache = null;
             
             showNotification('✅ Recalculado! ' + updated + ' ordens atualizadas' + (errors > 0 ? ', ' + errors + ' erros' : ''), 'success');
             loadProductionOrders();
@@ -17025,6 +17396,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             listenerManager.subscribe('productionOrders', query,
                 (snapshot) => {
                     productionOrdersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    
+                    // Alimentar DataStore para evitar leituras repetidas
+                    if (window.DataStore) {
+                        window.DataStore.set('productionOrders', productionOrdersCache);
+                    }
+                    
                     applyOrdersFilters();
                     populatePlanningOrderSelect();
                     if (productionOrderStatusMessage && productionOrderStatusMessage.className.includes('text-status-error')) {
@@ -17804,6 +18181,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     .map(doc => ({ id: doc.id, ...doc.data() }))
                     .filter(isPlanActive);
                 planningItems.sort((a, b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0));
+                
+                // Alimentar DataStore para evitar leituras repetidas
+                if (window.DataStore) {
+                    window.DataStore.set('planning', planningItems);
+                }
+                
                 if (machineSelector) {
                     machineSelector.machineData = {};
                     planningItems.forEach(item => {
@@ -17848,6 +18231,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         listenerManager.subscribe('productionEntries', entriesQuery,
             (snapshot) => {
                 productionEntries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                // Alimentar DataStore para evitar leituras repetidas
+                if (window.DataStore) {
+                    window.DataStore.set('productionEntries', productionEntries);
+                }
+                
                 scheduleRender();
             },
             (error) => console.error("Erro ao carregar lançamentos de produção:", error)
@@ -17896,12 +18285,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         // Executar imediatamente na primeira vez
         pollActiveDowntimes();
         
-        // Configurar polling a cada 5 segundos
+        // Configurar polling a cada 15 segundos (otimizado para reduzir custos - era 5s)
         window._startActiveDowntimesPolling = () => {
             if (window._activeDowntimesPolling) {
                 clearInterval(window._activeDowntimesPolling);
             }
-            window._activeDowntimesPolling = setInterval(pollActiveDowntimes, 5000);
+            window._activeDowntimesPolling = setInterval(pollActiveDowntimes, 15000);
         };
         window._startActiveDowntimesPolling();
     }
@@ -32823,11 +33212,9 @@ function sendDowntimeNotification() {
             oee: isNaN(oee) || !isFinite(oee) ? 0 : Math.max(0, Math.min(1, oee))
         };
 
-        console.log('[TRACE][calculateShiftOEE]', {
-            inputs: { produzido, tempoParadaMin, refugoPcs, cicloReal, cavAtivas },
-            calculations: { tempoProgramado, tempoProduzindo, producaoTeorica, totalProduzido },
-            result
-        });
+        // ✂️ Log de debug removido - estava poluindo o console (linha repetida)
+        // Se precisar debugar novamente, descomente:
+        // console.log('[TRACE][calculateShiftOEE]', { inputs: { produzido, tempoParadaMin, refugoPcs, cicloReal, cavAtivas }, calculations: { tempoProgramado, tempoProduzindo, producaoTeorica, totalProduzido }, result });
 
         return result;
     }
@@ -33971,7 +34358,7 @@ function sendDowntimeNotification() {
             if (activeDowntimeSnap.exists) {
                 const data = activeDowntimeSnap.data();
                 if (data && data.isActive) {
-                    console.log('[MACHINE-DOWNTIME] Parada ATIVA encontrada em active_downtimes:', { machine: normalizedId, data });
+                    // Log removido - estava poluindo o console a cada polling
                     return {
                         recordId: normalizedId, // Usar ID da máquina como recordId para paradas em active_downtimes
                         type: 'active_downtime_live',
@@ -33994,7 +34381,7 @@ function sendDowntimeNotification() {
             // Se encontrou parada ativa, retorna imediatamente
             for (const doc of activeSnap.docs) {
                 const data = doc.data();
-                console.log('[MACHINE-DOWNTIME] Parada ATIVA encontrada em extended_downtime_logs:', { id: doc.id, machine: normalizedId, status: data.status });
+                // Log removido - estava poluindo o console a cada polling
                 return {
                     recordId: doc.id,
                     type: data.type || 'maintenance',
@@ -34048,20 +34435,69 @@ function sendDowntimeNotification() {
         }
     }
 
-    // NOVO: Função para buscar status de todas as máquinas
-    async function getAllMachinesDowntimeStatus() {
+    // ========== CACHE PARA DOWNTIME STATUS ==========
+    // Evita múltiplas leituras Firebase para cada máquina
+    let _downtimeStatusCache = null;
+    let _downtimeStatusCacheTimestamp = 0;
+    const DOWNTIME_CACHE_TTL = 15000; // 15 segundos - mesmo intervalo do polling
+
+    // OTIMIZADO: Função para buscar status de todas as máquinas com cache
+    async function getAllMachinesDowntimeStatus(forceRefresh = false) {
+        // Verificar cache
+        const now = Date.now();
+        if (!forceRefresh && _downtimeStatusCache && (now - _downtimeStatusCacheTimestamp) < DOWNTIME_CACHE_TTL) {
+            // Usar cache - economia de leituras
+            return _downtimeStatusCache;
+        }
+        
         const statusMap = {};
         
         try {
-            const promises = machineDatabase.map(async (machine) => {
-                const mid = normalizeMachineId(machine.id);
-                const downtime = await getActiveMachineDowntime(mid);
-                if (downtime) {
-                    statusMap[mid] = downtime;
+            // OTIMIZAÇÃO: Buscar TODOS de uma vez ao invés de um por um
+            
+            // 1. Buscar todas as paradas ativas de active_downtimes
+            const activeDowntimesSnap = await window.db.collection('active_downtimes').get();
+            activeDowntimesSnap.forEach(doc => {
+                const data = doc.data();
+                if (data && data.isActive) {
+                    const mid = normalizeMachineId(doc.id);
+                    statusMap[mid] = {
+                        recordId: mid,
+                        type: 'active_downtime_live',
+                        reason: data.reason || 'Parada ativa',
+                        startDate: data.startDate,
+                        endDate: null,
+                        status: 'active',
+                        durationMinutes: data.durationMinutes
+                    };
                 }
             });
             
-            await Promise.all(promises);
+            // 2. Buscar paradas ativas de extended_downtime_logs
+            const extendedActiveSnap = await window.db.collection('extended_downtime_logs')
+                .where('status', '==', 'active')
+                .get();
+            extendedActiveSnap.forEach(doc => {
+                const data = doc.data();
+                const mid = normalizeMachineId(data.machine_id);
+                // Só adicionar se não já existe (active_downtimes tem prioridade)
+                if (!statusMap[mid]) {
+                    statusMap[mid] = {
+                        recordId: doc.id,
+                        type: data.type || 'maintenance',
+                        reason: data.reason || 'Parada longa ativa',
+                        startDate: data.start_date,
+                        endDate: data.end_date,
+                        status: 'active',
+                        durationMinutes: data.duration_minutes
+                    };
+                }
+            });
+            
+            // Atualizar cache
+            _downtimeStatusCache = statusMap;
+            _downtimeStatusCacheTimestamp = now;
+            
         } catch (error) {
             console.error('[MACHINE-STATUS] Erro ao carregar status:', error);
         }
@@ -35152,14 +35588,13 @@ async function executeImportOrders() {
     let errors = 0;
     
     try {
-        // Verificar ordens existentes
+        // Verificar ordens existentes usando cache para economizar leituras
         const existingOrders = new Set();
         if (skipExisting) {
-            const snapshot = await db.collection('production_orders').get();
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                if (data.order_number) {
-                    existingOrders.add(String(data.order_number));
+            const cachedOrders = await getProductionOrdersCached();
+            cachedOrders.forEach(order => {
+                if (order.order_number) {
+                    existingOrders.add(String(order.order_number));
                 }
             });
         }
@@ -39639,9 +40074,13 @@ function gerarTopOperadores(registros) {
     const table = document.getElementById('abs-top-operadores');
     if (!table) return;
 
-    // Contar por operador
+    // Filtrar registros - EXCLUIR FÉRIAS do top de ausências
+    // Férias é um direito do trabalhador, não deve ser contabilizado como "ausência problemática"
+    const registrosSemFerias = registros.filter(r => r.tipo !== 'ferias');
+
+    // Contar por operador (sem férias)
     const contagem = {};
-    registros.forEach(r => {
+    registrosSemFerias.forEach(r => {
         const key = r.operadorCod;
         if (!contagem[key]) {
             contagem[key] = { cod: r.operadorCod, nome: r.operadorNome, total: 0 };
