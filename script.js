@@ -41098,9 +41098,9 @@ function openPCPPriorityModal() {
     // Preencher select de máquinas com as máquinas do database
     const machineSelect = document.getElementById('pcp-priority-machine');
     if (machineSelect) {
-        // Gerar lista de máquinas (H01 a H31)
+        // Gerar lista de máquinas (H01 a H32)
         let optionsHTML = '<option value="">-- Selecione uma máquina --</option>';
-        for (let i = 1; i <= 31; i++) {
+        for (let i = 1; i <= 32; i++) {
             const machineId = `H${i.toString().padStart(2, '0')}`;
             const currentPriority = getMachinePriority(machineId);
             const priorityLabel = currentPriority > 0 ? ` (Prioridade: ${currentPriority})` : '';
