@@ -1,4 +1,9 @@
 ﻿// Função global para fechar modais (disponível imediatamente)
+// ============ CONFIGURAÇÃO DE MÁQUINAS ============
+// Máquinas desativadas/retiradas de uso - não aparecem nos dashboards
+const DISABLED_MACHINES = ['H11'];
+// ====================================================
+
 window.closeModal = function(modalId) {
     const modal = document.getElementById(modalId);
     if (!modal) {
@@ -41098,10 +41103,12 @@ function openPCPPriorityModal() {
     // Preencher select de máquinas com as máquinas do database
     const machineSelect = document.getElementById('pcp-priority-machine');
     if (machineSelect) {
-        // Gerar lista de máquinas (H01 a H32)
+        // Gerar lista de máquinas (H01 a H32), excluindo desativadas
         let optionsHTML = '<option value="">-- Selecione uma máquina --</option>';
         for (let i = 1; i <= 32; i++) {
             const machineId = `H${i.toString().padStart(2, '0')}`;
+            // Ignorar máquinas desativadas
+            if (DISABLED_MACHINES.includes(machineId)) continue;
             const currentPriority = getMachinePriority(machineId);
             const priorityLabel = currentPriority > 0 ? ` (Prioridade: ${currentPriority})` : '';
             optionsHTML += `<option value="${machineId}">${machineId}${priorityLabel}</option>`;
@@ -41216,6 +41223,12 @@ async function loadPCPData(date, shiftFilter = 'current') {
             const machineId = (data.machine || '').toUpperCase().trim();
             if (!machineId) return;
             
+            // Ignorar máquinas desativadas
+            if (DISABLED_MACHINES.includes(machineId)) {
+                console.log(`[PCP] Ignorando máquina desativada: ${machineId}`);
+                return;
+            }
+            
             machinesWithPlanning.add(machineId);
             
             // Determinar o turno do planejamento
@@ -41245,28 +41258,46 @@ async function loadPCPData(date, shiftFilter = 'current') {
         // Converter para array mantendo TODOS os planejamentos (multi-produto)
         // Se houver planejamentos do turno correto, remover os fallbacks
         const planningItems = [];
+        const addedPlanKeys = new Set(); // Rastrear planejamentos já adicionados para evitar duplicatas
+        
         planningByMachine.forEach((plans, machineId) => {
             // Verificar se tem planejamento do turno correto
             const correctShiftPlans = plans.filter(p => p._isCorrectShift);
             const fallbackPlans = plans.filter(p => p._isFallback);
             const normalPlans = plans.filter(p => !p._isCorrectShift && !p._isFallback);
             
+            // Função para adicionar plano evitando duplicatas
+            const addPlanIfNotDuplicate = (plan) => {
+                // Chave única: máquina + turno + código do produto
+                const planShift = String(plan.shift || plan.turno || '1');
+                const productCode = plan.product_code || plan.productCode || plan.product || plan.product_cod || '';
+                const key = `${machineId}_T${planShift}_${productCode}`;
+                
+                if (!addedPlanKeys.has(key)) {
+                    addedPlanKeys.add(key);
+                    planningItems.push(plan);
+                    return true;
+                } else {
+                    console.log(`[PCP] Ignorando planejamento duplicado: ${key} (id: ${plan.id})`);
+                    return false;
+                }
+            };
+            
             if (shiftFilter === 'all') {
-                // CORREÇÃO: Para visualização "Todos os turnos", agrupar planejamentos por turno+produto
-                // para identificar multi-produto corretamente, mas permitir visualização de todos os turnos
-                normalPlans.forEach(p => planningItems.push(p));
+                // CORREÇÃO: Para visualização "Todos os turnos", adicionar todos mas evitar duplicatas
+                normalPlans.forEach(p => addPlanIfNotDuplicate(p));
             } else if (correctShiftPlans.length > 0) {
-                // Tem planejamentos do turno correto - usar esses
-                correctShiftPlans.forEach(p => planningItems.push(p));
+                // Tem planejamentos do turno correto - usar esses (evitando duplicatas)
+                correctShiftPlans.forEach(p => addPlanIfNotDuplicate(p));
             } else if (fallbackPlans.length > 0) {
                 // CORREÇÃO: Só tem fallback - usar apenas UM como referência (o mais recente/primeiro)
                 // Não adicionar todos os fallbacks para evitar duplicação incorreta
                 console.log(`[PCP] Máquina ${machineId} não tem planejamento para turno ${effectiveShift}, usando 1 fallback de ${fallbackPlans.length} disponíveis`);
-                planningItems.push(fallbackPlans[0]); // Usar apenas o primeiro fallback
+                addPlanIfNotDuplicate(fallbackPlans[0]); // Usar apenas o primeiro fallback
             }
         });
         
-        console.log('[PCP] Planejamentos após processamento:', planningItems.length, 'máquinas únicas:', machinesWithPlanning.size);
+        console.log('[PCP] Planejamentos após processamento:', planningItems.length, 'máquinas únicas:', machinesWithPlanning.size, 'chaves únicas:', addedPlanKeys.size);
         
         // 2. Buscar paradas ativas (active_downtimes) - PRIORIDADE 1
         const activeDowntimesSnapshot = await db.collection('active_downtimes').get();
@@ -41276,6 +41307,8 @@ async function loadPCPData(date, shiftFilter = 'current') {
             // IMPORTANTE: Verificar se isActive === true
             if (data && data.isActive === true) {
                 const machineId = doc.id.toUpperCase().trim();
+                // Ignorar máquinas desativadas
+                if (DISABLED_MACHINES.includes(machineId)) return;
                 activeDowntimes.set(machineId, { ...data, source: 'active_live' });
             }
         });
@@ -41292,6 +41325,8 @@ async function loadPCPData(date, shiftFilter = 'current') {
             const data = doc.data();
             const machineId = (data.machine || data.machine_id || '').toUpperCase().trim();
             if (machineId) {
+                // Ignorar máquinas desativadas
+                if (DISABLED_MACHINES.includes(machineId)) return;
                 extendedDowntimes.set(machineId, { ...data, source: 'extended' });
             }
         });
@@ -41311,6 +41346,9 @@ async function loadPCPData(date, shiftFilter = 'current') {
             const data = doc.data();
             const machineId = (data.machine || '').toUpperCase().trim();
             if (!machineId) return;
+            
+            // Ignorar máquinas desativadas
+            if (DISABLED_MACHINES.includes(machineId)) return;
             
             // Verificar se a parada está em andamento
             const hasNoEndTime = !data.endTime || data.endTime === '';
