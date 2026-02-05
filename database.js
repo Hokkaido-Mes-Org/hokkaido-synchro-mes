@@ -577,7 +577,7 @@ var productDatabase = [
     { "cod": 3970, "client": "DIVERSOS", "name": "TAMPA SLIM II VERDE ASPARAGUS - 99.43.141", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 4003, "client": "DIVERSOS", "name": "PAINEL SWITCHES LIGHT - S1700150", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 4082, "client": "DIVERSOS", "name": "TAMPA PAINEL ATEGO - S1700127", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
-    { "cod": 4270, "client": "DIVERSOS", "name": "FIXACÃO-GS-28/410CUST---THREAD-HDPE-WINE - 31226472", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
+    { "cod": 4270, "client": "APTAR", "name": "FIXACÃO-GS-28/410CUST---THREAD-HDPE-WINE - 31226472", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
     { "cod": 4666, "client": "SILGAN", "name": "ATUADOR MD150 STD BEGE CB286 01PD06003 - 1.01.03.005.862", "cavities": 30, "cycle": 30.4, "weight": 0.94, "pieces_per_hour_goal": 3556, "mp": "" },
     { "cod": 4899, "client": "DIVERSOS", "name": "CAIXA DE CONTROLE DO GERADOR DE CLORO RESIDENCIAL G5 - 40070236", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 4900, "client": "DIVERSOS", "name": "TAMPA CAIXA DE CONTROLE DO GERADOR DE CLORO RESIDENCIAL G5 - 40070237", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
