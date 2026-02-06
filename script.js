@@ -39471,7 +39471,8 @@ const USUARIOS_ABSENTEISMO_AUTORIZADOS = [
     'linaldo',
     'luciano',
     'tiago.oliveira', 'tiago oliveira',
-    'michelle.benjamin', 'michelle benjamim', 'michelle benjamin'
+    'michelle.benjamin', 'michelle benjamim', 'michelle benjamin',
+    'davi.batista', 'davi batista'
 ];
 
 // Verificar se usuário tem acesso ao absenteísmo
