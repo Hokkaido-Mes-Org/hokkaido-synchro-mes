@@ -41209,6 +41209,9 @@ async function loadPCPData(date, shiftFilter = 'current') {
         const effectiveShift = shiftFilter === 'current' ? getCurrentShift() : shiftFilter;
         console.log('[PCP] Turno efetivo para filtro:', effectiveShift);
         
+        // 0. Carregar observações salvas para esta data
+        await loadPCPObservations(date);
+        
         // 1. Buscar planejamentos da data
         const planningSnapshot = await db.collection('planning')
             .where('date', '==', date)
@@ -41654,7 +41657,13 @@ async function loadPCPData(date, shiftFilter = 'current') {
         // Atualizar KPIs
         updatePCPKPIs(tableData, activeDowntimes);
         
-        // Renderizar tabela
+        // Carregar fila de ordens por máquina ANTES de renderizar a tabela
+        // para que a coluna "Fila" tenha os dados disponíveis
+        if (window.MachineQueue && typeof window.MachineQueue.load === 'function') {
+            await window.MachineQueue.load().catch(err => console.error('[PCP] Erro ao carregar fila:', err));
+        }
+        
+        // Renderizar tabela (agora com dados da fila disponíveis)
         renderPCPTable(tableData);
         
         // Esconder loading e mostrar tabela
@@ -41699,9 +41708,71 @@ function updatePCPKPIs(tableData, activeDowntimes) {
 }
 
 // Renderizar tabela do PCP
+// Cache local de observações PCP carregadas do Firebase
+let pcpObservationsCache = {};
+let pcpObservationsLoaded = false;
+
+/**
+ * Carrega observações salvas do Firebase para a data do PCP
+ */
+async function loadPCPObservations(date) {
+    try {
+        const docRef = db.collection('pcp_observations').doc(date);
+        const doc = await docRef.get();
+        if (doc.exists) {
+            pcpObservationsCache = doc.data().machines || {};
+        } else {
+            pcpObservationsCache = {};
+        }
+        pcpObservationsLoaded = true;
+        console.log('[PCP] Observações carregadas:', Object.keys(pcpObservationsCache).length, 'máquinas');
+    } catch (err) {
+        console.error('[PCP] Erro ao carregar observações:', err);
+        pcpObservationsCache = {};
+    }
+}
+
+/**
+ * Salva observação de uma máquina no Firebase (doc por data)
+ */
+async function savePCPObservation(machineId, text) {
+    try {
+        const dateEl = document.getElementById('pcp-date-selector');
+        const date = dateEl ? dateEl.value : new Date().toISOString().split('T')[0];
+        
+        pcpObservationsCache[machineId] = text;
+        
+        const docRef = db.collection('pcp_observations').doc(date);
+        await docRef.set({
+            machines: pcpObservationsCache,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        
+        console.log(`[PCP] Observação salva: ${machineId} = "${text}"`);
+    } catch (err) {
+        console.error('[PCP] Erro ao salvar observação:', err);
+        if (typeof showNotification === 'function') showNotification('Erro ao salvar observação', 'error');
+    }
+}
+
+// Expor globalmente para uso inline
+window.savePCPObservation = savePCPObservation;
+
+/**
+ * Escapa texto para uso seguro em atributos HTML (value="...")
+ */
+function escapeHtmlAttr(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function renderPCPTable(data) {
     const tableBody = document.getElementById('pcp-table-body');
     if (!tableBody) return;
+    
+    // Obter contagem de filas de ordens por máquina (do módulo MachineQueue)
+    const queueCounts = (window.MachineQueue && typeof window.MachineQueue.getQueueCounts === 'function')
+        ? window.MachineQueue.getQueueCounts() : {};
     
     // CORREÇÃO: Agrupar dados por máquina E turno para identificar multi-produto REAL
     // Multi-produto só ocorre quando há PRODUTOS DIFERENTES no MESMO TURNO na mesma máquina
@@ -41827,6 +41898,22 @@ function renderPCPTable(data) {
                 <td class="px-2 py-2 text-left text-gray-700 whitespace-nowrap border border-gray-300">${row.cliente}</td>
                 <td class="px-2 py-2 text-left text-gray-700 border border-gray-300">${row.produto}${multiProductBadge}</td>
                 <td class="px-2 py-2 text-left border border-gray-300 ${row.status !== 'Produzindo' ? 'text-red-600 font-semibold' : 'text-gray-500'}">${row.motivoParada}</td>
+                <td class="px-2 py-2 text-center border border-gray-300">${(() => {
+                    const machId = (row.machine || '').toUpperCase().trim();
+                    const count = queueCounts[machId] || 0;
+                    if (count === 0) return '<span class="text-gray-300">-</span>';
+                    const color = count >= 5 ? 'bg-red-100 text-red-700 border-red-200' : count >= 3 ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-blue-100 text-blue-700 border-blue-200';
+                    return '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border ' + color + '">' + count + ' <span class="text-[9px] font-normal">OPs</span></span>';
+                })()}</td>
+                <td class="px-1 py-1 border border-gray-300">
+                    <input type="text" 
+                        class="w-full px-2 py-1 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-blue-400 focus:border-blue-400 bg-white hover:bg-gray-50 transition placeholder-gray-300"
+                        placeholder="Escrever obs..."
+                        value="${escapeHtmlAttr(pcpObservationsCache[(row.machine || '').toUpperCase().trim()] || '')}"
+                        data-machine="${(row.machine || '').toUpperCase().trim()}"
+                        onchange="window.savePCPObservation(this.dataset.machine, this.value)"
+                    />
+                </td>
             </tr>
         `;
     }).join('');
