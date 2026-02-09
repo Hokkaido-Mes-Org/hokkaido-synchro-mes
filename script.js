@@ -18057,10 +18057,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         window.print();
     };
 
-    // Função para exportar tabela de planejamento
+    // Função para exportar tabela de planejamento para Excel (XLS)
     window.exportPlanningTable = function() {
         const table = document.getElementById('planning-table-body');
-        if (!table) return;
+        if (!table) {
+            alert('Tabela não encontrada!');
+            return;
+        }
         
         const rows = table.querySelectorAll('tr');
         if (rows.length === 0) {
@@ -18068,25 +18071,275 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             return;
         }
         
-        let csv = 'Máquina,Produto,MP,Ciclo Planejado,Cav. Planejadas,Peso,Ciclo T1,Cav T1,Qtd T1,Ciclo T2,Cav T2,Qtd T2,Ciclo T3,Cav T3,Qtd T3,Total\n';
+        const date = document.getElementById('planning-date-selector')?.value || 'export';
         
+        // Criar HTML com estilos para Excel
+        let html = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+        <meta charset="UTF-8">
+        <!--[if gte mso 9]>
+        <xml>
+            <x:ExcelWorkbook>
+                <x:ExcelWorksheets>
+                    <x:ExcelWorksheet>
+                        <x:Name>Controle Ciclo Cavidade</x:Name>
+                        <x:WorksheetOptions>
+                            <x:DisplayGridlines/>
+                        </x:WorksheetOptions>
+                    </x:ExcelWorksheet>
+                </x:ExcelWorksheets>
+            </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
+        <style>
+            table { border-collapse: collapse; width: 100%; }
+            th, td { border: 1px solid #333; padding: 6px; text-align: center; }
+            th { background-color: #475569; color: white; font-weight: bold; }
+            .title { font-size: 16px; font-weight: bold; background-color: #334155; color: white; }
+            .header-plan { background-color: #f1f5f9; color: #374151; font-weight: bold; }
+            .header-t1 { background-color: #DBEAFE; color: #1D4ED8; font-weight: bold; }
+            .header-t2 { background-color: #FEF3C7; color: #B45309; font-weight: bold; }
+            .header-t3 { background-color: #F3E8FF; color: #7E22CE; font-weight: bold; }
+            .header-total { background-color: #D1FAE5; color: #065F46; font-weight: bold; }
+            .text-left { text-align: left; }
+            .text-red { color: #dc2626; font-weight: bold; }
+            .text-green { color: #16a34a; font-weight: bold; }
+            .text-amber { color: #d97706; font-weight: bold; }
+            .total-cell { background-color: #ECFDF5; font-weight: bold; }
+        </style>
+    </head>
+    <body>
+        <table>
+            <tr>
+                <td colspan="16" class="title">Controle de Ciclo/Cavidade por Turno | Data: ${date}</td>
+            </tr>
+            <tr>
+                <th rowspan="2">Máq.</th>
+                <th rowspan="2">Produto</th>
+                <th rowspan="2">MP</th>
+                <th colspan="3" class="header-plan">Planejado</th>
+                <th colspan="3" class="header-t1">1º Turno</th>
+                <th colspan="3" class="header-t2">2º Turno</th>
+                <th colspan="3" class="header-t3">3º Turno</th>
+                <th rowspan="2" class="header-total">Total</th>
+            </tr>
+            <tr>
+                <th class="header-plan">Ciclo</th>
+                <th class="header-plan">Cav.</th>
+                <th class="header-plan">Peso</th>
+                <th class="header-t1">Ciclo</th>
+                <th class="header-t1">Cav.</th>
+                <th class="header-t1">Qtd.</th>
+                <th class="header-t2">Ciclo</th>
+                <th class="header-t2">Cav.</th>
+                <th class="header-t2">Qtd.</th>
+                <th class="header-t3">Ciclo</th>
+                <th class="header-t3">Cav.</th>
+                <th class="header-t3">Qtd.</th>
+            </tr>`;
+        
+        // Dados da tabela
         rows.forEach(row => {
             const cells = row.querySelectorAll('td');
             if (cells.length >= 15) {
-                const rowData = Array.from(cells).slice(0, 16).map(cell => {
-                    let text = cell.textContent.trim().replace(/,/g, ';');
-                    return `"${text}"`;
-                });
-                csv += rowData.join(',') + '\n';
+                const maquina = cells[0]?.textContent.trim() || '';
+                const produto = cells[1]?.textContent.trim() || '';
+                const mp = cells[2]?.textContent.trim() || '';
+                const cicloPlan = cells[3]?.textContent.trim() || '';
+                const cavPlan = cells[4]?.textContent.trim() || '';
+                const peso = cells[5]?.textContent.trim() || '';
+                const cicloT1 = cells[6]?.textContent.trim() || '';
+                const cavT1 = cells[7]?.textContent.trim() || '';
+                const qtdT1 = cells[8]?.textContent.trim() || '';
+                const cicloT2 = cells[9]?.textContent.trim() || '';
+                const cavT2 = cells[10]?.textContent.trim() || '';
+                const qtdT2 = cells[11]?.textContent.trim() || '';
+                const cicloT3 = cells[12]?.textContent.trim() || '';
+                const cavT3 = cells[13]?.textContent.trim() || '';
+                const qtdT3 = cells[14]?.textContent.trim() || '';
+                const total = cells[15]?.textContent.trim() || '';
+                
+                html += `
+            <tr>
+                <td style="font-weight: bold;">${maquina}</td>
+                <td class="text-left">${produto}</td>
+                <td>${mp}</td>
+                <td>${cicloPlan}</td>
+                <td>${cavPlan}</td>
+                <td>${peso}</td>
+                <td>${cicloT1}</td>
+                <td>${cavT1}</td>
+                <td>${qtdT1}</td>
+                <td>${cicloT2}</td>
+                <td>${cavT2}</td>
+                <td>${qtdT2}</td>
+                <td>${cicloT3}</td>
+                <td>${cavT3}</td>
+                <td>${qtdT3}</td>
+                <td class="total-cell">${total}</td>
+            </tr>`;
             }
         });
         
-        const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+        html += `
+        </table>
+    </body>
+    </html>`;
+        
+        // Criar e baixar arquivo XLS
+        const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
         const link = document.createElement('a');
-        const date = document.getElementById('planning-date-selector')?.value || 'export';
         link.href = URL.createObjectURL(blob);
-        link.download = `planejamento_${date}.csv`;
+        link.download = `controle_ciclo_cavidade_${date}.xls`;
         link.click();
+        URL.revokeObjectURL(link.href);
+    };
+
+    // Função para imprimir tabela de Controle de Ciclo/Cavidade por Turno
+    window.printPlanningTable = function() {
+        const table = document.getElementById('planning-table-body');
+        if (!table) {
+            alert('Tabela não encontrada!');
+            return;
+        }
+        
+        const rows = table.querySelectorAll('tr');
+        if (rows.length === 0) {
+            alert('Nenhum dado para imprimir.');
+            return;
+        }
+        
+        const date = document.getElementById('planning-date-selector')?.value || new Date().toISOString().split('T')[0];
+        
+        // Criar HTML para impressão
+        let html = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Controle de Ciclo/Cavidade por Turno - ${date}</title>
+    <style>
+        @page { size: landscape; margin: 10mm; }
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; font-size: 10px; margin: 0; padding: 10px; }
+        .header { text-align: center; margin-bottom: 15px; }
+        .header h1 { font-size: 16px; margin: 0 0 5px 0; color: #334155; }
+        .header p { font-size: 11px; color: #64748b; margin: 0; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #cbd5e1; padding: 4px 6px; text-align: center; }
+        th { background-color: #475569; color: white; font-weight: bold; font-size: 9px; }
+        .header-plan { background-color: #f1f5f9 !important; color: #374151 !important; }
+        .header-t1 { background-color: #DBEAFE !important; color: #1D4ED8 !important; }
+        .header-t2 { background-color: #FEF3C7 !important; color: #B45309 !important; }
+        .header-t3 { background-color: #F3E8FF !important; color: #7E22CE !important; }
+        .header-total { background-color: #D1FAE5 !important; color: #065F46 !important; }
+        .text-left { text-align: left; }
+        .total-cell { background-color: #ECFDF5; font-weight: bold; }
+        .machine { font-weight: bold; }
+        tr:nth-child(even) { background-color: #f8fafc; }
+        .footer { text-align: center; margin-top: 15px; font-size: 9px; color: #94a3b8; }
+        @media print {
+            body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Controle de Ciclo/Cavidade por Turno</h1>
+        <p>Data: ${date} | Impresso em: ${new Date().toLocaleString('pt-BR')}</p>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th rowspan="2">Máq.</th>
+                <th rowspan="2">Produto</th>
+                <th rowspan="2">MP</th>
+                <th colspan="3" class="header-plan">Planejado</th>
+                <th colspan="3" class="header-t1">1º Turno</th>
+                <th colspan="3" class="header-t2">2º Turno</th>
+                <th colspan="3" class="header-t3">3º Turno</th>
+                <th rowspan="2" class="header-total">Total</th>
+            </tr>
+            <tr>
+                <th class="header-plan">Ciclo</th>
+                <th class="header-plan">Cav.</th>
+                <th class="header-plan">Peso</th>
+                <th class="header-t1">Ciclo</th>
+                <th class="header-t1">Cav.</th>
+                <th class="header-t1">Qtd.</th>
+                <th class="header-t2">Ciclo</th>
+                <th class="header-t2">Cav.</th>
+                <th class="header-t2">Qtd.</th>
+                <th class="header-t3">Ciclo</th>
+                <th class="header-t3">Cav.</th>
+                <th class="header-t3">Qtd.</th>
+            </tr>
+        </thead>
+        <tbody>`;
+        
+        // Dados da tabela
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            if (cells.length >= 15) {
+                const maquina = cells[0]?.textContent.trim() || '';
+                const produto = cells[1]?.textContent.trim() || '';
+                const mp = cells[2]?.textContent.trim() || '';
+                const cicloPlan = cells[3]?.textContent.trim() || '';
+                const cavPlan = cells[4]?.textContent.trim() || '';
+                const peso = cells[5]?.textContent.trim() || '';
+                const cicloT1 = cells[6]?.textContent.trim() || '';
+                const cavT1 = cells[7]?.textContent.trim() || '';
+                const qtdT1 = cells[8]?.textContent.trim() || '';
+                const cicloT2 = cells[9]?.textContent.trim() || '';
+                const cavT2 = cells[10]?.textContent.trim() || '';
+                const qtdT2 = cells[11]?.textContent.trim() || '';
+                const cicloT3 = cells[12]?.textContent.trim() || '';
+                const cavT3 = cells[13]?.textContent.trim() || '';
+                const qtdT3 = cells[14]?.textContent.trim() || '';
+                const total = cells[15]?.textContent.trim() || '';
+                
+                html += `
+            <tr>
+                <td class="machine">${maquina}</td>
+                <td class="text-left">${produto}</td>
+                <td>${mp}</td>
+                <td>${cicloPlan}</td>
+                <td>${cavPlan}</td>
+                <td>${peso}</td>
+                <td>${cicloT1}</td>
+                <td>${cavT1}</td>
+                <td>${qtdT1}</td>
+                <td>${cicloT2}</td>
+                <td>${cavT2}</td>
+                <td>${qtdT2}</td>
+                <td>${cicloT3}</td>
+                <td>${cavT3}</td>
+                <td>${qtdT3}</td>
+                <td class="total-cell">${total}</td>
+            </tr>`;
+            }
+        });
+        
+        html += `
+        </tbody>
+    </table>
+    <div class="footer">Hokkaido MES - Sistema de Gestão de Produção</div>
+</body>
+</html>`;
+        
+        // Abrir janela de impressão
+        const printWindow = window.open('', '_blank', 'width=1200,height=800');
+        if (printWindow) {
+            printWindow.document.write(html);
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => {
+                printWindow.print();
+            }, 500);
+        } else {
+            alert('Não foi possível abrir a janela de impressão. Verifique se popups estão habilitados.');
+        }
     };
 
     // Setup de busca na tabela de planejamento
@@ -42063,19 +42316,19 @@ function exportPCPToExcel() {
     <body>
         <table>
             <tr>
-                <td colspan="8" class="title">PCP Dashboard - Produção | Data: ${date} | Turno: ${shiftName}</td>
+                <td colspan="10" class="title">PCP Dashboard - Produção | Data: ${date} | Turno: ${shiftName}</td>
             </tr>
             <tr>
                 <td colspan="3" class="kpi-header">Máquinas Planejadas</td>
-                <td colspan="2" class="kpi-header">Produzindo</td>
-                <td colspan="3" class="kpi-header">Paradas</td>
+                <td colspan="3" class="kpi-header">Produzindo</td>
+                <td colspan="4" class="kpi-header">Paradas</td>
             </tr>
             <tr>
                 <td colspan="3" class="kpi-value kpi-machines">${totalMachines}</td>
-                <td colspan="2" class="kpi-value kpi-producing">${producingMachines}</td>
-                <td colspan="3" class="kpi-value kpi-stopped">${stoppedMachines}</td>
+                <td colspan="3" class="kpi-value kpi-producing">${producingMachines}</td>
+                <td colspan="4" class="kpi-value kpi-stopped">${stoppedMachines}</td>
             </tr>
-            <tr><td colspan="8"></td></tr>
+            <tr><td colspan="10"></td></tr>
             <tr>
                 <th>Máquina</th>
                 <th>Prioridade</th>
@@ -42085,6 +42338,8 @@ function exportPCPToExcel() {
                 <th>Cliente</th>
                 <th>Produto</th>
                 <th>Motivo Parada</th>
+                <th>Fila</th>
+                <th>Observação</th>
             </tr>`;
     
     // Dados da tabela
@@ -42103,6 +42358,11 @@ function exportPCPToExcel() {
                 const cliente = tds[5].textContent.trim();
                 const produto = tds[6].textContent.trim();
                 const motivoParada = tds[7].textContent.trim();
+                
+                // Novas colunas: Fila e Observação
+                const fila = tds[8] ? tds[8].textContent.trim().replace('OPs', '').trim() : '-';
+                const observacaoInput = tds[9] ? tds[9].querySelector('input') : null;
+                const observacao = observacaoInput ? observacaoInput.value.trim() : (tds[9] ? tds[9].textContent.trim() : '');
                 
                 // Obter cores do status da célula original
                 const bgColor = statusCell.style.backgroundColor || 'transparent';
@@ -42138,6 +42398,8 @@ function exportPCPToExcel() {
                 <td class="text-left">${cliente}</td>
                 <td class="text-left">${produto}</td>
                 <td class="text-left ${motivoClass}">${motivoParada}</td>
+                <td style="text-align: center;">${fila}</td>
+                <td class="text-left">${observacao}</td>
             </tr>`;
             }
         });
@@ -42147,7 +42409,7 @@ function exportPCPToExcel() {
         </table>
         <br/>
         <table>
-            <tr><td colspan="8" style="font-size: 10px; color: #666;">Legenda de Status:</td></tr>
+            <tr><td colspan="10" style="font-size: 10px; color: #666;">Legenda de Status:</td></tr>
             <tr>
                 <td style="background-color: rgba(34, 197, 94, 0.3); color: #16A34A; font-weight: bold;">Produzindo</td>
                 <td style="background-color: rgba(233, 30, 99, 0.25); color: #E91E63; font-weight: bold;">Preparação</td>
@@ -42165,12 +42427,12 @@ function exportPCPToExcel() {
                 <td style="background-color: rgba(33, 33, 33, 0.8); color: #BDBDBD; font-weight: bold;">PCP</td>
                 <td style="background-color: rgba(158, 158, 158, 0.3); color: #424242; font-weight: bold;">Admin.</td>
                 <td style="background-color: rgba(120, 144, 156, 0.25); color: #78909C; font-weight: bold;">Outros</td>
-                <td colspan="2"></td>
+                <td colspan="4"></td>
             </tr>
         </table>
         <br/>
         <table>
-            <tr><td colspan="8" style="font-size: 10px; color: #666;">Legenda de Prioridade:</td></tr>
+            <tr><td colspan="10" style="font-size: 10px; color: #666;">Legenda de Prioridade:</td></tr>
             <tr>
                 <td style="background-color: #FEE2E2; color: #B91C1C; font-weight: bold;">5 - Urgência Máxima</td>
                 <td style="background-color: #FFEDD5; color: #C2410C; font-weight: bold;">4 - Alta</td>
@@ -42178,7 +42440,7 @@ function exportPCPToExcel() {
                 <td style="background-color: #FEF9C3; color: #A16207; font-weight: bold;">2 - Baixa</td>
                 <td style="background-color: #F3F4F6; color: #4B5563;">1 - Mínima</td>
                 <td style="color: #9CA3AF;">0 - Sem prioridade</td>
-                <td colspan="2"></td>
+                <td colspan="4"></td>
             </tr>
         </table>
         <br/>

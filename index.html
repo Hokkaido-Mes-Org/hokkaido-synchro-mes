@@ -735,6 +735,11 @@
                             <div class="flex items-center gap-2">
                                 <input type="text" id="planning-table-search" placeholder="Buscar máquina ou produto..." 
                                     class="px-3 py-1.5 text-sm border-0 rounded-lg bg-white/10 text-white placeholder-white/60 focus:ring-2 focus:ring-white/30 focus:bg-white/20 transition-all w-48">
+                                <button type="button" onclick="printPlanningTable()" 
+                                    class="bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 transition-all text-sm">
+                                    <i data-lucide="printer" class="w-4 h-4"></i>
+                                    <span class="hidden sm:inline">Imprimir</span>
+                                </button>
                                 <button type="button" onclick="exportPlanningTable()" 
                                     class="bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 transition-all text-sm">
                                     <i data-lucide="download" class="w-4 h-4"></i>
