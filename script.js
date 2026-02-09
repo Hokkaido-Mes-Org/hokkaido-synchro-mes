@@ -6730,7 +6730,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 };
                 
                 extendedDowntimeData.push({
-                    id: doc.id,
+                    id: data.id || d.id, // FIX: usar data.id em vez de doc.id
                     machine: machineId,
                     reason: d.reason || typeLabels[d.type] || d.type || 'Parada Longa',
                     duration: durationMinutes,
@@ -7053,7 +7053,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             allData.forEach(item => {
                 const d = item;
                 if (!item.id) return;
-                if (seenAnalysisIds.has(doc.id)) return;
+                if (seenAnalysisIds.has(item.id)) return; // FIX: usar item.id em vez de doc.id
                 
                 // Pegar data do registro (pode estar em diferentes campos)
                 const recordDate = d.start_date || d.date || '';
@@ -7072,8 +7072,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     return;
                 }
                 
-                seenAnalysisIds.add(doc.id);
-                data.push({ id: doc.id, ...d, machine_id: machineId }); // Garantir machine_id
+                seenAnalysisIds.add(item.id); // FIX: usar item.id em vez de doc.id
+                data.push({ id: item.id, ...d, machine_id: machineId }); // FIX: usar item.id em vez de doc.id
                 
                 // Log para debug
                 if (isActive) {
