@@ -1168,7 +1168,6 @@
                                         <option value="ADMINISTRATIVO">ADMINISTRATIVO</option>
                                         <option value="PCP">PCP</option>
                                         <option value="COMERCIAL">COMERCIAL</option>
-                                        <option value="HOKKAIDO">HOKKAIDO</option>
                                     </select>
                                 </div>
                                 <div>
@@ -5401,27 +5400,22 @@
                                         <span id="extended-downtime-total" class="text-xs font-semibold text-gray-700 bg-white px-3 py-1.5 rounded-full shadow-sm">0 registros</span>
                                     </div>
                                     
-                                    <!-- Cards de Categorias -->
-                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-                                        <div class="bg-white rounded-xl p-4 text-center shadow-sm border border-gray-100 hover:border-gray-300 transition">
-                                            <p class="text-xs text-gray-600 font-medium mb-2">Fim de Semana</p>
-                                            <p id="extended-weekend-hours" class="text-2xl font-bold text-gray-800">0h</p>
-                                            <p class="text-xs text-gray-500 mt-1">parada</p>
+                                    <!-- Cards de Categorias - DINÂMICO -->
+                                    <div id="extended-downtime-category-cards" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-5">
+                                        <!-- Gerado dinamicamente pelo JavaScript -->
+                                        <div class="col-span-full text-center py-4 text-gray-400 text-sm">
+                                            Carregando categorias...
                                         </div>
-                                        <div class="bg-blue-50 rounded-xl p-4 text-center shadow-sm border border-blue-100 hover:border-blue-300 transition">
-                                            <p class="text-xs text-blue-700 font-medium mb-2">Manutenção Preventiva</p>
-                                            <p id="extended-maintenance-hours" class="text-2xl font-bold text-blue-700">0h</p>
-                                            <p class="text-xs text-blue-600 mt-1">planejada</p>
+                                    </div>
+
+                                    <!-- Gráfico de Paradas Longas -->
+                                    <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100 mb-5">
+                                        <div class="flex items-center gap-2 mb-3">
+                                            <i data-lucide="pie-chart" class="w-4 h-4 text-gray-500"></i>
+                                            <span class="text-sm font-medium text-gray-700">Distribuição por Tipo</span>
                                         </div>
-                                        <div class="bg-amber-50 rounded-xl p-4 text-center shadow-sm border border-amber-100 hover:border-amber-300 transition">
-                                            <p class="text-xs text-amber-700 font-medium mb-2">Feriados</p>
-                                            <p id="extended-holiday-hours" class="text-2xl font-bold text-amber-700">0h</p>
-                                            <p class="text-xs text-amber-600 mt-1">inatividade</p>
-                                        </div>
-                                        <div class="bg-red-50 rounded-xl p-4 text-center shadow-sm border border-red-100 hover:border-red-300 transition">
-                                            <p class="text-xs text-red-700 font-medium mb-2">Outros</p>
-                                            <p id="extended-other-hours" class="text-2xl font-bold text-red-700">0h</p>
-                                            <p class="text-xs text-red-600 mt-1">não categorizadas</p>
+                                        <div class="h-64 relative">
+                                            <canvas id="extended-downtime-chart"></canvas>
                                         </div>
                                     </div>
 

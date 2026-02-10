@@ -3787,16 +3787,35 @@ document.addEventListener('DOMContentLoaded', function() {
             "SETUP": ["INSTALAÇÃO DE MOLDE", "RETIRADA DE MOLDE", "INSTALAÇÃO DE PERÍFÉRICOS", "AGUARDANDO SETUP"],
             "ADMINISTRATIVO": ["FALTA DE ENERGIA"],
             "PCP": ["SEM PROGRAMAÇÃO", "SEM PROGRAMAÇÃO-FIM DE SEMANA", "ESTRATÉGIA PCP" ],
-            "COMERCIAL": ["SEM PEDIDO"],
-            "OUTROS": ["VAZAMENTO DO BICO", "QUEIMA DE RESISTÊNCIA"],
-            "HOKKAIDO": ["HOKKAIDO"]
+            "COMERCIAL": ["SEM PEDIDO", "PARADA COMERCIAL", "BAIXA DEMANDA"],
+            "OUTROS": ["VAZAMENTO DO BICO", "QUEIMA DE RESISTÊNCIA"]
         };
     }
     
     // Função para obter a categoria de um motivo de parada
     function getDowntimeCategory(reason) {
         if (!reason) return 'OUTROS';
+        
         const reasonUpper = reason.trim().toUpperCase();
+        
+        // Mapeamento especial para motivos comuns
+        const specialReasonMapping = {
+            'FIM DE SEMANA': 'PCP',
+            'MANUTENÇÃO PREVENTIVA': 'MANUTENÇÃO',
+            'MANUTENÇÃO PROGRAMADA': 'MANUTENÇÃO',
+            'FERIADO': 'ADMINISTRATIVO',
+            'SETUP/TROCA': 'SETUP',
+            'PARADA COMERCIAL': 'COMERCIAL',
+            'SEM PEDIDO': 'COMERCIAL',
+            'BAIXA DEMANDA': 'COMERCIAL',
+            'PARADA LONGA': 'OUTROS',
+            'OUTROS (PARADA LONGA)': 'OUTROS'
+        };
+        
+        if (specialReasonMapping[reasonUpper]) {
+            return specialReasonMapping[reasonUpper];
+        }
+        
         const grouped = getGroupedDowntimeReasons();
         
         for (const [category, reasons] of Object.entries(grouped)) {
@@ -6661,110 +6680,82 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             events: downtimeData.length
         });
         
-        // ✅ OTIMIZADO: Carregar paradas longas usando cache
-        let extendedDowntimeData = [];
-        try {
-            const allExtended = await getExtendedDowntimesCached();
-            
-            // Definir limites do período filtrado
-            const filterStart = new Date(`${startDate}T00:00:00`);
-            const filterEnd = new Date(`${endDate}T23:59:59`);
-            const now = new Date();
-            
-            allExtended.forEach(data => {
-                const d = data;
-                const machineId = d.machine_id || d.machine || '';
-                
-                // Filtrar por máquina se selecionada
-                if (machine && machine !== 'all' && machine !== '' && machineId !== machine) return;
-                
-                // Determinar início e fim reais da parada
-                let paradaStart;
-                if (d.start_datetime?.toDate) {
-                    paradaStart = d.start_datetime.toDate();
-                } else if (d.start_date && d.start_time) {
-                    paradaStart = new Date(`${d.start_date}T${d.start_time}`);
-                } else if (d.start_date) {
-                    paradaStart = new Date(`${d.start_date}T00:00:00`);
-                } else {
-                    return; // Sem data de início, ignorar
-                }
-                
-                let paradaEnd;
-                const isActive = d.status === 'active';
-                if (isActive) {
-                    paradaEnd = now; // Parada ainda ativa - fim é agora
-                } else if (d.end_datetime?.toDate) {
-                    paradaEnd = d.end_datetime.toDate();
-                } else if (d.end_date && d.end_time) {
-                    paradaEnd = new Date(`${d.end_date}T${d.end_time}`);
-                } else if (d.end_date) {
-                    paradaEnd = new Date(`${d.end_date}T23:59:59`);
-                } else {
-                    paradaEnd = now; // Sem fim definido, assumir agora
-                }
-                
-                // Verificar se a parada tem intersecção com o período filtrado
-                if (paradaEnd < filterStart || paradaStart > filterEnd) {
-                    return; // Parada completamente fora do período
-                }
-                
-                // ✅ CALCULAR APENAS O TEMPO DENTRO DO PERÍODO FILTRADO
-                const effectiveStart = paradaStart < filterStart ? filterStart : paradaStart;
-                const effectiveEnd = paradaEnd > filterEnd ? filterEnd : paradaEnd;
-                
-                // Duração em minutos apenas do período filtrado
-                const durationMinutes = Math.max(0, Math.floor((effectiveEnd - effectiveStart) / (1000 * 60)));
-                
-                if (durationMinutes <= 0) return; // Sem tempo no período
-                
-                // Mapear tipo para motivo legível
-                const typeLabels = {
-                    weekend: 'Fim de Semana',
-                    maintenance: 'Manutenção Preventiva',
-                    preventive: 'Manutenção Preventiva',
-                    maintenance_planned: 'Manutenção Programada',
-                    holiday: 'Feriado',
-                    setup: 'Setup/Troca',
-                    other: 'Outros (Parada Longa)'
-                };
-                
-                extendedDowntimeData.push({
-                    id: data.id || d.id, // FIX: usar data.id em vez de doc.id
-                    machine: machineId,
-                    reason: d.reason || typeLabels[d.type] || d.type || 'Parada Longa',
-                    duration: durationMinutes,
-                    type: d.type,
-                    isExtended: true, // Flag para identificar paradas longas
-                    // Info adicional para debug
-                    _totalDuration: d.duration_minutes || Math.floor((paradaEnd - paradaStart) / (1000 * 60)),
-                    _filteredDuration: durationMinutes
-                });
-                
-                console.log(`[EXTENDED-DOWNTIME] ${machineId}: Total ${Math.floor((paradaEnd - paradaStart) / (1000 * 60))}min, No período: ${durationMinutes}min`);
-            });
-            
-            console.log('[TRACE][loadDowntimeAnalysis] extended downtime received', {
-                count: extendedDowntimeData.length
-            });
-        } catch (err) {
-            console.warn('[loadDowntimeAnalysis] Erro ao carregar paradas longas:', err);
-        }
+        // ✅ Carregar paradas longas para incluir no gráfico de categorias
+        const extendedData = await getExtendedDowntimesCached();
+        const extendedForChart = [];
         
-        // ✅ Combinar paradas normais + paradas longas para os gráficos
-        const allDowntimeData = [...downtimeData, ...extendedDowntimeData];
-        
-        console.log('[TRACE][loadDowntimeAnalysis] combined downtime data', {
-            normal: downtimeData.length,
-            extended: extendedDowntimeData.length,
-            total: allDowntimeData.length
+        extendedData.forEach(item => {
+            if (!item.id) return;
+            
+            const recordDate = item.start_date || item.date || '';
+            const isInPeriod = recordDate >= startDate && recordDate <= endDate;
+            
+            if (!isInPeriod) return;
+            
+            // Filtrar por máquina se selecionada
+            const machineId = item.machine_id || item.machine || '';
+            if (machine && machine !== 'all' && machine !== '' && machineId !== machine) {
+                return;
+            }
+            
+            // Calcular duração em minutos
+            let durationMinutes = 0;
+            if (item.status === 'active' && item.start_datetime) {
+                const startTime = item.start_datetime?.toDate?.() || new Date(item.start_date);
+                const now = new Date();
+                durationMinutes = Math.floor((now - startTime) / (1000 * 60));
+            } else {
+                durationMinutes = item.duration_minutes || 0;
+            }
+            
+            // Usar o motivo diretamente - item.reason é o valor confiável
+            // O campo type pode ser o mesmo que reason ou um código antigo
+            const typeToReason = {
+                'weekend': 'FIM DE SEMANA',
+                'maintenance': 'MANUTENÇÃO PROGRAMADA',
+                'preventive': 'MANUTENÇÃO PREVENTIVA',
+                'holiday': 'FERIADO',
+                'no_order': 'SEM PEDIDO',
+                'commercial': 'PARADA COMERCIAL',
+                'other': 'PARADA LONGA'
+            };
+            
+            // Priorizar item.reason, depois tentar mapear item.type
+            let reason = item.reason || '';
+            if (!reason && item.type) {
+                reason = typeToReason[item.type] || item.type;
+            }
+            if (!reason) {
+                reason = 'OUTROS';
+            }
+            
+            extendedForChart.push({
+                id: item.id,
+                machine: machineId,
+                date: recordDate,
+                duration: durationMinutes,
+                reason: reason,
+                isExtended: true
+            });
         });
         
-        const totalDowntime = allDowntimeData.reduce((sum, item) => sum + (item.duration || 0), 0);
-        const downtimeCount = allDowntimeData.length;
+        console.log('[TRACE][loadDowntimeAnalysis] extended downtime for chart:', extendedForChart.length);
+        
+        // ✅ Combinar para o gráfico de categorias/motivos (sem duplicação na lista)
+        const combinedForChart = [...downtimeData, ...extendedForChart];
+        
+        console.log('[TRACE][loadDowntimeAnalysis] combined data for chart:', {
+            normal: downtimeData.length,
+            extended: extendedForChart.length,
+            total: combinedForChart.length
+        });
+        
+        // Usar apenas paradas normais para estatísticas principais (KPIs)
+        const totalDowntime = downtimeData.reduce((sum, item) => sum + (item.duration || 0), 0);
+        const downtimeCount = downtimeData.length;
         const avgDowntime = downtimeCount > 0 ? (totalDowntime / downtimeCount) : 0;
         
-        // Calcular MTBF (Mean Time Between Failures)
+        // Calcular MTBF (Mean Time Between Failures) - apenas paradas normais
         const hoursInPeriod = calculateHoursInPeriod(startDate, endDate);
         const mtbf = downtimeCount > 0 ? (hoursInPeriod / downtimeCount) : 0;
 
@@ -6774,16 +6765,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         document.getElementById('avg-downtime').textContent = `${avgDowntime.toFixed(0)}min`;
         document.getElementById('mtbf-value').textContent = `${mtbf.toFixed(1)}h`;
 
-        // ✅ Gerar gráficos com dados combinados (normais + longas)
-        await generateDowntimeReasonsChart(allDowntimeData);
+        // ✅ Gerar gráfico de CATEGORIAS/MOTIVOS com TODAS as paradas (normais + longas)
+        await generateDowntimeReasonsChart(combinedForChart);
         setupDowntimeChartToggle(); // Setup dos botões de toggle categoria/motivo
-        await generateDowntimeByMachineChart(allDowntimeData);
-        await generateDowntimeTimelineChart(downtimeData); // Timeline mantém só normais para não distorcer
+        
+        // Outros gráficos apenas com paradas normais
+        await generateDowntimeByMachineChart(downtimeData);
+        await generateDowntimeTimelineChart(downtimeData);
 
-        // ✅ Popular filtro de motivos de parada com detalhes
-        await populateDowntimeReasonFilter(allDowntimeData, downtimeSegments);
+        // ✅ Popular filtro de motivos de parada apenas com paradas normais
+        await populateDowntimeReasonFilter(downtimeData, downtimeSegments);
 
-        // Carregar lista detalhada de paradas longas programadas
+        // Carregar lista detalhada de paradas longas programadas (seção separada)
         await loadExtendedDowntimeAnalysis(startDate, endDate, machine);
     }
 
@@ -6965,7 +6958,6 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             'ADMINISTRATIVO': 'bg-orange-100 text-orange-800',
             'PCP': 'bg-lime-100 text-lime-800',
             'COMERCIAL': 'bg-cyan-100 text-cyan-800',
-            'HOKKAIDO': 'bg-gray-200 text-gray-700',
             'OUTROS': 'bg-gray-100 text-gray-800'
         };
         
@@ -7089,68 +7081,111 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 console.log(`[EXTENDED-DOWNTIME] [${i+1}] ${d.machine_id} | ${d.start_date || d.date} | status: ${d.status || 'N/A'} | type: ${d.type}`);
             });
 
-            // Calcular totais por tipo
-            const typeHours = {
-                weekend: 0,
-                maintenance: 0,
-                holiday: 0,
-                other: 0
+            // Mapear tipos antigos para motivos reconhecíveis por getDowntimeCategory
+            const oldTypeToReason = {
+                'weekend': 'FIM DE SEMANA',
+                'maintenance': 'MANUTENÇÃO PROGRAMADA',
+                'preventive': 'MANUTENÇÃO PREVENTIVA',
+                'holiday': 'FERIADO',
+                'no_order': 'SEM PEDIDO',
+                'commercial': 'PARADA COMERCIAL',
+                'setup': 'SETUP/TROCA',
+                'other': ''
             };
 
+            // Agrupar horas por CATEGORIA real usando getDowntimeCategory
+            const categoryHours = {};
+
             data.forEach(item => {
-                // Calcular duração: se parada está finalizada, usar duration_minutes; senão calcular do início até agora
+                // Calcular duração
                 let hours = 0;
                 if (item.status === 'active' && item.start_datetime) {
-                    // Parada ativa - calcular tempo desde o início até agora
                     const startTime = item.start_datetime?.toDate?.() || new Date(item.start_date);
                     const now = new Date();
                     const durationMin = Math.floor((now - startTime) / (1000 * 60));
                     hours = durationMin / 60;
                 } else {
-                    // Parada finalizada - usar duration_minutes
                     hours = (item.duration_minutes || 0) / 60;
                 }
                 
-                const type = item.type || 'other';
+                // Determinar o motivo para categorização
+                // Priorizar: item.reason > item.category > mapear item.type antigo
+                let reasonForCategory = (item.reason || '').trim();
                 
-                if (type === 'weekend') typeHours.weekend += hours;
-                else if (type === 'maintenance' || type === 'preventive') typeHours.maintenance += hours;
-                else if (type === 'holiday') typeHours.holiday += hours;
-                else typeHours.other += hours;
+                if (!reasonForCategory) {
+                    // Tentar mapear tipo antigo
+                    const typeKey = (item.type || '').toLowerCase();
+                    reasonForCategory = oldTypeToReason[typeKey] || item.type || '';
+                }
+                
+                // Se temos o campo category preenchido, usar diretamente
+                let assignedCategory;
+                if (item.category && item.category.trim()) {
+                    assignedCategory = item.category.trim().toUpperCase();
+                } else {
+                    // Usar getDowntimeCategory para resolver a categoria pelo motivo
+                    assignedCategory = getDowntimeCategory(reasonForCategory);
+                }
+                
+                categoryHours[assignedCategory] = (categoryHours[assignedCategory] || 0) + hours;
+                
+                console.log(`[EXTENDED-DOWNTIME] ${item.machine_id} | reason="${item.reason}" | category="${item.category}" | type="${item.type}" => ${assignedCategory} (${hours.toFixed(1)}h)`);
             });
 
-            // Atualizar cards de resumo
-            document.getElementById('extended-weekend-hours').textContent = `${typeHours.weekend.toFixed(1)}h`;
-            document.getElementById('extended-maintenance-hours').textContent = `${typeHours.maintenance.toFixed(1)}h`;
-            document.getElementById('extended-holiday-hours').textContent = `${typeHours.holiday.toFixed(1)}h`;
-            document.getElementById('extended-other-hours').textContent = `${typeHours.other.toFixed(1)}h`;
+            console.log('[EXTENDED-DOWNTIME] Distribuição por categoria:', categoryHours);
+
+            // Cores e estilos por categoria
+            const categoryStyles = {
+                'FERRAMENTARIA': { bg: 'bg-red-50', border: 'border-red-100', text: 'text-red-700', textSub: 'text-red-600', label: 'moldes' },
+                'PROCESSO':      { bg: 'bg-purple-50', border: 'border-purple-100', text: 'text-purple-700', textSub: 'text-purple-600', label: 'técnico' },
+                'COMPRAS':       { bg: 'bg-yellow-50', border: 'border-yellow-100', text: 'text-yellow-700', textSub: 'text-yellow-600', label: 'insumos' },
+                'PREPARAÇÃO':    { bg: 'bg-orange-50', border: 'border-orange-100', text: 'text-orange-700', textSub: 'text-orange-600', label: 'material' },
+                'QUALIDADE':     { bg: 'bg-indigo-50', border: 'border-indigo-100', text: 'text-indigo-700', textSub: 'text-indigo-600', label: 'inspeção' },
+                'MANUTENÇÃO':    { bg: 'bg-blue-50', border: 'border-blue-100', text: 'text-blue-700', textSub: 'text-blue-600', label: 'planejada' },
+                'PRODUÇÃO':      { bg: 'bg-green-50', border: 'border-green-100', text: 'text-green-700', textSub: 'text-green-600', label: 'operação' },
+                'SETUP':         { bg: 'bg-amber-50', border: 'border-amber-100', text: 'text-amber-700', textSub: 'text-amber-600', label: 'troca' },
+                'ADMINISTRATIVO':{ bg: 'bg-gray-50', border: 'border-gray-100', text: 'text-gray-700', textSub: 'text-gray-600', label: 'feriado/energia' },
+                'PCP':           { bg: 'bg-slate-50', border: 'border-slate-100', text: 'text-slate-700', textSub: 'text-slate-600', label: 'programação' },
+                'COMERCIAL':     { bg: 'bg-cyan-50', border: 'border-cyan-100', text: 'text-cyan-700', textSub: 'text-cyan-600', label: 'sem pedido' },
+                'OUTROS':        { bg: 'bg-stone-50', border: 'border-stone-100', text: 'text-stone-700', textSub: 'text-stone-600', label: 'diversos' }
+            };
+
+            const defaultStyle = { bg: 'bg-gray-50', border: 'border-gray-100', text: 'text-gray-700', textSub: 'text-gray-600', label: '' };
+
+            // Gerar cards dinamicamente
+            const cardsContainer = document.getElementById('extended-downtime-category-cards');
+            if (cardsContainer) {
+                // Ordenar categorias por horas (maior primeiro)
+                const sortedCategories = Object.entries(categoryHours)
+                    .filter(([, h]) => h > 0)
+                    .sort((a, b) => b[1] - a[1]);
+
+                if (sortedCategories.length === 0) {
+                    cardsContainer.innerHTML = '<div class="col-span-full text-center py-4 text-gray-400 text-sm">Nenhuma parada no período</div>';
+                } else {
+                    cardsContainer.innerHTML = sortedCategories.map(([cat, hours]) => {
+                        const style = categoryStyles[cat] || defaultStyle;
+                        return `
+                            <div class="${style.bg} rounded-xl p-4 text-center shadow-sm border ${style.border} hover:shadow-md transition">
+                                <p class="text-xs ${style.text} font-medium mb-2">${cat}</p>
+                                <p class="text-2xl font-bold ${style.text}">${hours.toFixed(1)}h</p>
+                                <p class="text-xs ${style.textSub} mt-1">${style.label}</p>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
+
             document.getElementById('extended-downtime-total').textContent = `${data.length} registros`;
+
+            // Renderizar gráfico de distribuição por categoria
+            renderExtendedDowntimeChart(categoryHours);
 
             // Renderizar lista
             const listContainer = document.getElementById('extended-downtime-analysis-list');
             if (data.length === 0) {
                 listContainer.innerHTML = '<p class="text-sm text-gray-500 text-center py-4">Nenhuma parada longa no período selecionado.</p>';
             } else {
-                const typeLabels = {
-                    weekend: 'Fim de Semana',
-                    maintenance: 'Manutenção Preventiva',
-                    preventive: 'Manutenção Preventiva',
-                    maintenance_planned: 'Manutenção Programada',
-                    holiday: 'Feriado',
-                    setup: 'Setup/Troca',
-                    other: 'Outro'
-                };
-
-                const typeColors = {
-                    weekend: 'bg-gray-100 text-gray-700',
-                    maintenance: 'bg-blue-100 text-blue-700',
-                    preventive: 'bg-blue-100 text-blue-700',
-                    maintenance_planned: 'bg-blue-100 text-blue-700',
-                    holiday: 'bg-amber-100 text-amber-700',
-                    setup: 'bg-purple-100 text-purple-700',
-                    other: 'bg-red-100 text-red-700'
-                };
-
                 listContainer.innerHTML = data.map(item => {
                     // Calcular duração: se ativa, calcular do início até agora; senão usar duration_minutes
                     let hours;
@@ -7176,8 +7211,29 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                         hours = ((item.duration_minutes || 0) / 60).toFixed(1);
                     }
                     
-                    const typeLabel = typeLabels[item.type] || item.type || 'Outro';
-                    const typeColor = typeColors[item.type] || 'bg-gray-100 text-gray-700';
+                    // Determinar categoria/tipo para exibição
+                    const type = (item.type || '').toUpperCase();
+                    const reason = (item.reason || '').toUpperCase();
+                    const category = (item.category || '').toUpperCase();
+                    
+                    let typeLabel = item.reason || item.type || 'Outro';
+                    let typeColor = 'bg-gray-100 text-gray-700';
+                    
+                    // Categorizar para cor
+                    if (type === 'weekend' || reason.includes('FIM DE SEMANA') || reason.includes('SEM PROGRAMAÇÃO-FIM DE SEMANA')) {
+                        typeColor = 'bg-gray-200 text-gray-800';
+                    } else if (type === 'maintenance' || type === 'preventive' || 
+                        reason.includes('MANUTENÇÃO') || category === 'MANUTENÇÃO') {
+                        typeColor = 'bg-blue-100 text-blue-700';
+                    } else if (type === 'holiday' || reason.includes('FERIADO')) {
+                        typeColor = 'bg-amber-100 text-amber-700';
+                    } else if (category === 'COMERCIAL' || reason.includes('SEM PEDIDO') || reason.includes('PARADA COMERCIAL')) {
+                        typeColor = 'bg-cyan-100 text-cyan-700';
+                    } else if (category === 'PCP') {
+                        typeColor = 'bg-slate-100 text-slate-700';
+                    } else {
+                        typeColor = 'bg-red-100 text-red-700';
+                    }
                     
                     // Badge de status - considerar vários valores
                     let statusBadge;
@@ -7282,6 +7338,124 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         } catch (error) {
             console.error('[EXTENDED-DOWNTIME] Erro ao carregar paradas longas:', error);
         }
+    }
+
+    // Variável para armazenar instância do gráfico de paradas longas
+    let extendedDowntimeChartInstance = null;
+
+    // Renderiza o gráfico de distribuição de paradas longas por tipo
+    function renderExtendedDowntimeChart(categoryHoursObj) {
+        const canvas = document.getElementById('extended-downtime-chart');
+        if (!canvas) {
+            console.warn('[EXTENDED-DOWNTIME-CHART] Canvas não encontrado');
+            return;
+        }
+
+        // Destruir gráfico existente se houver
+        if (extendedDowntimeChartInstance) {
+            extendedDowntimeChartInstance.destroy();
+        }
+
+        const ctx = canvas.getContext('2d');
+        
+        // Cores por categoria (sincronizadas com o gráfico principal)
+        const categoryChartColors = {
+            'FERRAMENTARIA': '#ff1744',
+            'PROCESSO': '#7c4dff',
+            'COMPRAS': '#ffab00',
+            'PREPARAÇÃO': '#ff9100',
+            'QUALIDADE': '#6366f1',
+            'MANUTENÇÃO': '#3b82f6',
+            'PRODUÇÃO': '#00e676',
+            'SETUP': '#fbbf24',
+            'ADMINISTRATIVO': '#78909c',
+            'PCP': '#475569',
+            'COMERCIAL': '#06b6d4',
+            'OUTROS': '#9e9e9e'
+        };
+        
+        // Filtrar categorias com valor > 0 e ordenar por horas
+        const sortedEntries = Object.entries(categoryHoursObj)
+            .filter(([, h]) => h > 0)
+            .sort((a, b) => b[1] - a[1]);
+        
+        const labels = sortedEntries.map(([cat]) => cat);
+        const data = sortedEntries.map(([, h]) => h);
+        const colors = labels.map(cat => categoryChartColors[cat] || '#6B7280');
+        const total = data.reduce((sum, val) => sum + val, 0);
+
+        // Se não houver dados, mostrar mensagem
+        if (total === 0) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.font = '14px sans-serif';
+            ctx.fillStyle = '#9ca3af';
+            ctx.textAlign = 'center';
+            ctx.fillText('Sem dados para exibir', canvas.width / 2, canvas.height / 2);
+            return;
+        }
+
+        const isMobile = window.innerWidth < 768;
+
+        extendedDowntimeChartInstance = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels,
+                datasets: [{
+                    data,
+                    backgroundColor: colors,
+                    borderWidth: 0,
+                    hoverOffset: 8,
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '60%',
+                plugins: {
+                    legend: {
+                        position: isMobile ? 'bottom' : 'right',
+                        labels: {
+                            usePointStyle: true,
+                            padding: isMobile ? 10 : 14,
+                            boxWidth: isMobile ? 10 : 12,
+                            font: { size: isMobile ? 10 : 12 },
+                            generateLabels: function(chart) {
+                                const dataset = chart.data.datasets[0];
+                                return chart.data.labels.map((label, i) => {
+                                    const value = dataset.data[i];
+                                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                    return {
+                                        text: `${label}: ${value.toFixed(1)}h (${percentage}%)`,
+                                        fillStyle: dataset.backgroundColor[i],
+                                        hidden: false,
+                                        index: i
+                                    };
+                                });
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => {
+                                const value = context.parsed;
+                                const percentage = ((value / total) * 100).toFixed(1);
+                                return `${context.label}: ${value.toFixed(1)}h (${percentage}%)`;
+                            }
+                        },
+                        backgroundColor: '#0F172A',
+                        titleFont: { size: 12 },
+                        bodyFont: { size: 11 },
+                        padding: 10
+                    }
+                },
+                animation: {
+                    animateRotate: true,
+                    animateScale: true,
+                    duration: 800
+                }
+            }
+        });
     }
 
     // Handlers para editar/deletar da análise
@@ -10202,9 +10376,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             'SETUP': '#ffab00',               // Status Warning - Amarelo
             'ADMINISTRATIVO': '#78909c',      // Status Idle - Cinza
             'PCP': '#78909c',                 // Status Idle - Cinza
-            'COMERCIAL': '#78909c',           // Status Idle - Cinza
-            'HOKKAIDO': dbColors['HOKKAIDO'] || '#e5e7eb',  // Cinza claro
-            'OUTROS': '#78909c'               // Status Idle - Cinza
+            'COMERCIAL': '#00bcd4',           // Status Comercial - Ciano
+            'OUTROS': '#9e9e9e'               // Status Outros - Cinza médio
         };
 
         if (downtimeChartMode === 'category') {
@@ -21461,8 +21634,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             'MANUTENÇÃO': ['MANUTENÇÃO PREVENTIVA GERAL', 'PARADA PROGRAMADA', 'MANUTENÇÃO DE INFRAESTRUTURA'],
             'COMPRAS': ['FALTA DE MATÉRIA PRIMA GERAL', 'ATRASO NO FORNECEDOR'],
             'PCP': ['SEM PROGRAMAÇÃO', 'SEM PROGRAMAÇÃO-FIM DE SEMANA', 'ESTRATÉGIA PCP'],
-            'COMERCIAL': ['SEM PEDIDO', 'BAIXA DEMANDA'],
-            'HOKKAIDO': ['HOKKAIDO']
+            'COMERCIAL': ['SEM PEDIDO', 'BAIXA DEMANDA', 'PARADA COMERCIAL']
         };
         
         // Preencher grid de máquinas
@@ -27474,8 +27646,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             'SETUP': ['INSTALAÇÃO DE MOLDE', 'RETIRADA DE MOLDE', 'TROCA DE MOLDE', 'AQUECIMENTO'],
             'ADMINISTRATIVO': ['FALTA DE ENERGIA', 'FALTA DE ÁGUA', 'QUEDA DE ENERGIA', 'FERIADO', 'FIM DE SEMANA'],
             'PCP': ['SEM PROGRAMAÇÃO', 'SEM PROGRAMAÇÃO-FIM DE SEMANA', 'ESTRATÉGIA PCP', 'AGUARDANDO OP'],
-            'COMERCIAL': ['SEM PEDIDO', 'BAIXA DEMANDA', 'PARADA COMERCIAL'],
-            'HOKKAIDO': ['HOKKAIDO']
+            'COMERCIAL': ['SEM PEDIDO', 'BAIXA DEMANDA', 'PARADA COMERCIAL']
         };
         
         const motivos = motivosPorCategoria[category] || [];
