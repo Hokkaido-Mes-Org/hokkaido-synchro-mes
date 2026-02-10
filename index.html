@@ -2562,9 +2562,9 @@
                 </div>
 
                 <!-- PÁGINA: PCP - Planejamento e Controle da Produção -->
-                <div id="pcp-page" class="page-content hidden space-y-4 p-2">
-                    <div class="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-                        <!-- Header -->
+                <div id="pcp-page" class="page-content hidden p-2">
+                    <!-- ====== PCP HEADER GLOBAL + SUB-ABAS ====== -->
+                    <div class="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden mb-4">
                         <div class="bg-gradient-to-r from-indigo-700 to-purple-800 px-6 py-4">
                             <div class="flex items-center justify-between flex-wrap gap-3">
                                 <div class="flex items-center gap-3">
@@ -2572,9 +2572,38 @@
                                         <i data-lucide="sliders" class="w-6 h-6 text-white"></i>
                                     </div>
                                     <div>
-                                        <h2 class="text-xl font-bold text-white">PCP - Dashboard de Produção</h2>
-                                        <p class="text-indigo-200 text-sm">Visão em tempo real do status das máquinas</p>
+                                        <h2 class="text-xl font-bold text-white">PCP - Planejamento e Controle da Produção</h2>
+                                        <p class="text-indigo-200 text-sm">Gerencie produção, ordens e agendamento de máquinas</p>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Sub-abas -->
+                        <div class="flex border-b border-gray-200 bg-gray-50 overflow-x-auto">
+                            <button class="pcp-subtab-btn flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all whitespace-nowrap border-indigo-600 text-indigo-700 bg-white" data-subtab="pcp-dashboard">
+                                <i data-lucide="monitor" class="w-4 h-4"></i>
+                                Dashboard de Produção
+                            </button>
+                            <button class="pcp-subtab-btn flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all whitespace-nowrap border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100" data-subtab="pcp-fila">
+                                <i data-lucide="list-ordered" class="w-4 h-4"></i>
+                                Fila de Ordens
+                            </button>
+                            <button class="pcp-subtab-btn flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all whitespace-nowrap border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100" data-subtab="pcp-agendamento">
+                                <i data-lucide="calendar-range" class="w-4 h-4"></i>
+                                Agendamento Semanal
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ====== SUB-ABA 1: DASHBOARD DE PRODUÇÃO ====== -->
+                    <div id="pcp-subtab-pcp-dashboard" class="pcp-subtab-content space-y-4">
+                    <div class="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+                        <!-- Header Dashboard -->
+                        <div class="bg-gradient-to-r from-slate-700 to-slate-800 px-6 py-3">
+                            <div class="flex items-center justify-between flex-wrap gap-3">
+                                <div class="flex items-center gap-3">
+                                    <i data-lucide="monitor" class="w-5 h-5 text-white"></i>
+                                    <span class="text-white font-semibold">Visão em tempo real do status das máquinas</span>
                                 </div>
                                 <div class="flex gap-2 items-center flex-wrap">
                                     <div class="bg-white/10 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-2">
@@ -2688,7 +2717,11 @@
                             </div>
                         </div>
                     </div>
+                    </div>
+                    <!-- ====== FIM SUB-ABA 1 ====== -->
 
+                    <!-- ====== SUB-ABA 2: FILA DE ORDENS ====== -->
+                    <div id="pcp-subtab-pcp-fila" class="pcp-subtab-content hidden space-y-4">
                     <!-- SEÇÃO: Fila de Ordens de Produção por Máquina -->
                     <div class="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
                         <div class="bg-gradient-to-r from-cyan-700 to-blue-800 px-6 py-4">
@@ -2780,6 +2813,215 @@
                             </div>
                         </div>
                     </div>
+                    </div>
+                    <!-- ====== FIM SUB-ABA 2 ====== -->
+
+                    <!-- ====== SUB-ABA 3: AGENDAMENTO SEMANAL ====== -->
+                    <div id="pcp-subtab-pcp-agendamento" class="pcp-subtab-content hidden space-y-4">
+                    <!-- ====== AGENDAMENTO SEMANAL DE MÁQUINAS ====== -->
+                    <div id="schedule-section" class="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+                        <!-- Header -->
+                        <div class="bg-gradient-to-r from-teal-600 to-cyan-700 px-6 py-4">
+                            <div class="flex items-center justify-between flex-wrap gap-3">
+                                <div class="flex items-center gap-3">
+                                    <div class="p-2 bg-white/10 rounded-xl">
+                                        <i data-lucide="calendar-range" class="w-6 h-6 text-white"></i>
+                                    </div>
+                                    <div>
+                                        <h2 class="text-xl font-bold text-white">Agendamento Semanal de Máquinas</h2>
+                                        <p class="text-teal-100 text-sm">Defina quais máquinas operam em cada dia da semana</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Conteúdo do Agendamento (visível quando sub-aba ativa) -->
+                        <div id="schedule-content">
+                            <!-- Navegação de Semana + Ações -->
+                            <div class="p-4 bg-gradient-to-r from-slate-50 to-gray-50 border-b">
+                                <div class="flex items-center justify-between flex-wrap gap-3">
+                                    <!-- Navegação Semana -->
+                                    <div class="flex items-center gap-3">
+                                        <button id="btn-schedule-prev-week" class="p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition" title="Semana anterior">
+                                            <i data-lucide="chevron-left" class="w-5 h-5 text-gray-600"></i>
+                                        </button>
+                                        <div class="text-center min-w-[200px]">
+                                            <p class="text-sm font-bold text-gray-800" id="schedule-week-label">Semana</p>
+                                            <p class="text-xs text-gray-500" id="schedule-week-range">--/--/---- a --/--/----</p>
+                                        </div>
+                                        <button id="btn-schedule-next-week" class="p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition" title="Próxima semana">
+                                            <i data-lucide="chevron-right" class="w-5 h-5 text-gray-600"></i>
+                                        </button>
+                                        <button id="btn-schedule-today" class="bg-teal-100 text-teal-700 px-3 py-2 rounded-lg text-xs font-semibold hover:bg-teal-200 transition">
+                                            Semana Atual
+                                        </button>
+                                    </div>
+
+                                    <!-- Ações Rápidas -->
+                                    <div class="flex gap-2 flex-wrap">
+                                        <button id="btn-schedule-copy-prev" class="bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg text-xs font-semibold hover:bg-indigo-200 transition flex items-center gap-1">
+                                            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                                            Copiar Semana Anterior
+                                        </button>
+                                        <button id="btn-schedule-select-all" class="bg-emerald-100 text-emerald-700 px-3 py-2 rounded-lg text-xs font-semibold hover:bg-emerald-200 transition flex items-center gap-1">
+                                            <i data-lucide="check-square" class="w-3.5 h-3.5"></i>
+                                            Marcar Tudo
+                                        </button>
+                                        <button id="btn-schedule-clear-all" class="bg-red-100 text-red-700 px-3 py-2 rounded-lg text-xs font-semibold hover:bg-red-200 transition flex items-center gap-1">
+                                            <i data-lucide="x-square" class="w-3.5 h-3.5"></i>
+                                            Limpar Tudo
+                                        </button>
+                                        <button id="btn-schedule-save" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-md">
+                                            <i data-lucide="save" class="w-3.5 h-3.5"></i>
+                                            Salvar Semana
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- KPIs Resumo do Agendamento -->
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 border-b bg-white">
+                                <div class="bg-teal-50 rounded-xl p-3 border border-teal-100">
+                                    <div class="flex items-center gap-2">
+                                        <div class="p-1.5 bg-teal-100 rounded-lg"><i data-lucide="settings-2" class="w-4 h-4 text-teal-600"></i></div>
+                                        <div>
+                                            <p class="text-[10px] text-teal-600 uppercase font-semibold">Total Máquinas</p>
+                                            <p class="text-lg font-bold text-teal-700" id="schedule-kpi-total">26</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
+                                    <div class="flex items-center gap-2">
+                                        <div class="p-1.5 bg-emerald-100 rounded-lg"><i data-lucide="play-circle" class="w-4 h-4 text-emerald-600"></i></div>
+                                        <div>
+                                            <p class="text-[10px] text-emerald-600 uppercase font-semibold">Agendadas Hoje</p>
+                                            <p class="text-lg font-bold text-emerald-700" id="schedule-kpi-today">0</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="bg-amber-50 rounded-xl p-3 border border-amber-100">
+                                    <div class="flex items-center gap-2">
+                                        <div class="p-1.5 bg-amber-100 rounded-lg"><i data-lucide="bar-chart-3" class="w-4 h-4 text-amber-600"></i></div>
+                                        <div>
+                                            <p class="text-[10px] text-amber-600 uppercase font-semibold">Média Semana</p>
+                                            <p class="text-lg font-bold text-amber-700" id="schedule-kpi-avg">0</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="bg-blue-50 rounded-xl p-3 border border-blue-100">
+                                    <div class="flex items-center gap-2">
+                                        <div class="p-1.5 bg-blue-100 rounded-lg"><i data-lucide="percent" class="w-4 h-4 text-blue-600"></i></div>
+                                        <div>
+                                            <p class="text-[10px] text-blue-600 uppercase font-semibold">Utilização</p>
+                                            <p class="text-lg font-bold text-blue-700" id="schedule-kpi-usage">0%</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tabela do Agendamento Semanal -->
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm" id="schedule-grid-table">
+                                    <thead>
+                                        <tr class="bg-gray-100 border-b">
+                                            <th class="text-left px-3 py-2.5 text-xs font-bold text-gray-600 uppercase sticky left-0 bg-gray-100 z-10 min-w-[140px]">
+                                                Máquina
+                                            </th>
+                                            <th class="text-center px-2 py-2.5 text-xs font-bold uppercase min-w-[90px]" id="schedule-th-seg">
+                                                <span class="text-gray-600">Seg</span>
+                                                <br><span class="text-[10px] text-gray-400 font-normal schedule-day-date" data-day="0"></span>
+                                                <br>
+                                                <button class="schedule-col-toggle text-[10px] text-teal-600 hover:text-teal-800 font-semibold mt-0.5" data-day="0" title="Marcar/Desmarcar coluna">
+                                                    ✓ Todos
+                                                </button>
+                                            </th>
+                                            <th class="text-center px-2 py-2.5 text-xs font-bold uppercase min-w-[90px]" id="schedule-th-ter">
+                                                <span class="text-gray-600">Ter</span>
+                                                <br><span class="text-[10px] text-gray-400 font-normal schedule-day-date" data-day="1"></span>
+                                                <br>
+                                                <button class="schedule-col-toggle text-[10px] text-teal-600 hover:text-teal-800 font-semibold mt-0.5" data-day="1" title="Marcar/Desmarcar coluna">
+                                                    ✓ Todos
+                                                </button>
+                                            </th>
+                                            <th class="text-center px-2 py-2.5 text-xs font-bold uppercase min-w-[90px]" id="schedule-th-qua">
+                                                <span class="text-gray-600">Qua</span>
+                                                <br><span class="text-[10px] text-gray-400 font-normal schedule-day-date" data-day="2"></span>
+                                                <br>
+                                                <button class="schedule-col-toggle text-[10px] text-teal-600 hover:text-teal-800 font-semibold mt-0.5" data-day="2" title="Marcar/Desmarcar coluna">
+                                                    ✓ Todos
+                                                </button>
+                                            </th>
+                                            <th class="text-center px-2 py-2.5 text-xs font-bold uppercase min-w-[90px]" id="schedule-th-qui">
+                                                <span class="text-gray-600">Qui</span>
+                                                <br><span class="text-[10px] text-gray-400 font-normal schedule-day-date" data-day="3"></span>
+                                                <br>
+                                                <button class="schedule-col-toggle text-[10px] text-teal-600 hover:text-teal-800 font-semibold mt-0.5" data-day="3" title="Marcar/Desmarcar coluna">
+                                                    ✓ Todos
+                                                </button>
+                                            </th>
+                                            <th class="text-center px-2 py-2.5 text-xs font-bold uppercase min-w-[90px]" id="schedule-th-sex">
+                                                <span class="text-gray-600">Sex</span>
+                                                <br><span class="text-[10px] text-gray-400 font-normal schedule-day-date" data-day="4"></span>
+                                                <br>
+                                                <button class="schedule-col-toggle text-[10px] text-teal-600 hover:text-teal-800 font-semibold mt-0.5" data-day="4" title="Marcar/Desmarcar coluna">
+                                                    ✓ Todos
+                                                </button>
+                                            </th>
+                                            <th class="text-center px-2 py-2.5 text-xs font-bold uppercase min-w-[90px] bg-blue-50" id="schedule-th-sab">
+                                                <span class="text-blue-600">Sáb</span>
+                                                <br><span class="text-[10px] text-blue-400 font-normal schedule-day-date" data-day="5"></span>
+                                                <br>
+                                                <button class="schedule-col-toggle text-[10px] text-blue-600 hover:text-blue-800 font-semibold mt-0.5" data-day="5" title="Marcar/Desmarcar coluna">
+                                                    ✓ Todos
+                                                </button>
+                                            </th>
+                                            <th class="text-center px-2 py-2.5 text-xs font-bold uppercase min-w-[90px] bg-red-50" id="schedule-th-dom">
+                                                <span class="text-red-500">Dom</span>
+                                                <br><span class="text-[10px] text-red-400 font-normal schedule-day-date" data-day="6"></span>
+                                                <br>
+                                                <button class="schedule-col-toggle text-[10px] text-red-500 hover:text-red-700 font-semibold mt-0.5" data-day="6" title="Marcar/Desmarcar coluna">
+                                                    ✓ Todos
+                                                </button>
+                                            </th>
+                                            <th class="text-center px-2 py-2.5 text-xs font-bold text-gray-600 uppercase min-w-[60px]">
+                                                Total
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="schedule-grid-body">
+                                        <!-- Gerado via JavaScript -->
+                                    </tbody>
+                                    <tfoot>
+                                        <tr class="bg-gray-100 border-t-2 border-gray-300 font-bold">
+                                            <td class="px-3 py-2.5 text-xs text-gray-700 sticky left-0 bg-gray-100 z-10">
+                                                TOTAL POR DIA
+                                            </td>
+                                            <td class="text-center px-2 py-2.5 text-sm text-teal-700" id="schedule-total-seg">0</td>
+                                            <td class="text-center px-2 py-2.5 text-sm text-teal-700" id="schedule-total-ter">0</td>
+                                            <td class="text-center px-2 py-2.5 text-sm text-teal-700" id="schedule-total-qua">0</td>
+                                            <td class="text-center px-2 py-2.5 text-sm text-teal-700" id="schedule-total-qui">0</td>
+                                            <td class="text-center px-2 py-2.5 text-sm text-teal-700" id="schedule-total-sex">0</td>
+                                            <td class="text-center px-2 py-2.5 text-sm text-blue-700 bg-blue-50" id="schedule-total-sab">0</td>
+                                            <td class="text-center px-2 py-2.5 text-sm text-red-600 bg-red-50" id="schedule-total-dom">0</td>
+                                            <td class="text-center px-2 py-2.5 text-sm text-gray-700" id="schedule-total-week">0</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+
+                            <!-- Status de Salvamento -->
+                            <div class="p-3 bg-gray-50 border-t flex items-center justify-between">
+                                <p class="text-xs text-gray-500" id="schedule-last-saved">
+                                    <i data-lucide="info" class="w-3 h-3 inline mr-1"></i>
+                                    Nenhum agendamento salvo para esta semana
+                                </p>
+                                <p class="text-xs font-semibold hidden" id="schedule-save-status"></p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- ====== FIM AGENDAMENTO SEMANAL ====== -->
+                    </div>
+                    <!-- ====== FIM SUB-ABA 3 ====== -->
 
                     <!-- Modal Prioridade de Máquinas -->
                     <div id="modal-pcp-priority" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -3071,10 +3313,7 @@
                                                         <input type="radio" name="abs-tipo" value="atestado" class="text-yellow-600 focus:ring-yellow-500">
                                                         <span class="text-sm font-medium">Atestado Médico</span>
                                                     </label>
-                                                    <label class="flex items-center gap-2 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition has-[:checked]:bg-blue-100 has-[:checked]:border-blue-500">
-                                                        <input type="radio" name="abs-tipo" value="hokkaido_day" class="text-blue-600 focus:ring-blue-500">
-                                                        <span class="text-sm font-medium">Hokkaido Day</span>
-                                                    </label>
+
                                                     <label class="flex items-center gap-2 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-purple-50 hover:border-purple-300 transition has-[:checked]:bg-purple-100 has-[:checked]:border-purple-500">
                                                         <input type="radio" name="abs-tipo" value="folga_aniversario" class="text-purple-600 focus:ring-purple-500">
                                                         <span class="text-sm font-medium">Folga Aniversário</span>
@@ -3086,6 +3325,10 @@
                                                     <label class="flex items-center gap-2 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition has-[:checked]:bg-orange-100 has-[:checked]:border-orange-500">
                                                         <input type="radio" name="abs-tipo" value="atraso" class="text-orange-600 focus:ring-orange-500">
                                                         <span class="text-sm font-medium">Atraso</span>
+                                                    </label>
+                                                    <label class="flex items-center gap-2 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-sky-50 hover:border-sky-300 transition has-[:checked]:bg-sky-100 has-[:checked]:border-sky-500">
+                                                        <input type="radio" name="abs-tipo" value="hokkaido_day" class="text-sky-600 focus:ring-sky-500">
+                                                        <span class="text-sm font-medium">Dia Hokkaido</span>
                                                     </label>
                                                     <label class="flex items-center gap-2 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-400 transition has-[:checked]:bg-gray-200 has-[:checked]:border-gray-500">
                                                         <input type="radio" name="abs-tipo" value="outros" class="text-gray-600 focus:ring-gray-500">
@@ -3174,10 +3417,10 @@
                                                 <option value="">Todos os tipos</option>
                                                 <option value="falta_nao_justificada">Falta não justificada</option>
                                                 <option value="atestado">Atestado Médico</option>
-                                                <option value="hokkaido_day">Hokkaido Day</option>
                                                 <option value="folga_aniversario">Folga Aniversário</option>
                                                 <option value="ferias">Férias</option>
                                                 <option value="atraso">Atraso</option>
+                                                <option value="hokkaido_day">Dia Hokkaido</option>
                                                 <option value="outros">Outros</option>
                                             </select>
                                         </div>
@@ -3193,7 +3436,7 @@
                                 </div>
 
                                 <!-- Estatísticas do Período -->
-                                <div class="grid grid-cols-2 md:grid-cols-7 gap-3 mb-4">
+                                <div class="grid grid-cols-2 md:grid-cols-8 gap-3 mb-4">
                                     <div class="bg-red-50 rounded-lg p-3 text-center border border-red-100">
                                         <p class="text-xl font-bold text-red-600" id="abs-stat-falta">0</p>
                                         <p class="text-xs text-red-700">Faltas</p>
@@ -3202,10 +3445,7 @@
                                         <p class="text-xl font-bold text-yellow-600" id="abs-stat-atestado">0</p>
                                         <p class="text-xs text-yellow-700">Atestados</p>
                                     </div>
-                                    <div class="bg-blue-50 rounded-lg p-3 text-center border border-blue-100">
-                                        <p class="text-xl font-bold text-blue-600" id="abs-stat-hokkaido">0</p>
-                                        <p class="text-xs text-blue-700">Hokkaido Day</p>
-                                    </div>
+
                                     <div class="bg-purple-50 rounded-lg p-3 text-center border border-purple-100">
                                         <p class="text-xl font-bold text-purple-600" id="abs-stat-aniversario">0</p>
                                         <p class="text-xs text-purple-700">Aniversário</p>
@@ -3217,6 +3457,10 @@
                                     <div class="bg-orange-50 rounded-lg p-3 text-center border border-orange-100">
                                         <p class="text-xl font-bold text-orange-600" id="abs-stat-atraso">0</p>
                                         <p class="text-xs text-orange-700">Atrasos</p>
+                                    </div>
+                                    <div class="bg-sky-50 rounded-lg p-3 text-center border border-sky-100">
+                                        <p class="text-xl font-bold text-sky-600" id="abs-stat-hokkaido">0</p>
+                                        <p class="text-xs text-sky-700">Dia Hokkaido</p>
                                     </div>
                                     <div class="bg-gray-100 rounded-lg p-3 text-center border border-gray-200">
                                         <p class="text-xl font-bold text-gray-700" id="abs-stat-total">0</p>
@@ -3289,10 +3533,10 @@
                                                 <option value="">Todos os tipos</option>
                                                 <option value="falta_nao_justificada">Falta não justificada</option>
                                                 <option value="atestado">Atestado Médico</option>
-                                                <option value="hokkaido_day">Hokkaido Day</option>
                                                 <option value="folga_aniversario">Folga Aniversário</option>
                                                 <option value="ferias">Férias</option>
                                                 <option value="atraso">Atraso</option>
+                                                <option value="hokkaido_day">Dia Hokkaido</option>
                                                 <option value="outros">Outros</option>
                                             </select>
                                         </div>
