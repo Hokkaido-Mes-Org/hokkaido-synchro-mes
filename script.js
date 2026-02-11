@@ -4247,13 +4247,13 @@ document.addEventListener('DOMContentLoaded', function() {
             setupPlanningTab();
             setupProductionOrdersTab();
             setupLaunchTab();
-            setupExtendedDowntimeTab();
+            // setupExtendedDowntimeTab(); // Removido - Unificação paradas 02/2026
             setupAnalysisTab();
             setupQualityTab();
             populateLossOptions();
             
-            // Iniciar timer de atualização automática de paradas longas (a cada 30 min)
-            startExtendedDowntimeAutoUpdate();
+            // Timer de paradas longas removido - Unificação 02/2026
+            // startExtendedDowntimeAutoUpdate();
             
             // Inicializar dados básicos
             loadAnalysisMachines();
@@ -6680,75 +6680,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             events: downtimeData.length
         });
         
-        // ✅ Carregar paradas longas para incluir no gráfico de categorias
-        const extendedData = await getExtendedDowntimesCached();
-        const extendedForChart = [];
-        
-        extendedData.forEach(item => {
-            if (!item.id) return;
-            
-            const recordDate = item.start_date || item.date || '';
-            const isInPeriod = recordDate >= startDate && recordDate <= endDate;
-            
-            if (!isInPeriod) return;
-            
-            // Filtrar por máquina se selecionada
-            const machineId = item.machine_id || item.machine || '';
-            if (machine && machine !== 'all' && machine !== '' && machineId !== machine) {
-                return;
-            }
-            
-            // Calcular duração em minutos
-            let durationMinutes = 0;
-            if (item.status === 'active' && item.start_datetime) {
-                const startTime = item.start_datetime?.toDate?.() || new Date(item.start_date);
-                const now = new Date();
-                durationMinutes = Math.floor((now - startTime) / (1000 * 60));
-            } else {
-                durationMinutes = item.duration_minutes || 0;
-            }
-            
-            // Usar o motivo diretamente - item.reason é o valor confiável
-            // O campo type pode ser o mesmo que reason ou um código antigo
-            const typeToReason = {
-                'weekend': 'FIM DE SEMANA',
-                'maintenance': 'MANUTENÇÃO PROGRAMADA',
-                'preventive': 'MANUTENÇÃO PREVENTIVA',
-                'holiday': 'FERIADO',
-                'no_order': 'SEM PEDIDO',
-                'commercial': 'PARADA COMERCIAL',
-                'other': 'PARADA LONGA'
-            };
-            
-            // Priorizar item.reason, depois tentar mapear item.type
-            let reason = item.reason || '';
-            if (!reason && item.type) {
-                reason = typeToReason[item.type] || item.type;
-            }
-            if (!reason) {
-                reason = 'OUTROS';
-            }
-            
-            extendedForChart.push({
-                id: item.id,
-                machine: machineId,
-                date: recordDate,
-                duration: durationMinutes,
-                reason: reason,
-                isExtended: true
-            });
-        });
-        
-        console.log('[TRACE][loadDowntimeAnalysis] extended downtime for chart:', extendedForChart.length);
-        
-        // ✅ Combinar para o gráfico de categorias/motivos (sem duplicação na lista)
-        const combinedForChart = [...downtimeData, ...extendedForChart];
-        
-        console.log('[TRACE][loadDowntimeAnalysis] combined data for chart:', {
-            normal: downtimeData.length,
-            extended: extendedForChart.length,
-            total: combinedForChart.length
-        });
+        // Paradas longas removidas - Unificação 02/2026 (usa apenas downtime_entries)
         
         // Usar apenas paradas normais para estatísticas principais (KPIs)
         const totalDowntime = downtimeData.reduce((sum, item) => sum + (item.duration || 0), 0);
@@ -6765,8 +6697,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         document.getElementById('avg-downtime').textContent = `${avgDowntime.toFixed(0)}min`;
         document.getElementById('mtbf-value').textContent = `${mtbf.toFixed(1)}h`;
 
-        // ✅ Gerar gráfico de CATEGORIAS/MOTIVOS com TODAS as paradas (normais + longas)
-        await generateDowntimeReasonsChart(combinedForChart);
+        // ✅ Gerar gráfico de CATEGORIAS/MOTIVOS apenas com paradas normais
+        await generateDowntimeReasonsChart(downtimeData);
         setupDowntimeChartToggle(); // Setup dos botões de toggle categoria/motivo
         
         // Outros gráficos apenas com paradas normais
@@ -6776,8 +6708,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         // ✅ Popular filtro de motivos de parada apenas com paradas normais
         await populateDowntimeReasonFilter(downtimeData, downtimeSegments);
 
-        // Carregar lista detalhada de paradas longas programadas (seção separada)
-        await loadExtendedDowntimeAnalysis(startDate, endDate, machine);
+        // Paradas longas removidas - Unificação 02/2026
     }
 
     // ==================== FILTRO POR MOTIVO DE PARADA ====================
@@ -10870,6 +10801,17 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                         pointBackgroundColor: '#DC2626',
                         yAxisID: 'y1',
                         order: 1
+                    },
+                    {
+                        label: 'Meta (450 kg)',
+                        data: labels.map(() => 450),
+                        type: 'line',
+                        borderColor: '#EF4444',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        fill: false,
+                        order: 0
                     }
                 ]
             },
@@ -13244,10 +13186,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             setupPilotTab();
         }
 
-        if (page === 'paradas-longas') {
-            setupExtendedDowntimeTab();
-            loadExtendedDowntimeList();
-        }
+        // Página paradas-longas removida - Unificação 02/2026
 
         if (page === 'acompanhamento') {
             setupAcompanhamentoTurno();
@@ -30970,6 +30909,472 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             showNotification('❌ Erro ao registrar parada: ' + error.message, 'error');
         }
     }
+
+    // =============================================
+    // PARADA AVULSA (SEM OP) - Grid Start/Stop
+    // =============================================
+
+    // Cache de estado das paradas ativas sem OP
+    let _standaloneActiveDowntimes = {};
+    let _standaloneSelectedMachine = null;
+    let _standaloneTimerInterval = null;
+
+    /**
+     * Abre o modal com grid de máquinas para start/stop de parada
+     */
+    async function openStandaloneDowntimeModal() {
+        console.log('[STANDALONE] Abrindo modal de parada sem OP');
+
+        // Permissão
+        if (window.authSystem && window.authSystem.checkPermissionForAction) {
+            if (!window.authSystem.checkPermissionForAction('add_downtime')) {
+                showNotification('Permissão negada para registrar paradas', 'error');
+                return;
+            }
+        }
+
+        // Carregar paradas ativas do Firebase
+        await loadStandaloneActiveDowntimes();
+
+        // Renderizar grid
+        renderStandaloneMachineGrid();
+
+        // Abrir modal
+        const modal = document.getElementById('standalone-downtime-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        // Iniciar timer de atualização dos cronômetros
+        startStandaloneTimerUpdate();
+    }
+
+    /**
+     * Carrega paradas ativas da coleção active_downtimes que tenham semOP=true
+     */
+    async function loadStandaloneActiveDowntimes() {
+        try {
+            const snapshot = await db.collection('active_downtimes').where('semOP', '==', true).get();
+            _standaloneActiveDowntimes = {};
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                const machineId = data.machine || doc.id;
+                _standaloneActiveDowntimes[machineId] = { ...data, docId: doc.id };
+            });
+            console.log('[STANDALONE] Paradas ativas carregadas:', Object.keys(_standaloneActiveDowntimes));
+        } catch (error) {
+            console.error('[STANDALONE] Erro ao carregar paradas ativas:', error);
+            // Tentar carregar todas e filtrar
+            try {
+                const allSnapshot = await db.collection('active_downtimes').get();
+                _standaloneActiveDowntimes = {};
+                allSnapshot.forEach(doc => {
+                    const data = doc.data();
+                    if (data.semOP === true) {
+                        const machineId = data.machine || doc.id;
+                        _standaloneActiveDowntimes[machineId] = { ...data, docId: doc.id };
+                    }
+                });
+            } catch (e2) {
+                console.error('[STANDALONE] Erro no fallback:', e2);
+            }
+        }
+    }
+
+    /**
+     * Identifica quais máquinas têm OP ativa (não devem ser controladas aqui)
+     */
+    function getMachinesWithActiveOP() {
+        const machinesWithOP = new Set();
+        // machineCardData é populado pelo sistema para máquinas com plano ativo
+        if (typeof machineCardData !== 'undefined' && machineCardData) {
+            Object.keys(machineCardData).forEach(mid => {
+                if (machineCardData[mid]) {
+                    machinesWithOP.add(mid);
+                    // Normalizar: adicionar tanto "H01" quanto "H-01"
+                    const normalized = normalizeMachineId(mid);
+                    machinesWithOP.add(normalized);
+                }
+            });
+        }
+        return machinesWithOP;
+    }
+
+    /**
+     * Renderiza o grid de máquinas no modal
+     */
+    function renderStandaloneMachineGrid() {
+        const grid = document.getElementById('standalone-machine-grid');
+        if (!grid) return;
+
+        const machines = window.machineDatabase || [];
+        const machinesWithOP = getMachinesWithActiveOP();
+
+        grid.innerHTML = '';
+
+        machines.forEach(m => {
+            const mid = m.id;
+            const normalizedId = normalizeMachineId(mid);
+            const hasOP = machinesWithOP.has(mid) || machinesWithOP.has(normalizedId);
+            const activeDowntime = _standaloneActiveDowntimes[mid] || _standaloneActiveDowntimes[normalizedId];
+            const isActive = !!activeDowntime;
+
+            const card = document.createElement('div');
+            card.className = 'relative rounded-xl p-3 text-center cursor-pointer transition-all duration-200 border-2 select-none';
+            card.dataset.machineId = mid;
+
+            if (hasOP) {
+                // Máquina com OP ativa — bloqueada
+                card.className += ' bg-emerald-50 border-emerald-300 opacity-60 cursor-not-allowed';
+                card.innerHTML = `
+                    <div class="text-sm font-bold text-emerald-700">${mid}</div>
+                    <div class="text-[10px] text-emerald-500 mt-0.5 truncate">${m.model}</div>
+                    <div class="text-[10px] text-emerald-600 mt-1 font-medium">Com OP</div>
+                `;
+                card.title = 'Máquina com OP ativa - controle pela tela principal';
+            } else if (isActive) {
+                // Máquina com parada ativa — clique para FINALIZAR
+                const startInfo = getStandaloneElapsedText(activeDowntime);
+                card.className += ' bg-red-50 border-red-400 hover:bg-red-100 hover:shadow-md ring-2 ring-red-200';
+                card.innerHTML = `
+                    <div class="text-sm font-bold text-red-700">${mid}</div>
+                    <div class="text-[10px] text-red-500 mt-0.5 truncate">${activeDowntime.reason || '-'}</div>
+                    <div class="text-[10px] text-red-600 mt-1 font-mono font-semibold standalone-timer" data-machine="${mid}">${startInfo}</div>
+                    <div class="absolute top-1 right-1">
+                        <span class="relative flex h-2.5 w-2.5">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                        </span>
+                    </div>
+                `;
+                card.title = 'Clique para FINALIZAR parada';
+                card.onclick = () => finalizeStandaloneDowntime(mid);
+            } else {
+                // Máquina disponível — clique para INICIAR parada
+                card.className += ' bg-slate-50 border-slate-200 hover:bg-orange-50 hover:border-orange-300 hover:shadow-md';
+                card.innerHTML = `
+                    <div class="text-sm font-bold text-slate-700">${mid}</div>
+                    <div class="text-[10px] text-slate-400 mt-0.5 truncate">${m.model}</div>
+                    <div class="text-[10px] text-slate-500 mt-1">Disponível</div>
+                `;
+                card.title = 'Clique para INICIAR parada';
+                card.onclick = () => openStandaloneReasonModal(mid, m.model);
+            }
+
+            grid.appendChild(card);
+        });
+    }
+
+    /**
+     * Calcula texto de tempo decorrido para uma parada ativa
+     */
+    function getStandaloneElapsedText(downtimeData) {
+        let startDate;
+        if (downtimeData.startTimestampLocal) {
+            startDate = new Date(downtimeData.startTimestampLocal);
+        } else if (downtimeData.startTimestamp && downtimeData.startTimestamp.toDate) {
+            startDate = downtimeData.startTimestamp.toDate();
+        } else if (downtimeData.startDate && downtimeData.startTime) {
+            startDate = new Date(`${downtimeData.startDate}T${downtimeData.startTime}:00`);
+        } else {
+            return '--:--';
+        }
+
+        const now = new Date();
+        const diffMs = now - startDate;
+        if (diffMs < 0) return '00:00';
+
+        const totalMin = Math.floor(diffMs / 60000);
+        const hours = Math.floor(totalMin / 60);
+        const mins = totalMin % 60;
+        return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+    }
+
+    /**
+     * Atualiza os cronômetros a cada 30 segundos
+     */
+    function startStandaloneTimerUpdate() {
+        stopStandaloneTimerUpdate();
+        _standaloneTimerInterval = setInterval(() => {
+            const timers = document.querySelectorAll('.standalone-timer');
+            timers.forEach(el => {
+                const mid = el.dataset.machine;
+                const normalizedMid = normalizeMachineId(mid);
+                const downtimeData = _standaloneActiveDowntimes[mid] || _standaloneActiveDowntimes[normalizedMid];
+                if (downtimeData) {
+                    el.textContent = getStandaloneElapsedText(downtimeData);
+                }
+            });
+        }, 30000);
+    }
+
+    function stopStandaloneTimerUpdate() {
+        if (_standaloneTimerInterval) {
+            clearInterval(_standaloneTimerInterval);
+            _standaloneTimerInterval = null;
+        }
+    }
+
+    /**
+     * Abre o sub-modal de motivo para iniciar uma parada
+     */
+    function openStandaloneReasonModal(machineId, machineModel) {
+        _standaloneSelectedMachine = machineId;
+
+        // Atualizar label
+        const label = document.getElementById('standalone-reason-machine-label');
+        if (label) label.textContent = `Máquina: ${machineId} - ${machineModel || ''}`;
+
+        // Limpar campos
+        const userInput = document.getElementById('standalone-downtime-user');
+        const reason = document.getElementById('standalone-downtime-reason');
+        const obs = document.getElementById('standalone-downtime-obs');
+        if (userInput) { userInput.value = ''; updateUserNameDisplay('standalone-downtime-user', ''); }
+        if (obs) obs.value = '';
+
+        // Popular motivos a partir de groupedDowntimeReasons
+        if (reason) {
+            reason.innerHTML = '<option value="">Selecione o motivo...</option>';
+            const groups = window.groupedDowntimeReasons || {};
+            Object.keys(groups).forEach(groupName => {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = groupName;
+                groups[groupName].forEach(motivo => {
+                    const opt = document.createElement('option');
+                    opt.value = motivo;
+                    opt.textContent = motivo;
+                    optgroup.appendChild(opt);
+                });
+                reason.appendChild(optgroup);
+            });
+        }
+
+        // Configurar input do operador
+        setupUserCodeInput('standalone-downtime-user');
+
+        // Bind form
+        const form = document.getElementById('standalone-reason-form');
+        if (form) {
+            form.removeEventListener('submit', handleStandaloneStartSubmit);
+            form.addEventListener('submit', handleStandaloneStartSubmit);
+        }
+
+        // Abrir sub-modal
+        const modal = document.getElementById('standalone-reason-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+    }
+
+    /**
+     * INICIAR parada: salva em active_downtimes com semOP=true
+     */
+    async function handleStandaloneStartSubmit(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const machineId = _standaloneSelectedMachine;
+        if (!machineId) {
+            showNotification('Nenhuma máquina selecionada', 'error');
+            return;
+        }
+
+        // Validar operador
+        const userInput = document.getElementById('standalone-downtime-user');
+        const userCod = userInput ? parseInt(userInput.value, 10) : null;
+        if (userCod === null || isNaN(userCod) || userInput.value === '') {
+            alert('⚠️ Operador obrigatório!\n\nPor favor, digite o código do operador responsável.');
+            if (userInput) userInput.focus();
+            return;
+        }
+        const userData = getUserByCode ? getUserByCode(userCod) : null;
+        if (!userData) {
+            alert('⚠️ Código inválido!\n\nO código digitado não foi encontrado no sistema.\nVerifique e tente novamente.');
+            if (userInput) userInput.focus();
+            return;
+        }
+
+        const reason = document.getElementById('standalone-downtime-reason')?.value || '';
+        const obs = document.getElementById('standalone-downtime-obs')?.value || '';
+
+        if (!reason) {
+            showNotification('Selecione o motivo da parada', 'warning');
+            return;
+        }
+
+        try {
+            const now = new Date();
+            const currentShift = getShiftForDateTime(now);
+            const workday = getWorkdayForDateTime(now);
+            const normalizedId = normalizeMachineId(machineId);
+
+            const activeDowntimeData = {
+                machine: machineId,
+                startDate: workday,
+                startTime: formatTimeHM(now),
+                startTimestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                startTimestampLocal: now.toISOString(),
+                startShift: currentShift,
+                reason: reason,
+                observations: obs,
+                userCod: userCod,
+                nomeUsuario: userData.nomeUsuario,
+                semOP: true,
+                isActive: true,
+                startedBy: getActiveUser()?.name || 'Sistema',
+                startedByUsername: getActiveUser()?.username || null,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                systemVersion: '2.1'
+            };
+
+            await db.collection('active_downtimes').doc(normalizedId).set(activeDowntimeData, { merge: true });
+            console.log('[STANDALONE] Parada iniciada:', machineId, reason);
+
+            // Atualizar cache local
+            _standaloneActiveDowntimes[machineId] = {
+                ...activeDowntimeData,
+                startTimestampLocal: now.toISOString(),
+                docId: normalizedId
+            };
+
+            // Fechar sub-modal e atualizar grid
+            closeModal('standalone-reason-modal');
+            renderStandaloneMachineGrid();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+            showNotification(`⏸️ Parada iniciada: ${machineId} - ${reason}`, 'warning');
+
+            // Log
+            if (typeof logSystemAction === 'function') {
+                logSystemAction('parada', `Parada sem OP iniciada: ${machineId} - ${reason}`, {
+                    maquina: machineId,
+                    motivo: reason,
+                    turno: currentShift,
+                    semOP: true
+                });
+            }
+        } catch (error) {
+            console.error('[STANDALONE] Erro ao iniciar parada:', error);
+            showNotification('❌ Erro ao iniciar parada: ' + error.message, 'error');
+        }
+    }
+
+    /**
+     * FINALIZAR parada: calcula duração, salva em downtime_entries, remove de active_downtimes
+     */
+    async function finalizeStandaloneDowntime(machineId) {
+        const normalizedId = normalizeMachineId(machineId);
+        const activeData = _standaloneActiveDowntimes[machineId] || _standaloneActiveDowntimes[normalizedId];
+
+        if (!activeData) {
+            showNotification('Nenhuma parada ativa encontrada para esta máquina', 'warning');
+            return;
+        }
+
+        // Confirmar finalização
+        const elapsed = getStandaloneElapsedText(activeData);
+        const confirmMsg = `Finalizar parada da máquina ${machineId}?\n\nMotivo: ${activeData.reason || '-'}\nTempo: ${elapsed}\n\nDeseja finalizar?`;
+        if (!confirm(confirmMsg)) return;
+
+        try {
+            const now = new Date();
+            const endTime = formatTimeHM(now);
+            const endWorkday = getWorkdayForDateTime(now);
+
+            // Reconstruir data de início
+            let startDateTime;
+            if (activeData.startTimestampLocal) {
+                startDateTime = new Date(activeData.startTimestampLocal);
+            } else if (activeData.startTimestamp && activeData.startTimestamp.toDate) {
+                startDateTime = activeData.startTimestamp.toDate();
+            } else if (activeData.startDate && activeData.startTime) {
+                startDateTime = new Date(`${activeData.startDate}T${activeData.startTime}:00`);
+            }
+
+            if (!startDateTime || isNaN(startDateTime.getTime())) {
+                showNotification('Erro: data de início inválida', 'error');
+                return;
+            }
+
+            const startDateStr = activeData.startDate || getWorkdayForDateTime(startDateTime);
+            const startTimeStr = activeData.startTime || formatTimeHM(startDateTime);
+
+            // Quebrar em segmentos por dia
+            const segments = splitDowntimeIntoDailySegments(startDateStr, startTimeStr, endWorkday, endTime);
+            if (!segments.length) {
+                showNotification('Erro ao processar período da parada', 'error');
+                return;
+            }
+
+            // Salvar cada segmento na coleção downtime_entries
+            const currentUser = getActiveUser();
+            for (const seg of segments) {
+                const downtimeData = {
+                    machine: machineId,
+                    date: seg.date,
+                    startTime: seg.startTime,
+                    endTime: seg.endTime,
+                    duration: seg.duration,
+                    reason: activeData.reason || '',
+                    observations: activeData.observations || '',
+                    semOP: true,
+                    userCod: activeData.userCod || null,
+                    nomeUsuario: activeData.nomeUsuario || null,
+                    registradoPor: currentUser?.username || null,
+                    registradoPorNome: getCurrentUserName(),
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                await db.collection('downtime_entries').add(downtimeData);
+            }
+
+            // Remover de active_downtimes
+            const docId = activeData.docId || normalizedId;
+            await db.collection('active_downtimes').doc(docId).delete();
+            console.log('[STANDALONE] Parada finalizada e salva:', machineId);
+
+            // Atualizar cache local
+            delete _standaloneActiveDowntimes[machineId];
+            delete _standaloneActiveDowntimes[normalizedId];
+
+            // Re-renderizar grid
+            renderStandaloneMachineGrid();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+            // Atualizar dados
+            const totalDuration = segments.reduce((s, seg) => s + (seg.duration || 0), 0);
+            const totalMinutes = Math.round(totalDuration);
+
+            showNotification(`✅ Parada finalizada: ${machineId} - ${totalMinutes} min registrados`, 'success');
+
+            // Atualizar stats em background
+            Promise.all([
+                loadTodayStats(),
+                loadRecentEntries(false)
+            ]).catch(() => {});
+
+            // Log
+            if (typeof logSystemAction === 'function') {
+                logSystemAction('parada', `Parada sem OP finalizada: ${machineId}`, {
+                    maquina: machineId,
+                    motivo: activeData.reason,
+                    duracao: totalDuration,
+                    semOP: true
+                });
+            }
+        } catch (error) {
+            console.error('[STANDALONE] Erro ao finalizar parada:', error);
+            showNotification('❌ Erro ao finalizar parada: ' + error.message, 'error');
+        }
+    }
+
+    // Expor no escopo global para uso no onclick do HTML
+    window.openStandaloneDowntimeModal = openStandaloneDowntimeModal;
+    window.closeStandaloneModal = function() {
+        stopStandaloneTimerUpdate();
+        closeModal('standalone-downtime-modal');
+    };
     
     async function finishDowntime() {
         try {
@@ -32476,20 +32881,16 @@ function sendDowntimeNotification() {
         statusBar.innerHTML = sortedMachines.map(machine => {
             const mid = normalizeMachineId(machine.id);
             const hasActiveDowntime = activeDowntimeSet.has(mid);
-            const hasExtendedDowntime = machinesDowntime && machinesDowntime[mid];
             const hasPlan = machinesWithPlan.has(mid);
             
             // Determinar status e cor
             let statusClass = '';
             let statusTitle = '';
             
-            if (hasActiveDowntime || hasExtendedDowntime) {
-                // Máquina parada (normal ou longa)
+            if (hasActiveDowntime) {
+                // Máquina parada
                 statusClass = 'bg-red-500 text-white border-red-600';
-                const downtimeInfo = hasExtendedDowntime ? machinesDowntime[mid] : null;
-                statusTitle = downtimeInfo 
-                    ? `${mid} - PARADA: ${downtimeInfo.reason || downtimeInfo.type || 'Parada longa'}`
-                    : `${mid} - PARADA`;
+                statusTitle = `${mid} - PARADA`;
             } else if (hasPlan) {
                 // Máquina produzindo (tem OP ativa)
                 statusClass = 'bg-emerald-500 text-white border-emerald-600';
@@ -32560,9 +32961,17 @@ function sendDowntimeNotification() {
         }
         
         // Converter para Set para busca rápida (pode ser array ou Set)
-        const activeDowntimeSet = activeDowntimeMachines instanceof Set 
+        let activeDowntimeSet = activeDowntimeMachines instanceof Set 
             ? activeDowntimeMachines 
             : new Set(Array.isArray(activeDowntimeMachines) ? activeDowntimeMachines : []);
+
+        // Normalizar IDs do activeDowntimeSet para garantir consistência (H01 formato)
+        const normalizedActiveDowntimeSet = new Set();
+        activeDowntimeSet.forEach(id => {
+            const nid = normalizeMachineId(id);
+            if (nid) normalizedActiveDowntimeSet.add(nid);
+        });
+        activeDowntimeSet = normalizedActiveDowntimeSet;
 
         // NOVO: Cache de status de paradas para cronômetro
         downtimeStatusCache = machinesDowntime;
@@ -32591,13 +33000,13 @@ function sendDowntimeNotification() {
             }
         });
         
-        // Adicionar máquinas com parada longa ativa (somente se existir no machineDatabase)
-        Object.keys(machinesDowntime).forEach(machineId => {
-            const mid = normalizeMachineId(machineId);
-            if (validMachineIds.has(mid)) {
-                allMachineIds.add(mid);
-            } else {
-                console.warn(`[renderMachineCards] Máquina "${machineId}" com parada não existe no machineDatabase`);
+        // Paradas longas removidas - máquinas com parada longa não são mais adicionadas automaticamente
+        
+        // NOVO: Adicionar máquinas com parada ativa (sem OP) ao grid
+        activeDowntimeSet.forEach(mid => {
+            const normalized = normalizeMachineId(mid);
+            if (validMachineIds.has(normalized)) {
+                allMachineIds.add(normalized);
             }
         });
         
@@ -32802,6 +33211,44 @@ function sendDowntimeNotification() {
         const data = aggregated[machine];
         const plans = data.plans || [];
         const plan = data.plan || {};  // Primeiro plano (para compatibilidade)
+
+        // ===== CARD ESPECIAL: Máquina SEM OP mas COM parada ativa =====
+        const hasActiveDowntime = activeDowntimeSet.has(machine);
+        if (plans.length === 0 && hasActiveDowntime) {
+            const dtInfo = machinesDowntime ? machinesDowntime[machine] : null;
+            const reasonText = dtInfo?.reason || 'Parada ativa';
+            machineProgressInfo[machine] = { normalizedProgress: 0, progressPercent: 0, palette: {} };
+            return `
+                <div class="machine-card group relative bg-white rounded-lg border-2 border-red-400 shadow-sm hover:shadow-md transition-all duration-200 p-3 machine-stopped" data-machine="${machine}" data-plan-id="" data-order-id="" data-part-code="" data-multi-plan="false">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-2">
+                            <div class="machine-identifier w-8 h-8 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                                ${machine.slice(-2)}
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900">${machine}</h3>
+                                <p class="text-xs text-red-600 font-medium">SEM OP</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-bold">
+                                <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                                PARADA ATIVA
+                            </span>
+                        </div>
+                    </div>
+                    <div class="p-3 rounded-lg bg-red-50 border border-red-200 mb-2">
+                        <div class="flex items-center gap-2 mb-2">
+                            <i data-lucide="alert-circle" class="w-4 h-4 text-red-600 animate-pulse"></i>
+                            <span class="text-xs font-bold text-red-700">MÁQUINA PARADA</span>
+                        </div>
+                        <div class="text-sm font-semibold text-red-800 mb-1">${reasonText}</div>
+                    </div>
+                    <div class="text-center text-[10px] text-slate-400 uppercase">Nenhuma OP atribuída</div>
+                </div>
+            `;
+        }
+
         const hasMultiplePlans = plans.length > 1;
         
         // Resolver nome do produto - priorizar nome sobre código
@@ -32928,12 +33375,10 @@ function sendDowntimeNotification() {
             }
         }
 
-        // Lógica de cor do card: vermelho se houver parada ativa (normal OU longa)
+        // Lógica de cor do card: vermelho se houver parada ativa
         let cardColorClass = '';
-        const hasActiveDowntime = activeDowntimeSet.has(machine);
-        const hasExtendedDowntime = downtimeStatusCache && downtimeStatusCache[machine];
-        if (hasActiveDowntime || hasExtendedDowntime) {
-            cardColorClass = 'machine-stopped'; // vermelho para parada ativa (normal ou longa)
+        if (hasActiveDowntime) {
+            cardColorClass = 'machine-stopped'; // vermelho para parada ativa
         }
         
         // Gerar HTML para múltiplos produtos
@@ -33032,33 +33477,7 @@ function sendDowntimeNotification() {
                     </div>
                 </div>
 
-                <!-- Indicador de Parada Longa -->
-                ${(() => {
-                    const hasMachineDowntime = machinesDowntime && machinesDowntime[machine];
-                    if (hasMachineDowntime) {
-                        const typeLabel = getDowntimeTypeLabel(hasMachineDowntime.type);
-                        const typeColor = getDowntimeTypeColor(hasMachineDowntime.type);
-                        const recordId = hasMachineDowntime.recordId || '';
-                        return `
-                            <div class="mb-2 p-2 rounded-lg bg-amber-50 border border-amber-200">
-                                <div class="flex items-center justify-between mb-1">
-                                    <div class="flex items-center gap-2">
-                                        <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600"></i>
-                                        <span class="text-xs font-bold text-amber-700">PARADA ATIVA</span>
-                                    </div>
-                                    <span class="inline-block px-2 py-0.5 text-xs font-semibold rounded ${typeColor}">${typeLabel}</span>
-                                </div>
-                                <p class="text-xs text-amber-600 mb-2">${hasMachineDowntime.reason}</p>
-                                <button type="button" 
-                                        onclick="finalizarParada('${recordId}', '${machine}')"
-                                        class="w-full py-1 px-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded transition-colors">
-                                    🛑 FINALIZAR PARADA
-                                </button>
-                            </div>
-                        `;
-                    }
-                    return '';
-                })()}
+                <!-- Indicador de Parada Longa removido - Unificação 02/2026 -->
 
                 <!-- Mini card de parada ativa -->
                 ${(() => {
@@ -33519,37 +33938,7 @@ function sendDowntimeNotification() {
             });
         }
         
-        // Verificar e alertar sobre paradas longas
-        const downtime = await getActiveMachineDowntime(machine);
-        if (downtime) {
-            const typeLabel = getDowntimeTypeLabel(downtime.type);
-            const startDate = new Date(downtime.startDate).toLocaleDateString('pt-BR');
-            const endDate = new Date(downtime.endDate).toLocaleDateString('pt-BR');
-            
-            // Criar alerta visual
-            const alertDiv = document.createElement('div');
-            alertDiv.className = 'fixed top-4 right-4 bg-amber-100 border-l-4 border-amber-500 text-amber-800 p-4 rounded shadow-lg max-w-md z-50 animate-pulse';
-            alertDiv.innerHTML = `
-                <div class="flex items-start gap-3">
-                    <i data-lucide="alert-triangle" class="w-6 h-6 flex-shrink-0"></i>
-                    <div>
-                        <h3 class="font-bold mb-1">⚠️ Máquina em Parada Longa</h3>
-                        <p class="text-sm mb-2"><strong>${machine}</strong> está registrada em parada:</p>
-                        <p class="text-sm font-semibold text-amber-700 mb-1">${typeLabel}</p>
-                        <p class="text-xs mb-2"><strong>Período:</strong> ${startDate} a ${endDate}</p>
-                        <p class="text-xs"><strong>Motivo:</strong> ${downtime.reason}</p>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(alertDiv);
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-            
-            // Remover alerta após 8 segundos
-            setTimeout(() => {
-                alertDiv.style.animation = 'fadeOut 0.5s ease-out';
-                setTimeout(() => alertDiv.remove(), 500);
-            }, 8000);
-        }
+        // Alerta de parada longa removido - Unificação 02/2026
         
         // Carregar dados
         await refreshLaunchCharts();
@@ -35118,62 +35507,7 @@ function sendDowntimeNotification() {
                 }
             }
             
-            // PRIORIDADE 2: Buscar paradas com status='active' em extended_downtime_logs (paradas longas)
-            const activeSnap = await window.db
-                .collection('extended_downtime_logs')
-                .where('machine_id', '==', normalizedId)
-                .where('status', '==', 'active')
-                .get();
-            
-            // Se encontrou parada ativa, retorna imediatamente
-            for (const doc of activeSnap.docs) {
-                const data = doc.data();
-                // Log removido - estava poluindo o console a cada polling
-                return {
-                    recordId: doc.id,
-                    type: data.type || 'maintenance',
-                    reason: data.reason || 'Parada longa ativa',
-                    startDate: data.start_date,
-                    endDate: data.end_date,
-                    status: 'active',
-                    durationMinutes: data.duration_minutes
-                };
-            }
-            
-            // PRIORIDADE 3: Buscar paradas programadas (com end_date futuro)
-            const extendedSnap = await window.db
-                .collection('extended_downtime_logs')
-                .where('machine_id', '==', normalizedId)
-                .get();
-            
-            for (const doc of extendedSnap.docs) {
-                const data = doc.data();
-                
-                // Ignorar paradas já finalizadas
-                if (data.status === 'inactive' || data.status === 'finalized') {
-                    continue;
-                }
-                
-                // Verificar se a parada está dentro do período válido
-                const startDate = data.start_date ? new Date(data.start_date + 'T00:00:00') : null;
-                const endDate = data.end_date ? new Date(data.end_date + 'T23:59:59') : null;
-                
-                // Parada válida: já começou E (não tem fim OU fim é futuro)
-                const hasStarted = startDate && startDate <= now;
-                const isOngoing = !endDate || endDate >= now;
-                
-                if (hasStarted && isOngoing) {
-                    return {
-                        recordId: doc.id,
-                        type: data.type || 'maintenance',
-                        reason: data.reason || 'Parada longa ativa',
-                        startDate: data.start_date,
-                        endDate: data.end_date,
-                        status: data.status || 'active',
-                        durationMinutes: data.duration_minutes
-                    };
-                }
-            }
+            // Paradas longas (extended_downtime_logs) removidas - Unificação 02/2026
             
             return null;
         } catch (error) {
@@ -35220,26 +35554,7 @@ function sendDowntimeNotification() {
                 }
             });
             
-            // 2. Buscar paradas ativas de extended_downtime_logs
-            const extendedActiveSnap = await window.db.collection('extended_downtime_logs')
-                .where('status', '==', 'active')
-                .get();
-            extendedActiveSnap.forEach(doc => {
-                const data = doc.data();
-                const mid = normalizeMachineId(data.machine_id);
-                // Só adicionar se não já existe (active_downtimes tem prioridade)
-                if (!statusMap[mid]) {
-                    statusMap[mid] = {
-                        recordId: doc.id,
-                        type: data.type || 'maintenance',
-                        reason: data.reason || 'Parada longa ativa',
-                        startDate: data.start_date,
-                        endDate: data.end_date,
-                        status: 'active',
-                        durationMinutes: data.duration_minutes
-                    };
-                }
-            });
+            // Paradas longas (extended_downtime_logs) removidas - Unificação 02/2026
             
             // Atualizar cache
             _downtimeStatusCache = statusMap;
@@ -41956,23 +42271,7 @@ async function loadPCPData(date, shiftFilter = 'current') {
         
         console.log('[PCP] Paradas ativas (active_downtimes):', activeDowntimes.size, [...activeDowntimes.keys()]);
         
-        // 3. Buscar extended_downtime_logs ativos - PRIORIDADE 2
-        const extendedSnapshot = await db.collection('extended_downtime_logs')
-            .where('status', '==', 'active')
-            .get();
-        
-        const extendedDowntimes = new Map();
-        extendedSnapshot.forEach(doc => {
-            const data = doc.data();
-            const machineId = (data.machine || data.machine_id || '').toUpperCase().trim();
-            if (machineId) {
-                // Ignorar máquinas desativadas
-                if (DISABLED_MACHINES.includes(machineId)) return;
-                extendedDowntimes.set(machineId, { ...data, source: 'extended' });
-            }
-        });
-        
-        console.log('[PCP] Paradas longas ativas (extended_downtime_logs):', extendedDowntimes.size, [...extendedDowntimes.keys()]);
+        // Paradas longas (extended_downtime_logs) removidas - Unificação 02/2026
         
         // 4. Buscar downtime_entries do dia - PRIORIDADE 3
         // Paradas normais que ainda estão em andamento (sem endTime ou endTime ainda não passou)
@@ -42005,9 +42304,6 @@ async function loadPCPData(date, shiftFilter = 'current') {
         // Coletar máquinas com paradas mas sem planejamento para buscar dados
         const machinesNeedingData = new Set();
         activeDowntimes.forEach((_, machineId) => {
-            if (!machinesWithPlanning.has(machineId)) machinesNeedingData.add(machineId);
-        });
-        extendedDowntimes.forEach((_, machineId) => {
             if (!machinesWithPlanning.has(machineId)) machinesNeedingData.add(machineId);
         });
         normalDowntimes.forEach((_, machineId) => {
@@ -42066,7 +42362,7 @@ async function loadPCPData(date, shiftFilter = 'current') {
         }
         
         // Verificar se há dados para mostrar
-        if (planningItems.length === 0 && activeDowntimes.size === 0 && extendedDowntimes.size === 0 && normalDowntimes.size === 0) {
+        if (planningItems.length === 0 && activeDowntimes.size === 0 && normalDowntimes.size === 0) {
             if (loadingEl) loadingEl.classList.add('hidden');
             if (emptyState) emptyState.classList.remove('hidden');
             updatePCPKPIs([], []);
@@ -42107,16 +42403,9 @@ async function loadPCPData(date, shiftFilter = 'current') {
                 downtimeReason = activeDowntime.motivo || activeDowntime.reason || 'Não informado';
             }
             
-            // PRIORIDADE 2: Parada longa (extended_downtime_logs)
-            const extendedDowntime = extendedDowntimes.get(machineId);
-            if (extendedDowntime && !activeDowntime) {
-                status = 'Parada Longa';
-                downtimeReason = extendedDowntime.motivo || extendedDowntime.reason || 'Não informado';
-            }
-            
-            // PRIORIDADE 3: Parada normal (downtime_entries) em andamento
+            // PRIORIDADE 2: Parada normal (downtime_entries) em andamento
             const normalDowntime = normalDowntimes.get(machineId);
-            if (normalDowntime && !activeDowntime && !extendedDowntime) {
+            if (normalDowntime && !activeDowntime) {
                 status = 'Parada';
                 downtimeReason = normalDowntime.reason || normalDowntime.motivo || 'Não informado';
             }
@@ -42242,33 +42531,12 @@ async function loadPCPData(date, shiftFilter = 'current') {
             }
         });
         
-        // Paradas longas (extended_downtime_logs)
-        extendedDowntimes.forEach((downtimeData, machineId) => {
+        // Paradas longas removidas - Unificação 02/2026
+        
+        // Paradas normais em andamento (downtime_entries) - PRIORIDADE 2
+        normalDowntimes.forEach((downtimeData, machineId) => {
             // Só adiciona se não tem planejamento E não foi adicionada como parada ativa
             if (!machinesWithPlanning.has(machineId) && !activeDowntimes.has(machineId)) {
-                const reason = downtimeData.motivo || downtimeData.reason || 'Não informado';
-                const lastPlan = lastPlanningByMachine.get(machineId) || {};
-                tableData.push({
-                    machine: machineId,
-                    turno: '-',
-                    cavidades: lastPlan.cavidades || '-',
-                    ciclo: lastPlan.ciclo || '-',
-                    status: 'Parada Longa',
-                    cliente: lastPlan.cliente || '-',
-                    produto: lastPlan.produto || '-',
-                    motivoParada: reason,
-                    planejado: 0,
-                    executado: 0,
-                    faltante: 0,
-                    hasPlanning: false
-                });
-            }
-        });
-        
-        // Paradas normais em andamento (downtime_entries) - PRIORIDADE 3
-        normalDowntimes.forEach((downtimeData, machineId) => {
-            // Só adiciona se não tem planejamento E não foi adicionada como parada ativa ou longa
-            if (!machinesWithPlanning.has(machineId) && !activeDowntimes.has(machineId) && !extendedDowntimes.has(machineId)) {
                 const reason = downtimeData.reason || downtimeData.motivo || 'Não informado';
                 const lastPlan = lastPlanningByMachine.get(machineId) || {};
                 tableData.push({

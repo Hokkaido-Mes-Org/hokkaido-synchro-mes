@@ -466,7 +466,7 @@
         .kpi-strip {
             grid-column: 1 / -1;
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(3, 1fr);
             gap: 12px;
         }
 
@@ -1516,7 +1516,7 @@
         /* Tablets Landscape e Desktops pequenos */
         @media (max-width: 1600px) {
             .kpi-strip {
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns: repeat(3, 1fr);
             }
             .kpi-value {
                 font-size: 28px;
@@ -1595,7 +1595,7 @@
             
             .kpi-strip {
                 grid-column: 1 / -1;
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns: repeat(3, 1fr);
             }
             
             .kpi-value {
@@ -1750,7 +1750,7 @@
             }
             
             .kpi-strip {
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns: repeat(3, 1fr);
             }
             
             .kpi-value {
@@ -2407,6 +2407,22 @@
                     <span class="kpi-unit">pçs</span>
                 </div>
                 <div class="kpi-target">Progresso: <span id="kpiProgress">0%</span></div>
+            </div>
+
+            <!-- 3. PRODUÇÃO ACUMULADA DO MÊS -->
+            <div class="kpi-module" style="grid-column: span 1; border-left: 3px solid #7c3aed;">
+                <div class="kpi-header">
+                    <span class="kpi-title">Produção Acum. Mês</span>
+                    <span class="kpi-trend neutral" id="kpiMonthlyTrend">
+                        <i data-lucide="calendar" style="width:12px;height:12px"></i>
+                        <span id="kpiMonthlyLabel">--</span>
+                    </span>
+                </div>
+                <div class="kpi-value-container">
+                    <span class="kpi-value" id="kpiMonthlyProduction" style="color: #7c3aed;">0</span>
+                    <span class="kpi-unit">pçs</span>
+                </div>
+                <div class="kpi-target"><span id="kpiMonthlyDays">0</span> dias produtivos no mês</div>
             </div>
         </div>
 
@@ -3385,37 +3401,8 @@
                                                              'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
                                                              'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32']);
                 
-                // Buscar paradas longas ativas (extended_downtime_logs) - FILTRAR APENAS MÁQUINAS VÁLIDAS
-                const extendedSnapshot = await db.collection('extended_downtime_logs').get();
-                const extendedDowntimes = extendedSnapshot.docs
-                    .map(doc => ({ id: doc.id, source: 'extended', ...doc.data() }))
-                    .filter(dt => {
-                        // VALIDAÇÃO: Verificar se a máquina existe no sistema
-                        const machineId = normalizeMachineId(dt.machine_id || dt.machine);
-                        if (!validMachineIdsForDowntimes.has(machineId)) {
-                            console.warn(`[Dashboard TV] Máquina "${dt.machine_id || dt.machine}" em extended_downtime_logs não existe no sistema (ignorada)`);
-                            return false;
-                        }
-                        
-                        const dtDate = dt.start_date || dt.date || '';
-                        const isActive = dt.status === 'active';
-                        const isToday = dtDate === today;
-                        return isActive || isToday;
-                    })
-                    .map(dt => {
-                        let duration = dt.duration_minutes || dt.duration || 0;
-                        if (dt.status === 'active' && dt.start_datetime) {
-                            const startTime = dt.start_datetime?.toDate?.() || new Date(dt.start_date + 'T' + (dt.start_time || '00:00'));
-                            duration = Math.floor((new Date() - startTime) / (1000 * 60));
-                        }
-                        return {
-                            ...dt,
-                            date: dt.start_date || dt.date,
-                            machine: normalizeMachineId(dt.machine_id || dt.machine),
-                            reason: dt.reason || dt.type || 'Parada Longa',
-                            duration: duration
-                        };
-                    });
+                // Paradas longas (extended_downtime_logs) removidas - Unificação 02/2026
+                const extendedDowntimes = [];
                 
                 // NOVO: Buscar paradas ativas em tempo real (active_downtimes) - PRIORIDADE MÁXIMA
                 // FILTRAR APENAS MÁQUINAS VÁLIDAS DO MACHINEDB
@@ -3458,11 +3445,6 @@
                     });
                 
                 console.log('[Dashboard TV] Paradas LIVE (active_downtimes):', liveActiveDowntimes.length, liveActiveDowntimes.map(d => d.machine));
-                
-                // DEBUG: Log das paradas ATIVAS antes de juntar ao cache
-                console.log('[Dashboard TV] 🔴 PARADAS ATIVAS para contagem no header:');
-                console.log('  - Extended (status=active):', extendedDowntimes.filter(d => d.status === 'active').map(d => normalizeMachineId(d.machine || d.machine_id)));
-                console.log('  - Active Live:', liveActiveDowntimes.map(d => d.machine));
                 
                 // Adicionar paradas longas e paradas live ao cache
                 // IMPORTANTE: Manter TODAS as paradas sem deduplicar para permitir análise completa
@@ -3524,6 +3506,7 @@
                 updateMachinesGrid();
                 updateKPIs();
                 updateShiftKPIs();
+                updateMonthlyProduction();
                 updateStoppedMachinesList();
                 updateMachineStatusGrid();
                 updateActiveDowntimeAlert();
@@ -3601,25 +3584,24 @@
                                              'H12', 'H13', 'H14', 'H15', 'H16', 'H17', 'H18', 'H19', 'H20', 
                                              'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32']);
             
-            // Contar paradas ativas (extended downtimes com status = 'active' OU active_downtimes live)
+            // Contar paradas ativas (active_downtimes live)
             // IMPORTANTE: Filtrar apenas máquinas válidas E DEDUPLICAR por máquina
             const seenMachines = new Set();
             const activeDowntimes = cachedDowntimes.filter(dt => {
                 // Verificar se a máquina existe no sistema
                 const machineId = normalizeMachineId(dt.machine || dt.machine_id || dt.maquina);
                 if (!validMachineIds.has(machineId)) {
-                    return false; // Ignorar máquinas que não existem
+                    return false;
                 }
                 
-                // Verificar se é parada ativa
-                const isActive = (dt.source === 'extended' && dt.status === 'active') ||
-                                 (dt.source === 'active_live' && dt.isActive === true);
+                // Verificar se é parada ativa (apenas active_downtimes live)
+                const isActive = (dt.source === 'active_live' && dt.isActive === true);
                 
                 if (!isActive) return false;
                 
                 // DEDUPLICAR: Cada máquina conta apenas uma vez
                 if (seenMachines.has(machineId)) {
-                    return false; // Já contamos essa máquina
+                    return false;
                 }
                 seenMachines.add(machineId);
                 return true;
@@ -3737,7 +3719,7 @@
             const today = getFilteredDateForData(); // Usa data filtrada se selecionada
             
             // Primeiro: Obter TODAS as paradas ativas
-            // Inclui: extended_downtime_logs com status = 'active' E downtime_entries sem endTime ou em andamento
+            // Inclui: active_downtimes (live) E downtime_entries sem endTime ou em andamento
             const activeDowntimesMap = {};
             
             cachedDowntimes.forEach(dt => {
@@ -3747,10 +3729,7 @@
                 // PRIORIDADE 1: Parada LIVE (active_downtimes) - maior prioridade
                 const isLiveActive = dt.source === 'active_live' && dt.isActive === true;
                 
-                // PRIORIDADE 2: Parada ativa de extended_downtime_logs
-                const isExtendedActive = dt.source === 'extended' && dt.status === 'active';
-                
-                // PRIORIDADE 3: Parada normal (downtime_entries) em andamento
+                // PRIORIDADE 2: Parada normal (downtime_entries) em andamento
                 const dtDate = dt.date || dt.workDay || '';
                 const isToday = dtDate === today;
                 const hasNoEndTime = !dt.endTime || dt.endTime === '';
@@ -3758,11 +3737,10 @@
                 const isNormalActive = !dt.source && isToday && (hasNoEndTime || endTimeNotPassed);
                 
                 // Se qualquer condição de parada ativa for verdadeira
-                if ((isLiveActive || isExtendedActive || isNormalActive) && !activeDowntimesMap[dtMachine]) {
+                if ((isLiveActive || isNormalActive) && !activeDowntimesMap[dtMachine]) {
                     const reason = (dt.reason || dt.type || '').toLowerCase();
                     let sourceType = 'normal';
                     if (isLiveActive) sourceType = 'live';
-                    else if (isExtendedActive) sourceType = 'extended';
                     
                     activeDowntimesMap[dtMachine] = {
                         reason: reason,
@@ -4504,6 +4482,65 @@
             }
         }
 
+        // ==================== PRODUÇÃO ACUMULADA DO MÊS ====================
+        async function updateMonthlyProduction() {
+            try {
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = now.getMonth(); // 0-based
+                const firstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+                const lastDay = new Date(year, month + 1, 0);
+                const lastDayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`;
+                
+                // Meses em português
+                const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                               'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+                
+                // Buscar todas as produções do mês
+                const snapshot = await db.collection('production_entries')
+                    .where('data', '>=', firstDay)
+                    .where('data', '<=', lastDayStr)
+                    .get();
+                
+                let totalMonthly = 0;
+                const daysSet = new Set();
+                
+                snapshot.docs.forEach(doc => {
+                    const data = doc.data();
+                    const qty = Math.round(
+                        Number(data.produzido ?? data.pecasBoas ?? data.quantity ?? data.produced ?? data.qtd ?? data.quantidade ?? data.total_produzido ?? 0) || 0
+                    );
+                    totalMonthly += qty;
+                    
+                    // Contar dias produtivos
+                    const entryDate = data.data || data.date || '';
+                    if (entryDate) daysSet.add(entryDate);
+                });
+                
+                console.log('[Dashboard TV] Produção mensal:', totalMonthly, 'peças em', daysSet.size, 'dias');
+                
+                // Atualizar UI
+                const monthlyEl = document.getElementById('kpiMonthlyProduction');
+                const monthlyLabelEl = document.getElementById('kpiMonthlyLabel');
+                const monthlyDaysEl = document.getElementById('kpiMonthlyDays');
+                const monthlyTrendEl = document.getElementById('kpiMonthlyTrend');
+                
+                if (monthlyEl) monthlyEl.textContent = formatNumber(totalMonthly);
+                if (monthlyLabelEl) monthlyLabelEl.textContent = meses[month];
+                if (monthlyDaysEl) monthlyDaysEl.textContent = daysSet.size;
+                
+                // Calcular média diária para trend
+                if (monthlyTrendEl && daysSet.size > 0) {
+                    const avgDaily = Math.round(totalMonthly / daysSet.size);
+                    monthlyTrendEl.className = 'kpi-trend neutral';
+                    monthlyTrendEl.innerHTML = `<i data-lucide="calendar" style="width:12px;height:12px"></i>${meses[month]}`;
+                }
+                
+            } catch (error) {
+                console.error('[Dashboard TV] Erro ao carregar produção mensal:', error);
+            }
+        }
+
         // ==================== SHIFT KPIs UPDATE ====================
         function updateShiftKPIs() {
             // Inicializar contadores por turno
@@ -5025,12 +5062,7 @@
                             return true;
                         }
                         
-                        // PRIORIDADE 2: Extended downtimes com status = 'active'
-                        if (dt.source === 'extended' && dt.status === 'active') {
-                            return true;
-                        }
-                        
-                        // PRIORIDADE 3: Paradas normais (downtime_entries)
+                        // PRIORIDADE 2: Paradas normais (downtime_entries)
                         // Se tem status, verificar se é ativo
                         if (dt.status && dt.status !== 'active' && dt.status !== 'registered') {
                             return false;
