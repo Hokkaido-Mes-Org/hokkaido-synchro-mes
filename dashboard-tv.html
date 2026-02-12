@@ -2390,7 +2390,7 @@
                     <span class="kpi-value" id="kpiPlanning">0</span>
                     <span class="kpi-unit">pçs</span>
                 </div>
-                <div class="kpi-target">Soma dos produtos planejados</div>
+                <div class="kpi-target" id="kpiPlanningTarget">Meta Fixa: 1.400.000 pçs</div>
             </div>
 
             <!-- 2. EXECUTADO -->
@@ -2656,6 +2656,19 @@
         let cachedPlanning = [];
         let cachedDowntimes = [];
         let selectedDate = null; // Data filtrada (null = hoje/workDay)
+        
+        // ==================== META DIÁRIA FIXA ====================
+        const META_DIARIA_SEMANA = 1400000; // Meta fixa dias úteis: 1.400.000 peças
+        const META_DIARIA_FDS = 450000;     // Meta fixa fim de semana: 450.000 peças
+        
+        // Função para obter meta diária baseada no dia da semana
+        function getMetaDiaria(dateStr = null) {
+            // Se uma data for fornecida, usar ela; senão usar hoje
+            const date = dateStr ? new Date(dateStr + 'T12:00:00') : new Date();
+            const dayOfWeek = date.getDay(); // 0 = domingo, 6 = sábado
+            const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+            return isWeekend ? META_DIARIA_FDS : META_DIARIA_SEMANA;
+        }
 
         // ==================== INITIALIZATION ====================
         document.addEventListener('DOMContentLoaded', async function() {
@@ -4024,15 +4037,14 @@
                 });
             }
             
-            // Somar metas do planejamento ativo
-            if (normalizedData?.plan) {
-                normalizedData.plan.forEach(item => {
-                    totalTarget += Math.round(item.quantity || 0);
-                });
-            } else {
-                cachedPlanning.forEach(plan => {
-                    totalTarget += Math.round(getPlanTarget(plan));
-                });
+            // Meta fixa diária (1.400.000 semana / 450.000 fim de semana)
+            totalTarget = getMetaDiaria(workDay);
+            
+            // Atualizar texto da meta no HTML
+            const planningTargetEl = document.getElementById('kpiPlanningTarget');
+            if (planningTargetEl) {
+                const formattedMeta = totalTarget.toLocaleString('pt-BR');
+                planningTargetEl.textContent = `Meta Fixa: ${formattedMeta} pçs`;
             }
             
             console.log('[Dashboard TV] KPIs calculados - Produção:', totalProduced, 'Refugo:', totalRefugo, 'Meta:', totalTarget);
@@ -4627,14 +4639,8 @@
                 });
             }
             
-            // Calcular meta por turno (dividir meta total por 3)
-            // Usar normalizedData?.plan se disponível (igual ao updateKPIs)
-            let totalTarget = 0;
-            if (normalizedData?.plan) {
-                totalTarget = normalizedData.plan.reduce((sum, item) => sum + (item.quantity || 0), 0);
-            } else {
-                totalTarget = cachedPlanning.reduce((sum, p) => sum + getPlanTarget(p), 0);
-            }
+            // Calcular meta por turno (dividir meta fixa por 3)
+            const totalTarget = getMetaDiaria(workDay);
             const targetPerShift = Math.round(totalTarget / 3);
             shifts.T1.target = targetPerShift;
             shifts.T2.target = targetPerShift;
@@ -5357,7 +5363,7 @@
                     .reduce((sum, p) => sum + (p.pecasRuins || p.refugo_pcs || p.refugo || 0), 0);
             }
             
-            const totalTarget = cachedPlanning.reduce((sum, p) => sum + getPlanTarget(p), 0);
+            const totalTarget = getMetaDiaria(workDay);
             const completion = totalTarget > 0 ? ((totalProduced / totalTarget) * 100).toFixed(1) : 0;
             
             // Calcular paradas do dia
