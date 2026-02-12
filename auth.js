@@ -185,9 +185,9 @@ class AuthSystem {
             return true;
         }
 
-        // ⚙️ ACESSO EXCLUSIVO: Aba PCP para Leandro Camargo, Roberto Fernandes, Elaine e Daniel Rocha
+        // ⚙️ ACESSO EXCLUSIVO: Aba PCP para Leandro Camargo, Roberto Fernandes, Elaine, Daniel Rocha e Tiago Oliveira
         if (tabName === 'pcp') {
-            const allowedPCP = ['leandro camargo', 'roberto fernandes', 'elaine', 'daniel rocha'];
+            const allowedPCP = ['leandro camargo', 'roberto fernandes', 'elaine', 'daniel rocha', 'tiago oliveira'];
             const userNameLower = (this.currentUser.name || '').toLowerCase().trim();
             if (!allowedPCP.includes(userNameLower)) {
                 return false;
@@ -205,9 +205,9 @@ class AuthSystem {
             return true;
         }
 
-        // ⚙️ ACESSO: Aba Setup - apenas Leandro, Michelle e Líderes
+        // ⚙️ ACESSO: Aba Setup - Leandro, Michelle, Tiago e Líderes
         if (tabName === 'setup-maquinas') {
-            const allowedSetup = ['Leandro Camargo', 'Michelle Benjamin'];
+            const allowedSetup = ['Leandro Camargo', 'Michelle Benjamin', 'Tiago Oliveira'];
             const isLider = this.currentUser.role === 'lider';
             if (!allowedSetup.includes(this.currentUser.name) && !isLider) {
                 return false;
