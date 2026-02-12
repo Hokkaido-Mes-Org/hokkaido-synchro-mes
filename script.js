@@ -1011,6 +1011,94 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         return data;
     }
+
+    /**
+     * Busca active_downtimes com cache inteligente
+     * OTIMIZAÇÃO: Evita leituras repetidas do Firebase
+     * @param {boolean} forceRefresh - Se true, ignora cache
+     * @returns {Array} Lista de paradas ativas
+     */
+    async function getActiveDowntimesCached(forceRefresh = false) {
+        // Verificar DataStore primeiro
+        if (!forceRefresh && window.DataStore) {
+            const cached = window.DataStore.get('activeDowntimes');
+            if (cached && window.DataStore.isFresh('activeDowntimes', 30000)) {
+                console.log('📦 Usando DataStore.activeDowntimes');
+                if (window.FirebaseMonitor) window.FirebaseMonitor.trackRead('active_downtimes', true);
+                return cached;
+            }
+        }
+        
+        // Buscar do Firebase
+        console.log('🔥 Buscando active_downtimes do Firebase');
+        if (window.FirebaseMonitor) window.FirebaseMonitor.trackRead('active_downtimes', false);
+        const snapshot = await db.collection('active_downtimes').get();
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        // Armazenar no DataStore
+        if (window.DataStore) {
+            window.DataStore.set('activeDowntimes', data);
+        }
+        
+        return data;
+    }
+
+    /**
+     * Busca downtime_entries com cache
+     * @param {boolean} forceRefresh - Se true, ignora cache
+     * @returns {Array} Lista de downtime entries
+     */
+    async function getDowntimeEntriesCached(forceRefresh = false) {
+        const cacheKey = 'downtimeEntries';
+        
+        if (!forceRefresh && window.DataStore) {
+            const cached = window.DataStore.get(cacheKey);
+            if (cached && window.DataStore.isFresh(cacheKey, 60000)) { // 1 min TTL
+                console.log('📦 Usando cache downtime_entries');
+                return cached;
+            }
+        }
+        
+        console.log('🔥 Buscando downtime_entries do Firebase');
+        const snapshot = await db.collection('downtime_entries').get();
+        const data = snapshot.docs.map(doc => ({ id: doc.id, docRef: doc.ref, ...doc.data() }));
+        
+        if (window.DataStore) {
+            window.DataStore.set(cacheKey, data);
+        }
+        
+        return data;
+    }
+
+    /**
+     * Busca machine_priorities com cache
+     * @param {boolean} forceRefresh - Se true, ignora cache
+     * @returns {Object} Mapa de prioridades por máquina
+     */
+    async function getMachinePrioritiesCached(forceRefresh = false) {
+        const cacheKey = 'machinePriorities';
+        
+        if (!forceRefresh && window.DataStore) {
+            const cached = window.DataStore.get(cacheKey);
+            if (cached && window.DataStore.isFresh(cacheKey, 300000)) { // 5 min TTL
+                console.log('📦 Usando cache machine_priorities');
+                return cached;
+            }
+        }
+        
+        console.log('🔥 Buscando machine_priorities do Firebase');
+        const snapshot = await db.collection('machine_priorities').get();
+        const priorities = {};
+        snapshot.docs.forEach(doc => {
+            priorities[doc.id] = doc.data().priority || 99;
+        });
+        
+        if (window.DataStore) {
+            window.DataStore.set(cacheKey, priorities);
+        }
+        
+        return priorities;
+    }
     
     // Expor globalmente
     window.getProductionOrdersCached = getProductionOrdersCached;
@@ -1018,6 +1106,9 @@ document.addEventListener('DOMContentLoaded', function() {
     window.findProductionOrderCached = findProductionOrderCached;
     window.getProductionEntriesCached = getProductionEntriesCached;
     window.getExtendedDowntimesCached = getExtendedDowntimesCached;
+    window.getActiveDowntimesCached = getActiveDowntimesCached;
+    window.getDowntimeEntriesCached = getDowntimeEntriesCached;
+    window.getMachinePrioritiesCached = getMachinePrioritiesCached;
     
     
     try {
@@ -11015,9 +11106,8 @@ ${content.innerHTML}
         const { startDate, endDate, machine, shift, order } = filters;
         const config = reportTypeConfig.quantitativo;
         
-        // Buscar dados
-        const planSnapshot = await db.collection('planning').get();
-        const allPlans = planSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // OTIMIZAÇÃO: Usar cache para planning
+        const allPlans = await getPlanningCached();
         let plans = allPlans.filter(isPlanActive);
         
         // Filtrar por OP se digitado (busca parcial por número da ordem)
@@ -11148,9 +11238,8 @@ ${content.innerHTML}
         const { startDate, endDate, machine, shift, order } = filters;
         const config = reportTypeConfig.eficiencia;
         
-        // Buscar dados
-        const planSnapshot = await db.collection('planning').get();
-        const allPlans = planSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // OTIMIZAÇÃO: Usar cache para planning
+        const allPlans = await getPlanningCached();
         let plans = allPlans.filter(isPlanActive);
         
         // Filtrar por OP se digitado (busca parcial por número da ordem)
@@ -11290,15 +11379,15 @@ ${content.innerHTML}
         // Buscar planos se houver filtro de OP (para obter IDs correspondentes)
         let matchingPlanIds = null;
         if (order && order.length > 0) {
-            const planSnapshot = await db.collection('planning').get();
+            // OTIMIZAÇÃO: Usar cache para planning
+            const allPlans = await getPlanningCached();
             const orderSearch = order.toLowerCase();
-            matchingPlanIds = planSnapshot.docs
-                .filter(doc => {
-                    const data = doc.data();
-                    const orderNum = String(data.order_number || data.orderNumber || '').toLowerCase();
+            matchingPlanIds = allPlans
+                .filter(plan => {
+                    const orderNum = String(plan.order_number || plan.orderNumber || '').toLowerCase();
                     return orderNum.includes(orderSearch);
                 })
-                .map(doc => doc.id);
+                .map(plan => plan.id);
             if (matchingPlanIds.length === 0) throw new Error('Nenhuma OP encontrada com o número digitado');
         }
         
@@ -11439,15 +11528,15 @@ ${content.innerHTML}
         // Buscar planos se houver filtro de OP (para obter IDs correspondentes)
         let matchingPlanIds = null;
         if (order && order.length > 0) {
-            const planSnapshot = await db.collection('planning').get();
+            // OTIMIZAÇÃO: Usar cache para planning
+            const allPlans = await getPlanningCached();
             const orderSearch = order.toLowerCase();
-            matchingPlanIds = planSnapshot.docs
-                .filter(doc => {
-                    const data = doc.data();
-                    const orderNum = String(data.order_number || data.orderNumber || '').toLowerCase();
+            matchingPlanIds = allPlans
+                .filter(plan => {
+                    const orderNum = String(plan.order_number || plan.orderNumber || '').toLowerCase();
                     return orderNum.includes(orderSearch);
                 })
-                .map(doc => doc.id);
+                .map(plan => plan.id);
             if (matchingPlanIds.length === 0) throw new Error('Nenhuma OP encontrada com o número digitado');
         }
         
@@ -11583,15 +11672,15 @@ ${content.innerHTML}
         // Buscar planos se houver filtro de OP (para obter IDs correspondentes)
         let matchingPlanIds = null;
         if (order && order.length > 0) {
-            const planSnapshot = await db.collection('planning').get();
+            // OTIMIZAÇÃO: Usar cache para planning
+            const allPlans = await getPlanningCached();
             const orderSearch = order.toLowerCase();
-            matchingPlanIds = planSnapshot.docs
-                .filter(doc => {
-                    const data = doc.data();
-                    const orderNum = String(data.order_number || data.orderNumber || '').toLowerCase();
+            matchingPlanIds = allPlans
+                .filter(plan => {
+                    const orderNum = String(plan.order_number || plan.orderNumber || '').toLowerCase();
                     return orderNum.includes(orderSearch);
                 })
-                .map(doc => doc.id);
+                .map(plan => plan.id);
             if (matchingPlanIds.length === 0) throw new Error('Nenhuma OP encontrada com o número digitado');
         }
         
@@ -11713,15 +11802,15 @@ ${content.innerHTML}
         // Buscar planos se houver filtro de OP (para obter IDs correspondentes)
         let matchingPlanIds = null;
         if (order && order.length > 0) {
-            const planSnapshot = await db.collection('planning').get();
+            // OTIMIZAÇÃO: Usar cache para planning
+            const allPlans = await getPlanningCached();
             const orderSearch = order.toLowerCase();
-            matchingPlanIds = planSnapshot.docs
-                .filter(doc => {
-                    const data = doc.data();
-                    const orderNum = String(data.order_number || data.orderNumber || '').toLowerCase();
+            matchingPlanIds = allPlans
+                .filter(plan => {
+                    const orderNum = String(plan.order_number || plan.orderNumber || '').toLowerCase();
                     return orderNum.includes(orderSearch);
                 })
-                .map(doc => doc.id);
+                .map(plan => plan.id);
             if (matchingPlanIds.length === 0) throw new Error('Nenhuma OP encontrada com o número digitado');
         }
         
@@ -11855,9 +11944,8 @@ ${content.innerHTML}
         showNotification('⏳ Gerando relatório...', 'info');
         
         try {
-            // Buscar dados do Firebase
-            const planSnapshot = await db.collection('planning').get();
-            const allPlans = planSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // OTIMIZAÇÃO: Usar cache para planning
+            const allPlans = await getPlanningCached();
             const plans = allPlans.filter(isPlanActive);
             
             if (plans.length === 0) {
@@ -17808,9 +17896,8 @@ ${content.innerHTML}
                 return;
             }
 
-            // NOVO: Buscar todos os planejamentos e filtrar os ATIVOS no cliente
-            const snapshot = await db.collection('planning').get();
-            const allPlans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // OTIMIZAÇÃO: Usar cache global para planning
+            const allPlans = await getPlanningCached();
             const plans = allPlans.filter(isPlanActive);
             plans.sort((a, b) => (a.machine || '').localeCompare(b.machine || ''));
             qualityPlansCache = { lastDate: effectiveDate, plans };
@@ -21215,9 +21302,10 @@ ${content.innerHTML}
         const validMachineIdsSet = new Set(machineDatabase.map(m => normalizeMachineId(m.id)));
         const pollActiveDowntimes = async () => {
             try {
-                const snapshot = await db.collection('active_downtimes').get();
+                // OTIMIZAÇÃO: Usar função com cache (TTL 30s para dados em tempo real)
+                const downtimes = await getActiveDowntimesCached(false);
                 // Filtrar apenas máquinas que existem no machineDatabase
-                const allDowntimeIds = snapshot.docs.map(doc => doc.id);
+                const allDowntimeIds = downtimes.map(d => d.id);
                 const validDowntimeIds = allDowntimeIds.filter(id => {
                     const normalizedId = normalizeMachineId(id);
                     const isValid = validMachineIdsSet.has(normalizedId);
@@ -37086,9 +37174,8 @@ function sendDowntimeNotification() {
         if (showLoading) showLoadingState('resumo', true);
 
         try {
-            // NOVO: Buscar todos os planejamentos e filtrar os ATIVOS no cliente
-            const planSnapshot = await db.collection('planning').get();
-            const allPlans = planSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // OTIMIZAÇÃO: Usar cache para planning
+            const allPlans = await getPlanningCached();
             const plans = allPlans.filter(isPlanActive);
 
             if (plans.length === 0) {
@@ -41766,7 +41853,11 @@ const OrdersPageModule = (function() {
         const icon = elements.refreshBtn?.querySelector('i');
         icon?.classList.add('animate-spin');
         ordersCache = [];
-        await loadOrders();
+        // OTIMIZAÇÃO: Forçar refresh do cache ao clicar em atualizar
+        ordersCache = await getProductionOrdersCached(true);
+        populateMachineFilter();
+        updateKPIs();
+        renderOrders();
         icon?.classList.remove('animate-spin');
         showNotification('Ordens atualizadas!', 'success');
     }
@@ -41774,8 +41865,8 @@ const OrdersPageModule = (function() {
     async function loadOrders() {
         try {
             console.log('📋 [OrdersPage] Carregando ordens...');
-            const snapshot = await db.collection('production_orders').get();
-            ordersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // OTIMIZAÇÃO: Usar função com cache
+            ordersCache = await getProductionOrdersCached(false);
             console.log('[OrdersPage] ' + ordersCache.length + ' ordens carregadas');
             
             populateMachineFilter();
@@ -44216,6 +44307,110 @@ function getSetupCurrentUserName() {
     return 'Sistema';
 }
 
+// Variáveis de paginação de setups
+let setupPaginaAtual = 1;
+const SETUP_POR_PAGINA = 20;
+let setupDadosAtuais = [];
+
+// Função para configurar eventos de paginação
+function setupPaginacaoEventos() {
+    const btnPrimeira = document.getElementById('setup-pag-primeira');
+    const btnAnterior = document.getElementById('setup-pag-anterior');
+    const btnProxima = document.getElementById('setup-pag-proxima');
+    const btnUltima = document.getElementById('setup-pag-ultima');
+    
+    if (btnPrimeira) {
+        btnPrimeira.addEventListener('click', () => {
+            if (setupPaginaAtual > 1) {
+                setupPaginaAtual = 1;
+                renderSetupTabelaPaginada();
+            }
+        });
+    }
+    
+    if (btnAnterior) {
+        btnAnterior.addEventListener('click', () => {
+            if (setupPaginaAtual > 1) {
+                setupPaginaAtual--;
+                renderSetupTabelaPaginada();
+            }
+        });
+    }
+    
+    if (btnProxima) {
+        btnProxima.addEventListener('click', () => {
+            const totalPaginas = Math.ceil(setupDadosAtuais.length / SETUP_POR_PAGINA);
+            if (setupPaginaAtual < totalPaginas) {
+                setupPaginaAtual++;
+                renderSetupTabelaPaginada();
+            }
+        });
+    }
+    
+    if (btnUltima) {
+        btnUltima.addEventListener('click', () => {
+            const totalPaginas = Math.ceil(setupDadosAtuais.length / SETUP_POR_PAGINA);
+            if (setupPaginaAtual < totalPaginas) {
+                setupPaginaAtual = totalPaginas;
+                renderSetupTabelaPaginada();
+            }
+        });
+    }
+}
+
+// Função para renderizar tabela paginada
+function renderSetupTabelaPaginada() {
+    const totalRegistros = setupDadosAtuais.length;
+    const totalPaginas = Math.ceil(totalRegistros / SETUP_POR_PAGINA) || 1;
+    
+    // Garantir que a página atual está dentro dos limites
+    if (setupPaginaAtual > totalPaginas) setupPaginaAtual = totalPaginas;
+    if (setupPaginaAtual < 1) setupPaginaAtual = 1;
+    
+    // Calcular índices
+    const inicio = (setupPaginaAtual - 1) * SETUP_POR_PAGINA;
+    const fim = Math.min(inicio + SETUP_POR_PAGINA, totalRegistros);
+    
+    // Extrair subset dos dados
+    const setupsPagina = setupDadosAtuais.slice(inicio, fim);
+    
+    // Renderizar tabela com subset
+    renderSetupTabelaInterno(setupsPagina);
+    
+    // Atualizar controles de paginação
+    atualizarControlesPaginacao(inicio + 1, fim, totalRegistros, totalPaginas);
+}
+
+// Atualizar controles de paginação
+function atualizarControlesPaginacao(inicio, fim, total, totalPaginas) {
+    // Atualizar textos
+    const elInicio = document.getElementById('setup-pag-inicio');
+    const elFim = document.getElementById('setup-pag-fim');
+    const elTotal = document.getElementById('setup-pag-total');
+    const elPagAtual = document.getElementById('setup-pag-atual');
+    const elTotalPaginas = document.getElementById('setup-pag-total-paginas');
+    
+    if (elInicio) elInicio.textContent = total > 0 ? inicio : 0;
+    if (elFim) elFim.textContent = fim;
+    if (elTotal) elTotal.textContent = total;
+    if (elPagAtual) elPagAtual.textContent = setupPaginaAtual;
+    if (elTotalPaginas) elTotalPaginas.textContent = totalPaginas;
+    
+    // Atualizar estado dos botões
+    const btnPrimeira = document.getElementById('setup-pag-primeira');
+    const btnAnterior = document.getElementById('setup-pag-anterior');
+    const btnProxima = document.getElementById('setup-pag-proxima');
+    const btnUltima = document.getElementById('setup-pag-ultima');
+    
+    const naPrimeiraPagina = setupPaginaAtual <= 1;
+    const naUltimaPagina = setupPaginaAtual >= totalPaginas;
+    
+    if (btnPrimeira) btnPrimeira.disabled = naPrimeiraPagina;
+    if (btnAnterior) btnAnterior.disabled = naPrimeiraPagina;
+    if (btnProxima) btnProxima.disabled = naUltimaPagina;
+    if (btnUltima) btnUltima.disabled = naUltimaPagina;
+}
+
 // Inicializar página de Setup
 function setupSetupMaquinasPage() {
     console.log('[Setup] Inicializando módulo de Setup de Máquinas');
@@ -44223,10 +44418,27 @@ function setupSetupMaquinasPage() {
     const page = document.getElementById('setup-maquinas-page');
     if (!page) return;
 
-    // Definir data padrão nos filtros (últimos 7 dias)
+    // Configurar filtro de período
+    const periodoSelect = document.getElementById('setup-periodo');
+    const customDateRange = document.getElementById('setup-custom-date-range');
     const dataInicio = document.getElementById('setup-data-inicio');
     const dataFim = document.getElementById('setup-data-fim');
     
+    if (periodoSelect) {
+        // Mostrar/ocultar datas personalizadas
+        periodoSelect.addEventListener('change', () => {
+            if (periodoSelect.value === 'custom') {
+                customDateRange?.classList.remove('hidden');
+            } else {
+                customDateRange?.classList.add('hidden');
+            }
+        });
+        
+        // Definir período padrão (7 dias)
+        periodoSelect.value = '7days';
+    }
+    
+    // Definir data padrão nos campos (caso mude para personalizado)
     if (dataInicio && dataFim) {
         const hoje = new Date();
         const seteDiasAtras = new Date();
@@ -44244,6 +44456,9 @@ function setupSetupMaquinasPage() {
 
     // Configurar toggle dos gráficos
     setupChartsToggle();
+    
+    // Configurar eventos de paginação
+    setupPaginacaoEventos();
 
     // Configurar botão buscar
     const btnBuscar = document.getElementById('btn-buscar-setups');
@@ -44402,14 +44617,57 @@ async function salvarSetup() {
 
 // Carregar setups
 async function loadSetups() {
-    const dataInicio = document.getElementById('setup-data-inicio')?.value;
-    const dataFim = document.getElementById('setup-data-fim')?.value;
+    const periodoSelect = document.getElementById('setup-periodo')?.value || '7days';
+    let dataInicio = document.getElementById('setup-data-inicio')?.value;
+    let dataFim = document.getElementById('setup-data-fim')?.value;
     const filtroMaquina = document.getElementById('setup-filtro-maquina')?.value;
     const filtroTipo = document.getElementById('setup-filtro-tipo')?.value;
+    const filtroTurno = document.getElementById('setup-filtro-turno')?.value;
 
-    if (!dataInicio || !dataFim) {
-        setupShowToast('Selecione o período para buscar', 'error');
-        return;
+    // Calcular datas baseado no período selecionado
+    const hoje = new Date();
+    const hojeStr = getSetupDateString(hoje);
+    
+    switch (periodoSelect) {
+        case 'today':
+            dataInicio = hojeStr;
+            dataFim = hojeStr;
+            break;
+        case 'yesterday':
+            const ontem = new Date(hoje);
+            ontem.setDate(ontem.getDate() - 1);
+            dataInicio = getSetupDateString(ontem);
+            dataFim = getSetupDateString(ontem);
+            break;
+        case '7days':
+            const seteDias = new Date(hoje);
+            seteDias.setDate(seteDias.getDate() - 7);
+            dataInicio = getSetupDateString(seteDias);
+            dataFim = hojeStr;
+            break;
+        case '30days':
+            const trintaDias = new Date(hoje);
+            trintaDias.setDate(trintaDias.getDate() - 30);
+            dataInicio = getSetupDateString(trintaDias);
+            dataFim = hojeStr;
+            break;
+        case 'month':
+            dataInicio = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-01`;
+            dataFim = hojeStr;
+            break;
+        case 'lastmonth':
+            const mesPassado = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+            const ultimoDiaMesPassado = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+            dataInicio = getSetupDateString(mesPassado);
+            dataFim = getSetupDateString(ultimoDiaMesPassado);
+            break;
+        case 'custom':
+            // Manter valores dos campos
+            if (!dataInicio || !dataFim) {
+                setupShowToast('Selecione as datas do período personalizado', 'error');
+                return;
+            }
+            break;
     }
 
     try {
@@ -44427,6 +44685,17 @@ async function loadSetups() {
             // Aplicar filtros adicionais
             if (filtroMaquina && data.maquina !== filtroMaquina) return;
             if (filtroTipo && data.tipo !== filtroTipo) return;
+            
+            // Filtro de turno baseado na hora de início
+            if (filtroTurno && data.horaInicio) {
+                const hora = parseInt(data.horaInicio.split(':')[0], 10);
+                let turnoDoSetup = '';
+                if (hora >= 6 && hora < 14) turnoDoSetup = '1';
+                else if (hora >= 14 && hora < 22) turnoDoSetup = '2';
+                else turnoDoSetup = '3'; // 22:00-06:00
+                
+                if (turnoDoSetup !== filtroTurno) return;
+            }
             
             setups.push({ id: doc.id, ...data });
         });
@@ -44466,8 +44735,18 @@ function renderSetupStats(setups) {
     if (tempoMedioEl) tempoMedioEl.textContent = `${tempoMedio}min`;
 }
 
-// Renderizar tabela
+// Renderizar tabela (entrada principal - armazena dados e chama paginação)
 function renderSetupTabela(setups) {
+    // Armazenar dados para paginação
+    setupDadosAtuais = setups;
+    setupPaginaAtual = 1;
+    
+    // Chamar renderização paginada
+    renderSetupTabelaPaginada();
+}
+
+// Renderizar tabela interno (usado pela paginação)
+function renderSetupTabelaInterno(setups) {
     const tbody = document.getElementById('setup-tabela-body');
     if (!tbody) return;
 
@@ -45317,16 +45596,13 @@ function getCurrentShift() {
 
 // ============ SISTEMA DE PRIORIDADE DE MÁQUINAS =====================
 
-// Carregar prioridades das máquinas do Firestore
+// Carregar prioridades das máquinas do Firestore (com cache)
 async function loadMachinePriorities() {
     try {
         console.log('[PCP] Carregando prioridades das máquinas...');
-        const snapshot = await db.collection('machine_priorities').get();
-        
-        pcpState.machinePriorities = {};
-        snapshot.forEach(doc => {
-            pcpState.machinePriorities[doc.id] = doc.data().priority || 0;
-        });
+        // OTIMIZAÇÃO: Usar função com cache
+        const priorities = await getMachinePrioritiesCached(false);
+        pcpState.machinePriorities = priorities;
         
         console.log('[PCP] Prioridades carregadas:', Object.keys(pcpState.machinePriorities).length, 'máquinas');
     } catch (error) {

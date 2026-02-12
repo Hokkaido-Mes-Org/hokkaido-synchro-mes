@@ -1966,41 +1966,87 @@
 
                         <!-- Filtros -->
                         <div class="border-b border-gray-200 p-4 bg-gray-50">
-                            <div class="flex flex-wrap items-end gap-4">
-                                <div class="flex-1 min-w-[150px]">
+                            <div class="flex flex-wrap items-end gap-3">
+                                <!-- Período -->
+                                <div class="flex-1 min-w-[140px] max-w-[180px]">
                                     <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                                        <i data-lucide="calendar" class="w-3 h-3 inline mr-1"></i> Data Início
+                                        <i data-lucide="calendar" class="w-3 h-3 inline mr-1"></i> Período
                                     </label>
-                                    <input type="date" id="setup-data-inicio" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500">
+                                    <div class="relative">
+                                        <select id="setup-periodo" class="w-full appearance-none bg-white border border-gray-200 rounded-lg py-2.5 pl-3 pr-10 text-sm font-medium text-gray-700 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition cursor-pointer">
+                                            <option value="today">Hoje</option>
+                                            <option value="yesterday">Ontem</option>
+                                            <option value="7days" selected>Últimos 7 dias</option>
+                                            <option value="30days">Últimos 30 dias</option>
+                                            <option value="month">Este mês</option>
+                                            <option value="lastmonth">Mês passado</option>
+                                            <option value="custom">Personalizado</option>
+                                        </select>
+                                        <i data-lucide="chevron-down" class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"></i>
+                                    </div>
                                 </div>
-                                <div class="flex-1 min-w-[150px]">
-                                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                                        <i data-lucide="calendar" class="w-3 h-3 inline mr-1"></i> Data Fim
-                                    </label>
-                                    <input type="date" id="setup-data-fim" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500">
-                                </div>
-                                <div class="flex-1 min-w-[150px]">
+                                
+                                <!-- Máquina -->
+                                <div class="flex-1 min-w-[140px] max-w-[180px]">
                                     <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
                                         <i data-lucide="cpu" class="w-3 h-3 inline mr-1"></i> Máquina
                                     </label>
-                                    <select id="setup-filtro-maquina" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500">
-                                        <option value="">Todas as máquinas</option>
-                                    </select>
+                                    <div class="relative">
+                                        <select id="setup-filtro-maquina" class="w-full appearance-none bg-white border border-gray-200 rounded-lg py-2.5 pl-3 pr-10 text-sm font-medium text-gray-700 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition cursor-pointer">
+                                            <option value="">Todas as máquinas</option>
+                                        </select>
+                                        <i data-lucide="chevron-down" class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"></i>
+                                    </div>
                                 </div>
-                                <div class="flex-1 min-w-[150px]">
+                                
+                                <!-- Turno -->
+                                <div class="flex-1 min-w-[120px] max-w-[150px]">
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                                        <i data-lucide="clock" class="w-3 h-3 inline mr-1"></i> Turno
+                                    </label>
+                                    <div class="relative">
+                                        <select id="setup-filtro-turno" class="w-full appearance-none bg-white border border-gray-200 rounded-lg py-2.5 pl-3 pr-10 text-sm font-medium text-gray-700 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition cursor-pointer">
+                                            <option value="">Todos</option>
+                                            <option value="1">1º Turno (06h-14h)</option>
+                                            <option value="2">2º Turno (14h-22h)</option>
+                                            <option value="3">3º Turno (22h-06h)</option>
+                                        </select>
+                                        <i data-lucide="chevron-down" class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"></i>
+                                    </div>
+                                </div>
+                                
+                                <!-- Tipo -->
+                                <div class="flex-1 min-w-[120px] max-w-[150px]">
                                     <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
                                         <i data-lucide="tag" class="w-3 h-3 inline mr-1"></i> Tipo
                                     </label>
-                                    <select id="setup-filtro-tipo" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500">
-                                        <option value="">Todos os tipos</option>
-                                        <option value="planejado">Planejado</option>
-                                        <option value="nao_planejado">Não Planejado</option>
-                                    </select>
+                                    <div class="relative">
+                                        <select id="setup-filtro-tipo" class="w-full appearance-none bg-white border border-gray-200 rounded-lg py-2.5 pl-3 pr-10 text-sm font-medium text-gray-700 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition cursor-pointer">
+                                            <option value="">Todos os tipos</option>
+                                            <option value="planejado">Planejado</option>
+                                            <option value="nao_planejado">Não Planejado</option>
+                                        </select>
+                                        <i data-lucide="chevron-down" class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"></i>
+                                    </div>
                                 </div>
-                                <button id="btn-buscar-setups" class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 rounded-lg font-semibold transition flex items-center gap-2">
+                                
+                                <!-- Botão Buscar -->
+                                <button id="btn-buscar-setups" class="inline-flex items-center gap-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-semibold py-2.5 px-5 rounded-lg shadow-md hover:shadow-lg transition-all text-sm">
                                     <i data-lucide="search" class="w-4 h-4"></i>
-                                    Buscar
+                                    <span class="hidden sm:inline">Buscar</span>
                                 </button>
+                            </div>
+                            
+                            <!-- Datas Personalizadas -->
+                            <div id="setup-custom-date-range" class="mt-4 flex flex-wrap items-end gap-3 hidden">
+                                <div class="min-w-[160px]">
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Data Inicial</label>
+                                    <input type="date" id="setup-data-inicio" class="w-full bg-white border border-gray-200 rounded-lg py-2.5 px-3 text-sm font-medium text-gray-700 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition">
+                                </div>
+                                <div class="min-w-[160px]">
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Data Final</label>
+                                    <input type="date" id="setup-data-fim" class="w-full bg-white border border-gray-200 rounded-lg py-2.5 px-3 text-sm font-medium text-gray-700 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition">
+                                </div>
                             </div>
                         </div>
 
@@ -2129,6 +2175,30 @@
                                         </tr>
                                     </tbody>
                                 </table>
+                            </div>
+                            
+                            <!-- Paginação -->
+                            <div id="setup-paginacao" class="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t border-gray-200">
+                                <div class="text-sm text-gray-600">
+                                    Mostrando <span id="setup-pag-inicio" class="font-semibold">0</span> - <span id="setup-pag-fim" class="font-semibold">0</span> de <span id="setup-pag-total" class="font-semibold">0</span> registros
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button id="setup-pag-primeira" class="p-2 text-gray-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed" title="Primeira página">
+                                        <i data-lucide="chevrons-left" class="w-4 h-4"></i>
+                                    </button>
+                                    <button id="setup-pag-anterior" class="p-2 text-gray-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed" title="Página anterior">
+                                        <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                                    </button>
+                                    <span class="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg text-sm font-semibold">
+                                        Página <span id="setup-pag-atual">1</span> de <span id="setup-pag-total-paginas">1</span>
+                                    </span>
+                                    <button id="setup-pag-proxima" class="p-2 text-gray-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed" title="Próxima página">
+                                        <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                                    </button>
+                                    <button id="setup-pag-ultima" class="p-2 text-gray-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed" title="Última página">
+                                        <i data-lucide="chevrons-right" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -3419,8 +3419,16 @@
                 
                 // NOVO: Buscar paradas ativas em tempo real (active_downtimes) - PRIORIDADE MÁXIMA
                 // FILTRAR APENAS MÁQUINAS VÁLIDAS DO MACHINEDB
-                const activeDowntimesSnapshot = await db.collection('active_downtimes').get();
-                const liveActiveDowntimes = activeDowntimesSnapshot.docs
+                // OTIMIZADO: Usar função de cache global se disponível
+                let activeDowntimesDocs;
+                if (typeof window.getActiveDowntimesCached === 'function') {
+                    const cachedData = await window.getActiveDowntimesCached();
+                    activeDowntimesDocs = cachedData.map(d => ({ id: d.id, data: () => d }));
+                } else {
+                    const activeDowntimesSnapshot = await db.collection('active_downtimes').get();
+                    activeDowntimesDocs = activeDowntimesSnapshot.docs.map(doc => ({ id: doc.id, data: () => doc.data() }));
+                }
+                const liveActiveDowntimes = activeDowntimesDocs
                     .filter(doc => {
                         const data = doc.data();
                         const machineId = normalizeMachineId(doc.id);
@@ -3649,8 +3657,16 @@
                                                  'H26', 'H27', 'H28', 'H29', 'H30', 'H31', 'H32']);
                 
                 // Buscar paradas LIVE ativas (active_downtimes)
-                const activeDowntimesSnapshot = await db.collection('active_downtimes').get();
-                const liveActiveDowntimes = activeDowntimesSnapshot.docs
+                // OTIMIZADO: Usar função de cache global se disponível
+                let activeDowntimesDocs2;
+                if (typeof window.getActiveDowntimesCached === 'function') {
+                    const cachedData = await window.getActiveDowntimesCached();
+                    activeDowntimesDocs2 = cachedData.map(d => ({ id: d.id, data: () => d }));
+                } else {
+                    const activeDowntimesSnapshot = await db.collection('active_downtimes').get();
+                    activeDowntimesDocs2 = activeDowntimesSnapshot.docs.map(doc => ({ id: doc.id, data: () => doc.data() }));
+                }
+                const liveActiveDowntimes = activeDowntimesDocs2
                     .filter(doc => {
                         const data = doc.data();
                         const machineId = normalizeMachineId(doc.id);

@@ -289,14 +289,23 @@
             elements.btnAnalyze.disabled = true;
 
             try {
-                const snapshot = await db.collection('downtime_entries').get();
-                log(`Total de documentos: ${snapshot.size}`, 'info');
+                // OTIMIZADO: Usar função de cache global se disponível
+                let docs;
+                if (typeof window.getDowntimeEntriesCached === 'function') {
+                    const cachedData = await window.getDowntimeEntriesCached(true); // forceRefresh para análise
+                    docs = cachedData;
+                    log(`Total de documentos (cache): ${docs.length}`, 'info');
+                } else {
+                    const snapshot = await db.collection('downtime_entries').get();
+                    docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    log(`Total de documentos: ${snapshot.size}`, 'info');
+                }
 
                 const problemDocs = [];
 
-                snapshot.forEach(doc => {
+                docs.forEach(doc => {
                     stats.total++;
-                    const data = doc.data();
+                    const data = doc;
                     const analysis = analyzeRecord(data);
 
                     if (analysis.issues.length > 0) {
@@ -340,6 +349,8 @@
             elements.btnFix.disabled = true;
 
             try {
+                // OTIMIZADO: Usar função de cache global se disponível
+                // Para correções, precisa do snapshot original para ter acesso ao docRef
                 const snapshot = await db.collection('downtime_entries').get();
                 let processed = 0;
 
