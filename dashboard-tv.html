@@ -4655,12 +4655,11 @@
                 });
             }
             
-            // Calcular meta por turno (dividir meta fixa por 3)
+            // Calcular meta por turno (proporcional: T1=35%, T2=35%, T3=30%)
             const totalTarget = getMetaDiaria(workDay);
-            const targetPerShift = Math.round(totalTarget / 3);
-            shifts.T1.target = targetPerShift;
-            shifts.T2.target = targetPerShift;
-            shifts.T3.target = targetPerShift;
+            shifts.T1.target = Math.round(totalTarget * 0.35);
+            shifts.T2.target = Math.round(totalTarget * 0.35);
+            shifts.T3.target = Math.round(totalTarget * 0.30);
             
             // Contar paradas por turno usando dados normalizados
             if (normalizedData?.downtime) {
