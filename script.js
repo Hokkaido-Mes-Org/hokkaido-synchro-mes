@@ -141,6 +141,24 @@ document.addEventListener('DOMContentLoaded', async function() {
             } else {
                 console.warn('⚠️ Botão da aba Dashboard TV não encontrado no DOM');
             }
+            
+            // Mostrar/ocultar subaba Relatórios (dentro de Análise) apenas para Leandro Camargo
+            const reportsTabBtn = document.querySelector('.analysis-tab-btn[data-view="reports"]');
+            const isLeandroForReports = user && (
+                user.name === 'Leandro Camargo' || 
+                user.username === 'leandro.camargo' ||
+                user.email === 'leandro@hokkaido.com.br'
+            );
+            
+            if (reportsTabBtn) {
+                if (isLeandroForReports) {
+                    reportsTabBtn.style.display = '';  // Mostrar
+                    console.log('✅ Subaba Relatórios visível para ' + user.name);
+                } else {
+                    reportsTabBtn.style.display = 'none';  // Ocultar
+                    console.log('🔒 Subaba Relatórios oculta para usuário: ' + (user?.name || 'desconhecido'));
+                }
+            }
         } catch (e) {
             console.warn('Erro ao aplicar restrição da aba PMP:', e);
         }
@@ -4584,6 +4602,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 case 'predictive':
                     await loadPredictiveAnalysis();
                     break;
+                case 'reports':
+                    await loadReportsView();
+                    break;
             }
         } catch (error) {
             console.error('Erro ao carregar dados de análise:', error);
@@ -6647,11 +6668,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         if (topBorraReasonElement) topBorraReasonElement.textContent = topBorraReason.replace('BORRA - ', '');
         if (topBorraMachineElement) topBorraMachineElement.textContent = topBorraMachine;
 
-        // Gerar gráficos (usando allLossesData que inclui pmp_borra)
-        await generateLossesParetoChart(regularLossesData);
-        await generateLossesByMachineChart(regularLossesData);
-        await generateLossesByMaterialChart(regularLossesData); // ✅ CORRIGIDO: Usar apenas regularLossesData (sem borra)
-        await generateLossesDailyChart(regularLossesData); // ✅ NOVO: Gráfico de perdas diárias
+        // ✅ CORREÇÃO: Armazenar dados ANTES da geração de gráficos
+        // para garantir que filtros funcionem mesmo se um gráfico falhar
+        window._lossesAnalysisData = [...regularLossesData];
+        populateLossesReasonFilter(regularLossesData);
+        console.log('[TRACE][loadLossesAnalysis] _lossesAnalysisData populated with', regularLossesData.length, 'items');
+
+        // Gerar gráficos (usando regularLossesData que exclui borra)
+        try { await generateLossesParetoChart(regularLossesData); } catch(e) { console.warn('[CHART] Pareto error:', e); }
+        try { await generateLossesByMachineChart(regularLossesData); } catch(e) { console.warn('[CHART] ByMachine error:', e); }
+        try { await generateLossesByProductChart(regularLossesData); } catch(e) { console.warn('[CHART] ByProduct error:', e); }
+        try { await generateLossesByMaterialChart(regularLossesData); } catch(e) { console.warn('[CHART] ByMaterial error:', e); }
+        try { await generateLossesDailyChart(regularLossesData); } catch(e) { console.warn('[CHART] Daily error:', e); }
         
         // Gerar gráficos específicos de borra
         await generateBorraByMachineChart(borraData);
@@ -7639,6 +7667,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             { name: 'OEE Components Timeline', canvasId: 'oee-components-timeline', view: 'efficiency' },
             { name: 'Losses Pareto', canvasId: 'losses-pareto-chart', view: 'losses' },
             { name: 'Losses by Machine', canvasId: 'losses-by-machine-chart', view: 'losses' },
+            { name: 'Losses by Product', canvasId: 'losses-by-product-chart', view: 'losses' },
             { name: 'Losses by Material', canvasId: 'losses-by-material-chart', view: 'losses' },
             { name: 'Losses Trend', canvasId: 'losses-trend-chart', view: 'losses' },
             { name: 'Downtime Reasons', canvasId: 'downtime-reasons-chart', view: 'downtime' },
@@ -10055,6 +10084,2395 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             }
         });
     }
+
+    // ========== PERDAS POR PRODUTO + TOGGLE + FILTROS + RELATÓRIO ==========
+    
+    // Dados globais para filtros de perdas
+    window._lossesAnalysisData = [];
+    window._lossesFilteredData = [];
+    window._lossesTraceCurrentPage = 1;
+    const LOSSES_TRACE_PAGE_SIZE = 20;
+
+    // Toggle entre gráfico Máquina / Produto
+    window.toggleLossesChart = function(mode) {
+        const machineWrapper = document.getElementById('losses-machine-chart-wrapper');
+        const productWrapper = document.getElementById('losses-product-chart-wrapper');
+        const title = document.getElementById('losses-machine-product-title');
+        const subtitle = document.getElementById('losses-machine-product-subtitle');
+        const toggleBtns = document.querySelectorAll('#losses-chart-toggle button');
+        
+        toggleBtns.forEach(btn => {
+            const isActive = btn.getAttribute('data-losses-chart') === mode;
+            btn.className = isActive
+                ? 'px-3 py-1 text-xs font-medium rounded-md transition-all bg-white shadow text-gray-800'
+                : 'px-3 py-1 text-xs font-medium rounded-md transition-all text-gray-500 hover:text-gray-700';
+        });
+        
+        if (mode === 'machine') {
+            if (machineWrapper) machineWrapper.classList.remove('hidden');
+            if (productWrapper) productWrapper.classList.add('hidden');
+            if (title) title.textContent = 'Refugos por Máquina';
+            if (subtitle) subtitle.textContent = 'Comparativo máquinas';
+        } else {
+            if (machineWrapper) machineWrapper.classList.add('hidden');
+            if (productWrapper) productWrapper.classList.remove('hidden');
+            if (title) title.textContent = 'Refugos por Produto';
+            if (subtitle) subtitle.textContent = 'Comparativo por código de produto';
+        }
+    };
+
+    // Gerar gráfico de perdas por produto
+    async function generateLossesByProductChart(lossesData) {
+        const ctx = document.getElementById('losses-by-product-chart');
+        if (!ctx) return;
+        
+        destroyChart('losses-by-product-chart');
+        
+        if (lossesData.length === 0) {
+            showNoDataMessage('losses-by-product-chart');
+            return;
+        }
+        
+        clearNoDataMessage('losses-by-product-chart');
+        
+        const productLosses = {};
+        lossesData.forEach(item => {
+            const raw = item.raw || {};
+            // Resolver código/descrição do produto
+            let productCode = raw.mp || raw.product || raw.produto || raw.product_cod || raw.cod_produto || '';
+            let productLabel = productCode || 'Sem produto';
+            
+            // Tentar resolver nome do produto
+            if (productCode && typeof getProductByCode === 'function') {
+                const prodInfo = getProductByCode(productCode);
+                if (prodInfo) {
+                    productLabel = `${prodInfo.cod || productCode} - ${(prodInfo.name || prodInfo.descricao || '').substring(0, 25)}`;
+                }
+            } else if (productCode && typeof getDescricaoMP === 'function') {
+                const desc = getDescricaoMP(productCode);
+                if (desc && desc !== productCode) {
+                    productLabel = `${productCode} - ${desc.substring(0, 25)}`;
+                }
+            }
+            
+            const lossKg = raw.refugo_kg || item.scrapKg || item.quantity || 0;
+            productLosses[productLabel] = (productLosses[productLabel] || 0) + lossKg;
+        });
+        
+        // Ordenar por maior perda
+        const sorted = Object.entries(productLosses).sort((a, b) => b[1] - a[1]).slice(0, 15);
+        const labels = sorted.map(s => s[0]);
+        const data = sorted.map(s => s[1]);
+        
+        const colors = [
+            '#EF4444', '#F97316', '#EAB308', '#22C55E', '#06B6D4',
+            '#3B82F6', '#8B5CF6', '#EC4899', '#F43F5E', '#14B8A6',
+            '#A855F7', '#6366F1', '#D946EF', '#0EA5E9', '#84CC16'
+        ];
+        
+        const isMobile = window.innerWidth < 768;
+        
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Perdas (kg)',
+                    data: data,
+                    backgroundColor: colors.slice(0, data.length).map(c => c + 'CC'),
+                    borderColor: colors.slice(0, data.length),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        ticks: { font: { size: isMobile ? 10 : 12 } }
+                    },
+                    y: {
+                        ticks: { font: { size: isMobile ? 9 : 11 } }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                return `${ctx.parsed.x.toFixed(3)} kg`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Populate reason filter dropdown
+    function populateLossesReasonFilter(lossesData) {
+        const select = document.getElementById('losses-filter-reason');
+        if (!select) return;
+        
+        const reasons = new Set();
+        lossesData.forEach(item => {
+            const reason = item.reason || item.raw?.perdas || '';
+            if (reason) reasons.add(reason);
+        });
+        
+        // Preservar valor selecionado
+        const currentVal = select.value;
+        select.innerHTML = '<option value="all">Todos os motivos</option>';
+        
+        // Agrupar por categoria se possível
+        const grouped = {};
+        const ungrouped = [];
+        
+        reasons.forEach(reason => {
+            let foundGroup = false;
+            if (window.groupedLossReasons) {
+                for (const [group, list] of Object.entries(window.groupedLossReasons)) {
+                    if (list.includes(reason.toUpperCase()) || list.includes(reason)) {
+                        if (!grouped[group]) grouped[group] = [];
+                        grouped[group].push(reason);
+                        foundGroup = true;
+                        break;
+                    }
+                }
+            }
+            if (!foundGroup) ungrouped.push(reason);
+        });
+        
+        // Adicionar agrupados
+        for (const [group, items] of Object.entries(grouped)) {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = group;
+            items.sort().forEach(reason => {
+                const opt = document.createElement('option');
+                opt.value = reason;
+                opt.textContent = reason;
+                optgroup.appendChild(opt);
+            });
+            select.appendChild(optgroup);
+        }
+        
+        // Adicionar não agrupados
+        ungrouped.sort().forEach(reason => {
+            const opt = document.createElement('option');
+            opt.value = reason;
+            opt.textContent = reason;
+            select.appendChild(opt);
+        });
+        
+        // Restaurar seleção
+        if (currentVal) select.value = currentVal;
+    }
+
+    // Aplicar filtros de rastreabilidade de perdas
+    window.applyLossesFilters = function() {
+        const opFilter = (document.getElementById('losses-filter-op')?.value || '').trim().toLowerCase();
+        const productFilter = (document.getElementById('losses-filter-product')?.value || '').trim().toLowerCase();
+        const reasonFilter = document.getElementById('losses-filter-reason')?.value || 'all';
+        
+        const allData = window._lossesAnalysisData || [];
+        console.log('[TRACE][applyLossesFilters] Data available:', allData.length, 'items. Filters:', { opFilter, productFilter, reasonFilter });
+        
+        if (allData.length === 0) {
+            showNotification('Nenhum dado de perdas carregado. Verifique se o período possui dados e aguarde o carregamento.', 'warning');
+        }
+        
+        let filtered = allData.filter(item => {
+            const raw = item.raw || {};
+            
+            // Filtro por OP - verificar campos mapeados E raw (prioridade: orderNumber)
+            if (opFilter) {
+                const orderNumber = (raw.orderNumber || raw.order_number || raw.orderId || raw.order_id || '').toString().toLowerCase();
+                if (!orderNumber.includes(opFilter)) return false;
+            }
+            
+            // Filtro por produto - verificar campos mapeados E raw
+            if (productFilter) {
+                const mp = (item.mp || raw.mp || item.product || raw.product || raw.produto || raw.product_cod || raw.cod_produto || '').toString().toLowerCase();
+                const tipoMP = (raw.tipoMateriaPrima || '').toLowerCase();
+                if (!mp.includes(productFilter) && !tipoMP.includes(productFilter)) return false;
+            }
+            
+            // Filtro por motivo
+            if (reasonFilter !== 'all') {
+                const reason = (item.reason || raw.perdas || '').toString();
+                if (reason !== reasonFilter) return false;
+            }
+            
+            return true;
+        });
+        
+        console.log('[TRACE][applyLossesFilters] Filtered results:', filtered.length);
+        
+        window._lossesFilteredData = filtered;
+        window._lossesTraceCurrentPage = 1;
+        
+        // Mostrar seção de resultados
+        const section = document.getElementById('losses-traceability-section');
+        if (section) section.classList.remove('hidden');
+        
+        // Atualizar info
+        const infoEl = document.getElementById('losses-filter-results-info');
+        if (infoEl) infoEl.textContent = `${filtered.length} registros encontrados`;
+        
+        // Atualizar tags de filtros ativos
+        updateActiveFilterTags(opFilter, productFilter, reasonFilter);
+        
+        // Renderizar tabela
+        renderLossesTraceTable();
+        
+        // Scroll para a tabela
+        if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    // Limpar filtros
+    window.clearLossesFilters = function() {
+        const opInput = document.getElementById('losses-filter-op');
+        const productInput = document.getElementById('losses-filter-product');
+        const reasonSelect = document.getElementById('losses-filter-reason');
+        
+        if (opInput) opInput.value = '';
+        if (productInput) productInput.value = '';
+        if (reasonSelect) reasonSelect.value = 'all';
+        
+        window._lossesFilteredData = [];
+        window._lossesTraceCurrentPage = 1;
+        
+        const section = document.getElementById('losses-traceability-section');
+        if (section) section.classList.add('hidden');
+        
+        const tagsContainer = document.getElementById('losses-active-filters');
+        if (tagsContainer) tagsContainer.classList.add('hidden');
+    };
+
+    // Atualizar tags visuais dos filtros ativos
+    function updateActiveFilterTags(opFilter, productFilter, reasonFilter) {
+        const container = document.getElementById('losses-active-filters');
+        if (!container) return;
+        
+        container.innerHTML = '<span class="text-xs text-gray-500">Filtros ativos:</span>';
+        let hasFilters = false;
+        
+        if (opFilter) {
+            hasFilters = true;
+            container.innerHTML += `<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">OP: ${opFilter}</span>`;
+        }
+        if (productFilter) {
+            hasFilters = true;
+            container.innerHTML += `<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">Produto: ${productFilter}</span>`;
+        }
+        if (reasonFilter !== 'all') {
+            hasFilters = true;
+            container.innerHTML += `<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">Motivo: ${reasonFilter}</span>`;
+        }
+        
+        container.classList.toggle('hidden', !hasFilters);
+    }
+
+    // Renderizar tabela de rastreabilidade paginada
+    function renderLossesTraceTable() {
+        const tbody = document.getElementById('losses-traceability-tbody');
+        if (!tbody) return;
+        
+        const data = window._lossesFilteredData || [];
+        const page = window._lossesTraceCurrentPage || 1;
+        const start = (page - 1) * LOSSES_TRACE_PAGE_SIZE;
+        const end = Math.min(start + LOSSES_TRACE_PAGE_SIZE, data.length);
+        const pageData = data.slice(start, end);
+        
+        if (pageData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-6 text-center text-gray-400 text-sm">Nenhum registro encontrado com os filtros aplicados</td></tr>';
+        } else {
+            tbody.innerHTML = pageData.map(item => {
+                const raw = item.raw || {};
+                const date = item.date || raw.data || '-';
+                const machine = item.machine || '-';
+                const orderId = raw.orderNumber || raw.order_number || '-';
+                const mp = raw.mp || raw.product || raw.produto || '-';
+                let productLabel = mp;
+                if (mp && mp !== '-') {
+                    if (typeof getProductByCode === 'function') {
+                        const prodInfo = getProductByCode(mp);
+                        if (prodInfo) productLabel = `${prodInfo.cod || mp} - ${(prodInfo.name || prodInfo.descricao || '').substring(0, 20)}`;
+                    } else if (typeof getDescricaoMP === 'function') {
+                        const desc = getDescricaoMP(mp);
+                        if (desc && desc !== mp) productLabel = `${mp} - ${desc.substring(0, 20)}`;
+                    }
+                }
+                const reason = item.reason || raw.perdas || '-';
+                const qty = item.scrapPcs || item.quantity || 0;
+                const kg = (item.scrapKg || raw.refugo_kg || 0).toFixed(3);
+                const turno = item.shift || raw.turno || '-';
+                
+                return `<tr class="hover:bg-indigo-50/50 transition">
+                    <td class="px-3 py-2 text-xs text-gray-700">${date}</td>
+                    <td class="px-3 py-2 text-xs font-medium text-gray-800">${machine}</td>
+                    <td class="px-3 py-2 text-xs text-gray-600 max-w-[100px] truncate" title="${orderId}">${orderId}</td>
+                    <td class="px-3 py-2 text-xs text-gray-600 max-w-[150px] truncate" title="${productLabel}">${productLabel}</td>
+                    <td class="px-3 py-2 text-xs text-gray-600 max-w-[120px] truncate" title="${reason}">${reason}</td>
+                    <td class="px-3 py-2 text-xs text-center font-medium text-red-600">${qty}</td>
+                    <td class="px-3 py-2 text-xs text-center font-medium text-red-600">${kg}</td>
+                    <td class="px-3 py-2 text-xs text-center"><span class="px-1.5 py-0.5 bg-gray-100 rounded text-gray-700 font-medium">T${turno}</span></td>
+                </tr>`;
+            }).join('');
+        }
+        
+        // Atualizar paginação
+        const showingEl = document.getElementById('losses-trace-showing');
+        const totalEl = document.getElementById('losses-trace-total');
+        const pageEl = document.getElementById('losses-trace-page');
+        const prevBtn = document.getElementById('losses-trace-prev');
+        const nextBtn = document.getElementById('losses-trace-next');
+        
+        if (showingEl) showingEl.textContent = pageData.length;
+        if (totalEl) totalEl.textContent = data.length;
+        if (pageEl) pageEl.textContent = `Página ${page}`;
+        
+        const totalPages = Math.ceil(data.length / LOSSES_TRACE_PAGE_SIZE) || 1;
+        if (prevBtn) prevBtn.disabled = page <= 1;
+        if (nextBtn) nextBtn.disabled = page >= totalPages;
+    }
+
+    // Mudança de página na tabela de rastreabilidade
+    window.lossesTracePageChange = function(dir) {
+        const data = window._lossesFilteredData || [];
+        const totalPages = Math.ceil(data.length / LOSSES_TRACE_PAGE_SIZE) || 1;
+        window._lossesTraceCurrentPage = Math.max(1, Math.min(totalPages, (window._lossesTraceCurrentPage || 1) + dir));
+        renderLossesTraceTable();
+    };
+
+    // Exportar dados filtrados para CSV
+    window.exportFilteredLosses = function() {
+        const data = window._lossesFilteredData || [];
+        if (data.length === 0) {
+            showNotification('Nenhum dado para exportar. Aplique filtros primeiro.', 'warning');
+            return;
+        }
+        
+        const headers = ['Data', 'Máquina', 'OP', 'Produto', 'Motivo', 'Qtd (pçs)', 'Peso (kg)', 'Turno', 'Observações'];
+        const rows = data.map(item => {
+            const raw = item.raw || {};
+            return [
+                item.date || raw.data || '',
+                item.machine || '',
+                raw.orderNumber || raw.order_number || '',
+                raw.mp || raw.product || '',
+                item.reason || raw.perdas || '',
+                item.scrapPcs || item.quantity || 0,
+                (item.scrapKg || raw.refugo_kg || 0).toFixed(3),
+                item.shift || raw.turno || '',
+                (raw.observacoes || '').replace(/[;\n\r]/g, ' ')
+            ];
+        });
+        
+        const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `perdas_filtradas_${new Date().toISOString().split('T')[0]}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+        
+        showNotification(`✅ ${data.length} registros exportados com sucesso!`, 'success');
+    };
+
+    // Gerar relatório detalhado de perdas
+    // MELHORADO: Agora aceita parâmetros de data e busca dados diretamente
+    window.generateLossesReport = async function(startDateParam, endDateParam) {
+        // Usar datas do parâmetro ou do filtro global ou data atual
+        const today = getProductionDateString();
+        const startDate = startDateParam || currentAnalysisFilters?.startDate || today;
+        const endDate = endDateParam || currentAnalysisFilters?.endDate || startDate;
+        const machine = currentAnalysisFilters?.machine || 'all';
+        const shift = currentAnalysisFilters?.shift || 'all';
+        
+        if (!startDate) {
+            showNotification('Selecione uma data para gerar o relatório.', 'warning');
+            return;
+        }
+        
+        showNotification('⏳ Gerando relatório de perdas...', 'info');
+        
+        let allData = window._lossesAnalysisData || [];
+        
+        // Se datas foram fornecidas, buscar dados diretamente do Firebase
+        if (startDateParam || endDateParam) {
+            try {
+                let query = db.collection('production_entries')
+                    .where('entryType', '==', 'losses');
+                
+                if (startDate === endDate) {
+                    query = query.where('data', '==', startDate);
+                } else {
+                    query = query.where('data', '>=', startDate).where('data', '<=', endDate);
+                }
+                
+                const snapshot = await query.get();
+                allData = snapshot.docs.map(doc => {
+                    const data = doc.data();
+                    return {
+                        id: doc.id,
+                        date: data.data,
+                        machine: data.machine,
+                        shift: data.turno,
+                        reason: data.perdas || data.reason,
+                        scrapPcs: data.produzido || data.quantidade || 0,
+                        scrapKg: data.refugo_kg || 0,
+                        quantity: data.produzido || data.quantidade || 0,
+                        raw: data
+                    };
+                });
+                
+                // Aplicar filtros de máquina e turno
+                if (machine && machine !== 'all') {
+                    allData = allData.filter(d => d.machine === machine);
+                }
+                if (shift && shift !== 'all') {
+                    allData = allData.filter(d => String(d.shift) === String(shift));
+                }
+            } catch (error) {
+                console.error('Erro ao buscar dados de perdas:', error);
+                showNotification('Erro ao buscar dados. Tente novamente.', 'error');
+                return;
+            }
+        }
+        
+        if (allData.length === 0) {
+            showNotification('Nenhum dado de perdas para o período selecionado.', 'warning');
+            return;
+        }
+        
+        // Calcular estatísticas
+        let totalPcs = 0, totalKg = 0;
+        const byMachine = {}, byReason = {}, byProduct = {}, byShift = {}, byDate = {};
+        
+        allData.forEach(item => {
+            const raw = item.raw || {};
+            const pcs = item.scrapPcs || item.quantity || 0;
+            const kg = item.scrapKg || raw.refugo_kg || 0;
+            const machineId = item.machine || 'N/A';
+            const reason = item.reason || raw.perdas || 'N/A';
+            const mp = raw.mp || raw.product || 'N/A';
+            const shiftVal = item.shift || raw.turno || 'N/A';
+            const date = item.date || raw.data || 'N/A';
+            
+            totalPcs += pcs;
+            totalKg += kg;
+            
+            if (!byMachine[machineId]) byMachine[machineId] = { pcs: 0, kg: 0, count: 0 };
+            byMachine[machineId].pcs += pcs;
+            byMachine[machineId].kg += kg;
+            byMachine[machineId].count++;
+            
+            if (!byReason[reason]) byReason[reason] = { pcs: 0, kg: 0, count: 0 };
+            byReason[reason].pcs += pcs;
+            byReason[reason].kg += kg;
+            byReason[reason].count++;
+            
+            if (!byProduct[mp]) byProduct[mp] = { pcs: 0, kg: 0, count: 0 };
+            byProduct[mp].pcs += pcs;
+            byProduct[mp].kg += kg;
+            byProduct[mp].count++;
+            
+            if (!byShift[shiftVal]) byShift[shiftVal] = { pcs: 0, kg: 0, count: 0 };
+            byShift[shiftVal].pcs += pcs;
+            byShift[shiftVal].kg += kg;
+            byShift[shiftVal].count++;
+            
+            if (!byDate[date]) byDate[date] = { pcs: 0, kg: 0, count: 0 };
+            byDate[date].pcs += pcs;
+            byDate[date].kg += kg;
+            byDate[date].count++;
+        });
+        
+        // Ordenar
+        const sortedMachines = Object.entries(byMachine).sort((a, b) => b[1].kg - a[1].kg);
+        const sortedReasons = Object.entries(byReason).sort((a, b) => b[1].kg - a[1].kg);
+        const sortedProducts = Object.entries(byProduct).sort((a, b) => b[1].kg - a[1].kg);
+        const sortedDates = Object.entries(byDate).sort((a, b) => a[0].localeCompare(b[0]));
+        
+        // Gerar HTML do relatório
+        const reportWindow = window.open('', '_blank');
+        if (!reportWindow) {
+            showNotification('Popup bloqueado. Permita popups para gerar o relatório.', 'warning');
+            return;
+        }
+        
+        reportWindow.document.write(`<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Relatório de Perdas - HokkaidoMES</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; color: #333; padding: 30px; background: #f8f9fa; }
+        .report-header { background: linear-gradient(135deg, #dc2626, #991b1b); color: white; padding: 25px 30px; border-radius: 12px; margin-bottom: 25px; }
+        .report-header h1 { font-size: 22px; margin-bottom: 5px; }
+        .report-header p { opacity: 0.85; font-size: 13px; }
+        .meta-info { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 12px; }
+        .meta-item { background: rgba(255,255,255,0.15); padding: 6px 14px; border-radius: 8px; font-size: 12px; }
+        .section { background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .section h2 { font-size: 16px; color: #dc2626; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #fee2e2; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .kpi-card { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px; text-align: center; }
+        .kpi-card .value { font-size: 24px; font-weight: 700; color: #dc2626; }
+        .kpi-card .label { font-size: 11px; color: #991b1b; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        thead th { background: #fef2f2; color: #991b1b; padding: 8px 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #fecaca; }
+        tbody td { padding: 6px 12px; border-bottom: 1px solid #f3f4f6; }
+        tbody tr:hover { background: #fff5f5; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; }
+        .badge-red { background: #fef2f2; color: #dc2626; }
+        .footer { text-align: center; color: #9ca3af; font-size: 11px; margin-top: 30px; padding-top: 15px; border-top: 1px solid #e5e7eb; }
+        @media print { body { padding: 15px; background: white; } .section { box-shadow: none; border: 1px solid #e5e7eb; } }
+        .print-btn { position: fixed; top: 15px; right: 15px; background: #dc2626; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; z-index: 100; }
+        .print-btn:hover { background: #991b1b; }
+        @media print { .print-btn { display: none; } }
+    </style>
+</head>
+<body>
+    <button class="print-btn" onclick="window.print()">🖨️ Imprimir</button>
+    
+    <div class="report-header">
+        <h1>📊 Relatório Detalhado de Perdas</h1>
+        <p>HokkaidoMES - Sistema de Execução da Manufatura</p>
+        <div class="meta-info">
+            <div class="meta-item">📅 Período: ${startDate || '-'} a ${endDate || '-'}</div>
+            <div class="meta-item">🏭 Máquina: ${machine === 'all' ? 'Todas' : machine}</div>
+            <div class="meta-item">⏰ Turno: ${shift === 'all' ? 'Todos' : 'T' + shift}</div>
+            <div class="meta-item">📋 Gerado em: ${new Date().toLocaleString('pt-BR')}</div>
+        </div>
+    </div>
+    
+    <div class="kpi-grid">
+        <div class="kpi-card"><div class="value">${allData.length}</div><div class="label">Total de Registros</div></div>
+        <div class="kpi-card"><div class="value">${totalPcs.toLocaleString()}</div><div class="label">Total Peças Perdidas</div></div>
+        <div class="kpi-card"><div class="value">${totalKg.toFixed(3)}</div><div class="label">Total Peso (kg)</div></div>
+        <div class="kpi-card"><div class="value">${sortedReasons.length}</div><div class="label">Motivos Distintos</div></div>
+        <div class="kpi-card"><div class="value">${sortedMachines.length}</div><div class="label">Máquinas Afetadas</div></div>
+    </div>
+    
+    <div class="section">
+        <h2>🏭 Perdas por Máquina</h2>
+        <table>
+            <thead><tr><th>Máquina</th><th class="text-right">Peças</th><th class="text-right">Peso (kg)</th><th class="text-center">Ocorrências</th><th class="text-right">% do Total</th></tr></thead>
+            <tbody>
+                ${sortedMachines.map(([m, v]) => `<tr><td><strong>${m}</strong></td><td class="text-right">${v.pcs.toLocaleString()}</td><td class="text-right">${v.kg.toFixed(3)}</td><td class="text-center">${v.count}</td><td class="text-right">${totalKg > 0 ? (v.kg / totalKg * 100).toFixed(1) : 0}%</td></tr>`).join('')}
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="section">
+        <h2>⚠️ Perdas por Motivo</h2>
+        <table>
+            <thead><tr><th>Motivo</th><th class="text-right">Peças</th><th class="text-right">Peso (kg)</th><th class="text-center">Ocorrências</th><th class="text-right">% do Total</th></tr></thead>
+            <tbody>
+                ${sortedReasons.map(([r, v]) => `<tr><td>${r}</td><td class="text-right">${v.pcs.toLocaleString()}</td><td class="text-right">${v.kg.toFixed(3)}</td><td class="text-center">${v.count}</td><td class="text-right">${totalKg > 0 ? (v.kg / totalKg * 100).toFixed(1) : 0}%</td></tr>`).join('')}
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="section">
+        <h2>📦 Perdas por Produto / MP</h2>
+        <table>
+            <thead><tr><th>Produto / MP</th><th class="text-right">Peças</th><th class="text-right">Peso (kg)</th><th class="text-center">Ocorrências</th><th class="text-right">% do Total</th></tr></thead>
+            <tbody>
+                ${sortedProducts.map(([p, v]) => {
+                    let label = p;
+                    if (p && p !== 'N/A' && typeof getDescricaoMP === 'function') {
+                        const desc = getDescricaoMP(p);
+                        if (desc && desc !== p) label = p + ' - ' + desc;
+                    }
+                    return `<tr><td>${label}</td><td class="text-right">${v.pcs.toLocaleString()}</td><td class="text-right">${v.kg.toFixed(3)}</td><td class="text-center">${v.count}</td><td class="text-right">${totalKg > 0 ? (v.kg / totalKg * 100).toFixed(1) : 0}%</td></tr>`;
+                }).join('')}
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="section">
+        <h2>📅 Evolução Diária</h2>
+        <table>
+            <thead><tr><th>Data</th><th class="text-right">Peças</th><th class="text-right">Peso (kg)</th><th class="text-center">Ocorrências</th></tr></thead>
+            <tbody>
+                ${sortedDates.map(([d, v]) => `<tr><td>${d}</td><td class="text-right">${v.pcs.toLocaleString()}</td><td class="text-right">${v.kg.toFixed(3)}</td><td class="text-center">${v.count}</td></tr>`).join('')}
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="section">
+        <h2>⏰ Perdas por Turno</h2>
+        <table>
+            <thead><tr><th>Turno</th><th class="text-right">Peças</th><th class="text-right">Peso (kg)</th><th class="text-center">Ocorrências</th></tr></thead>
+            <tbody>
+                ${Object.entries(byShift).sort((a, b) => String(a[0]).localeCompare(String(b[0]))).map(([s, v]) => `<tr><td>Turno ${s}</td><td class="text-right">${v.pcs.toLocaleString()}</td><td class="text-right">${v.kg.toFixed(3)}</td><td class="text-center">${v.count}</td></tr>`).join('')}
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="section">
+        <h2>📋 Listagem Completa (${allData.length} registros)</h2>
+        <div style="overflow-x:auto;">
+        <table>
+            <thead><tr><th>Data</th><th>Máquina</th><th>OP</th><th>Produto</th><th>Motivo</th><th class="text-right">Qtd</th><th class="text-right">Peso (kg)</th><th class="text-center">Turno</th></tr></thead>
+            <tbody>
+                ${allData.slice(0, 500).map(item => {
+                    const raw = item.raw || {};
+                    return `<tr>
+                        <td>${item.date || raw.data || '-'}</td>
+                        <td>${item.machine || '-'}</td>
+                        <td>${raw.orderNumber || raw.order_number || '-'}</td>
+                        <td>${raw.mp || raw.product || '-'}</td>
+                        <td>${item.reason || raw.perdas || '-'}</td>
+                        <td class="text-right">${(item.scrapPcs || item.quantity || 0).toLocaleString()}</td>
+                        <td class="text-right">${(item.scrapKg || raw.refugo_kg || 0).toFixed(3)}</td>
+                        <td class="text-center">T${item.shift || raw.turno || '-'}</td>
+                    </tr>`;
+                }).join('')}
+                ${allData.length > 500 ? `<tr><td colspan="8" style="text-align:center;color:#9ca3af;padding:12px;">... e mais ${allData.length - 500} registros (exportar CSV para ver todos)</td></tr>` : ''}
+            </tbody>
+        </table>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>HokkaidoMES &copy; ${new Date().getFullYear()} - Relatório gerado automaticamente</p>
+    </div>
+</body>
+</html>`);
+        reportWindow.document.close();
+        
+        showNotification('📊 Relatório gerado em nova aba!', 'success');
+    };
+
+    // ========== MÓDULO RELATÓRIOS (ABA RELATÓRIOS) - REMOVIDO 02/2026 ==========
+    // Subaba Relatórios removida por otimização. Viabilidade será analisada futuramente.
+    // Funções stub para evitar erros caso algum código antigo faça referência:
+    window.loadReportsView = function() { console.log('[REPORTS] Módulo desabilitado'); };
+    window.selectReportType = function() { console.log('[REPORTS] Módulo desabilitado'); };
+    window.generateInlineReport = function() { console.log('[REPORTS] Módulo desabilitado'); };
+    window.exportReportToPDF = function() { console.log('[REPORTS] Módulo desabilitado'); };
+    window.printInlineReport = function() { console.log('[REPORTS] Módulo desabilitado'); };
+    window.clearInlineReport = function() { console.log('[REPORTS] Módulo desabilitado'); };
+    // ========== FIM MÓDULO RELATÓRIOS (REMOVIDO) ==========
+    
+    /* ===== INÍCIO CÓDIGO REMOVIDO (ABA RELATÓRIOS) =====
+    let currentReportType = null;
+    let _inlineReportData = null;
+    const reportTypeConfig = {
+        quantitativo: { color: '#10B981', colorDark: '#059669', title: 'Relatório Quantitativo de Produção', icon: 'factory' },
+        eficiencia: { color: '#8B5CF6', colorDark: '#7C3AED', title: 'Relatório de Eficiência (OEE)', icon: 'gauge' },
+        paradas: { color: '#F97316', colorDark: '#EA580C', title: 'Relatório de Paradas', icon: 'timer-off' },
+        perdas: { color: '#EF4444', colorDark: '#DC2626', title: 'Relatório de Perdas', icon: 'alert-triangle' },
+        borra: { color: '#F59E0B', colorDark: '#D97706', title: 'Relatório de Borra e Sucata', icon: 'trash-2' },
+        consolidado: { color: '#2563EB', colorDark: '#1D4ED8', title: 'Relatório Consolidado Executivo', icon: 'layout-dashboard' }
+    };
+    
+    // Carregar aba de relatórios - inicializar filtros e popular máquinas
+    async function loadReportsView() {
+        const today = getProductionDateString();
+        
+        // Inicializar campos de data
+        const startInput = document.getElementById('report-filter-start');
+        const endInput = document.getElementById('report-filter-end');
+        if (startInput && !startInput.value) startInput.value = today;
+        if (endInput && !endInput.value) endInput.value = today;
+        
+        // Popular seletor de máquinas
+        const machineSelect = document.getElementById('report-filter-machine');
+        if (machineSelect) {
+            // Limpar e repopular sempre para garantir que as máquinas estejam presentes
+            machineSelect.innerHTML = '<option value="all">Todas as máquinas</option>';
+            
+            // Lista de máquinas válidas (fonte confiável)
+            const validMachines = ['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 
+                                   'H11', 'H21', 'H22', 'H23', 'H24', 'H25', 'H26', 'H27', 'H28', 'H29', 'H30', 
+                                   'H31', 'H32', 'H33', 'H34', 'H35', 'H42', 'H43', 'H44', 'H45'];
+            
+            validMachines.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m;
+                opt.textContent = m;
+                machineSelect.appendChild(opt);
+            });
+            
+            console.log('[REPORTS] Máquinas carregadas:', validMachines.length);
+        }
+        
+        // Limpar campo de OP
+        const orderInput = document.getElementById('report-filter-order');
+        if (orderInput) orderInput.value = '';
+        
+        // Resetar estado
+        currentReportType = null;
+        _inlineReportData = null;
+        
+        // Mostrar placeholder
+        document.getElementById('report-placeholder')?.classList.remove('hidden');
+        document.getElementById('report-content-container')?.classList.add('hidden');
+        document.getElementById('report-action-buttons')?.classList.add('hidden');
+        document.getElementById('btn-generate-report')?.setAttribute('disabled', 'true');
+        
+        // Limpar seleção de tipo
+        document.querySelectorAll('.report-type-btn').forEach(btn => {
+            btn.classList.remove('ring-2', 'border-primary-blue', 'bg-blue-50');
+        });
+        
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+    window.loadReportsView = loadReportsView;
+    
+    // Selecionar tipo de relatório
+    window.selectReportType = function(type) {
+        currentReportType = type;
+        
+        // Atualizar visual dos botões
+        document.querySelectorAll('.report-type-btn').forEach(btn => {
+            btn.classList.remove('ring-2', 'border-primary-blue', 'bg-blue-50');
+            if (btn.getAttribute('data-report-type') === type) {
+                btn.classList.add('ring-2', 'ring-primary-blue', 'border-primary-blue', 'bg-blue-50');
+            }
+        });
+        
+        // Habilitar botão de gerar
+        const generateBtn = document.getElementById('btn-generate-report');
+        if (generateBtn) generateBtn.removeAttribute('disabled');
+        
+        console.log('[REPORTS] Tipo selecionado:', type);
+    };
+    
+    // Obter filtros atuais
+    function getReportFilters() {
+        const orderValue = document.getElementById('report-filter-order')?.value?.trim() || '';
+        return {
+            startDate: document.getElementById('report-filter-start')?.value || getProductionDateString(),
+            endDate: document.getElementById('report-filter-end')?.value || getProductionDateString(),
+            machine: document.getElementById('report-filter-machine')?.value || 'all',
+            shift: document.getElementById('report-filter-shift')?.value || 'all',
+            order: orderValue // Texto livre - número da OP ou vazio para todas
+        };
+    }
+    
+    // Gerar relatório inline
+    window.generateInlineReport = async function() {
+        if (!currentReportType) {
+            showNotification('Selecione um tipo de relatório primeiro.', 'warning');
+            return;
+        }
+        
+        const filters = getReportFilters();
+        console.log('[REPORTS] Gerando relatório:', currentReportType, filters);
+        
+        // Mostrar loading
+        document.getElementById('report-placeholder')?.classList.add('hidden');
+        document.getElementById('report-content-container')?.classList.add('hidden');
+        document.getElementById('report-loading')?.classList.remove('hidden');
+        
+        try {
+            let reportHTML = '';
+            
+            switch (currentReportType) {
+                case 'quantitativo':
+                    reportHTML = await generateInlineQuantitativo(filters);
+                    break;
+                case 'eficiencia':
+                    reportHTML = await generateInlineEficiencia(filters);
+                    break;
+                case 'paradas':
+                    reportHTML = await generateInlineParadas(filters);
+                    break;
+                case 'perdas':
+                    reportHTML = await generateInlinePerdas(filters);
+                    break;
+                case 'borra':
+                    reportHTML = await generateInlineBorra(filters);
+                    break;
+                case 'consolidado':
+                    reportHTML = await generateInlineConsolidado(filters);
+                    break;
+                default:
+                    throw new Error('Tipo de relatório não suportado');
+            }
+            
+            // Esconder loading, mostrar conteúdo
+            document.getElementById('report-loading')?.classList.add('hidden');
+            
+            const contentContainer = document.getElementById('report-content-container');
+            const content = document.getElementById('report-content');
+            
+            if (content && contentContainer) {
+                content.innerHTML = reportHTML;
+                contentContainer.classList.remove('hidden');
+                
+                // Mostrar botões de ação
+                document.getElementById('report-action-buttons')?.classList.remove('hidden');
+                document.getElementById('report-action-buttons')?.classList.add('flex');
+            }
+            
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            showNotification('✅ Relatório gerado com sucesso!', 'success');
+            
+        } catch (error) {
+            console.error('[REPORTS] Erro ao gerar relatório:', error);
+            document.getElementById('report-loading')?.classList.add('hidden');
+            document.getElementById('report-placeholder')?.classList.remove('hidden');
+            showNotification('Erro ao gerar relatório: ' + error.message, 'error');
+        }
+    };
+    
+    // Exportar relatório para PDF
+    window.exportReportToPDF = function() {
+        const content = document.getElementById('report-content');
+        if (!content || !content.innerHTML.trim()) {
+            showNotification('Nenhum relatório para exportar.', 'warning');
+            return;
+        }
+        
+        showNotification('⏳ Gerando PDF...', 'info');
+        
+        const config = reportTypeConfig[currentReportType] || reportTypeConfig.consolidado;
+        const filters = getReportFilters();
+        const filename = `${currentReportType || 'relatorio'}_${filters.startDate}_${filters.endDate}.pdf`;
+        
+        const opt = {
+            margin: [10, 10, 10, 10],
+            filename: filename,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, logging: false },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        };
+        
+        html2pdf().set(opt).from(content).save().then(() => {
+            showNotification('📄 PDF exportado com sucesso!', 'success');
+        }).catch(err => {
+            console.error('Erro ao exportar PDF:', err);
+            showNotification('Erro ao exportar PDF', 'error');
+        });
+    };
+    
+    // Imprimir relatório
+    window.printInlineReport = function() {
+        const content = document.getElementById('report-content');
+        if (!content || !content.innerHTML.trim()) {
+            showNotification('Nenhum relatório para imprimir.', 'warning');
+            return;
+        }
+        
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            showNotification('Popup bloqueado. Permita popups para imprimir.', 'warning');
+            return;
+        }
+        
+        printWindow.document.write(`<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Imprimir Relatório</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; padding: 20px; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+    th { background: #f3f4f6; font-weight: 600; }
+    .report-header { margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #ddd; }
+    .report-header h1 { font-size: 18px; margin-bottom: 5px; }
+    .kpi-grid { display: flex; flex-wrap: wrap; gap: 10px; margin: 15px 0; }
+    .kpi-card { padding: 10px 15px; border: 1px solid #ddd; border-radius: 6px; text-align: center; }
+    .section { margin-top: 20px; }
+    .section h2 { font-size: 14px; margin-bottom: 10px; padding-bottom: 5px; border-bottom: 1px solid #ddd; }
+    @media print { body { padding: 10px; } }
+</style>
+</head><body>
+${content.innerHTML}
+<script>window.onload = function() { window.print(); window.close(); }</script>
+</body></html>`);
+        printWindow.document.close();
+    };
+    
+    // Limpar relatório
+    window.clearInlineReport = function() {
+        document.getElementById('report-content-container')?.classList.add('hidden');
+        document.getElementById('report-placeholder')?.classList.remove('hidden');
+        document.getElementById('report-action-buttons')?.classList.add('hidden');
+        
+        const content = document.getElementById('report-content');
+        if (content) content.innerHTML = '';
+        
+        _inlineReportData = null;
+    };
+    
+    // ========== GERADORES DE RELATÓRIO INLINE ==========
+    
+    // Relatório Quantitativo Inline
+    async function generateInlineQuantitativo(filters) {
+        const { startDate, endDate, machine, shift, order } = filters;
+        const config = reportTypeConfig.quantitativo;
+        
+        // Buscar dados
+        const planSnapshot = await db.collection('planning').get();
+        const allPlans = planSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let plans = allPlans.filter(isPlanActive);
+        
+        // Filtrar por OP se digitado (busca parcial por número da ordem)
+        if (order && order.length > 0) {
+            const orderSearch = order.toLowerCase();
+            plans = plans.filter(p => {
+                const orderNum = String(p.order_number || p.orderNumber || '').toLowerCase();
+                return orderNum.includes(orderSearch);
+            });
+        }
+        
+        if (plans.length === 0) throw new Error('Nenhum plano ativo encontrado para os filtros aplicados');
+        
+        const productionSnapshot = await db.collection('production_entries')
+            .where('data', '>=', startDate)
+            .where('data', '<=', endDate)
+            .get();
+        const productions = productionSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        const downtimeSnapshot = await db.collection('downtime_entries')
+            .where('date', '>=', startDate)
+            .where('date', '<=', endDate)
+            .get();
+        const downtimes = downtimeSnapshot.docs.map(doc => doc.data());
+        
+        // Processar dados
+        let reportData = processResumoData(plans, productions, downtimes);
+        
+        if (machine !== 'all') reportData = reportData.filter(r => r.machine === machine);
+        if (shift !== 'all') {
+            const shiftKey = 'T' + shift;
+            reportData = reportData.filter(r => r[shiftKey] && r[shiftKey].produzido > 0);
+        }
+        
+        if (reportData.length === 0) throw new Error('Nenhum dado encontrado para os filtros selecionados');
+        
+        // Obter label da OP se filtrada
+        const orderLabel = order && order.length > 0 ? order : null;
+        
+        // Totais
+        let totalPlanejado = 0, totalProduzido = 0, totalRefugo = 0;
+        reportData.forEach(item => {
+            totalPlanejado += coerceToNumber(item.planned_quantity, 0);
+            totalProduzido += coerceToNumber(item.total_produzido, 0);
+            totalRefugo += (item.T1.refugo_kg || 0) + (item.T2.refugo_kg || 0) + (item.T3.refugo_kg || 0);
+        });
+        
+        return `
+        <div class="p-6" style="font-family: 'Segoe UI', sans-serif;">
+            <div class="report-header" style="background: linear-gradient(135deg, ${config.color}, ${config.colorDark}); color: white; padding: 20px 25px; border-radius: 12px; margin-bottom: 20px;">
+                <h1 style="font-size: 20px; margin-bottom: 5px;">📊 ${config.title}</h1>
+                <p style="opacity: 0.9; font-size: 13px;">Período: ${startDate} a ${endDate} | Máquina: ${machine === 'all' ? 'Todas' : machine} | Turno: ${shift === 'all' ? 'Todos' : 'T' + shift}${orderLabel ? ` | OP: ${orderLabel}` : ''}</p>
+                <p style="opacity: 0.7; font-size: 11px; margin-top: 5px;">Gerado em: ${new Date().toLocaleString('pt-BR')}</p>
+            </div>
+            
+            <div class="kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px;">
+                <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 15px; text-align: center;">
+                    <div style="font-size: 26px; font-weight: 700; color: #16a34a;">${totalProduzido.toLocaleString('pt-BR')}</div>
+                    <div style="font-size: 11px; color: #166534;">Peças Produzidas</div>
+                </div>
+                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 15px; text-align: center;">
+                    <div style="font-size: 26px; font-weight: 700; color: #2563eb;">${totalPlanejado.toLocaleString('pt-BR')}</div>
+                    <div style="font-size: 11px; color: #1e40af;">Planejado</div>
+                </div>
+                <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 15px; text-align: center;">
+                    <div style="font-size: 26px; font-weight: 700; color: #dc2626;">${(totalPlanejado - totalProduzido).toLocaleString('pt-BR')}</div>
+                    <div style="font-size: 11px; color: #991b1b;">Faltante</div>
+                </div>
+                <div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 15px; text-align: center;">
+                    <div style="font-size: 26px; font-weight: 700; color: #ea580c;">${totalRefugo.toFixed(2)}</div>
+                    <div style="font-size: 11px; color: #9a3412;">Refugo (kg)</div>
+                </div>
+            </div>
+            
+            <div class="section" style="margin-top: 20px;">
+                <h2 style="font-size: 16px; color: ${config.colorDark}; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid ${config.color}40;">📋 Detalhamento por Máquina e Turno</h2>
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                        <thead>
+                            <tr style="background: ${config.color}15;">
+                                <th rowspan="2" style="padding: 8px; border: 1px solid #ddd; text-align: left;">Máquina</th>
+                                <th rowspan="2" style="padding: 8px; border: 1px solid #ddd; text-align: left;">Produto</th>
+                                <th colspan="2" style="padding: 8px; border: 1px solid #ddd; text-align: center; background: #dcfce7;">Turno 1</th>
+                                <th colspan="2" style="padding: 8px; border: 1px solid #ddd; text-align: center; background: #dbeafe;">Turno 2</th>
+                                <th colspan="2" style="padding: 8px; border: 1px solid #ddd; text-align: center; background: #fef3c7;">Turno 3</th>
+                                <th rowspan="2" style="padding: 8px; border: 1px solid #ddd; text-align: center;">Planejado</th>
+                                <th rowspan="2" style="padding: 8px; border: 1px solid #ddd; text-align: center;">Total</th>
+                                <th rowspan="2" style="padding: 8px; border: 1px solid #ddd; text-align: center;">Faltante</th>
+                            </tr>
+                            <tr>
+                                <th style="padding: 6px; border: 1px solid #ddd; text-align: center; background: #dcfce7;">Prod.</th>
+                                <th style="padding: 6px; border: 1px solid #ddd; text-align: center; background: #dcfce7;">Ref.(kg)</th>
+                                <th style="padding: 6px; border: 1px solid #ddd; text-align: center; background: #dbeafe;">Prod.</th>
+                                <th style="padding: 6px; border: 1px solid #ddd; text-align: center; background: #dbeafe;">Ref.(kg)</th>
+                                <th style="padding: 6px; border: 1px solid #ddd; text-align: center; background: #fef3c7;">Prod.</th>
+                                <th style="padding: 6px; border: 1px solid #ddd; text-align: center; background: #fef3c7;">Ref.(kg)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${reportData.map(item => {
+                                const planned = coerceToNumber(item.planned_quantity, 0);
+                                const produced = coerceToNumber(item.total_produzido, 0);
+                                const faltante = planned - produced;
+                                const faltanteColor = faltante > 0 ? '#dc2626' : '#16a34a';
+                                return `<tr style="border-bottom: 1px solid #e5e7eb;">
+                                    <td style="padding: 8px; border: 1px solid #ddd; font-weight: 600;">${item.machine || '-'}</td>
+                                    <td style="padding: 8px; border: 1px solid #ddd;">${item.product || '-'}</td>
+                                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${(item.T1.produzido || 0).toLocaleString('pt-BR')}</td>
+                                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${(item.T1.refugo_kg || 0).toFixed(2)}</td>
+                                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${(item.T2.produzido || 0).toLocaleString('pt-BR')}</td>
+                                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${(item.T2.refugo_kg || 0).toFixed(2)}</td>
+                                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${(item.T3.produzido || 0).toLocaleString('pt-BR')}</td>
+                                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${(item.T3.refugo_kg || 0).toFixed(2)}</td>
+                                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight: 600;">${planned.toLocaleString('pt-BR')}</td>
+                                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight: 600;">${produced.toLocaleString('pt-BR')}</td>
+                                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight: 600; color: ${faltanteColor};">${faltante.toLocaleString('pt-BR')}</td>
+                                </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>`;
+    }
+    
+    // Relatório de Eficiência Inline
+    async function generateInlineEficiencia(filters) {
+        const { startDate, endDate, machine, shift, order } = filters;
+        const config = reportTypeConfig.eficiencia;
+        
+        // Buscar dados
+        const planSnapshot = await db.collection('planning').get();
+        const allPlans = planSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let plans = allPlans.filter(isPlanActive);
+        
+        // Filtrar por OP se digitado (busca parcial por número da ordem)
+        if (order && order.length > 0) {
+            const orderSearch = order.toLowerCase();
+            plans = plans.filter(p => {
+                const orderNum = String(p.order_number || p.orderNumber || '').toLowerCase();
+                return orderNum.includes(orderSearch);
+            });
+        }
+        
+        if (plans.length === 0) throw new Error('Nenhum plano ativo encontrado para os filtros aplicados');
+        
+        const productionSnapshot = await db.collection('production_entries')
+            .where('data', '>=', startDate)
+            .where('data', '<=', endDate)
+            .get();
+        const productions = productionSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        const downtimeSnapshot = await db.collection('downtime_entries')
+            .where('date', '>=', startDate)
+            .where('date', '<=', endDate)
+            .get();
+        const downtimes = downtimeSnapshot.docs.map(doc => doc.data());
+        
+        let reportData = processResumoData(plans, productions, downtimes);
+        
+        if (machine !== 'all') reportData = reportData.filter(r => r.machine === machine);
+        
+        if (reportData.length === 0) throw new Error('Nenhum dado encontrado para os filtros selecionados');
+        
+        // Obter label da OP se filtrada
+        const orderLabel = order && order.length > 0 ? order : null;
+        
+        // Calcular OEE médio
+        let totalOee = 0, countOee = 0;
+        reportData.forEach(item => {
+            [item.T1, item.T2, item.T3].forEach(t => {
+                if (t.oee > 0) { totalOee += t.oee; countOee++; }
+            });
+        });
+        const avgOee = countOee > 0 ? totalOee / countOee : 0;
+        
+        const formatPct = (val) => {
+            const pct = (val * 100).toFixed(1);
+            let color = '#16a34a';
+            if (val < 0.7) color = '#dc2626';
+            else if (val < 0.85) color = '#f59e0b';
+            return `<span style="color: ${color}; font-weight: 600;">${pct}%</span>`;
+        };
+        
+        return `
+        <div class="p-6" style="font-family: 'Segoe UI', sans-serif;">
+            <div class="report-header" style="background: linear-gradient(135deg, ${config.color}, ${config.colorDark}); color: white; padding: 20px 25px; border-radius: 12px; margin-bottom: 20px;">
+                <h1 style="font-size: 20px; margin-bottom: 5px;">📊 ${config.title}</h1>
+                <p style="opacity: 0.9; font-size: 13px;">Período: ${startDate} a ${endDate} | Máquina: ${machine === 'all' ? 'Todas' : machine} | Turno: ${shift === 'all' ? 'Todos' : 'T' + shift}${orderLabel ? ` | OP: ${orderLabel}` : ''}</p>
+            </div>
+            
+            <div class="kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px;">
+                <div style="background: ${avgOee >= 0.85 ? '#f0fdf4' : avgOee >= 0.7 ? '#fffbeb' : '#fef2f2'}; border: 1px solid ${avgOee >= 0.85 ? '#bbf7d0' : avgOee >= 0.7 ? '#fde68a' : '#fecaca'}; border-radius: 8px; padding: 15px; text-align: center;">
+                    <div style="font-size: 28px; font-weight: 700; color: ${avgOee >= 0.85 ? '#16a34a' : avgOee >= 0.7 ? '#d97706' : '#dc2626'};">${(avgOee * 100).toFixed(1)}%</div>
+                    <div style="font-size: 11px; color: #666;">OEE Médio</div>
+                </div>
+                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 15px; text-align: center;">
+                    <div style="font-size: 28px; font-weight: 700; color: #2563eb;">${reportData.length}</div>
+                    <div style="font-size: 11px; color: #1e40af;">Máquinas</div>
+                </div>
+            </div>
+            
+            <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px;">
+                <strong style="color: #1e40af;">Legenda OEE:</strong>
+                <span style="color: #16a34a; margin-left: 15px;">★ ≥85% Excelente</span>
+                <span style="color: #f59e0b; margin-left: 15px;">★ 70-84% Aceitável</span>
+                <span style="color: #dc2626; margin-left: 15px;">★ <70% Crítico</span>
+            </div>
+            
+            <div class="section" style="margin-top: 20px;">
+                <h2 style="font-size: 16px; color: ${config.colorDark}; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid ${config.color}40;">📋 OEE por Máquina e Turno</h2>
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                        <thead>
+                            <tr style="background: ${config.color}15;">
+                                <th rowspan="2" style="padding: 6px; border: 1px solid #ddd; text-align: left;">Máquina</th>
+                                <th colspan="4" style="padding: 6px; border: 1px solid #ddd; text-align: center; background: #dcfce7;">Turno 1</th>
+                                <th colspan="4" style="padding: 6px; border: 1px solid #ddd; text-align: center; background: #dbeafe;">Turno 2</th>
+                                <th colspan="4" style="padding: 6px; border: 1px solid #ddd; text-align: center; background: #fef3c7;">Turno 3</th>
+                                <th rowspan="2" style="padding: 6px; border: 1px solid #ddd; text-align: center;">OEE Médio</th>
+                            </tr>
+                            <tr>
+                                <th style="padding: 4px; border: 1px solid #ddd; background: #dcfce7; font-size: 10px;">Disp.</th>
+                                <th style="padding: 4px; border: 1px solid #ddd; background: #dcfce7; font-size: 10px;">Perf.</th>
+                                <th style="padding: 4px; border: 1px solid #ddd; background: #dcfce7; font-size: 10px;">Qual.</th>
+                                <th style="padding: 4px; border: 1px solid #ddd; background: #dcfce7; font-size: 10px; font-weight: 700;">OEE</th>
+                                <th style="padding: 4px; border: 1px solid #ddd; background: #dbeafe; font-size: 10px;">Disp.</th>
+                                <th style="padding: 4px; border: 1px solid #ddd; background: #dbeafe; font-size: 10px;">Perf.</th>
+                                <th style="padding: 4px; border: 1px solid #ddd; background: #dbeafe; font-size: 10px;">Qual.</th>
+                                <th style="padding: 4px; border: 1px solid #ddd; background: #dbeafe; font-size: 10px; font-weight: 700;">OEE</th>
+                                <th style="padding: 4px; border: 1px solid #ddd; background: #fef3c7; font-size: 10px;">Disp.</th>
+                                <th style="padding: 4px; border: 1px solid #ddd; background: #fef3c7; font-size: 10px;">Perf.</th>
+                                <th style="padding: 4px; border: 1px solid #ddd; background: #fef3c7; font-size: 10px;">Qual.</th>
+                                <th style="padding: 4px; border: 1px solid #ddd; background: #fef3c7; font-size: 10px; font-weight: 700;">OEE</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${reportData.map(item => {
+                                const oeeVals = [item.T1.oee, item.T2.oee, item.T3.oee].filter(v => v > 0);
+                                const itemAvg = oeeVals.length > 0 ? oeeVals.reduce((a,b) => a + b, 0) / oeeVals.length : 0;
+                                return `<tr>
+                                    <td style="padding: 6px; border: 1px solid #ddd; font-weight: 600;">${item.machine || '-'}</td>
+                                    <td style="padding: 4px; border: 1px solid #ddd; text-align: center;">${formatPct(item.T1.disponibilidade || 0)}</td>
+                                    <td style="padding: 4px; border: 1px solid #ddd; text-align: center;">${formatPct(item.T1.performance || 0)}</td>
+                                    <td style="padding: 4px; border: 1px solid #ddd; text-align: center;">${formatPct(item.T1.qualidade || 0)}</td>
+                                    <td style="padding: 4px; border: 1px solid #ddd; text-align: center; font-weight: 700;">${formatPct(item.T1.oee || 0)}</td>
+                                    <td style="padding: 4px; border: 1px solid #ddd; text-align: center;">${formatPct(item.T2.disponibilidade || 0)}</td>
+                                    <td style="padding: 4px; border: 1px solid #ddd; text-align: center;">${formatPct(item.T2.performance || 0)}</td>
+                                    <td style="padding: 4px; border: 1px solid #ddd; text-align: center;">${formatPct(item.T2.qualidade || 0)}</td>
+                                    <td style="padding: 4px; border: 1px solid #ddd; text-align: center; font-weight: 700;">${formatPct(item.T2.oee || 0)}</td>
+                                    <td style="padding: 4px; border: 1px solid #ddd; text-align: center;">${formatPct(item.T3.disponibilidade || 0)}</td>
+                                    <td style="padding: 4px; border: 1px solid #ddd; text-align: center;">${formatPct(item.T3.performance || 0)}</td>
+                                    <td style="padding: 4px; border: 1px solid #ddd; text-align: center;">${formatPct(item.T3.qualidade || 0)}</td>
+                                    <td style="padding: 4px; border: 1px solid #ddd; text-align: center; font-weight: 700;">${formatPct(item.T3.oee || 0)}</td>
+                                    <td style="padding: 6px; border: 1px solid #ddd; text-align: center; font-weight: 700; font-size: 13px;">${formatPct(itemAvg)}</td>
+                                </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>`;
+    }
+    
+    // Relatório de Paradas Inline
+    async function generateInlineParadas(filters) {
+        const { startDate, endDate, machine, shift, order } = filters;
+        const config = reportTypeConfig.paradas;
+        
+        // Buscar planos se houver filtro de OP (para obter IDs correspondentes)
+        let matchingPlanIds = null;
+        if (order && order.length > 0) {
+            const planSnapshot = await db.collection('planning').get();
+            const orderSearch = order.toLowerCase();
+            matchingPlanIds = planSnapshot.docs
+                .filter(doc => {
+                    const data = doc.data();
+                    const orderNum = String(data.order_number || data.orderNumber || '').toLowerCase();
+                    return orderNum.includes(orderSearch);
+                })
+                .map(doc => doc.id);
+            if (matchingPlanIds.length === 0) throw new Error('Nenhuma OP encontrada com o número digitado');
+        }
+        
+        // Buscar dados de paradas
+        let query = db.collection('downtime_entries');
+        if (startDate === endDate) {
+            query = query.where('date', '==', startDate);
+        } else {
+            query = query.where('date', '>=', startDate).where('date', '<=', endDate);
+        }
+        
+        const snapshot = await query.get();
+        let downtimeData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            let duration = data.duration || 0;
+            if (!duration && data.startTime && data.endTime && data.date) {
+                const start = new Date(`${data.date}T${data.startTime}`);
+                const end = new Date(`${data.date}T${data.endTime}`);
+                duration = end > start ? Math.round((end - start) / 60000) : 0;
+            }
+            return { ...data, duration, raw: data };
+        });
+        
+        if (machine !== 'all') downtimeData = downtimeData.filter(d => d.machine === machine);
+        if (shift !== 'all') downtimeData = downtimeData.filter(d => String(d.shift) === String(shift));
+        
+        // Filtrar por OP se digitado (usando IDs dos planos encontrados)
+        if (matchingPlanIds) {
+            downtimeData = downtimeData.filter(d => matchingPlanIds.includes(d.planId) || matchingPlanIds.includes(d.order_id));
+        }
+        
+        if (downtimeData.length === 0) throw new Error('Nenhuma parada encontrada para os filtros selecionados');
+        
+        // Estatísticas
+        let totalMin = 0;
+        const byMachine = {}, byReason = {}, byShift = {};
+        
+        downtimeData.forEach(item => {
+            const dur = item.duration || 0;
+            const machId = item.machine || 'N/A';
+            const reason = item.reason || 'N/A';
+            const sh = item.shift || 'N/A';
+            
+            totalMin += dur;
+            
+            if (!byMachine[machId]) byMachine[machId] = { min: 0, count: 0 };
+            byMachine[machId].min += dur;
+            byMachine[machId].count++;
+            
+            if (!byReason[reason]) byReason[reason] = { min: 0, count: 0 };
+            byReason[reason].min += dur;
+            byReason[reason].count++;
+            
+            if (!byShift[sh]) byShift[sh] = { min: 0, count: 0 };
+            byShift[sh].min += dur;
+            byShift[sh].count++;
+        });
+        
+        const sortedMachines = Object.entries(byMachine).sort((a,b) => b[1].min - a[1].min);
+        const sortedReasons = Object.entries(byReason).sort((a,b) => b[1].min - a[1].min);
+        
+        // Obter label da OP se filtrada
+        const orderLabel = order && order.length > 0 ? order : null;
+        
+        return `
+        <div class="p-6" style="font-family: 'Segoe UI', sans-serif;">
+            <div class="report-header" style="background: linear-gradient(135deg, ${config.color}, ${config.colorDark}); color: white; padding: 20px 25px; border-radius: 12px; margin-bottom: 20px;">
+                <h1 style="font-size: 20px; margin-bottom: 5px;">⏸ ${config.title}</h1>
+                <p style="opacity: 0.9; font-size: 13px;">Período: ${startDate} a ${endDate} | Máquina: ${machine === 'all' ? 'Todas' : machine} | Turno: ${shift === 'all' ? 'Todos' : 'T' + shift}${orderLabel ? ` | OP: ${orderLabel}` : ''}</p>
+            </div>
+            
+            <div class="kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px;">
+                <div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 15px; text-align: center;">
+                    <div style="font-size: 26px; font-weight: 700; color: #ea580c;">${downtimeData.length}</div>
+                    <div style="font-size: 11px; color: #9a3412;">Total Paradas</div>
+                </div>
+                <div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 15px; text-align: center;">
+                    <div style="font-size: 26px; font-weight: 700; color: #ea580c;">${(totalMin / 60).toFixed(1)}h</div>
+                    <div style="font-size: 11px; color: #9a3412;">Tempo Total</div>
+                </div>
+                <div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 15px; text-align: center;">
+                    <div style="font-size: 26px; font-weight: 700; color: #ea580c;">${downtimeData.length > 0 ? (totalMin / downtimeData.length).toFixed(0) : 0}min</div>
+                    <div style="font-size: 11px; color: #9a3412;">Duração Média</div>
+                </div>
+                <div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 15px; text-align: center;">
+                    <div style="font-size: 26px; font-weight: 700; color: #ea580c;">${sortedMachines.length}</div>
+                    <div style="font-size: 11px; color: #9a3412;">Máquinas Afetadas</div>
+                </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
+                <div class="section">
+                    <h2 style="font-size: 15px; color: ${config.colorDark}; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid ${config.color}40;">🏭 Por Máquina</h2>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                        <thead>
+                            <tr style="background: ${config.color}15;"><th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Máquina</th><th style="padding: 8px; border: 1px solid #ddd; text-align: right;">Tempo (min)</th><th style="padding: 8px; border: 1px solid #ddd; text-align: center;">Qtd</th><th style="padding: 8px; border: 1px solid #ddd; text-align: right;">%</th></tr>
+                        </thead>
+                        <tbody>
+                            ${sortedMachines.map(([m, v]) => `<tr><td style="padding: 6px; border: 1px solid #ddd; font-weight: 600;">${m}</td><td style="padding: 6px; border: 1px solid #ddd; text-align: right;">${v.min.toFixed(0)}</td><td style="padding: 6px; border: 1px solid #ddd; text-align: center;">${v.count}</td><td style="padding: 6px; border: 1px solid #ddd; text-align: right;">${totalMin > 0 ? (v.min / totalMin * 100).toFixed(1) : 0}%</td></tr>`).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="section">
+                    <h2 style="font-size: 15px; color: ${config.colorDark}; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid ${config.color}40;">⚠️ Por Motivo</h2>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                        <thead>
+                            <tr style="background: ${config.color}15;"><th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Motivo</th><th style="padding: 8px; border: 1px solid #ddd; text-align: right;">Tempo (min)</th><th style="padding: 8px; border: 1px solid #ddd; text-align: center;">Qtd</th><th style="padding: 8px; border: 1px solid #ddd; text-align: right;">%</th></tr>
+                        </thead>
+                        <tbody>
+                            ${sortedReasons.map(([r, v]) => `<tr><td style="padding: 6px; border: 1px solid #ddd;">${r}</td><td style="padding: 6px; border: 1px solid #ddd; text-align: right;">${v.min.toFixed(0)}</td><td style="padding: 6px; border: 1px solid #ddd; text-align: center;">${v.count}</td><td style="padding: 6px; border: 1px solid #ddd; text-align: right;">${totalMin > 0 ? (v.min / totalMin * 100).toFixed(1) : 0}%</td></tr>`).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="section" style="margin-top: 20px;">
+                <h2 style="font-size: 15px; color: ${config.colorDark}; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid ${config.color}40;">📋 Listagem (${Math.min(downtimeData.length, 100)} de ${downtimeData.length})</h2>
+                <div style="overflow-x: auto; max-height: 400px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                        <thead style="position: sticky; top: 0; background: white;">
+                            <tr style="background: ${config.color}15;"><th style="padding: 6px; border: 1px solid #ddd;">Data</th><th style="padding: 6px; border: 1px solid #ddd;">Máquina</th><th style="padding: 6px; border: 1px solid #ddd;">Motivo</th><th style="padding: 6px; border: 1px solid #ddd; text-align: right;">Duração</th><th style="padding: 6px; border: 1px solid #ddd; text-align: center;">Turno</th><th style="padding: 6px; border: 1px solid #ddd;">Início</th><th style="padding: 6px; border: 1px solid #ddd;">Fim</th></tr>
+                        </thead>
+                        <tbody>
+                            ${downtimeData.slice(0, 100).map(item => `<tr><td style="padding: 5px; border: 1px solid #ddd;">${item.date || '-'}</td><td style="padding: 5px; border: 1px solid #ddd;">${item.machine || '-'}</td><td style="padding: 5px; border: 1px solid #ddd;">${item.reason || '-'}</td><td style="padding: 5px; border: 1px solid #ddd; text-align: right;">${(item.duration || 0).toFixed(0)} min</td><td style="padding: 5px; border: 1px solid #ddd; text-align: center;">T${item.shift || '-'}</td><td style="padding: 5px; border: 1px solid #ddd;">${item.raw?.startTime || '-'}</td><td style="padding: 5px; border: 1px solid #ddd;">${item.raw?.endTime || '-'}</td></tr>`).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>`;
+    }
+    
+    // Relatório de Perdas Inline
+    async function generateInlinePerdas(filters) {
+        const { startDate, endDate, machine, shift, order } = filters;
+        const config = reportTypeConfig.perdas;
+        
+        // Buscar planos se houver filtro de OP (para obter IDs correspondentes)
+        let matchingPlanIds = null;
+        if (order && order.length > 0) {
+            const planSnapshot = await db.collection('planning').get();
+            const orderSearch = order.toLowerCase();
+            matchingPlanIds = planSnapshot.docs
+                .filter(doc => {
+                    const data = doc.data();
+                    const orderNum = String(data.order_number || data.orderNumber || '').toLowerCase();
+                    return orderNum.includes(orderSearch);
+                })
+                .map(doc => doc.id);
+            if (matchingPlanIds.length === 0) throw new Error('Nenhuma OP encontrada com o número digitado');
+        }
+        
+        let query = db.collection('production_entries').where('entryType', '==', 'losses');
+        if (startDate === endDate) {
+            query = query.where('data', '==', startDate);
+        } else {
+            query = query.where('data', '>=', startDate).where('data', '<=', endDate);
+        }
+        
+        const snapshot = await query.get();
+        let allData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                date: data.data,
+                machine: data.machine,
+                shift: data.turno,
+                reason: data.perdas || data.reason,
+                scrapPcs: data.produzido || data.quantidade || 0,
+                scrapKg: data.refugo_kg || 0,
+                planId: data.planId,
+                raw: data
+            };
+        });
+        
+        if (machine !== 'all') allData = allData.filter(d => d.machine === machine);
+        if (shift !== 'all') allData = allData.filter(d => String(d.shift) === String(shift));
+        
+        // Filtrar por OP se digitado (usando IDs dos planos encontrados)
+        if (matchingPlanIds) {
+            allData = allData.filter(d => matchingPlanIds.includes(d.planId));
+        }
+        
+        if (allData.length === 0) throw new Error('Nenhuma perda encontrada para os filtros selecionados');
+        
+        // Estatísticas
+        let totalPcs = 0, totalKg = 0;
+        const byMachine = {}, byReason = {}, byShift = {};
+        
+        allData.forEach(item => {
+            const pcs = item.scrapPcs || 0;
+            const kg = item.scrapKg || 0;
+            const machineId = item.machine || 'N/A';
+            const reason = item.reason || 'N/A';
+            const shiftVal = item.shift || 'N/A';
+            
+            totalPcs += pcs;
+            totalKg += kg;
+            
+            if (!byMachine[machineId]) byMachine[machineId] = { pcs: 0, kg: 0, count: 0 };
+            byMachine[machineId].pcs += pcs;
+            byMachine[machineId].kg += kg;
+            byMachine[machineId].count++;
+            
+            if (!byReason[reason]) byReason[reason] = { pcs: 0, kg: 0, count: 0 };
+            byReason[reason].pcs += pcs;
+            byReason[reason].kg += kg;
+            byReason[reason].count++;
+            
+            if (!byShift[shiftVal]) byShift[shiftVal] = { pcs: 0, kg: 0, count: 0 };
+            byShift[shiftVal].pcs += pcs;
+            byShift[shiftVal].kg += kg;
+            byShift[shiftVal].count++;
+        });
+        
+        const sortedMachines = Object.entries(byMachine).sort((a, b) => b[1].kg - a[1].kg);
+        const sortedReasons = Object.entries(byReason).sort((a, b) => b[1].kg - a[1].kg);
+        
+        // Obter label da OP se filtrada
+        const orderLabel = order && order.length > 0 ? order : null;
+        
+        return `
+        <div class="p-6" style="font-family: 'Segoe UI', sans-serif;">
+            <div class="report-header" style="background: linear-gradient(135deg, ${config.color}, ${config.colorDark}); color: white; padding: 20px 25px; border-radius: 12px; margin-bottom: 20px;">
+                <h1 style="font-size: 20px; margin-bottom: 5px;">⚠️ ${config.title}</h1>
+                <p style="opacity: 0.9; font-size: 13px;">Período: ${startDate} a ${endDate} | Máquina: ${machine === 'all' ? 'Todas' : machine} | Turno: ${shift === 'all' ? 'Todos' : 'T' + shift}${orderLabel ? ` | OP: ${orderLabel}` : ''}</p>
+            </div>
+            
+            <div class="kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px;">
+                <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 15px; text-align: center;">
+                    <div style="font-size: 26px; font-weight: 700; color: #dc2626;">${allData.length}</div>
+                    <div style="font-size: 11px; color: #991b1b;">Registros</div>
+                </div>
+                <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 15px; text-align: center;">
+                    <div style="font-size: 26px; font-weight: 700; color: #dc2626;">${totalPcs.toLocaleString('pt-BR')}</div>
+                    <div style="font-size: 11px; color: #991b1b;">Peças Perdidas</div>
+                </div>
+                <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 15px; text-align: center;">
+                    <div style="font-size: 26px; font-weight: 700; color: #dc2626;">${totalKg.toFixed(3)}</div>
+                    <div style="font-size: 11px; color: #991b1b;">Peso (kg)</div>
+                </div>
+                <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 15px; text-align: center;">
+                    <div style="font-size: 26px; font-weight: 700; color: #dc2626;">${sortedReasons.length}</div>
+                    <div style="font-size: 11px; color: #991b1b;">Motivos</div>
+                </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
+                <div class="section">
+                    <h2 style="font-size: 15px; color: ${config.colorDark}; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid ${config.color}40;">🏭 Por Máquina</h2>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                        <thead><tr style="background: ${config.color}15;"><th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Máquina</th><th style="padding: 8px; border: 1px solid #ddd; text-align: right;">Peças</th><th style="padding: 8px; border: 1px solid #ddd; text-align: right;">Peso (kg)</th><th style="padding: 8px; border: 1px solid #ddd; text-align: right;">%</th></tr></thead>
+                        <tbody>${sortedMachines.map(([m, v]) => `<tr><td style="padding: 6px; border: 1px solid #ddd; font-weight: 600;">${m}</td><td style="padding: 6px; border: 1px solid #ddd; text-align: right;">${v.pcs.toLocaleString('pt-BR')}</td><td style="padding: 6px; border: 1px solid #ddd; text-align: right;">${v.kg.toFixed(3)}</td><td style="padding: 6px; border: 1px solid #ddd; text-align: right;">${totalKg > 0 ? (v.kg / totalKg * 100).toFixed(1) : 0}%</td></tr>`).join('')}</tbody>
+                    </table>
+                </div>
+                <div class="section">
+                    <h2 style="font-size: 15px; color: ${config.colorDark}; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid ${config.color}40;">⚠️ Por Motivo</h2>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                        <thead><tr style="background: ${config.color}15;"><th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Motivo</th><th style="padding: 8px; border: 1px solid #ddd; text-align: right;">Peças</th><th style="padding: 8px; border: 1px solid #ddd; text-align: right;">Peso (kg)</th><th style="padding: 8px; border: 1px solid #ddd; text-align: right;">%</th></tr></thead>
+                        <tbody>${sortedReasons.map(([r, v]) => `<tr><td style="padding: 6px; border: 1px solid #ddd;">${r}</td><td style="padding: 6px; border: 1px solid #ddd; text-align: right;">${v.pcs.toLocaleString('pt-BR')}</td><td style="padding: 6px; border: 1px solid #ddd; text-align: right;">${v.kg.toFixed(3)}</td><td style="padding: 6px; border: 1px solid #ddd; text-align: right;">${totalKg > 0 ? (v.kg / totalKg * 100).toFixed(1) : 0}%</td></tr>`).join('')}</tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="section" style="margin-top: 20px;">
+                <h2 style="font-size: 15px; color: ${config.colorDark}; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid ${config.color}40;">📋 Listagem (${Math.min(allData.length, 100)} de ${allData.length})</h2>
+                <div style="overflow-x: auto; max-height: 350px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                        <thead style="position: sticky; top: 0; background: white;"><tr style="background: ${config.color}15;"><th style="padding: 6px; border: 1px solid #ddd;">Data</th><th style="padding: 6px; border: 1px solid #ddd;">Máquina</th><th style="padding: 6px; border: 1px solid #ddd;">Motivo</th><th style="padding: 6px; border: 1px solid #ddd; text-align: right;">Qtd</th><th style="padding: 6px; border: 1px solid #ddd; text-align: right;">Peso (kg)</th><th style="padding: 6px; border: 1px solid #ddd; text-align: center;">Turno</th></tr></thead>
+                        <tbody>${allData.slice(0, 100).map(item => `<tr><td style="padding: 5px; border: 1px solid #ddd;">${item.date || '-'}</td><td style="padding: 5px; border: 1px solid #ddd;">${item.machine || '-'}</td><td style="padding: 5px; border: 1px solid #ddd;">${item.reason || '-'}</td><td style="padding: 5px; border: 1px solid #ddd; text-align: right;">${(item.scrapPcs || 0).toLocaleString('pt-BR')}</td><td style="padding: 5px; border: 1px solid #ddd; text-align: right;">${(item.scrapKg || 0).toFixed(3)}</td><td style="padding: 5px; border: 1px solid #ddd; text-align: center;">T${item.shift || '-'}</td></tr>`).join('')}</tbody>
+                    </table>
+                </div>
+            </div>
+        </div>`;
+    }
+    
+    // Relatório de Borra Inline
+    async function generateInlineBorra(filters) {
+        const { startDate, endDate, machine, order } = filters;
+        const config = reportTypeConfig.borra;
+        
+        // Buscar planos se houver filtro de OP (para obter IDs correspondentes)
+        let matchingPlanIds = null;
+        if (order && order.length > 0) {
+            const planSnapshot = await db.collection('planning').get();
+            const orderSearch = order.toLowerCase();
+            matchingPlanIds = planSnapshot.docs
+                .filter(doc => {
+                    const data = doc.data();
+                    const orderNum = String(data.order_number || data.orderNumber || '').toLowerCase();
+                    return orderNum.includes(orderSearch);
+                })
+                .map(doc => doc.id);
+            if (matchingPlanIds.length === 0) throw new Error('Nenhuma OP encontrada com o número digitado');
+        }
+        
+        // Buscar borra
+        let borraData = [];
+        const pmpSnap = await db.collection('pmp_borra')
+            .where('date', '>=', startDate)
+            .where('date', '<=', endDate)
+            .get();
+        
+        pmpSnap.forEach(doc => {
+            const d = doc.data();
+            borraData.push({ id: doc.id, ...d, machine: normalizeMachineId(d.machine || '') });
+        });
+        
+        if (machine !== 'all') borraData = borraData.filter(b => b.machine === normalizeMachineId(machine));
+        
+        // Filtrar por OP se digitado (usando IDs dos planos encontrados)
+        if (matchingPlanIds) {
+            borraData = borraData.filter(b => matchingPlanIds.includes(b.planId));
+        }
+        
+        // Buscar sucata
+        let sucataData = [];
+        try {
+            const sucSnap = await db.collection('pmp_sucata')
+                .where('date', '>=', startDate)
+                .where('date', '<=', endDate)
+                .get();
+            sucSnap.forEach(doc => {
+                const d = doc.data();
+                sucataData.push({ id: doc.id, ...d, machine: normalizeMachineId(d.machine || '') });
+            });
+            if (machine !== 'all') sucataData = sucataData.filter(s => s.machine === normalizeMachineId(machine));
+            if (matchingPlanIds) {
+                sucataData = sucataData.filter(s => matchingPlanIds.includes(s.planId));
+            }
+        } catch(e) { console.warn('Sem dados de sucata:', e); }
+        
+        if (borraData.length === 0 && sucataData.length === 0) {
+            throw new Error('Nenhum dado de borra/sucata encontrado para os filtros selecionados');
+        }
+        
+        const totalBorraKg = borraData.reduce((s, b) => s + (b.quantityKg || 0), 0);
+        const totalSucataKg = sucataData.reduce((s, b) => s + (b.quantityKg || b.weight || 0), 0);
+        
+        const borraByMachine = {};
+        borraData.forEach(b => {
+            if (!borraByMachine[b.machine]) borraByMachine[b.machine] = { kg: 0, count: 0 };
+            borraByMachine[b.machine].kg += b.quantityKg || 0;
+            borraByMachine[b.machine].count++;
+        });
+        
+        // Obter label da OP se filtrada
+        const orderLabel = order && order.length > 0 ? order : null;
+        
+        return `
+        <div class="p-6" style="font-family: 'Segoe UI', sans-serif;">
+            <div class="report-header" style="background: linear-gradient(135deg, ${config.color}, ${config.colorDark}); color: white; padding: 20px 25px; border-radius: 12px; margin-bottom: 20px;">
+                <h1 style="font-size: 20px; margin-bottom: 5px;">🗑️ ${config.title}</h1>
+                <p style="opacity: 0.9; font-size: 13px;">Período: ${startDate} a ${endDate} | Máquina: ${machine === 'all' ? 'Todas' : machine}${orderLabel ? ` | OP: ${orderLabel}` : ''}</p>
+            </div>
+            
+            <div class="kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px;">
+                <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 15px; text-align: center;">
+                    <div style="font-size: 26px; font-weight: 700; color: #d97706;">${totalBorraKg.toFixed(3)}</div>
+                    <div style="font-size: 11px; color: #92400e;">Total Borra (kg)</div>
+                </div>
+                <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 15px; text-align: center;">
+                    <div style="font-size: 26px; font-weight: 700; color: #d97706;">${borraData.length}</div>
+                    <div style="font-size: 11px; color: #92400e;">Lançamentos Borra</div>
+                </div>
+                <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 15px; text-align: center;">
+                    <div style="font-size: 26px; font-weight: 700; color: #dc2626;">${totalSucataKg.toFixed(3)}</div>
+                    <div style="font-size: 11px; color: #991b1b;">Total Sucata (kg)</div>
+                </div>
+                <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 15px; text-align: center;">
+                    <div style="font-size: 26px; font-weight: 700; color: #dc2626;">${sucataData.length}</div>
+                    <div style="font-size: 11px; color: #991b1b;">Lançamentos Sucata</div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2 style="font-size: 15px; color: ${config.colorDark}; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid ${config.color}40;">🏭 Borra por Máquina</h2>
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                    <thead><tr style="background: ${config.color}15;"><th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Máquina</th><th style="padding: 8px; border: 1px solid #ddd; text-align: right;">Peso (kg)</th><th style="padding: 8px; border: 1px solid #ddd; text-align: center;">Lançamentos</th><th style="padding: 8px; border: 1px solid #ddd; text-align: right;">%</th></tr></thead>
+                    <tbody>${Object.entries(borraByMachine).sort((a,b) => b[1].kg - a[1].kg).map(([m,v]) => `<tr><td style="padding: 6px; border: 1px solid #ddd; font-weight: 600;">${m}</td><td style="padding: 6px; border: 1px solid #ddd; text-align: right;">${v.kg.toFixed(3)}</td><td style="padding: 6px; border: 1px solid #ddd; text-align: center;">${v.count}</td><td style="padding: 6px; border: 1px solid #ddd; text-align: right;">${totalBorraKg > 0 ? (v.kg/totalBorraKg*100).toFixed(1) : 0}%</td></tr>`).join('')}</tbody>
+                </table>
+            </div>
+            
+            <div class="section" style="margin-top: 20px;">
+                <h2 style="font-size: 15px; color: ${config.colorDark}; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid ${config.color}40;">📋 Lançamentos de Borra (${borraData.length})</h2>
+                <div style="overflow-x: auto; max-height: 300px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                        <thead style="position: sticky; top: 0; background: white;"><tr style="background: ${config.color}15;"><th style="padding: 6px; border: 1px solid #ddd;">Data</th><th style="padding: 6px; border: 1px solid #ddd;">Máquina</th><th style="padding: 6px; border: 1px solid #ddd; text-align: right;">Peso (kg)</th><th style="padding: 6px; border: 1px solid #ddd;">Operador</th><th style="padding: 6px; border: 1px solid #ddd;">Hora</th></tr></thead>
+                        <tbody>${borraData.slice(0, 100).map(b => `<tr><td style="padding: 5px; border: 1px solid #ddd;">${b.date || '-'}</td><td style="padding: 5px; border: 1px solid #ddd;">${b.machine || '-'}</td><td style="padding: 5px; border: 1px solid #ddd; text-align: right;">${(b.quantityKg || 0).toFixed(3)}</td><td style="padding: 5px; border: 1px solid #ddd;">${b.operatorName || b.operator || '-'}</td><td style="padding: 5px; border: 1px solid #ddd;">${b.hour || '-'}</td></tr>`).join('')}</tbody>
+                    </table>
+                </div>
+            </div>
+            
+            ${sucataData.length > 0 ? `
+            <div class="section" style="margin-top: 20px;">
+                <h2 style="font-size: 15px; color: #dc2626; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #fecaca;">📋 Lançamentos de Sucata (${sucataData.length})</h2>
+                <div style="overflow-x: auto; max-height: 300px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                        <thead style="position: sticky; top: 0; background: white;"><tr style="background: #fef2f2;"><th style="padding: 6px; border: 1px solid #ddd;">Data</th><th style="padding: 6px; border: 1px solid #ddd;">Máquina</th><th style="padding: 6px; border: 1px solid #ddd;">Tipo</th><th style="padding: 6px; border: 1px solid #ddd; text-align: right;">Peso (kg)</th><th style="padding: 6px; border: 1px solid #ddd;">Operador</th></tr></thead>
+                        <tbody>${sucataData.slice(0, 100).map(s => `<tr><td style="padding: 5px; border: 1px solid #ddd;">${s.date || '-'}</td><td style="padding: 5px; border: 1px solid #ddd;">${s.machine || '-'}</td><td style="padding: 5px; border: 1px solid #ddd;">${s.type || s.tipo || '-'}</td><td style="padding: 5px; border: 1px solid #ddd; text-align: right;">${(s.quantityKg || s.weight || 0).toFixed(3)}</td><td style="padding: 5px; border: 1px solid #ddd;">${s.operatorName || '-'}</td></tr>`).join('')}</tbody>
+                    </table>
+                </div>
+            </div>` : ''}
+        </div>`;
+    }
+    
+    // Relatório Consolidado Inline
+    async function generateInlineConsolidado(filters) {
+        const { startDate, endDate, machine, shift, order } = filters;
+        const config = reportTypeConfig.consolidado;
+        
+        // Buscar planos se houver filtro de OP (para obter IDs correspondentes)
+        let matchingPlanIds = null;
+        if (order && order.length > 0) {
+            const planSnapshot = await db.collection('planning').get();
+            const orderSearch = order.toLowerCase();
+            matchingPlanIds = planSnapshot.docs
+                .filter(doc => {
+                    const data = doc.data();
+                    const orderNum = String(data.order_number || data.orderNumber || '').toLowerCase();
+                    return orderNum.includes(orderSearch);
+                })
+                .map(doc => doc.id);
+            if (matchingPlanIds.length === 0) throw new Error('Nenhuma OP encontrada com o número digitado');
+        }
+        
+        let [productionData, lossesData, downtimeData] = await Promise.all([
+            getFilteredData('production', startDate, endDate, machine, shift),
+            getFilteredData('losses', startDate, endDate, machine, shift),
+            getFilteredData('downtime', startDate, endDate, machine, shift)
+        ]);
+        
+        // Filtrar por OP se digitado (usando IDs dos planos encontrados)
+        if (matchingPlanIds) {
+            productionData = productionData.filter(d => matchingPlanIds.includes(d.raw?.planId));
+            lossesData = lossesData.filter(d => matchingPlanIds.includes(d.raw?.planId));
+            downtimeData = downtimeData.filter(d => matchingPlanIds.includes(d.raw?.planId) || matchingPlanIds.includes(d.raw?.order_id));
+        }
+        
+        const totalProduced = productionData.reduce((s, i) => s + (i.quantity || 0), 0);
+        const totalLossKg = lossesData.reduce((s, i) => s + (i.scrapKg || 0), 0);
+        const totalLossPcs = lossesData.reduce((s, i) => s + (i.scrapPcs || 0), 0);
+        const totalDowntimeMin = downtimeData.reduce((s, i) => s + (i.duration || 0), 0);
+        const lossPercent = totalProduced > 0 ? (totalLossPcs / totalProduced * 100) : 0;
+        
+        // Top motivos de perda
+        const lossReasons = {};
+        lossesData.forEach(i => {
+            const r = i.reason || 'N/A';
+            lossReasons[r] = (lossReasons[r] || 0) + (i.scrapKg || 0);
+        });
+        const topLossReasons = Object.entries(lossReasons).sort((a,b) => b[1] - a[1]).slice(0, 5);
+        
+        // Top motivos de parada
+        const dtReasons = {};
+        downtimeData.forEach(i => {
+            const r = i.reason || 'N/A';
+            dtReasons[r] = (dtReasons[r] || 0) + (i.duration || 0);
+        });
+        const topDtReasons = Object.entries(dtReasons).sort((a,b) => b[1] - a[1]).slice(0, 5);
+        
+        // Produção por máquina
+        const prodByMachine = {};
+        productionData.forEach(i => {
+            const m = i.machine || 'N/A';
+            prodByMachine[m] = (prodByMachine[m] || 0) + (i.quantity || 0);
+        });
+        
+        // Obter label da OP se filtrada
+        const orderLabel = order && order.length > 0 ? order : null;
+        
+        return `
+        <div class="p-6" style="font-family: 'Segoe UI', sans-serif;">
+            <div class="report-header" style="background: linear-gradient(135deg, ${config.color}, ${config.colorDark}); color: white; padding: 20px 25px; border-radius: 12px; margin-bottom: 20px;">
+                <h1 style="font-size: 20px; margin-bottom: 5px;">📊 ${config.title}</h1>
+                <p style="opacity: 0.9; font-size: 13px;">Período: ${startDate} a ${endDate} | Máquina: ${machine === 'all' ? 'Todas' : machine} | Turno: ${shift === 'all' ? 'Todos' : 'T' + shift}${orderLabel ? ` | OP: ${orderLabel}` : ''}</p>
+                <p style="opacity: 0.7; font-size: 11px; margin-top: 5px;">Gerado em: ${new Date().toLocaleString('pt-BR')}</p>
+            </div>
+            
+            <div class="kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px;">
+                <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="font-size: 22px; font-weight: 700; color: #16a34a;">${totalProduced.toLocaleString('pt-BR')}</div>
+                    <div style="font-size: 10px; color: #166534;">Peças Produzidas</div>
+                </div>
+                <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="font-size: 22px; font-weight: 700; color: #dc2626;">${totalLossPcs.toLocaleString('pt-BR')}</div>
+                    <div style="font-size: 10px; color: #991b1b;">Peças Perdidas</div>
+                </div>
+                <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="font-size: 22px; font-weight: 700; color: #dc2626;">${totalLossKg.toFixed(3)}</div>
+                    <div style="font-size: 10px; color: #991b1b;">Refugo (kg)</div>
+                </div>
+                <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="font-size: 22px; font-weight: 700; color: #dc2626;">${lossPercent.toFixed(1)}%</div>
+                    <div style="font-size: 10px; color: #991b1b;">% Perda</div>
+                </div>
+                <div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="font-size: 22px; font-weight: 700; color: #ea580c;">${(totalDowntimeMin / 60).toFixed(1)}h</div>
+                    <div style="font-size: 10px; color: #9a3412;">Tempo Parado</div>
+                </div>
+                <div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="font-size: 22px; font-weight: 700; color: #ea580c;">${downtimeData.length}</div>
+                    <div style="font-size: 10px; color: #9a3412;">Paradas</div>
+                </div>
+                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="font-size: 22px; font-weight: 700; color: #2563eb;">${productionData.length}</div>
+                    <div style="font-size: 10px; color: #1e40af;">Lançamentos Prod.</div>
+                </div>
+                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="font-size: 22px; font-weight: 700; color: #2563eb;">${lossesData.length}</div>
+                    <div style="font-size: 10px; color: #1e40af;">Lançamentos Perda</div>
+                </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px;">
+                <div class="section">
+                    <h2 style="font-size: 15px; color: ${config.colorDark}; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid ${config.color}40;">🏭 Produção por Máquina</h2>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                        <thead><tr style="background: ${config.color}15;"><th style="padding: 6px; border: 1px solid #ddd; text-align: left;">Máquina</th><th style="padding: 6px; border: 1px solid #ddd; text-align: right;">Peças</th><th style="padding: 6px; border: 1px solid #ddd; text-align: right;">%</th></tr></thead>
+                        <tbody>${Object.entries(prodByMachine).sort((a,b) => b[1] - a[1]).map(([m,v]) => `<tr><td style="padding: 5px; border: 1px solid #ddd; font-weight: 600;">${m}</td><td style="padding: 5px; border: 1px solid #ddd; text-align: right;">${v.toLocaleString('pt-BR')}</td><td style="padding: 5px; border: 1px solid #ddd; text-align: right;">${totalProduced > 0 ? (v/totalProduced*100).toFixed(1) : 0}%</td></tr>`).join('')}</tbody>
+                    </table>
+                </div>
+                
+                <div class="section">
+                    <h2 style="font-size: 15px; color: #dc2626; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #fecaca;">⚠️ Top 5 Motivos de Perda</h2>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                        <thead><tr style="background: #fef2f2;"><th style="padding: 6px; border: 1px solid #ddd; text-align: left;">Motivo</th><th style="padding: 6px; border: 1px solid #ddd; text-align: right;">Peso (kg)</th><th style="padding: 6px; border: 1px solid #ddd; text-align: right;">%</th></tr></thead>
+                        <tbody>${topLossReasons.map(([r,v]) => `<tr><td style="padding: 5px; border: 1px solid #ddd;">${r}</td><td style="padding: 5px; border: 1px solid #ddd; text-align: right;">${v.toFixed(3)}</td><td style="padding: 5px; border: 1px solid #ddd; text-align: right;">${totalLossKg > 0 ? (v/totalLossKg*100).toFixed(1) : 0}%</td></tr>`).join('')}</tbody>
+                    </table>
+                </div>
+                
+                <div class="section">
+                    <h2 style="font-size: 15px; color: #ea580c; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #fed7aa;">⏸ Top 5 Motivos de Parada</h2>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                        <thead><tr style="background: #fff7ed;"><th style="padding: 6px; border: 1px solid #ddd; text-align: left;">Motivo</th><th style="padding: 6px; border: 1px solid #ddd; text-align: right;">Tempo (min)</th><th style="padding: 6px; border: 1px solid #ddd; text-align: right;">%</th></tr></thead>
+                        <tbody>${topDtReasons.map(([r,v]) => `<tr><td style="padding: 5px; border: 1px solid #ddd;">${r}</td><td style="padding: 5px; border: 1px solid #ddd; text-align: right;">${v.toFixed(0)}</td><td style="padding: 5px; border: 1px solid #ddd; text-align: right;">${totalDowntimeMin > 0 ? (v/totalDowntimeMin*100).toFixed(1) : 0}%</td></tr>`).join('')}</tbody>
+                    </table>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    // Relatório de Produção (Quantitativo ou Eficiência)
+    // MELHORADO: Agora aceita parâmetro de data e busca dados diretamente
+    window.generateProductionReport = async function(type, selectedDate) {
+        // Usar data selecionada no card ou data atual
+        const date = selectedDate || getProductionDateString();
+        
+        if (!date) {
+            showNotification('Selecione uma data para gerar o relatório.', 'warning');
+            return;
+        }
+        
+        showNotification('⏳ Gerando relatório...', 'info');
+        
+        try {
+            // Buscar dados do Firebase
+            const planSnapshot = await db.collection('planning').get();
+            const allPlans = planSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const plans = allPlans.filter(isPlanActive);
+            
+            if (plans.length === 0) {
+                showNotification('Nenhum plano ativo encontrado.', 'warning');
+                return;
+            }
+            
+            const productionSnapshot = await db.collection('production_entries').where('data', '==', date).get();
+            const productions = productionSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            const downtimeSnapshot = await db.collection('downtime_entries').where('date', '==', date).get();
+            const downtimes = downtimeSnapshot.docs.map(doc => doc.data());
+            
+            // Processar dados usando função existente
+            const reportData = processResumoData(plans, productions, downtimes);
+            
+            if (reportData.length === 0) {
+                showNotification('Nenhum dado encontrado para a data selecionada.', 'warning');
+                return;
+            }
+            
+            // Abrir nova janela para o relatório
+            const reportWindow = window.open('', '_blank');
+            if (!reportWindow) {
+                showNotification('Popup bloqueado. Permita popups para gerar o relatório.', 'warning');
+                return;
+            }
+            
+            const title = type === 'quant' ? 'Relatório Quantitativo de Produção' : 'Relatório de Eficiência (OEE)';
+            const color = type === 'quant' ? '#10B981' : '#8B5CF6';
+            const dateFormatted = new Date(date.replace(/-/g, '/')).toLocaleDateString('pt-BR');
+            
+            // Gerar conteúdo do relatório
+            let tableContent = '';
+            if (type === 'quant') {
+                tableContent = generateQuantitativeTableHTML(reportData, color);
+            } else {
+                tableContent = generateEfficiencyTableHTML(reportData, color);
+            }
+            
+            reportWindow.document.write(`<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><title>${title}</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; color: #333; padding: 20px; background: #fff; }
+    .header { background: linear-gradient(135deg, ${color}, ${color}dd); color: white; padding: 20px 25px; border-radius: 10px; margin-bottom: 20px; }
+    .header h1 { font-size: 20px; margin-bottom: 3px; }
+    .header p { opacity: 0.9; font-size: 12px; }
+    .print-btn { position: fixed; top: 10px; right: 10px; background: ${color}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 15px; }
+    th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: center; }
+    th { background: #f8f9fa; font-weight: 600; font-size: 10px; text-transform: uppercase; }
+    tr:nth-child(even) { background: #fafafa; }
+    .text-left { text-align: left; }
+    .font-bold { font-weight: 600; }
+    .text-success { color: #10B981; }
+    .text-warning { color: #F59E0B; }
+    .text-error { color: #EF4444; }
+    .legend { margin: 15px 0; padding: 10px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; font-size: 11px; }
+    .legend span { margin-right: 15px; }
+    @media print { 
+        .print-btn { display: none; } 
+        body { padding: 10px; }
+        .header { padding: 15px 20px; }
+    }
+</style></head><body>
+    <button class="print-btn" onclick="window.print()">🖨️ Imprimir</button>
+    <div class="header">
+        <h1>📊 ${title}</h1>
+        <p>HokkaidoMES - Data: ${dateFormatted}</p>
+        <p style="margin-top:5px;opacity:0.8;">Gerado em: ${new Date().toLocaleString('pt-BR')}</p>
+    </div>
+    ${tableContent}
+</body></html>`);
+            reportWindow.document.close();
+            showNotification('📊 Relatório gerado com sucesso!', 'success');
+            
+        } catch (error) {
+            console.error('Erro ao gerar relatório:', error);
+            showNotification('Erro ao gerar relatório. Tente novamente.', 'error');
+        }
+    };
+    
+    // Função auxiliar para gerar tabela HTML do relatório quantitativo
+    function generateQuantitativeTableHTML(data, color) {
+        let rows = data.map(item => {
+            const plannedTotal = coerceToNumber(item.planned_quantity, 0);
+            const producedTotal = coerceToNumber(item.total_produzido, 0);
+            const faltante = plannedTotal - producedTotal;
+            const faltanteClass = faltante > 0 ? 'text-error' : 'text-success';
+            
+            return `<tr>
+                <td class="text-left font-bold">${item.machine || '-'}</td>
+                <td class="text-left">${item.product || '-'}</td>
+                <td>${(item.T1.produzido || 0).toLocaleString('pt-BR')}</td>
+                <td>${(item.T1.refugo_kg || 0).toFixed(2)}</td>
+                <td>${(item.T2.produzido || 0).toLocaleString('pt-BR')}</td>
+                <td>${(item.T2.refugo_kg || 0).toFixed(2)}</td>
+                <td>${(item.T3.produzido || 0).toLocaleString('pt-BR')}</td>
+                <td>${(item.T3.refugo_kg || 0).toFixed(2)}</td>
+                <td class="font-bold">${plannedTotal.toLocaleString('pt-BR')}</td>
+                <td class="font-bold">${producedTotal.toLocaleString('pt-BR')}</td>
+                <td class="font-bold ${faltanteClass}">${faltante.toLocaleString('pt-BR')}</td>
+            </tr>`;
+        }).join('');
+        
+        return `
+        <table>
+            <thead>
+                <tr>
+                    <th rowspan="2" class="text-left">Máquina</th>
+                    <th rowspan="2" class="text-left">Produto</th>
+                    <th colspan="2" style="background:#dcfce7;">Turno 1</th>
+                    <th colspan="2" style="background:#dbeafe;">Turno 2</th>
+                    <th colspan="2" style="background:#fef3c7;">Turno 3</th>
+                    <th rowspan="2">Planejado</th>
+                    <th rowspan="2">Total Dia</th>
+                    <th rowspan="2">Faltante</th>
+                </tr>
+                <tr>
+                    <th style="background:#dcfce7;">Prod.</th><th style="background:#dcfce7;">Refugo(kg)</th>
+                    <th style="background:#dbeafe;">Prod.</th><th style="background:#dbeafe;">Refugo(kg)</th>
+                    <th style="background:#fef3c7;">Prod.</th><th style="background:#fef3c7;">Refugo(kg)</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>`;
+    }
+    
+    // Função auxiliar para gerar tabela HTML do relatório de eficiência
+    function generateEfficiencyTableHTML(data, color) {
+        const formatPercent = (val) => {
+            const pct = (val * 100).toFixed(1);
+            let cls = 'text-success';
+            if (val < 0.7) cls = 'text-error';
+            else if (val < 0.85) cls = 'text-warning';
+            return `<span class="${cls}">${pct}%</span>`;
+        };
+        
+        let rows = data.map(item => {
+            const oeeValues = [item.T1.oee, item.T2.oee, item.T3.oee].filter(v => v > 0);
+            const avgOee = oeeValues.length > 0 ? oeeValues.reduce((a, b) => a + b, 0) / oeeValues.length : 0;
+            
+            return `<tr>
+                <td class="text-left font-bold">${item.machine || '-'}</td>
+                <td class="text-left">${item.product || '-'}</td>
+                <td>${formatPercent(item.T1.disponibilidade || 0)}</td>
+                <td>${formatPercent(item.T1.performance || 0)}</td>
+                <td>${formatPercent(item.T1.qualidade || 0)}</td>
+                <td class="font-bold">${formatPercent(item.T1.oee || 0)}</td>
+                <td>${formatPercent(item.T2.disponibilidade || 0)}</td>
+                <td>${formatPercent(item.T2.performance || 0)}</td>
+                <td>${formatPercent(item.T2.qualidade || 0)}</td>
+                <td class="font-bold">${formatPercent(item.T2.oee || 0)}</td>
+                <td>${formatPercent(item.T3.disponibilidade || 0)}</td>
+                <td>${formatPercent(item.T3.performance || 0)}</td>
+                <td>${formatPercent(item.T3.qualidade || 0)}</td>
+                <td class="font-bold">${formatPercent(item.T3.oee || 0)}</td>
+                <td class="font-bold" style="font-size:13px;">${formatPercent(avgOee)}</td>
+            </tr>`;
+        }).join('');
+        
+        return `
+        <div class="legend">
+            <strong>Legenda OEE:</strong>
+            <span class="text-success">★ ≥85% - Excelente</span>
+            <span class="text-warning">★ 70-84% - Aceitável</span>
+            <span class="text-error">★ <70% - Crítico</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th rowspan="2" class="text-left">Máquina</th>
+                    <th rowspan="2" class="text-left">Produto</th>
+                    <th colspan="4" style="background:#dcfce7;">Turno 1</th>
+                    <th colspan="4" style="background:#dbeafe;">Turno 2</th>
+                    <th colspan="4" style="background:#fef3c7;">Turno 3</th>
+                    <th rowspan="2">OEE Médio</th>
+                </tr>
+                <tr>
+                    <th style="background:#dcfce7;">Disp.</th><th style="background:#dcfce7;">Perf.</th>
+                    <th style="background:#dcfce7;">Qual.</th><th style="background:#dcfce7;">OEE</th>
+                    <th style="background:#dbeafe;">Disp.</th><th style="background:#dbeafe;">Perf.</th>
+                    <th style="background:#dbeafe;">Qual.</th><th style="background:#dbeafe;">OEE</th>
+                    <th style="background:#fef3c7;">Disp.</th><th style="background:#fef3c7;">Perf.</th>
+                    <th style="background:#fef3c7;">Qual.</th><th style="background:#fef3c7;">OEE</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>`;
+    }
+    ===== FIM CÓDIGO REMOVIDO (ABA RELATÓRIOS) ===== */
+
+    // Relatório de Paradas
+    // MELHORADO: Agora aceita parâmetros de data diretamente do card
+    window.generateDowntimeReport = async function(startDateParam, endDateParam) {
+        // Usar datas do parâmetro ou do filtro global ou data atual
+        const today = getProductionDateString();
+        const startDate = startDateParam || currentAnalysisFilters?.startDate || today;
+        const endDate = endDateParam || currentAnalysisFilters?.endDate || startDate;
+        const machine = currentAnalysisFilters?.machine || 'all';
+        const shift = currentAnalysisFilters?.shift || 'all';
+        
+        if (!startDate) {
+            showNotification('Selecione uma data inicial para gerar o relatório.', 'warning');
+            return;
+        }
+        
+        showNotification('⏳ Gerando relatório de paradas...', 'info');
+        
+        try {
+            // Buscar dados diretamente do Firebase com range de datas
+            let query = db.collection('downtime_entries');
+            
+            if (startDate === endDate) {
+                // Data única
+                query = query.where('date', '==', startDate);
+            } else {
+                // Range de datas
+                query = query.where('date', '>=', startDate).where('date', '<=', endDate);
+            }
+            
+            const snapshot = await query.get();
+            let downtimeData = snapshot.docs.map(doc => {
+                const data = doc.data();
+                // Calcular duração se não estiver presente
+                let duration = data.duration || 0;
+                if (!duration && data.startTime && data.endTime && data.date) {
+                    const start = new Date(`${data.date}T${data.startTime}`);
+                    const end = new Date(`${data.date}T${data.endTime}`);
+                    duration = end > start ? Math.round((end - start) / 60000) : 0;
+                }
+                return {
+                    ...data,
+                    duration,
+                    raw: data
+                };
+            });
+            
+            // Filtrar por máquina se necessário
+            if (machine && machine !== 'all') {
+                downtimeData = downtimeData.filter(d => d.machine === machine);
+            }
+            
+            // Filtrar por turno se necessário
+            if (shift && shift !== 'all') {
+                downtimeData = downtimeData.filter(d => String(d.shift) === String(shift));
+            }
+            
+            if (downtimeData.length === 0) {
+                showNotification('Nenhum dado de paradas para o período selecionado.', 'warning');
+                return;
+            }
+            
+            // Calcular estatísticas
+            let totalMin = 0;
+            const byMachine = {}, byReason = {}, byShift = {};
+            
+            downtimeData.forEach(item => {
+                const dur = item.duration || 0;
+                const machId = item.machine || 'N/A';
+                const reason = item.reason || 'N/A';
+                const sh = item.shift || 'N/A';
+                
+                totalMin += dur;
+                
+                if (!byMachine[machId]) byMachine[machId] = { min: 0, count: 0 };
+                byMachine[machId].min += dur;
+                byMachine[machId].count++;
+                
+                if (!byReason[reason]) byReason[reason] = { min: 0, count: 0 };
+                byReason[reason].min += dur;
+                byReason[reason].count++;
+                
+                if (!byShift[sh]) byShift[sh] = { min: 0, count: 0 };
+                byShift[sh].min += dur;
+                byShift[sh].count++;
+            });
+            
+            const sortedMachines = Object.entries(byMachine).sort((a,b) => b[1].min - a[1].min);
+            const sortedReasons = Object.entries(byReason).sort((a,b) => b[1].min - a[1].min);
+            
+            const reportWindow = window.open('', '_blank');
+            if (!reportWindow) { showNotification('Popup bloqueado.', 'warning'); return; }
+            
+            reportWindow.document.write(`<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório de Paradas</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; color: #333; padding: 30px; background: #f8f9fa; }
+    .header { background: linear-gradient(135deg, #f97316, #ea580c); color: white; padding: 25px 30px; border-radius: 12px; margin-bottom: 25px; }
+    .header h1 { font-size: 22px; } .header p { opacity: 0.85; font-size: 13px; }
+    .meta-info { display: flex; gap: 15px; flex-wrap: wrap; margin-top: 10px; }
+    .meta-item { background: rgba(255,255,255,0.15); padding: 5px 12px; border-radius: 8px; font-size: 12px; }
+    .section { background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .section h2 { font-size: 16px; color: #f97316; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #fed7aa; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .kpi-card { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 12px; text-align: center; }
+    .kpi-card .value { font-size: 24px; font-weight: 700; color: #ea580c; }
+    .kpi-card .label { font-size: 11px; color: #9a3412; margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    thead th { background: #fff7ed; color: #9a3412; padding: 8px 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #fed7aa; }
+    tbody td { padding: 6px 12px; border-bottom: 1px solid #f3f4f6; }
+    tbody tr:hover { background: #fffbeb; }
+    .text-right { text-align: right; } .text-center { text-align: center; }
+    .footer { text-align: center; color: #9ca3af; font-size: 11px; margin-top: 30px; padding-top: 15px; border-top: 1px solid #e5e7eb; }
+    .print-btn { position: fixed; top: 15px; right: 15px; background: #f97316; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+    @media print { .print-btn { display: none; } body { padding: 15px; background: white; } .section { box-shadow: none; border: 1px solid #e5e7eb; } }
+</style></head><body>
+    <button class="print-btn" onclick="window.print()">🖨️ Imprimir</button>
+    <div class="header">
+        <h1>⏸ Relatório de Paradas</h1>
+        <p>HokkaidoMES - Sistema de Execução da Manufatura</p>
+        <div class="meta-info">
+            <div class="meta-item">📅 ${startDate || '-'} a ${endDate || '-'}</div>
+            <div class="meta-item">🏭 ${machine === 'all' ? 'Todas' : machine}</div>
+            <div class="meta-item">⏰ ${shift === 'all' ? 'Todos' : 'T' + shift}</div>
+            <div class="meta-item">📋 ${new Date().toLocaleString('pt-BR')}</div>
+        </div>
+    </div>
+    <div class="kpi-grid">
+        <div class="kpi-card"><div class="value">${downtimeData.length}</div><div class="label">Total de Paradas</div></div>
+        <div class="kpi-card"><div class="value">${(totalMin / 60).toFixed(1)}h</div><div class="label">Tempo Total Parado</div></div>
+        <div class="kpi-card"><div class="value">${downtimeData.length > 0 ? (totalMin / downtimeData.length).toFixed(0) : 0}min</div><div class="label">Duração Média</div></div>
+        <div class="kpi-card"><div class="value">${sortedMachines.length}</div><div class="label">Máquinas Afetadas</div></div>
+    </div>
+    <div class="section">
+        <h2>🏭 Paradas por Máquina</h2>
+        <table>
+            <thead><tr><th>Máquina</th><th class="text-right">Tempo (min)</th><th class="text-right">Tempo (h)</th><th class="text-center">Ocorrências</th><th class="text-right">% do Total</th></tr></thead>
+            <tbody>${sortedMachines.map(([m,v]) => `<tr><td><strong>${m}</strong></td><td class="text-right">${v.min.toFixed(0)}</td><td class="text-right">${(v.min/60).toFixed(1)}</td><td class="text-center">${v.count}</td><td class="text-right">${totalMin > 0 ? (v.min/totalMin*100).toFixed(1) : 0}%</td></tr>`).join('')}</tbody>
+        </table>
+    </div>
+    <div class="section">
+        <h2>⚠️ Paradas por Motivo</h2>
+        <table>
+            <thead><tr><th>Motivo</th><th class="text-right">Tempo (min)</th><th class="text-right">Tempo (h)</th><th class="text-center">Ocorrências</th><th class="text-right">% do Total</th></tr></thead>
+            <tbody>${sortedReasons.map(([r,v]) => `<tr><td>${r}</td><td class="text-right">${v.min.toFixed(0)}</td><td class="text-right">${(v.min/60).toFixed(1)}</td><td class="text-center">${v.count}</td><td class="text-right">${totalMin > 0 ? (v.min/totalMin*100).toFixed(1) : 0}%</td></tr>`).join('')}</tbody>
+        </table>
+    </div>
+    <div class="section">
+        <h2>⏰ Paradas por Turno</h2>
+        <table>
+            <thead><tr><th>Turno</th><th class="text-right">Tempo (min)</th><th class="text-center">Ocorrências</th></tr></thead>
+            <tbody>${Object.entries(byShift).sort((a,b) => String(a[0]).localeCompare(String(b[0]))).map(([s,v]) => `<tr><td>Turno ${s}</td><td class="text-right">${v.min.toFixed(0)}</td><td class="text-center">${v.count}</td></tr>`).join('')}</tbody>
+        </table>
+    </div>
+    <div class="section">
+        <h2>📋 Listagem Completa (${downtimeData.length} registros)</h2>
+        <div style="overflow-x:auto;"><table>
+            <thead><tr><th>Data</th><th>Máquina</th><th>Motivo</th><th class="text-right">Duração (min)</th><th class="text-center">Turno</th><th>Início</th><th>Fim</th></tr></thead>
+            <tbody>${downtimeData.slice(0, 500).map(item => {
+                const raw = item.raw || {};
+                return `<tr><td>${item.date || '-'}</td><td>${item.machine || '-'}</td><td>${item.reason || '-'}</td><td class="text-right">${(item.duration || 0).toFixed(0)}</td><td class="text-center">T${item.shift || '-'}</td><td>${raw.startTime || '-'}</td><td>${raw.endTime || '-'}</td></tr>`;
+            }).join('')}
+            ${downtimeData.length > 500 ? '<tr><td colspan="7" style="text-align:center;color:#9ca3af;padding:12px;">... truncado</td></tr>' : ''}
+            </tbody>
+        </table></div>
+    </div>
+    <div class="footer"><p>HokkaidoMES &copy; ${new Date().getFullYear()}</p></div>
+</body></html>`);
+            reportWindow.document.close();
+            showNotification('📊 Relatório de paradas gerado!', 'success');
+        } catch (error) {
+            console.error('Erro ao gerar relatório de paradas:', error);
+            showNotification('Erro ao gerar relatório. Verifique o console.', 'error');
+        }
+    };
+
+    // Relatório de Borra e Sucata
+    // MELHORADO: Agora aceita parâmetros de data diretamente do card
+    window.generateBorraSucataReport = async function(startDateParam, endDateParam) {
+        // Usar datas do parâmetro ou do filtro global ou data atual
+        const today = getProductionDateString();
+        const startDate = startDateParam || currentAnalysisFilters?.startDate || today;
+        const endDate = endDateParam || currentAnalysisFilters?.endDate || startDate;
+        const machine = currentAnalysisFilters?.machine || 'all';
+        const shift = currentAnalysisFilters?.shift || 'all';
+        
+        if (!startDate) {
+            showNotification('Selecione uma data para gerar o relatório.', 'warning');
+            return;
+        }
+        
+        showNotification('⏳ Gerando relatório de borra e sucata...', 'info');
+        
+        try {
+            // Buscar dados de borra do PMP
+            let borraData = [];
+            const pmpSnap = await db.collection('pmp_borra')
+                .where('date', '>=', startDate)
+                .where('date', '<=', endDate)
+                .get();
+            
+            pmpSnap.forEach(doc => {
+                const d = doc.data();
+                borraData.push({ id: doc.id, ...d, machine: normalizeMachineId(d.machine || '') });
+            });
+            
+            if (machine !== 'all') {
+                borraData = borraData.filter(b => b.machine === normalizeMachineId(machine));
+            }
+            
+            // Buscar sucata
+            let sucataData = [];
+            try {
+                const sucSnap = await db.collection('pmp_sucata')
+                    .where('date', '>=', startDate)
+                    .where('date', '<=', endDate)
+                    .get();
+                sucSnap.forEach(doc => {
+                    const d = doc.data();
+                    sucataData.push({ id: doc.id, ...d, machine: normalizeMachineId(d.machine || '') });
+                });
+                if (machine !== 'all') {
+                    sucataData = sucataData.filter(s => s.machine === normalizeMachineId(machine));
+                }
+            } catch(e) { console.warn('Sem dados de sucata:', e); }
+            
+            if (borraData.length === 0 && sucataData.length === 0) {
+                showNotification('Nenhum dado de borra/sucata para o período.', 'warning');
+                return;
+            }
+            
+            const totalBorraKg = borraData.reduce((s, b) => s + (b.quantityKg || 0), 0);
+            const totalSucataKg = sucataData.reduce((s, b) => s + (b.quantityKg || b.weight || 0), 0);
+            
+            const borraByMachine = {};
+            borraData.forEach(b => {
+                if (!borraByMachine[b.machine]) borraByMachine[b.machine] = { kg: 0, count: 0 };
+                borraByMachine[b.machine].kg += b.quantityKg || 0;
+                borraByMachine[b.machine].count++;
+            });
+            
+            const reportWindow = window.open('', '_blank');
+            if (!reportWindow) { showNotification('Popup bloqueado.', 'warning'); return; }
+            
+            reportWindow.document.write(`<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório de Borra e Sucata</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; color: #333; padding: 30px; background: #f8f9fa; }
+    .header { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; padding: 25px 30px; border-radius: 12px; margin-bottom: 25px; }
+    .header h1 { font-size: 22px; } .header p { opacity: 0.85; font-size: 13px; }
+    .section { background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .section h2 { font-size: 16px; color: #d97706; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #fde68a; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .kpi-card { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 12px; text-align: center; }
+    .kpi-card .value { font-size: 24px; font-weight: 700; color: #d97706; }
+    .kpi-card .label { font-size: 11px; color: #92400e; margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    thead th { background: #fffbeb; color: #92400e; padding: 8px 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #fde68a; }
+    tbody td { padding: 6px 12px; border-bottom: 1px solid #f3f4f6; }
+    .text-right { text-align: right; } .text-center { text-align: center; }
+    .footer { text-align: center; color: #9ca3af; font-size: 11px; margin-top: 30px; padding-top: 15px; border-top: 1px solid #e5e7eb; }
+    .print-btn { position: fixed; top: 15px; right: 15px; background: #f59e0b; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+    @media print { .print-btn { display: none; } body { padding: 15px; background: white; } }
+</style></head><body>
+    <button class="print-btn" onclick="window.print()">🖨️ Imprimir</button>
+    <div class="header">
+        <h1>🗑️ Relatório de Borra e Sucata</h1>
+        <p>HokkaidoMES | ${startDate || '-'} a ${endDate || '-'} | ${machine === 'all' ? 'Todas' : machine} | ${new Date().toLocaleString('pt-BR')}</p>
+    </div>
+    <div class="kpi-grid">
+        <div class="kpi-card"><div class="value">${totalBorraKg.toFixed(3)}</div><div class="label">Total Borra (kg)</div></div>
+        <div class="kpi-card"><div class="value">${borraData.length}</div><div class="label">Lançamentos Borra</div></div>
+        <div class="kpi-card"><div class="value">${totalSucataKg.toFixed(3)}</div><div class="label">Total Sucata (kg)</div></div>
+        <div class="kpi-card"><div class="value">${sucataData.length}</div><div class="label">Lançamentos Sucata</div></div>
+    </div>
+    <div class="section">
+        <h2>🏭 Borra por Máquina</h2>
+        <table>
+            <thead><tr><th>Máquina</th><th class="text-right">Peso (kg)</th><th class="text-center">Lançamentos</th><th class="text-right">% do Total</th></tr></thead>
+            <tbody>${Object.entries(borraByMachine).sort((a,b) => b[1].kg - a[1].kg).map(([m,v]) => `<tr><td><strong>${m}</strong></td><td class="text-right">${v.kg.toFixed(3)}</td><td class="text-center">${v.count}</td><td class="text-right">${totalBorraKg > 0 ? (v.kg/totalBorraKg*100).toFixed(1) : 0}%</td></tr>`).join('')}</tbody>
+        </table>
+    </div>
+    <div class="section">
+        <h2>📋 Lançamentos de Borra (${borraData.length})</h2>
+        <div style="overflow-x:auto;"><table>
+            <thead><tr><th>Data</th><th>Máquina</th><th class="text-right">Peso (kg)</th><th>Operador</th><th>Hora</th></tr></thead>
+            <tbody>${borraData.slice(0,300).map(b => `<tr><td>${b.date || '-'}</td><td>${b.machine || '-'}</td><td class="text-right">${(b.quantityKg || 0).toFixed(3)}</td><td>${b.operatorName || b.operator || '-'}</td><td>${b.hour || '-'}</td></tr>`).join('')}</tbody>
+        </table></div>
+    </div>
+    ${sucataData.length > 0 ? `<div class="section">
+        <h2>📋 Lançamentos de Sucata (${sucataData.length})</h2>
+        <div style="overflow-x:auto;"><table>
+            <thead><tr><th>Data</th><th>Máquina</th><th>Tipo</th><th class="text-right">Peso (kg)</th><th>Operador</th></tr></thead>
+            <tbody>${sucataData.slice(0,300).map(s => `<tr><td>${s.date || '-'}</td><td>${s.machine || '-'}</td><td>${s.type || s.tipo || '-'}</td><td class="text-right">${(s.quantityKg || s.weight || 0).toFixed(3)}</td><td>${s.operatorName || '-'}</td></tr>`).join('')}</tbody>
+        </table></div>
+    </div>` : ''}
+    <div class="footer"><p>HokkaidoMES &copy; ${new Date().getFullYear()}</p></div>
+</body></html>`);
+            reportWindow.document.close();
+            showNotification('📊 Relatório de borra/sucata gerado!', 'success');
+        } catch (error) {
+            console.error('Erro ao gerar relatório borra/sucata:', error);
+            showNotification('Erro ao gerar relatório. Verifique o console.', 'error');
+        }
+    };
+
+    // Relatório Consolidado (Executivo)
+    window.generateConsolidatedReport = async function() {
+        const { startDate, endDate, machine, shift } = currentAnalysisFilters || {};
+        
+        showNotification('⏳ Gerando relatório consolidado...', 'info');
+        
+        try {
+            const [productionData, lossesData, downtimeData] = await Promise.all([
+                getFilteredData('production', startDate, endDate, machine, shift),
+                getFilteredData('losses', startDate, endDate, machine, shift),
+                getFilteredData('downtime', startDate, endDate, machine, shift)
+            ]);
+            
+            const totalProduced = productionData.reduce((s, i) => s + (i.quantity || 0), 0);
+            const totalLossKg = lossesData.reduce((s, i) => s + (i.scrapKg || 0), 0);
+            const totalLossPcs = lossesData.reduce((s, i) => s + (i.scrapPcs || 0), 0);
+            const totalDowntimeMin = downtimeData.reduce((s, i) => s + (i.duration || 0), 0);
+            const lossPercent = totalProduced > 0 ? (totalLossPcs / totalProduced * 100) : 0;
+            
+            // Top motivos de perda
+            const lossReasons = {};
+            lossesData.forEach(i => {
+                const r = i.reason || 'N/A';
+                lossReasons[r] = (lossReasons[r] || 0) + (i.scrapKg || 0);
+            });
+            const topLossReasons = Object.entries(lossReasons).sort((a,b) => b[1] - a[1]).slice(0, 5);
+            
+            // Top motivos de parada
+            const dtReasons = {};
+            downtimeData.forEach(i => {
+                const r = i.reason || 'N/A';
+                dtReasons[r] = (dtReasons[r] || 0) + (i.duration || 0);
+            });
+            const topDtReasons = Object.entries(dtReasons).sort((a,b) => b[1] - a[1]).slice(0, 5);
+            
+            // Produção por máquina
+            const prodByMachine = {};
+            productionData.forEach(i => {
+                const m = i.machine || 'N/A';
+                prodByMachine[m] = (prodByMachine[m] || 0) + (i.quantity || 0);
+            });
+            
+            const reportWindow = window.open('', '_blank');
+            if (!reportWindow) { showNotification('Popup bloqueado.', 'warning'); return; }
+            
+            reportWindow.document.write(`<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório Consolidado</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; color: #333; padding: 30px; background: #f8f9fa; }
+    .header { background: linear-gradient(135deg, #2563EB, #1d4ed8); color: white; padding: 25px 30px; border-radius: 12px; margin-bottom: 25px; }
+    .header h1 { font-size: 22px; } .header p { opacity: 0.85; font-size: 13px; }
+    .section { background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .section h2 { font-size: 16px; color: #2563EB; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #bfdbfe; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .kpi-card { border-radius: 8px; padding: 12px; text-align: center; }
+    .kpi-card .value { font-size: 22px; font-weight: 700; }
+    .kpi-card .label { font-size: 11px; margin-top: 4px; }
+    .kpi-green { background: #f0fdf4; border: 1px solid #bbf7d0; } .kpi-green .value { color: #16a34a; } .kpi-green .label { color: #166534; }
+    .kpi-red { background: #fef2f2; border: 1px solid #fecaca; } .kpi-red .value { color: #dc2626; } .kpi-red .label { color: #991b1b; }
+    .kpi-orange { background: #fff7ed; border: 1px solid #fed7aa; } .kpi-orange .value { color: #ea580c; } .kpi-orange .label { color: #9a3412; }
+    .kpi-blue { background: #eff6ff; border: 1px solid #bfdbfe; } .kpi-blue .value { color: #2563eb; } .kpi-blue .label { color: #1e40af; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    thead th { background: #eff6ff; color: #1e40af; padding: 8px 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #bfdbfe; }
+    tbody td { padding: 6px 12px; border-bottom: 1px solid #f3f4f6; }
+    .text-right { text-align: right; } .text-center { text-align: center; }
+    .footer { text-align: center; color: #9ca3af; font-size: 11px; margin-top: 30px; padding-top: 15px; border-top: 1px solid #e5e7eb; }
+    .print-btn { position: fixed; top: 15px; right: 15px; background: #2563eb; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+    @media print { .print-btn { display: none; } body { padding: 15px; background: white; } }
+</style></head><body>
+    <button class="print-btn" onclick="window.print()">🖨️ Imprimir</button>
+    <div class="header">
+        <h1>📊 Relatório Consolidado - Visão Executiva</h1>
+        <p>HokkaidoMES | ${startDate || '-'} a ${endDate || '-'} | ${machine === 'all' ? 'Todas as máquinas' : machine} | Turno: ${shift === 'all' ? 'Todos' : 'T' + shift} | Gerado: ${new Date().toLocaleString('pt-BR')}</p>
+    </div>
+    <div class="kpi-grid">
+        <div class="kpi-card kpi-green"><div class="value">${totalProduced.toLocaleString()}</div><div class="label">Peças Produzidas</div></div>
+        <div class="kpi-card kpi-red"><div class="value">${totalLossPcs.toLocaleString()}</div><div class="label">Peças Perdidas</div></div>
+        <div class="kpi-card kpi-red"><div class="value">${totalLossKg.toFixed(3)}</div><div class="label">Refugo (kg)</div></div>
+        <div class="kpi-card kpi-red"><div class="value">${lossPercent.toFixed(1)}%</div><div class="label">% Perda</div></div>
+        <div class="kpi-card kpi-orange"><div class="value">${(totalDowntimeMin / 60).toFixed(1)}h</div><div class="label">Tempo Parado</div></div>
+        <div class="kpi-card kpi-orange"><div class="value">${downtimeData.length}</div><div class="label">Paradas</div></div>
+        <div class="kpi-card kpi-blue"><div class="value">${productionData.length}</div><div class="label">Lançamentos Prod.</div></div>
+        <div class="kpi-card kpi-blue"><div class="value">${lossesData.length}</div><div class="label">Lançamentos Perda</div></div>
+    </div>
+    <div class="section">
+        <h2>🏭 Produção por Máquina</h2>
+        <table>
+            <thead><tr><th>Máquina</th><th class="text-right">Peças Produzidas</th><th class="text-right">% do Total</th></tr></thead>
+            <tbody>${Object.entries(prodByMachine).sort((a,b) => b[1] - a[1]).map(([m,v]) => `<tr><td><strong>${m}</strong></td><td class="text-right">${v.toLocaleString()}</td><td class="text-right">${totalProduced > 0 ? (v/totalProduced*100).toFixed(1) : 0}%</td></tr>`).join('')}</tbody>
+        </table>
+    </div>
+    <div class="section">
+        <h2>⚠️ Top 5 Motivos de Perda</h2>
+        <table>
+            <thead><tr><th>Motivo</th><th class="text-right">Peso (kg)</th><th class="text-right">% do Total</th></tr></thead>
+            <tbody>${topLossReasons.map(([r,v]) => `<tr><td>${r}</td><td class="text-right">${v.toFixed(3)}</td><td class="text-right">${totalLossKg > 0 ? (v/totalLossKg*100).toFixed(1) : 0}%</td></tr>`).join('')}</tbody>
+        </table>
+    </div>
+    <div class="section">
+        <h2>⏸ Top 5 Motivos de Parada</h2>
+        <table>
+            <thead><tr><th>Motivo</th><th class="text-right">Tempo (min)</th><th class="text-right">% do Total</th></tr></thead>
+            <tbody>${topDtReasons.map(([r,v]) => `<tr><td>${r}</td><td class="text-right">${v.toFixed(0)}</td><td class="text-right">${totalDowntimeMin > 0 ? (v/totalDowntimeMin*100).toFixed(1) : 0}%</td></tr>`).join('')}</tbody>
+        </table>
+    </div>
+    <div class="footer"><p>HokkaidoMES &copy; ${new Date().getFullYear()} - Relatório Consolidado</p></div>
+</body></html>`);
+            reportWindow.document.close();
+            showNotification('📊 Relatório consolidado gerado!', 'success');
+        } catch (error) {
+            console.error('Erro ao gerar relatório consolidado:', error);
+            showNotification('Erro ao gerar relatório. Verifique o console.', 'error');
+        }
+    };
 
     // Gerar gráfico de perdas por tipo de matéria-prima
     async function generateLossesByMaterialChart(lossesData) {
@@ -18830,18 +21248,27 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
     function renderPlanningTable(items) {
         if (!planningTableBody) return;
-        const orDash = (value) => value || '-';
+        // Helper: exibe valor ou traço se nulo/undefined/vazio (aceita 0 como valor válido)
+        const orDash = (value) => (value !== null && value !== undefined && value !== '') ? value : '-';
         const orDashNum = (value) => {
             const parsed = parseOptionalNumber(value);
             return parsed !== null ? parsed.toLocaleString('pt-BR') : '-';
         };
         const cycleClass = (realCycle, budgetedCycle) => {
-            if (!realCycle || !budgetedCycle) return '';
-            return realCycle > budgetedCycle ? 'text-status-error font-bold' : '';
+            if (realCycle === null || realCycle === undefined || budgetedCycle === null || budgetedCycle === undefined) return '';
+            return Number(realCycle) > Number(budgetedCycle) ? 'text-status-error font-bold' : '';
         };
 
         // Agrupar por Máquina + Produto (independente da OP)
         const grouped = new Map();
+        
+        // Helper para extrair valor numérico de ciclo/cavidade (aceita 0, rejeita null/undefined/string vazia)
+        const extractCycleCavity = (value) => {
+            if (value === null || value === undefined || value === '') return null;
+            const num = Number(value);
+            return isNaN(num) ? null : num;
+        };
+        
         (items || []).forEach(item => {
             const key = `${item.machine}||${item.product_cod || item.product || ''}`;
             if (!grouped.has(key)) {
@@ -18855,12 +21282,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     mold_cavities: item.mold_cavities,
                     piece_weight: item.piece_weight,
                     // Ciclos/Cavidades reais por turno (pega o primeiro valor informado)
-                    real_cycle_t1: item.real_cycle_t1 || null,
-                    active_cavities_t1: item.active_cavities_t1 || null,
-                    real_cycle_t2: item.real_cycle_t2 || null,
-                    active_cavities_t2: item.active_cavities_t2 || null,
-                    real_cycle_t3: item.real_cycle_t3 || null,
-                    active_cavities_t3: item.active_cavities_t3 || null,
+                    real_cycle_t1: extractCycleCavity(item.real_cycle_t1),
+                    active_cavities_t1: extractCycleCavity(item.active_cavities_t1),
+                    real_cycle_t2: extractCycleCavity(item.real_cycle_t2),
+                    active_cavities_t2: extractCycleCavity(item.active_cavities_t2),
+                    real_cycle_t3: extractCycleCavity(item.real_cycle_t3),
+                    active_cavities_t3: extractCycleCavity(item.active_cavities_t3),
                     // Produção por turno acumulada
                     T1: { produzido: Number(item.T1?.produzido) || 0 },
                     T2: { produzido: Number(item.T2?.produzido) || 0 },
@@ -18872,12 +21299,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             } else {
                 const agg = grouped.get(key);
                 // Manter primeiro valor de ciclo/cavidades reais informado; se vazio, assumir do item atual
-                if (!agg.real_cycle_t1 && item.real_cycle_t1) agg.real_cycle_t1 = item.real_cycle_t1;
-                if (!agg.active_cavities_t1 && item.active_cavities_t1) agg.active_cavities_t1 = item.active_cavities_t1;
-                if (!agg.real_cycle_t2 && item.real_cycle_t2) agg.real_cycle_t2 = item.real_cycle_t2;
-                if (!agg.active_cavities_t2 && item.active_cavities_t2) agg.active_cavities_t2 = item.active_cavities_t2;
-                if (!agg.real_cycle_t3 && item.real_cycle_t3) agg.real_cycle_t3 = item.real_cycle_t3;
-                if (!agg.active_cavities_t3 && item.active_cavities_t3) agg.active_cavities_t3 = item.active_cavities_t3;
+                if (agg.real_cycle_t1 === null) agg.real_cycle_t1 = extractCycleCavity(item.real_cycle_t1);
+                if (agg.active_cavities_t1 === null) agg.active_cavities_t1 = extractCycleCavity(item.active_cavities_t1);
+                if (agg.real_cycle_t2 === null) agg.real_cycle_t2 = extractCycleCavity(item.real_cycle_t2);
+                if (agg.active_cavities_t2 === null) agg.active_cavities_t2 = extractCycleCavity(item.active_cavities_t2);
+                if (agg.real_cycle_t3 === null) agg.real_cycle_t3 = extractCycleCavity(item.real_cycle_t3);
+                if (agg.active_cavities_t3 === null) agg.active_cavities_t3 = extractCycleCavity(item.active_cavities_t3);
                 // Atualizar campos básicos se estiverem vazios
                 if (!agg.mp && item.mp) agg.mp = item.mp;
                 if (!agg.budgeted_cycle && item.budgeted_cycle) agg.budgeted_cycle = item.budgeted_cycle;
@@ -18959,6 +21386,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     function renderLeaderPanel(planItems) {
         if (!leaderLaunchPanel) return;
 
+        // Helper para extrair valor numérico de ciclo/cavidade (aceita 0, rejeita null/undefined/string vazia)
+        const extractCycleCavity = (value) => {
+            if (value === null || value === undefined || value === '') return null;
+            const num = Number(value);
+            return isNaN(num) ? null : num;
+        };
+
         // Agrupar por Máquina + Produto (consolidar itens de OPs diferentes do mesmo produto)
         const groups = new Map();
         (planItems || []).forEach(item => {
@@ -18970,23 +21404,23 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     product: item.product,
                     product_cod: item.product_cod,
                     mp: item.mp || '',
-                    real_cycle_t1: item.real_cycle_t1 || null,
-                    active_cavities_t1: item.active_cavities_t1 || null,
-                    real_cycle_t2: item.real_cycle_t2 || null,
-                    active_cavities_t2: item.active_cavities_t2 || null,
-                    real_cycle_t3: item.real_cycle_t3 || null,
-                    active_cavities_t3: item.active_cavities_t3 || null
+                    real_cycle_t1: extractCycleCavity(item.real_cycle_t1),
+                    active_cavities_t1: extractCycleCavity(item.active_cavities_t1),
+                    real_cycle_t2: extractCycleCavity(item.real_cycle_t2),
+                    active_cavities_t2: extractCycleCavity(item.active_cavities_t2),
+                    real_cycle_t3: extractCycleCavity(item.real_cycle_t3),
+                    active_cavities_t3: extractCycleCavity(item.active_cavities_t3)
                 });
             } else {
                 const g = groups.get(key);
                 g.ids.push(item.id);
                 // Manter o primeiro valor informado para ciclo/cavidades de cada turno
-                if (!g.real_cycle_t1 && item.real_cycle_t1) g.real_cycle_t1 = item.real_cycle_t1;
-                if (!g.active_cavities_t1 && item.active_cavities_t1) g.active_cavities_t1 = item.active_cavities_t1;
-                if (!g.real_cycle_t2 && item.real_cycle_t2) g.real_cycle_t2 = item.real_cycle_t2;
-                if (!g.active_cavities_t2 && item.active_cavities_t2) g.active_cavities_t2 = item.active_cavities_t2;
-                if (!g.real_cycle_t3 && item.real_cycle_t3) g.real_cycle_t3 = item.real_cycle_t3;
-                if (!g.active_cavities_t3 && item.active_cavities_t3) g.active_cavities_t3 = item.active_cavities_t3;
+                if (g.real_cycle_t1 === null) g.real_cycle_t1 = extractCycleCavity(item.real_cycle_t1);
+                if (g.active_cavities_t1 === null) g.active_cavities_t1 = extractCycleCavity(item.active_cavities_t1);
+                if (g.real_cycle_t2 === null) g.real_cycle_t2 = extractCycleCavity(item.real_cycle_t2);
+                if (g.active_cavities_t2 === null) g.active_cavities_t2 = extractCycleCavity(item.active_cavities_t2);
+                if (g.real_cycle_t3 === null) g.real_cycle_t3 = extractCycleCavity(item.real_cycle_t3);
+                if (g.active_cavities_t3 === null) g.active_cavities_t3 = extractCycleCavity(item.active_cavities_t3);
                 if (!g.mp && item.mp) g.mp = item.mp;
             }
         });
@@ -18996,7 +21430,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const statusHtml = turnos.map(turno => {
                 const rc = group[`real_cycle_${turno.toLowerCase()}`];
                 const cav = group[`active_cavities_${turno.toLowerCase()}`];
-                const isComplete = rc && cav;
+                // Considerar preenchido se ambos tiverem valor numérico (incluindo 0)
+                const isComplete = rc !== null && cav !== null;
                 const statusClass = isComplete ? 'bg-green-100 text-status-success' : 'bg-yellow-100 text-status-warning';
                 const statusIcon = isComplete ? `<i data-lucide="check-circle-2" class="w-4 h-4"></i>` : `<i data-lucide="alert-circle" class="w-4 h-4"></i>`;
                 return `<div class="flex items-center justify-center gap-2 p-1 rounded-md text-xs font-semibold ${statusClass}">${statusIcon} ${turno}</div>`;
@@ -19005,7 +21440,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             const btnClasses = turnos.map(turno => {
                 const rc = group[`real_cycle_${turno.toLowerCase()}`];
                 const cav = group[`active_cavities_${turno.toLowerCase()}`];
-                const isComplete = rc && cav;
+                // Considerar preenchido se ambos tiverem valor numérico (incluindo 0)
+                const isComplete = rc !== null && cav !== null;
                 return isComplete ? 'bg-status-success hover:bg-green-700' : 'bg-gray-500 hover:bg-gray-600';
             });
             const mpLabel = group.mp ? `<p class="text-xs text-gray-500 mt-1">MP: ${group.mp}</p>` : '';
@@ -31375,6 +33811,390 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         stopStandaloneTimerUpdate();
         closeModal('standalone-downtime-modal');
     };
+
+    // =============================================
+    // PARADA EM LOTE - Múltiplas Máquinas ao Mesmo Tempo
+    // =============================================
+
+    // Cache de máquinas selecionadas para parada em lote
+    let _batchSelectedMachines = new Set();
+
+    /**
+     * Abre o modal de parada em lote
+     */
+    async function openBatchDowntimeModal() {
+        console.log('[BATCH-DOWNTIME] Abrindo modal de parada em lote');
+
+        // Limpar seleções anteriores
+        _batchSelectedMachines.clear();
+
+        // Carregar paradas ativas de TODAS as máquinas (não só sem OP)
+        try {
+            const allDowntimeStatus = await getAllMachinesDowntimeStatus(true); // forceRefresh
+            // Mesclar com _standaloneActiveDowntimes para ter visão completa
+            Object.keys(allDowntimeStatus).forEach(mid => {
+                if (!_standaloneActiveDowntimes[mid]) {
+                    _standaloneActiveDowntimes[mid] = allDowntimeStatus[mid];
+                }
+            });
+        } catch (e) {
+            console.warn('[BATCH-DOWNTIME] Erro ao carregar status de paradas:', e);
+        }
+
+        // Resetar campos do formulário
+        const userInput = document.getElementById('batch-downtime-user');
+        const reason = document.getElementById('batch-downtime-reason');
+        const obs = document.getElementById('batch-downtime-obs');
+        if (userInput) { userInput.value = ''; updateUserNameDisplay('batch-downtime-user', ''); }
+        if (obs) obs.value = '';
+
+        // Popular motivos a partir de groupedDowntimeReasons
+        if (reason) {
+            reason.innerHTML = '<option value="">Selecione o motivo...</option>';
+            // Popular motivos do database.js
+            const groups = window.groupedDowntimeReasons || {};
+            Object.keys(groups).forEach(groupName => {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = groupName;
+                groups[groupName].forEach(motivo => {
+                    const opt = document.createElement('option');
+                    opt.value = motivo;
+                    opt.textContent = motivo;
+                    // Pré-selecionar FALTA DE ENERGIA como opção padrão
+                    if (motivo === 'FALTA DE ENERGIA') {
+                        opt.selected = true;
+                    }
+                    optgroup.appendChild(opt);
+                });
+                reason.appendChild(optgroup);
+            });
+        }
+
+        // Configurar input do operador
+        setupUserCodeInput('batch-downtime-user');
+
+        // Renderizar grid de máquinas
+        renderBatchMachineGrid();
+
+        // Bind form
+        const form = document.getElementById('batch-downtime-form');
+        if (form) {
+            form.removeEventListener('submit', handleBatchDowntimeSubmit);
+            form.addEventListener('submit', handleBatchDowntimeSubmit);
+        }
+
+        // Abrir modal
+        const modal = document.getElementById('batch-downtime-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        updateBatchSelectedCount();
+    }
+
+    /**
+     * Fechar modal de parada em lote
+     */
+    function closeBatchDowntimeModal() {
+        closeModal('batch-downtime-modal');
+        _batchSelectedMachines.clear();
+    }
+
+    /**
+     * Renderiza o grid de máquinas com checkboxes para seleção
+     * Mostra máquinas COM OP (produzindo) como disponíveis para parada em lote
+     */
+    function renderBatchMachineGrid() {
+        const grid = document.getElementById('batch-machine-grid');
+        if (!grid) return;
+
+        const machines = window.machineDatabase || [];
+        const machinesWithOP = getMachinesWithActiveOP();
+
+        grid.innerHTML = '';
+
+        machines.forEach(m => {
+            const mid = m.id;
+            const normalizedId = normalizeMachineId(mid);
+            const hasOP = machinesWithOP.has(mid) || machinesWithOP.has(normalizedId);
+            const hasActiveDowntime = _standaloneActiveDowntimes[mid] || _standaloneActiveDowntimes[normalizedId];
+            
+            // Máquina disponível = tem OP (produzindo) e NÃO tem parada ativa
+            const isAvailable = hasOP && !hasActiveDowntime;
+            // Máquina indisponível = já tem parada ativa OU não tem OP (não está produzindo)
+            const isDisabled = !isAvailable;
+
+            const card = document.createElement('div');
+            card.className = 'relative rounded-xl p-3 text-center transition-all duration-200 border-2 select-none flex flex-col items-center';
+            card.dataset.machineId = mid;
+
+            if (hasActiveDowntime) {
+                // Máquina já com parada ativa
+                card.className += ' bg-red-50 border-red-200 opacity-60 cursor-not-allowed';
+                card.innerHTML = `
+                    <div class="text-sm font-bold text-red-500">${mid}</div>
+                    <div class="text-[10px] text-red-400 mt-0.5 truncate">${m.model}</div>
+                    <div class="text-[10px] text-red-400 mt-1">⏸ Parada Ativa</div>
+                `;
+            } else if (!hasOP) {
+                // Máquina sem OP (não está produzindo)
+                card.className += ' bg-gray-100 border-gray-200 opacity-50 cursor-not-allowed';
+                card.innerHTML = `
+                    <div class="text-sm font-bold text-gray-400">${mid}</div>
+                    <div class="text-[10px] text-gray-300 mt-0.5 truncate">${m.model}</div>
+                    <div class="text-[10px] text-gray-400 mt-1">Sem OP</div>
+                `;
+            } else {
+                // Máquina produzindo (com OP) - disponível para seleção
+                const isSelected = _batchSelectedMachines.has(mid);
+                card.className += isSelected 
+                    ? ' bg-amber-100 border-amber-400 ring-2 ring-amber-200 cursor-pointer'
+                    : ' bg-emerald-50 border-emerald-300 hover:bg-amber-50 hover:border-amber-300 cursor-pointer';
+                card.innerHTML = `
+                    <div class="text-sm font-bold ${isSelected ? 'text-amber-700' : 'text-emerald-700'}">${mid}</div>
+                    <div class="text-[10px] ${isSelected ? 'text-amber-500' : 'text-emerald-500'} mt-0.5 truncate">${m.model}</div>
+                    <div class="text-[10px] ${isSelected ? 'text-amber-600 font-semibold' : 'text-emerald-600'} mt-1 batch-status-text">${isSelected ? '✓ Selecionada' : '▶ Produzindo'}</div>
+                    <div class="absolute top-2 right-2 w-4 h-4 border-2 ${isSelected ? 'bg-amber-500 border-amber-500' : 'border-emerald-400'} rounded flex items-center justify-center">
+                        ${isSelected ? '<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>' : ''}
+                    </div>
+                `;
+                card.onclick = () => toggleBatchMachineClick(mid);
+            }
+
+            grid.appendChild(card);
+        });
+    }
+
+    /**
+     * Toggle de máquina via click direto (sem checkbox)
+     */
+    function toggleBatchMachineClick(machineId) {
+        if (_batchSelectedMachines.has(machineId)) {
+            _batchSelectedMachines.delete(machineId);
+        } else {
+            _batchSelectedMachines.add(machineId);
+        }
+        // Re-renderizar grid para atualizar visual
+        renderBatchMachineGrid();
+        updateBatchSelectedCount();
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    /**
+     * Toggle seleção de uma máquina (mantido para compatibilidade)
+     */
+    function toggleBatchMachine(machineId) {
+        toggleBatchMachineClick(machineId);
+    }
+
+    /**
+     * Selecionar todas as máquinas disponíveis (produzindo)
+     */
+    function batchSelectAllMachines() {
+        const machines = window.machineDatabase || [];
+        const machinesWithOP = getMachinesWithActiveOP();
+        
+        machines.forEach(m => {
+            const mid = m.id;
+            const normalizedId = normalizeMachineId(mid);
+            const hasOP = machinesWithOP.has(mid) || machinesWithOP.has(normalizedId);
+            const hasActiveDowntime = _standaloneActiveDowntimes[mid] || _standaloneActiveDowntimes[normalizedId];
+            // Selecionar apenas máquinas COM OP (produzindo) e SEM parada ativa
+            const isAvailable = hasOP && !hasActiveDowntime;
+            
+            if (isAvailable && !_batchSelectedMachines.has(mid)) {
+                _batchSelectedMachines.add(mid);
+            }
+        });
+        
+        renderBatchMachineGrid();
+        updateBatchSelectedCount();
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    /**
+     * Desmarcar todas as máquinas
+     */
+    function batchDeselectAllMachines() {
+        _batchSelectedMachines.clear();
+        renderBatchMachineGrid();
+        updateBatchSelectedCount();
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    /**
+     * Atualizar contador de máquinas selecionadas
+     */
+    function updateBatchSelectedCount() {
+        const countEl = document.getElementById('batch-selected-count');
+        const submitBtn = document.getElementById('batch-downtime-submit-btn');
+        const count = _batchSelectedMachines.size;
+
+        if (countEl) countEl.textContent = count;
+        if (submitBtn) {
+            submitBtn.disabled = count === 0;
+            submitBtn.innerHTML = count > 0 
+                ? `<i data-lucide="zap" class="w-4 h-4 inline mr-1"></i> Iniciar ${count} Parada${count > 1 ? 's' : ''}`
+                : '<i data-lucide="zap" class="w-4 h-4 inline mr-1"></i> Iniciar Paradas em Lote';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+    }
+
+    /**
+     * Submeter parada em lote
+     */
+    async function handleBatchDowntimeSubmit(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (_batchSelectedMachines.size === 0) {
+            showNotification('Selecione pelo menos uma máquina', 'warning');
+            return;
+        }
+
+        // Validar operador
+        const userInput = document.getElementById('batch-downtime-user');
+        const userCod = userInput ? parseInt(userInput.value, 10) : null;
+        if (userCod === null || isNaN(userCod) || userInput.value === '') {
+            alert('⚠️ Operador obrigatório!\n\nPor favor, digite o código do operador responsável.');
+            if (userInput) userInput.focus();
+            return;
+        }
+        const userData = getUserByCode ? getUserByCode(userCod) : null;
+        if (!userData) {
+            alert('⚠️ Código inválido!\n\nO código digitado não foi encontrado no sistema.\nVerifique e tente novamente.');
+            if (userInput) userInput.focus();
+            return;
+        }
+
+        const reason = document.getElementById('batch-downtime-reason')?.value || '';
+        const obs = document.getElementById('batch-downtime-obs')?.value || '';
+
+        if (!reason) {
+            showNotification('Selecione o motivo da parada', 'warning');
+            return;
+        }
+
+        // Confirmar ação
+        const machinesList = Array.from(_batchSelectedMachines).join(', ');
+        const confirmMsg = `⚠️ PARADA EM LOTE\n\nVocê está prestes a iniciar parada em ${_batchSelectedMachines.size} máquina(s):\n${machinesList}\n\nMotivo: ${reason}\n\nDeseja continuar?`;
+        if (!confirm(confirmMsg)) return;
+
+        // Desabilitar botão durante processamento
+        const submitBtn = document.getElementById('batch-downtime-submit-btn');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 inline mr-1 animate-spin"></i> Processando...';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        try {
+            const now = new Date();
+            const currentShift = getShiftForDateTime(now);
+            const workday = getWorkdayForDateTime(now);
+            const batch = db.batch();
+            const machinesArray = Array.from(_batchSelectedMachines);
+            let successCount = 0;
+            let errorCount = 0;
+
+            for (const machineId of machinesArray) {
+                try {
+                    const normalizedId = normalizeMachineId(machineId);
+
+                    const activeDowntimeData = {
+                        machine: machineId,
+                        startDate: workday,
+                        startTime: formatTimeHM(now),
+                        startTimestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                        startTimestampLocal: now.toISOString(),
+                        startShift: currentShift,
+                        reason: reason,
+                        observations: obs + (obs ? ' | ' : '') + '[Parada em Lote]',
+                        userCod: userCod,
+                        nomeUsuario: userData.nomeUsuario,
+                        semOP: false, // Máquinas COM OP (produzindo)
+                        isActive: true,
+                        batchDowntime: true,
+                        batchTimestamp: now.toISOString(),
+                        startedBy: getActiveUser()?.name || 'Sistema',
+                        startedByUsername: getActiveUser()?.username || null,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        systemVersion: '2.1'
+                    };
+
+                    batch.set(db.collection('active_downtimes').doc(normalizedId), activeDowntimeData, { merge: true });
+
+                    // Atualizar cache local
+                    _standaloneActiveDowntimes[machineId] = {
+                        ...activeDowntimeData,
+                        startTimestampLocal: now.toISOString(),
+                        docId: normalizedId
+                    };
+
+                    successCount++;
+                } catch (machineError) {
+                    console.error(`[BATCH-DOWNTIME] Erro ao processar ${machineId}:`, machineError);
+                    errorCount++;
+                }
+            }
+
+            // Executar batch
+            await batch.commit();
+            console.log(`[BATCH-DOWNTIME] Parada em lote concluída: ${successCount} sucesso, ${errorCount} erros`);
+
+            // Log
+            if (typeof logSystemAction === 'function') {
+                logSystemAction('parada_lote', `Parada em lote iniciada: ${machinesArray.join(', ')} - ${reason}`, {
+                    maquinas: machinesArray,
+                    motivo: reason,
+                    turno: currentShift,
+                    batchDowntime: true,
+                    totalMaquinas: machinesArray.length
+                });
+            }
+
+            // Fechar modal e atualizar UI
+            closeBatchDowntimeModal();
+            await loadStandaloneActiveDowntimes();
+            renderStandaloneMachineGrid();
+            
+            // Atualizar grid principal de máquinas para refletir as paradas
+            if (typeof populateMachineSelector === 'function') {
+                populateMachineSelector();
+            }
+            
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+            // Notificação de sucesso
+            if (errorCount === 0) {
+                showNotification(`⚡ Parada em lote iniciada com sucesso em ${successCount} máquina(s)!`, 'success');
+            } else {
+                showNotification(`⚠️ Parada em lote: ${successCount} sucesso, ${errorCount} erros`, 'warning');
+            }
+
+        } catch (error) {
+            console.error('[BATCH-DOWNTIME] Erro ao executar parada em lote:', error);
+            showNotification('❌ Erro ao executar parada em lote: ' + error.message, 'error');
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                updateBatchSelectedCount();
+            }
+        }
+    }
+
+    // Expor funções de parada em lote globalmente
+    window.openBatchDowntimeModal = openBatchDowntimeModal;
+    window.closeBatchDowntimeModal = closeBatchDowntimeModal;
+    window.toggleBatchMachine = toggleBatchMachine;
+    window.toggleBatchMachineClick = toggleBatchMachineClick;
+    window.batchSelectAllMachines = batchSelectAllMachines;
+    window.batchDeselectAllMachines = batchDeselectAllMachines;
+
+    // =============================================
+    // FIM - PARADA EM LOTE
+    // =============================================
     
     async function finishDowntime() {
         try {
@@ -33482,13 +36302,30 @@ function sendDowntimeNotification() {
                 <!-- Mini card de parada ativa -->
                 ${(() => {
                     // Verifica se há parada ativa (downtime sem fim) para esta máquina
-                    const paradaAtiva = filteredDowntimeEntries.some(dt => dt && dt.machine === machine && (!dt.endTime && !dt.endDate));
-                    return paradaAtiva ? `
-                        <div class="mb-2 p-2 rounded-lg bg-red-50 border border-red-200 flex items-center gap-2">
-                            <i data-lucide="alert-circle" class="w-4 h-4 text-red-600 animate-pulse"></i>
-                            <span class="text-xs font-bold text-red-700">PARADA ATIVA - MÁQUINA PARADA</span>
+                    // Priorizar dados de machinesDowntime (mais completo com motivo)
+                    const downtimeInfo = machinesDowntime ? machinesDowntime[machine] : null;
+                    const paradaAtiva = downtimeInfo || filteredDowntimeEntries.some(dt => dt && dt.machine === machine && (!dt.endTime && !dt.endDate));
+                    
+                    if (!paradaAtiva) return '';
+                    
+                    // Obter motivo da parada
+                    let reasonText = downtimeInfo?.reason || '';
+                    
+                    // Se não tiver motivo em machinesDowntime, tentar buscar nas entradas
+                    if (!reasonText) {
+                        const dtEntry = filteredDowntimeEntries.find(dt => dt && dt.machine === machine && (!dt.endTime && !dt.endDate));
+                        reasonText = dtEntry?.reason || dtEntry?.motivo || dtEntry?.downtime_reason || '';
+                    }
+                    
+                    return `
+                        <div class="mb-2 p-2 rounded-lg bg-red-50 border border-red-200">
+                            <div class="flex items-center gap-2 mb-1">
+                                <i data-lucide="alert-circle" class="w-4 h-4 text-red-600 animate-pulse"></i>
+                                <span class="text-xs font-bold text-red-700">PARADA ATIVA</span>
+                            </div>
+                            ${reasonText ? `<div class="text-xs text-red-600 font-medium pl-6">${reasonText}</div>` : ''}
                         </div>
-                    ` : '';
+                    `;
                 })()}                ${allCompleted ? `
                     <div class="card-actions flex gap-2 mt-3">
                         ${String(plan.status||'').toLowerCase()!=='concluida' && plan.order_id ? `
@@ -34278,41 +37115,68 @@ function sendDowntimeNotification() {
         }
     }
     
+    // Função auxiliar para determinar o turno de uma parada baseado no horário
+    function getShiftFromTime(timeStr) {
+        if (!timeStr) return null;
+        const [hour, minute] = timeStr.split(':').map(Number);
+        const totalMinutes = hour * 60 + (minute || 0);
+        
+        // T1: 06:30-14:59 (390-899 min)
+        // T2: 15:00-23:19 (900-1399 min)
+        // T3: 23:20-06:29 (1400-1439 ou 0-389 min)
+        if (totalMinutes >= 390 && totalMinutes < 900) {
+            return 'T1';
+        } else if (totalMinutes >= 900 && totalMinutes < 1400) {
+            return 'T2';
+        } else {
+            return 'T3';
+        }
+    }
+
     function processResumoData(plans, productions, downtimes) {
         return plans.map(plan => {
             const data = { ...plan, T1: {}, T2: {}, T3: {} };
             const turnos = ['T1', 'T2', 'T3'];
 
+            // Obter categorias excluídas do OEE (apenas uma vez)
+            const oeeExcludedCategoriesResumo = window.databaseModule?.oeeExcludedCategories || [];
+            
+            // Pré-filtrar paradas da máquina (excluindo categorias não-OEE)
+            const machineDowntimesFiltered = downtimes.filter(d => {
+                if (d.machine !== plan.machine) return false;
+                const reason = d.reason || '';
+                const category = getDowntimeCategory(reason);
+                if (oeeExcludedCategoriesResumo.includes(category)) {
+                    return false;
+                }
+                return true;
+            });
+
             turnos.forEach(turno => {
                 const entries = productions.filter(p => p.planId === plan.id && p.turno === turno);
-                const produzido = entries.reduce((sum, item) => sum + item.produzido, 0);
+                const produzido = entries.reduce((sum, item) => sum + (item.produzido || 0), 0);
                 
-                // Obter categorias excluídas do OEE
-                const oeeExcludedCategoriesResumo = window.databaseModule?.oeeExcludedCategories || [];
-                
-                const machineDowntimes = downtimes.filter(d => {
-                    if (d.machine !== plan.machine) return false;
-                    // Excluir paradas de categorias que não devem afetar OEE
-                    const reason = d.reason || '';
-                    const category = getDowntimeCategory(reason);
-                    if (oeeExcludedCategoriesResumo.includes(category)) {
-                        return false;
-                    }
-                    return true;
+                // CORREÇÃO: Filtrar paradas por turno baseado no horário de início
+                const turnoDowntimes = machineDowntimesFiltered.filter(d => {
+                    const downtimeShift = getShiftFromTime(d.startTime);
+                    return downtimeShift === turno;
                 });
-                const totalParadas = machineDowntimes.reduce((sum, item) => {
+                
+                // Calcular tempo total de paradas APENAS deste turno
+                const totalParadas = turnoDowntimes.reduce((sum, item) => {
                     const start = new Date(`${item.date}T${item.startTime}`);
                     const end = new Date(`${item.date}T${item.endTime}`);
                     return sum + (end > start ? Math.round((end - start) / 60000) : 0);
                 }, 0);
 
-                const refugo_kg = entries.reduce((sum, item) => sum + item.refugo_kg, 0);
+                const refugo_kg = entries.reduce((sum, item) => sum + (item.refugo_kg || 0), 0);
                 const refugo_pcs = plan.piece_weight > 0 ? Math.round((refugo_kg * 1000) / plan.piece_weight) : 0;
                 
                 const ciclo_real = plan[`real_cycle_${turno.toLowerCase()}`] || plan.budgeted_cycle;
                 const cav_ativas = plan[`active_cavities_${turno.toLowerCase()}`] || plan.mold_cavities;
                 
-                const oee = calculateShiftOEE(produzido, totalParadas / 3, refugo_pcs, ciclo_real, cav_ativas);
+                // CORREÇÃO: Remover divisão /3 - agora totalParadas já é por turno
+                const oee = calculateShiftOEE(produzido, totalParadas, refugo_pcs, ciclo_real, cav_ativas);
 
                 data[turno] = { produzido, paradas: totalParadas, refugo_kg, refugo_pcs, ...oee };
                 
@@ -34718,21 +37582,49 @@ function sendDowntimeNotification() {
         const isToday = date === today;
         
         // Se for hoje, calcular OEE em tempo real para cada item
+        // CORREÇÃO: Substituído forEach async (não funcionava) por loop síncrono
         let realTimeData = {};
         if (isToday) {
-            data.forEach(async (item) => {
-                const combinedData = [{
-                    machine: item.machine,
-                    turno: 'T1',
-                    produzido: item.T1.produzido || 0,
-                    duracao_min: item.T1.paradas || 0,
-                    refugo_kg: item.T1.refugo_kg || 0,
-                    piece_weight: item.piece_weight,
-                    real_cycle_t1: item.real_cycle_t1,
-                    active_cavities_t1: item.active_cavities_t1,
-                    budgeted_cycle: item.budgeted_cycle,
-                    mold_cavities: item.mold_cavities
-                }];
+            data.forEach(item => {
+                // Preparar dados combinados de todos os turnos para cálculo em tempo real
+                const combinedData = [
+                    {
+                        machine: item.machine,
+                        turno: 'T1',
+                        produzido: item.T1.produzido || 0,
+                        duracao_min: item.T1.paradas || 0,
+                        refugo_kg: item.T1.refugo_kg || 0,
+                        piece_weight: item.piece_weight,
+                        real_cycle_t1: item.real_cycle_t1 || item.budgeted_cycle,
+                        active_cavities_t1: item.active_cavities_t1 || item.mold_cavities,
+                        budgeted_cycle: item.budgeted_cycle,
+                        mold_cavities: item.mold_cavities
+                    },
+                    {
+                        machine: item.machine,
+                        turno: 'T2',
+                        produzido: item.T2.produzido || 0,
+                        duracao_min: item.T2.paradas || 0,
+                        refugo_kg: item.T2.refugo_kg || 0,
+                        piece_weight: item.piece_weight,
+                        real_cycle_t2: item.real_cycle_t2 || item.budgeted_cycle,
+                        active_cavities_t2: item.active_cavities_t2 || item.mold_cavities,
+                        budgeted_cycle: item.budgeted_cycle,
+                        mold_cavities: item.mold_cavities
+                    },
+                    {
+                        machine: item.machine,
+                        turno: 'T3',
+                        produzido: item.T3.produzido || 0,
+                        duracao_min: item.T3.paradas || 0,
+                        refugo_kg: item.T3.refugo_kg || 0,
+                        piece_weight: item.piece_weight,
+                        real_cycle_t3: item.real_cycle_t3 || item.budgeted_cycle,
+                        active_cavities_t3: item.active_cavities_t3 || item.mold_cavities,
+                        budgeted_cycle: item.budgeted_cycle,
+                        mold_cavities: item.mold_cavities
+                    }
+                ];
                 
                 const realTimeOee = calculateRealTimeOEE(combinedData);
                 if (realTimeOee && realTimeOee.oeeByMachine[item.machine]) {
@@ -41350,6 +44242,9 @@ function setupSetupMaquinasPage() {
     // Configurar modal
     setupNovoSetupModal();
 
+    // Configurar toggle dos gráficos
+    setupChartsToggle();
+
     // Configurar botão buscar
     const btnBuscar = document.getElementById('btn-buscar-setups');
     if (btnBuscar) {
@@ -41543,6 +44438,7 @@ async function loadSetups() {
         });
 
         renderSetupStats(setups);
+        renderSetupCharts(setups);
         renderSetupTabela(setups);
 
     } catch (error) {
@@ -41698,10 +44594,507 @@ async function excluirSetup(setupId) {
     }
 }
 
+// =========================================
+// GRÁFICOS DO MÓDULO SETUP DE MÁQUINAS
+// =========================================
+
+// Armazenar referências dos gráficos
+let setupCharts = {
+    tipo: null,
+    maquina: null,
+    tempoMaquina: null,
+    diario: null,
+    distribuicaoTempo: null
+};
+
+// Configurar toggle dos gráficos
+function setupChartsToggle() {
+    const toggleBtn = document.getElementById('toggle-setup-charts');
+    const container = document.getElementById('setup-charts-container');
+    const icon = document.getElementById('setup-charts-toggle-icon');
+    const text = document.getElementById('setup-charts-toggle-text');
+    
+    if (!toggleBtn || !container) {
+        console.warn('[Setup Charts] Toggle elements not found');
+        return;
+    }
+    
+    console.log('[Setup Charts] Toggle configurado');
+    
+    toggleBtn.addEventListener('click', () => {
+        const isHidden = container.classList.contains('hidden');
+        
+        if (isHidden) {
+            container.classList.remove('hidden');
+            if (icon) icon.setAttribute('data-lucide', 'chevron-up');
+            if (text) text.textContent = 'Ocultar Gráficos';
+        } else {
+            container.classList.add('hidden');
+            if (icon) icon.setAttribute('data-lucide', 'chevron-down');
+            if (text) text.textContent = 'Mostrar Gráficos';
+        }
+        
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    });
+}
+
+// Renderizar todos os gráficos de setup
+function renderSetupCharts(setups) {
+    console.log('[Setup Charts] Iniciando renderização...', setups?.length || 0, 'registros');
+    
+    // Verificar se Chart.js está disponível
+    if (typeof Chart === 'undefined') {
+        console.error('[Setup Charts] Chart.js não está carregado!');
+        return;
+    }
+    
+    if (!setups || setups.length === 0) {
+        console.log('[Setup Charts] Sem dados para gráficos - mostrando estado vazio');
+        // Limpar gráficos existentes
+        Object.keys(setupCharts).forEach(key => {
+            if (setupCharts[key]) {
+                setupCharts[key].destroy();
+                setupCharts[key] = null;
+            }
+        });
+        return;
+    }
+    
+    try {
+        renderSetupTipoChart(setups);
+        console.log('[Setup Charts] Tipo OK');
+        renderSetupMaquinaChart(setups);
+        console.log('[Setup Charts] Máquina OK');
+        renderSetupTempoMaquinaChart(setups);
+        console.log('[Setup Charts] Tempo Máquina OK');
+        renderSetupDiarioChart(setups);
+        console.log('[Setup Charts] Diário OK');
+        renderSetupDistribuicaoTempoChart(setups);
+        console.log('[Setup Charts] Distribuição OK');
+        console.log('[Setup Charts] Todos os gráficos renderizados com sucesso!');
+    } catch (error) {
+        console.error('[Setup Charts] Erro ao renderizar:', error);
+    }
+}
+
+// Gráfico 1: Distribuição por Tipo (Doughnut)
+function renderSetupTipoChart(setups) {
+    const canvas = document.getElementById('setup-chart-tipo');
+    if (!canvas) {
+        console.warn('[Setup Charts] Canvas setup-chart-tipo não encontrado');
+        return;
+    }
+    
+    const ctx = canvas.getContext('2d');
+    
+    // Destruir gráfico existente usando Chart.getChart
+    const existingChart = Chart.getChart(canvas);
+    if (existingChart) {
+        existingChart.destroy();
+    }
+    
+    const planejados = setups.filter(s => s.tipo === 'planejado').length;
+    const naoPlanejados = setups.filter(s => s.tipo === 'nao_planejado').length;
+    
+    setupCharts.tipo = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Planejados', 'Não Planejados'],
+            datasets: [{
+                data: [planejados, naoPlanejados],
+                backgroundColor: [
+                    'rgba(34, 197, 94, 0.8)',
+                    'rgba(239, 68, 68, 0.8)'
+                ],
+                borderColor: [
+                    'rgba(34, 197, 94, 1)',
+                    'rgba(239, 68, 68, 1)'
+                ],
+                borderWidth: 2,
+                hoverOffset: 10
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 20,
+                        usePointStyle: true,
+                        font: { size: 12, weight: '500' }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const total = planejados + naoPlanejados;
+                            const percent = total > 0 ? ((context.raw / total) * 100).toFixed(1) : 0;
+                            return `${context.label}: ${context.raw} (${percent}%)`;
+                        }
+                    }
+                }
+            },
+            cutout: '60%'
+        }
+    });
+}
+
+// Gráfico 2: Quantidade por Máquina (Bar)
+function renderSetupMaquinaChart(setups) {
+    const canvas = document.getElementById('setup-chart-maquina');
+    if (!canvas) {
+        console.warn('[Setup Charts] Canvas setup-chart-maquina não encontrado');
+        return;
+    }
+    
+    const ctx = canvas.getContext('2d');
+    
+    const existingChart = Chart.getChart(canvas);
+    if (existingChart) {
+        existingChart.destroy();
+    }
+    
+    // Agrupar por máquina
+    const maquinaCount = {};
+    const maquinaPlanejado = {};
+    const maquinaNaoPlanejado = {};
+    
+    setups.forEach(s => {
+        const maq = s.maquina || 'N/A';
+        maquinaCount[maq] = (maquinaCount[maq] || 0) + 1;
+        if (s.tipo === 'planejado') {
+            maquinaPlanejado[maq] = (maquinaPlanejado[maq] || 0) + 1;
+        } else {
+            maquinaNaoPlanejado[maq] = (maquinaNaoPlanejado[maq] || 0) + 1;
+        }
+    });
+    
+    // Ordenar por quantidade (decrescente)
+    const labels = Object.keys(maquinaCount).sort((a, b) => maquinaCount[b] - maquinaCount[a]);
+    
+    setupCharts.maquina = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Planejados',
+                    data: labels.map(m => maquinaPlanejado[m] || 0),
+                    backgroundColor: 'rgba(34, 197, 94, 0.7)',
+                    borderColor: 'rgba(34, 197, 94, 1)',
+                    borderWidth: 1,
+                    borderRadius: 4
+                },
+                {
+                    label: 'Não Planejados',
+                    data: labels.map(m => maquinaNaoPlanejado[m] || 0),
+                    backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                    borderColor: 'rgba(239, 68, 68, 1)',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { usePointStyle: true, font: { size: 11 } }
+                }
+            },
+            scales: {
+                x: {
+                    stacked: true,
+                    grid: { display: false },
+                    ticks: { font: { size: 10 } }
+                },
+                y: {
+                    stacked: true,
+                    beginAtZero: true,
+                    ticks: { stepSize: 1, font: { size: 10 } },
+                    grid: { color: 'rgba(0,0,0,0.05)' }
+                }
+            }
+        }
+    });
+}
+
+// Gráfico 3: Tempo Total por Máquina (Bar Horizontal)
+function renderSetupTempoMaquinaChart(setups) {
+    const canvas = document.getElementById('setup-chart-tempo-maquina');
+    if (!canvas) {
+        console.warn('[Setup Charts] Canvas setup-chart-tempo-maquina não encontrado');
+        return;
+    }
+    
+    const ctx = canvas.getContext('2d');
+    
+    const existingChart = Chart.getChart(canvas);
+    if (existingChart) {
+        existingChart.destroy();
+    }
+    
+    // Agrupar tempo por máquina
+    const maquinaTempo = {};
+    setups.forEach(s => {
+        const maq = s.maquina || 'N/A';
+        maquinaTempo[maq] = (maquinaTempo[maq] || 0) + (s.duracaoMinutos || 0);
+    });
+    
+    // Ordenar por tempo (decrescente)
+    const labels = Object.keys(maquinaTempo).sort((a, b) => maquinaTempo[b] - maquinaTempo[a]);
+    const data = labels.map(m => maquinaTempo[m]);
+    
+    // Gerar cores
+    const colors = labels.map((_, i) => {
+        const hue = (i * 35) % 360;
+        return `hsla(${hue}, 70%, 55%, 0.8)`;
+    });
+    
+    setupCharts.tempoMaquina = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Tempo Total (min)',
+                data: data,
+                backgroundColor: colors,
+                borderColor: colors.map(c => c.replace('0.8', '1')),
+                borderWidth: 1,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const mins = context.raw;
+                            const hours = Math.floor(mins / 60);
+                            const m = mins % 60;
+                            return hours > 0 ? `${hours}h ${m}min` : `${mins}min`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    ticks: { font: { size: 10 } }
+                },
+                y: {
+                    grid: { display: false },
+                    ticks: { font: { size: 10 } }
+                }
+            }
+        }
+    });
+}
+
+// Gráfico 4: Evolução Diária (Line)
+function renderSetupDiarioChart(setups) {
+    const canvas = document.getElementById('setup-chart-diario');
+    if (!canvas) {
+        console.warn('[Setup Charts] Canvas setup-chart-diario não encontrado');
+        return;
+    }
+    
+    const ctx = canvas.getContext('2d');
+    
+    const existingChart = Chart.getChart(canvas);
+    if (existingChart) {
+        existingChart.destroy();
+    }
+    
+    // Agrupar por data
+    const diaCount = {};
+    const diaTempo = {};
+    
+    setups.forEach(s => {
+        const data = s.data || '';
+        if (data) {
+            diaCount[data] = (diaCount[data] || 0) + 1;
+            diaTempo[data] = (diaTempo[data] || 0) + (s.duracaoMinutos || 0);
+        }
+    });
+    
+    // Ordenar por data
+    const labels = Object.keys(diaCount).sort();
+    const formattedLabels = labels.map(d => d.split('-').reverse().join('/'));
+    
+    setupCharts.diario = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: formattedLabels,
+            datasets: [
+                {
+                    label: 'Quantidade',
+                    data: labels.map(d => diaCount[d]),
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Tempo (min)',
+                    data: labels.map(d => diaTempo[d]),
+                    borderColor: 'rgba(249, 115, 22, 1)',
+                    backgroundColor: 'rgba(249, 115, 22, 0.1)',
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    borderDash: [5, 5],
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { usePointStyle: true, font: { size: 11 } }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { font: { size: 10 }, maxRotation: 45 }
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    beginAtZero: true,
+                    title: { display: true, text: 'Quantidade', font: { size: 10 } },
+                    ticks: { stepSize: 1, font: { size: 10 } },
+                    grid: { color: 'rgba(0,0,0,0.05)' }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    beginAtZero: true,
+                    title: { display: true, text: 'Tempo (min)', font: { size: 10 } },
+                    ticks: { font: { size: 10 } },
+                    grid: { drawOnChartArea: false }
+                }
+            }
+        }
+    });
+}
+
+// Gráfico 5: Distribuição de Tempo (Histogram-like Bar)
+function renderSetupDistribuicaoTempoChart(setups) {
+    const canvas = document.getElementById('setup-chart-distribuicao-tempo');
+    if (!canvas) {
+        console.warn('[Setup Charts] Canvas setup-chart-distribuicao-tempo não encontrado');
+        return;
+    }
+    
+    const ctx = canvas.getContext('2d');
+    
+    const existingChart = Chart.getChart(canvas);
+    if (existingChart) {
+        existingChart.destroy();
+    }
+    
+    // Definir faixas de tempo
+    const faixas = [
+        { label: '0-15 min', min: 0, max: 15 },
+        { label: '15-30 min', min: 15, max: 30 },
+        { label: '30-45 min', min: 30, max: 45 },
+        { label: '45-60 min', min: 45, max: 60 },
+        { label: '1-2 horas', min: 60, max: 120 },
+        { label: '2-3 horas', min: 120, max: 180 },
+        { label: '3+ horas', min: 180, max: Infinity }
+    ];
+    
+    // Contar setups por faixa
+    const counts = faixas.map(f => {
+        return setups.filter(s => {
+            const dur = s.duracaoMinutos || 0;
+            return dur >= f.min && dur < f.max;
+        }).length;
+    });
+    
+    // Cores gradiente
+    const colors = [
+        'rgba(34, 197, 94, 0.7)',   // Verde
+        'rgba(132, 204, 22, 0.7)',   // Lima
+        'rgba(250, 204, 21, 0.7)',   // Amarelo
+        'rgba(251, 146, 60, 0.7)',   // Laranja claro
+        'rgba(249, 115, 22, 0.7)',   // Laranja
+        'rgba(239, 68, 68, 0.7)',    // Vermelho claro
+        'rgba(220, 38, 38, 0.7)'     // Vermelho
+    ];
+    
+    setupCharts.distribuicaoTempo = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: faixas.map(f => f.label),
+            datasets: [{
+                label: 'Quantidade de Setups',
+                data: counts,
+                backgroundColor: colors,
+                borderColor: colors.map(c => c.replace('0.7', '1')),
+                borderWidth: 1,
+                borderRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const total = setups.length;
+                            const percent = total > 0 ? ((context.raw / total) * 100).toFixed(1) : 0;
+                            return `${context.raw} setups (${percent}%)`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { font: { size: 10 } }
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: { stepSize: 1, font: { size: 10 } },
+                    grid: { color: 'rgba(0,0,0,0.05)' }
+                }
+            }
+        }
+    });
+}
+
 // Expor funções globalmente
 window.editarSetup = editarSetup;
 window.excluirSetup = excluirSetup;
 window.setupSetupMaquinasPage = setupSetupMaquinasPage;
+window.renderSetupCharts = renderSetupCharts;
 
 // =========================================
 // FIM DO MÓDULO SETUP DE MÁQUINAS

@@ -248,6 +248,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- SheetJS (XLSX) para importação/exportação de Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- html2pdf.js para exportação de PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -2022,8 +2024,83 @@
                             </div>
                         </div>
 
+                        <!-- Seção de Gráficos -->
+                        <div class="p-4 border-t border-gray-100">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                                    <i data-lucide="bar-chart-3" class="w-5 h-5 text-orange-600"></i>
+                                    Análise Visual de Setups
+                                </h3>
+                                <button id="toggle-setup-charts" class="text-sm text-orange-600 hover:text-orange-700 font-medium flex items-center gap-1 transition">
+                                    <i data-lucide="chevron-up" class="w-4 h-4" id="setup-charts-toggle-icon"></i>
+                                    <span id="setup-charts-toggle-text">Ocultar Gráficos</span>
+                                </button>
+                            </div>
+                            
+                            <div id="setup-charts-container">
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                                    <!-- Gráfico 1: Distribuição por Tipo -->
+                                    <div class="bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                                        <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                                            <i data-lucide="pie-chart" class="w-4 h-4 text-orange-500"></i>
+                                            Distribuição por Tipo
+                                        </h4>
+                                        <div class="relative h-64 flex items-center justify-center">
+                                            <canvas id="setup-chart-tipo"></canvas>
+                                        </div>
+                                    </div>
+
+                                    <!-- Gráfico 2: Setups por Máquina -->
+                                    <div class="bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                                        <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                                            <i data-lucide="bar-chart-2" class="w-4 h-4 text-blue-500"></i>
+                                            Quantidade por Máquina
+                                        </h4>
+                                        <div class="relative h-64">
+                                            <canvas id="setup-chart-maquina"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                    <!-- Gráfico 3: Tempo por Máquina -->
+                                    <div class="bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                                        <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                                            <i data-lucide="clock" class="w-4 h-4 text-amber-500"></i>
+                                            Tempo Total por Máquina (minutos)
+                                        </h4>
+                                        <div class="relative h-64">
+                                            <canvas id="setup-chart-tempo-maquina"></canvas>
+                                        </div>
+                                    </div>
+
+                                    <!-- Gráfico 4: Evolução Diária -->
+                                    <div class="bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                                        <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                                            <i data-lucide="trending-up" class="w-4 h-4 text-green-500"></i>
+                                            Evolução Diária de Setups
+                                        </h4>
+                                        <div class="relative h-64">
+                                            <canvas id="setup-chart-diario"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Gráfico 5: Distribuição de Tempo -->
+                                <div class="mt-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                                    <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                                        <i data-lucide="timer" class="w-4 h-4 text-purple-500"></i>
+                                        Distribuição de Tempo de Setup
+                                    </h4>
+                                    <div class="relative h-64">
+                                        <canvas id="setup-chart-distribuicao-tempo"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Tabela de Setups -->
-                        <div class="p-4">
+                        <div class="p-4 border-t border-gray-100">
                             <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                                 <i data-lucide="table" class="w-5 h-5 text-orange-600"></i>
                                 Registros de Setup
@@ -4258,6 +4335,7 @@
                                         </div>
                                         <span>Paradas</span>
                                     </button>
+                                    <!-- Subaba Relatórios removida - Otimização 02/2026 -->
                                     <!-- Subaba Analytics IA removida - Otimização 02/12/2025 -->
                                 </nav>
                             </div>
@@ -4784,10 +4862,60 @@
                                         <h2 class="text-lg font-semibold text-gray-800">Análise de Perdas & Borras</h2>
                                         <p class="text-sm text-gray-500">Monitore refugos e perdas de matéria-prima</p>
                                     </div>
-                                    <button onclick="openModal('quick-losses-modal')" class="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all">
-                                        <i data-lucide="plus" class="w-5 h-5"></i>
-                                        Registrar Perda
-                                    </button>
+                                    <div class="flex items-center gap-2">
+                                        <button onclick="generateLossesReport()" class="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all">
+                                            <i data-lucide="file-text" class="w-5 h-5"></i>
+                                            Relatório Detalhado
+                                        </button>
+                                        <button onclick="openModal('quick-losses-modal')" class="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all">
+                                            <i data-lucide="plus" class="w-5 h-5"></i>
+                                            Registrar Perda
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Filtros de Rastreabilidade -->
+                                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-6">
+                                    <div class="flex items-center gap-2 mb-3">
+                                        <div class="p-1.5 bg-red-100 rounded-lg">
+                                            <i data-lucide="filter" class="w-4 h-4 text-red-600"></i>
+                                        </div>
+                                        <h3 class="text-sm font-semibold text-gray-700">Filtros de Rastreabilidade</h3>
+                                        <button onclick="clearLossesFilters()" class="ml-auto text-xs text-gray-500 hover:text-red-600 transition flex items-center gap-1">
+                                            <i data-lucide="x-circle" class="w-3 h-3"></i>
+                                            Limpar filtros
+                                        </button>
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                        <!-- Filtro por OP -->
+                                        <div>
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Ordem (OP)</label>
+                                            <input type="text" id="losses-filter-op" placeholder="Buscar por OP..." class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition">
+                                        </div>
+                                        <!-- Filtro por Produto -->
+                                        <div>
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Produto (Cód.)</label>
+                                            <input type="text" id="losses-filter-product" placeholder="Código do produto..." class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition">
+                                        </div>
+                                        <!-- Filtro por Motivo -->
+                                        <div>
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Motivo</label>
+                                            <select id="losses-filter-reason" class="w-full appearance-none bg-gray-50 border border-gray-200 rounded-lg py-2 pl-3 pr-8 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition cursor-pointer">
+                                                <option value="all">Todos os motivos</option>
+                                            </select>
+                                        </div>
+                                        <!-- Botão Filtrar -->
+                                        <div class="flex items-end">
+                                            <button onclick="applyLossesFilters()" class="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:shadow-lg transition-all text-sm">
+                                                <i data-lucide="search" class="w-4 h-4"></i>
+                                                Filtrar
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <!-- Tags de filtros ativos -->
+                                    <div id="losses-active-filters" class="hidden mt-3 flex flex-wrap items-center gap-2">
+                                        <span class="text-xs text-gray-500">Filtros ativos:</span>
+                                    </div>
                                 </div>
 
                                 <!-- KPIs Principais - Grid Superior -->
@@ -4851,17 +4979,27 @@
                                         </div>
                                     </div>
                                     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition">
-                                        <div class="flex items-center gap-3 mb-4">
-                                            <div class="p-2 bg-orange-100 rounded-lg">
-                                                <i data-lucide="cpu" class="w-4 h-4 text-orange-600"></i>
+                                        <div class="flex items-center justify-between mb-4">
+                                            <div class="flex items-center gap-3">
+                                                <div class="p-2 bg-orange-100 rounded-lg">
+                                                    <i data-lucide="cpu" class="w-4 h-4 text-orange-600"></i>
+                                                </div>
+                                                <div>
+                                                    <h3 id="losses-machine-product-title" class="font-semibold text-gray-800">Refugos por Máquina</h3>
+                                                    <p id="losses-machine-product-subtitle" class="text-xs text-gray-500">Comparativo máquinas</p>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <h3 class="font-semibold text-gray-800">Refugos por Máquina</h3>
-                                                <p class="text-xs text-gray-500">Comparativo máquinas</p>
+                                            <!-- Toggle Máquina/Produto -->
+                                            <div class="flex items-center bg-gray-100 rounded-lg p-1" id="losses-chart-toggle">
+                                                <button class="px-3 py-1 text-xs font-medium rounded-md transition-all bg-white shadow text-gray-800" data-losses-chart="machine" onclick="toggleLossesChart('machine')">Máquina</button>
+                                                <button class="px-3 py-1 text-xs font-medium rounded-md transition-all text-gray-500 hover:text-gray-700" data-losses-chart="product" onclick="toggleLossesChart('product')">Produto</button>
                                             </div>
                                         </div>
-                                        <div class="relative" style="height: 300px;">
+                                        <div id="losses-machine-chart-wrapper" class="relative" style="height: 300px;">
                                             <canvas id="losses-by-machine-chart" class="w-full h-full"></canvas>
+                                        </div>
+                                        <div id="losses-product-chart-wrapper" class="relative hidden" style="height: 300px;">
+                                            <canvas id="losses-by-product-chart" class="w-full h-full"></canvas>
                                         </div>
                                     </div>
                                 </div>
@@ -5076,11 +5214,59 @@
                                         </div>
                                     </div>
                                 </div>
+
+                                <!-- Tabela de Rastreabilidade Detalhada -->
+                                <div id="losses-traceability-section" class="hidden mt-6">
+                                    <div class="bg-white rounded-2xl shadow-sm border border-indigo-200 p-5 hover:shadow-md transition">
+                                        <div class="flex items-center justify-between mb-4">
+                                            <div class="flex items-center gap-3">
+                                                <div class="p-2 bg-indigo-100 rounded-lg">
+                                                    <i data-lucide="search" class="w-5 h-5 text-indigo-700"></i>
+                                                </div>
+                                                <div>
+                                                    <h3 class="font-semibold text-gray-800">Resultados da Filtragem</h3>
+                                                    <p id="losses-filter-results-info" class="text-xs text-gray-500">0 registros encontrados</p>
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <button onclick="exportFilteredLosses()" class="flex items-center gap-2 px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg text-xs font-medium transition">
+                                                    <i data-lucide="download" class="w-3 h-3"></i>
+                                                    Exportar CSV
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="overflow-x-auto">
+                                            <table class="w-full text-sm">
+                                                <thead>
+                                                    <tr class="bg-indigo-50 text-indigo-800">
+                                                        <th class="px-3 py-2.5 text-left font-semibold rounded-l-lg text-xs">Data</th>
+                                                        <th class="px-3 py-2.5 text-left font-semibold text-xs">Máquina</th>
+                                                        <th class="px-3 py-2.5 text-left font-semibold text-xs">OP</th>
+                                                        <th class="px-3 py-2.5 text-left font-semibold text-xs">Produto</th>
+                                                        <th class="px-3 py-2.5 text-left font-semibold text-xs">Motivo</th>
+                                                        <th class="px-3 py-2.5 text-center font-semibold text-xs">Qtd (pçs)</th>
+                                                        <th class="px-3 py-2.5 text-center font-semibold text-xs">Peso (kg)</th>
+                                                        <th class="px-3 py-2.5 text-center font-semibold rounded-r-lg text-xs">Turno</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="losses-traceability-tbody" class="divide-y divide-indigo-100">
+                                                    <tr><td colspan="8" class="px-4 py-6 text-center text-gray-400 text-sm">Aplique filtros para ver resultados</td></tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <div class="flex items-center justify-between mt-4 pt-4 border-t border-indigo-100">
+                                            <p class="text-xs text-indigo-600">
+                                                Mostrando <span id="losses-trace-showing">0</span> de <span id="losses-trace-total">0</span> registros
+                                            </p>
+                                            <div class="flex items-center gap-2">
+                                                <button id="losses-trace-prev" onclick="lossesTracePageChange(-1)" class="px-3 py-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded text-xs font-medium transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>Anterior</button>
+                                                <span id="losses-trace-page" class="text-xs text-indigo-700 font-medium">Página 1</span>
+                                                <button id="losses-trace-next" onclick="lossesTracePageChange(1)" class="px-3 py-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded text-xs font-medium transition disabled:opacity-50 disabled:cursor-not-allowed">Próxima</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-
-
-
-
                             <!-- ========== ANLISE DE Paradas ========== -->
                             <div id="downtime-view" class="analysis-view hidden">
                                 <!-- Header com Descrição -->
@@ -5262,6 +5448,8 @@
 
                                 <!-- Paradas Longas Programadas - Removida (Unificação 02/2026) -->
                             </div>
+
+                            <!-- Subaba Relatórios removida - Otimização 02/2026 (viabilidade será analisada futuramente) -->
 
                             <!-- Analytics IA removido - Otimização 02/12/2025 -->
                         
@@ -7095,9 +7283,14 @@
                         <p class="text-xs text-gray-500">Clique na máquina para iniciar ou finalizar uma parada</p>
                     </div>
                 </div>
-                <button onclick="closeStandaloneModal()" class="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-                    <i data-lucide="x" class="w-5 h-5 text-gray-500"></i>
-                </button>
+                <div class="flex items-center gap-2">
+                    <button onclick="openBatchDowntimeModal()" class="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-semibold rounded-lg shadow-sm hover:shadow-md transition-all" title="Parada em Lote (ex: Queda de Energia)">
+                        <i data-lucide="zap" class="w-4 h-4"></i> Parada em Lote
+                    </button>
+                    <button onclick="closeStandaloneModal()" class="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                        <i data-lucide="x" class="w-5 h-5 text-gray-500"></i>
+                    </button>
+                </div>
             </div>
             <!-- Legenda -->
             <div class="px-6 py-2 bg-gray-50 border-b border-gray-100 flex items-center gap-4 text-xs shrink-0">
@@ -7154,6 +7347,81 @@
                     </button>
                     <button type="submit" class="flex-1 py-2.5 px-4 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all">
                         <i data-lucide="pause-circle" class="w-4 h-4 inline mr-1"></i> Iniciar Parada
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de Parada em Lote (Todas as Máquinas) -->
+    <div id="batch-downtime-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[60] flex justify-center items-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-xl border border-gray-100 max-h-[90vh] overflow-hidden flex flex-col">
+            <!-- Header -->
+            <div class="flex justify-between items-center border-b border-gray-100 px-6 py-4 shrink-0 bg-gradient-to-r from-amber-50 to-orange-50">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl">
+                        <i data-lucide="zap" class="w-5 h-5 text-white"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">Parada em Lote</h3>
+                        <p class="text-xs text-gray-500">Registrar parada em múltiplas máquinas simultaneamente</p>
+                    </div>
+                </div>
+                <button onclick="closeBatchDowntimeModal()" class="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                    <i data-lucide="x" class="w-5 h-5 text-gray-500"></i>
+                </button>
+            </div>
+            <!-- Form -->
+            <form id="batch-downtime-form" class="flex flex-col flex-1 overflow-hidden">
+                <!-- Campos fixos -->
+                <div class="p-4 space-y-4 border-b border-gray-100 shrink-0">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Código do Operador <span class="text-red-500">*</span></label>
+                        <input type="number" id="batch-downtime-user" name="user" min="0" max="999" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all" placeholder="Digite seu código (ex: 42)" required inputmode="numeric">
+                        <p class="text-xs text-gray-400 mt-1" id="batch-downtime-user-name">Digite o código para ver o nome</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Motivo da Parada <span class="text-red-500">*</span></label>
+                        <select id="batch-downtime-reason" name="reason" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all" required>
+                            <option value="">Selecione o motivo...</option>
+                            <!-- Populado dinamicamente -->
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Observações</label>
+                        <textarea id="batch-downtime-obs" name="observations" rows="2" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all" placeholder="Ex: Queda de energia afetou toda a fábrica"></textarea>
+                    </div>
+                </div>
+                <!-- Seleção de Máquinas -->
+                <div class="px-4 py-3 bg-gray-50 border-b border-gray-100 shrink-0 flex flex-col gap-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-semibold text-gray-700">Selecionar Máquinas:</span>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs text-gray-500"><span id="batch-selected-count">0</span> selecionadas</span>
+                            <button type="button" onclick="batchSelectAllMachines()" class="text-xs text-amber-600 hover:text-amber-700 font-semibold">Selecionar Todas</button>
+                            <button type="button" onclick="batchDeselectAllMachines()" class="text-xs text-gray-500 hover:text-gray-700">Limpar</button>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4 text-[10px] text-gray-500">
+                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-emerald-400 rounded-sm"></span> Produzindo (disponível)</span>
+                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-amber-400 rounded-sm"></span> Selecionada</span>
+                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-red-400 rounded-sm"></span> Parada Ativa</span>
+                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-gray-300 rounded-sm"></span> Sem OP</span>
+                    </div>
+                </div>
+                <!-- Grid de Máquinas com Checkbox -->
+                <div class="p-4 overflow-y-auto flex-1">
+                    <div id="batch-machine-grid" class="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                        <!-- Populado via JS -->
+                    </div>
+                </div>
+                <!-- Footer/Botões -->
+                <div class="flex gap-3 p-4 border-t border-gray-100 bg-gray-50 shrink-0">
+                    <button type="button" onclick="closeBatchDowntimeModal()" class="flex-1 py-2.5 px-4 bg-gray-200 text-gray-700 rounded-xl font-medium text-sm hover:bg-gray-300 transition-colors">
+                        Cancelar
+                    </button>
+                    <button type="submit" id="batch-downtime-submit-btn" class="flex-1 py-2.5 px-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        <i data-lucide="zap" class="w-4 h-4 inline mr-1"></i> Iniciar Paradas em Lote
                     </button>
                 </div>
             </form>
