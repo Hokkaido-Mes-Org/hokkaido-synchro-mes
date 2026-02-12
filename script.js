@@ -1471,7 +1471,9 @@ document.addEventListener('DOMContentLoaded', function() {
             'quick-downtime-user': 'quick-downtime-user-name',
             'manual-production-user': 'manual-production-user-name',
             'manual-losses-user': 'manual-losses-user-name',
-            'manual-downtime-user': 'manual-downtime-user-name'
+            'manual-downtime-user': 'manual-downtime-user-name',
+            'batch-downtime-user': 'batch-downtime-user-name',
+            'standalone-downtime-user': 'standalone-downtime-user-name'
         };
         
         const displayElement = document.getElementById(displayIdMap[inputId]);
@@ -25772,17 +25774,8 @@ ${content.innerHTML}
             });
         });
         
-        // Aba Paradas - botões
-        const btnAnalyze = document.getElementById('admin-btn-analyze');
-        const btnFix = document.getElementById('admin-btn-fix');
-        const btnClearLog = document.getElementById('admin-btn-clear-log');
-        
-        if (btnAnalyze) btnAnalyze.addEventListener('click', adminAnalyzeDowntimeProblems);
-        if (btnFix) btnFix.addEventListener('click', adminFixDowntimeRecords);
-        if (btnClearLog) btnClearLog.addEventListener('click', () => {
-            const logContainer = document.getElementById('admin-log-container');
-            if (logContainer) logContainer.innerHTML = '';
-        });
+        // Aba Paradas - nova gestão de paradas
+        setupAdminParadasGestao();
         
         // Aba Ordens - nova estrutura simplificada
         const btnBuscarOP = document.getElementById('admin-btn-buscar-op');
@@ -25925,6 +25918,491 @@ ${content.innerHTML}
         container.scrollTop = container.scrollHeight;
     }
     
+    // ============================================
+    // NOVA GESTÃO DE PARADAS - Admin Dados
+    // ============================================
+    
+    let adminParadasDados = [];
+    let adminParadasPaginaAtual = 1;
+    const ADMIN_PARADAS_POR_PAGINA = 20;
+    let adminParadaEmEdicao = null;
+    
+    function setupAdminParadasGestao() {
+        console.log('[ADMIN-PARADAS] Inicializando gestão de paradas...');
+        
+        // Configurar filtro de período
+        const periodoSelect = document.getElementById('admin-paradas-periodo');
+        const customDates = document.getElementById('admin-paradas-custom-dates');
+        const customDatesFim = document.getElementById('admin-paradas-custom-dates-fim');
+        
+        if (periodoSelect) {
+            periodoSelect.addEventListener('change', () => {
+                const isCustom = periodoSelect.value === 'custom';
+                customDates?.classList.toggle('hidden', !isCustom);
+                customDatesFim?.classList.toggle('hidden', !isCustom);
+            });
+        }
+        
+        // Popular select de máquinas
+        const selectMaquina = document.getElementById('admin-paradas-maquina');
+        if (selectMaquina && window.databaseModule?.machineDatabase) {
+            let options = '<option value="">Todas</option>';
+            window.databaseModule.machineDatabase.forEach(m => {
+                const id = normalizeMachineId(m.id);
+                options += `<option value="${id}">${id}</option>`;
+            });
+            selectMaquina.innerHTML = options;
+        }
+        
+        // Botão buscar
+        const btnBuscar = document.getElementById('admin-paradas-buscar');
+        if (btnBuscar) btnBuscar.addEventListener('click', adminParadasBuscar);
+        
+        // Paginação
+        const btnAnterior = document.getElementById('admin-paradas-pag-anterior');
+        const btnProxima = document.getElementById('admin-paradas-pag-proxima');
+        if (btnAnterior) btnAnterior.addEventListener('click', () => {
+            if (adminParadasPaginaAtual > 1) {
+                adminParadasPaginaAtual--;
+                adminParadasRenderTabela();
+            }
+        });
+        if (btnProxima) btnProxima.addEventListener('click', () => {
+            const totalPaginas = Math.ceil(adminParadasDados.length / ADMIN_PARADAS_POR_PAGINA);
+            if (adminParadasPaginaAtual < totalPaginas) {
+                adminParadasPaginaAtual++;
+                adminParadasRenderTabela();
+            }
+        });
+        
+        // Check all
+        const checkAll = document.getElementById('admin-paradas-check-all');
+        if (checkAll) checkAll.addEventListener('change', adminParadasToggleAll);
+        
+        // Exportar
+        const btnExportar = document.getElementById('admin-paradas-exportar');
+        if (btnExportar) btnExportar.addEventListener('click', adminParadasExportarCSV);
+        
+        // Modal
+        setupAdminParadasModal();
+        
+        // Calcular duração ao editar horários
+        const editInicio = document.getElementById('admin-paradas-edit-inicio');
+        const editFim = document.getElementById('admin-paradas-edit-fim');
+        if (editInicio) editInicio.addEventListener('change', adminParadasCalcDuracao);
+        if (editFim) editFim.addEventListener('change', adminParadasCalcDuracao);
+    }
+    
+    function setupAdminParadasModal() {
+        const modal = document.getElementById('admin-paradas-modal');
+        const btnClose = document.getElementById('admin-paradas-modal-close');
+        const btnCancel = document.getElementById('admin-paradas-modal-cancel');
+        const form = document.getElementById('admin-paradas-form');
+        
+        const fecharModal = () => {
+            modal?.classList.add('hidden');
+            adminParadaEmEdicao = null;
+        };
+        
+        if (btnClose) btnClose.addEventListener('click', fecharModal);
+        if (btnCancel) btnCancel.addEventListener('click', fecharModal);
+        if (modal) modal.addEventListener('click', (e) => {
+            if (e.target === modal) fecharModal();
+        });
+        
+        if (form) form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await adminParadasSalvar();
+        });
+    }
+    
+    async function adminParadasBuscar() {
+        const periodo = document.getElementById('admin-paradas-periodo')?.value || '7days';
+        let dataInicio, dataFim;
+        const hoje = new Date();
+        const hojeStr = getProductionDateString(hoje);
+        
+        switch (periodo) {
+            case 'today':
+                dataInicio = dataFim = hojeStr;
+                break;
+            case 'yesterday':
+                const ontem = new Date(hoje);
+                ontem.setDate(ontem.getDate() - 1);
+                dataInicio = dataFim = getProductionDateString(ontem);
+                break;
+            case '7days':
+                const seteDias = new Date(hoje);
+                seteDias.setDate(seteDias.getDate() - 7);
+                dataInicio = getProductionDateString(seteDias);
+                dataFim = hojeStr;
+                break;
+            case '30days':
+                const trintaDias = new Date(hoje);
+                trintaDias.setDate(trintaDias.getDate() - 30);
+                dataInicio = getProductionDateString(trintaDias);
+                dataFim = hojeStr;
+                break;
+            case 'custom':
+                dataInicio = document.getElementById('admin-paradas-data-inicio')?.value;
+                dataFim = document.getElementById('admin-paradas-data-fim')?.value;
+                if (!dataInicio || !dataFim) {
+                    alert('Selecione as datas do período personalizado');
+                    return;
+                }
+                break;
+        }
+        
+        const filtroMaquina = document.getElementById('admin-paradas-maquina')?.value || '';
+        const filtroStatus = document.getElementById('admin-paradas-status')?.value || '';
+        
+        try {
+            console.log('[ADMIN-PARADAS] Buscando paradas de', dataInicio, 'a', dataFim);
+            
+            let query = db.collection('downtime_entries')
+                .where('date', '>=', dataInicio)
+                .where('date', '<=', dataFim)
+                .orderBy('date', 'desc');
+            
+            const snapshot = await query.get();
+            let paradas = [];
+            
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                
+                // Filtro de máquina
+                const machineId = normalizeMachineId(data.machine || data.machine_id || '');
+                if (filtroMaquina && machineId !== filtroMaquina) return;
+                
+                // Filtro de status
+                const isActive = data.status === 'active' || data.isActive === true;
+                if (filtroStatus === 'active' && !isActive) return;
+                if (filtroStatus === 'finished' && isActive) return;
+                
+                paradas.push({
+                    id: doc.id,
+                    ...data,
+                    machineId: machineId,
+                    isActive: isActive
+                });
+            });
+            
+            // Ordenar por data + hora de início
+            paradas.sort((a, b) => {
+                if (a.date !== b.date) return b.date.localeCompare(a.date);
+                const horaA = a.start_time || a.startTime || '00:00';
+                const horaB = b.start_time || b.startTime || '00:00';
+                return horaB.localeCompare(horaA);
+            });
+            
+            adminParadasDados = paradas;
+            adminParadasPaginaAtual = 1;
+            adminParadasRenderStats();
+            adminParadasRenderTabela();
+            
+            console.log('[ADMIN-PARADAS] Encontradas', paradas.length, 'paradas');
+            
+        } catch (error) {
+            console.error('[ADMIN-PARADAS] Erro ao buscar:', error);
+            alert('Erro ao buscar paradas: ' + error.message);
+        }
+    }
+    
+    function adminParadasRenderStats() {
+        const paradas = adminParadasDados;
+        const ativas = paradas.filter(p => p.isActive);
+        const finalizadas = paradas.filter(p => !p.isActive);
+        
+        let tempoTotal = 0;
+        paradas.forEach(p => {
+            tempoTotal += p.duration || p.durationMinutes || 0;
+        });
+        
+        const tempoMedio = paradas.length > 0 ? Math.round(tempoTotal / paradas.length) : 0;
+        const horasTotal = Math.floor(tempoTotal / 60);
+        const minsTotal = tempoTotal % 60;
+        
+        document.getElementById('admin-paradas-stat-total').textContent = paradas.length;
+        document.getElementById('admin-paradas-stat-ativas').textContent = ativas.length;
+        document.getElementById('admin-paradas-stat-finalizadas').textContent = finalizadas.length;
+        document.getElementById('admin-paradas-stat-tempo').textContent = horasTotal > 0 
+            ? `${horasTotal}h${minsTotal > 0 ? ` ${minsTotal}m` : ''}` 
+            : `${minsTotal}min`;
+        document.getElementById('admin-paradas-stat-medio').textContent = `${tempoMedio}min`;
+    }
+    
+    function adminParadasRenderTabela() {
+        const tbody = document.getElementById('admin-paradas-tbody');
+        if (!tbody) return;
+        
+        const totalRegistros = adminParadasDados.length;
+        const totalPaginas = Math.ceil(totalRegistros / ADMIN_PARADAS_POR_PAGINA) || 1;
+        
+        if (adminParadasPaginaAtual > totalPaginas) adminParadasPaginaAtual = totalPaginas;
+        if (adminParadasPaginaAtual < 1) adminParadasPaginaAtual = 1;
+        
+        const inicio = (adminParadasPaginaAtual - 1) * ADMIN_PARADAS_POR_PAGINA;
+        const fim = Math.min(inicio + ADMIN_PARADAS_POR_PAGINA, totalRegistros);
+        const paradasPagina = adminParadasDados.slice(inicio, fim);
+        
+        if (paradasPagina.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="9" class="text-center py-12 text-gray-400">
+                        <i data-lucide="pause-circle" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                        <p>Nenhuma parada encontrada</p>
+                    </td>
+                </tr>
+            `;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            adminParadasAtualizarPaginacao(0, 0, 0, 1);
+            return;
+        }
+        
+        tbody.innerHTML = paradasPagina.map(p => {
+            const dataFormatada = p.date ? p.date.split('-').reverse().join('/') : '-';
+            const horaInicio = p.start_time || p.startTime || '-';
+            const horaFim = p.end_time || p.endTime || '-';
+            const duracao = p.duration || p.durationMinutes || 0;
+            const duracaoFormatada = duracao >= 60 ? `${Math.floor(duracao/60)}h ${duracao%60}m` : `${duracao}min`;
+            const motivo = p.reason || p.motivo || 'Não informado';
+            const statusClass = p.isActive ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800';
+            const statusLabel = p.isActive ? 'Ativa' : 'Finalizada';
+            
+            return `
+                <tr class="hover:bg-gray-50 transition-colors" data-id="${p.id}">
+                    <td class="px-3 py-2.5">
+                        <input type="checkbox" class="admin-paradas-check rounded border-gray-300 text-blue-600 focus:ring-blue-500" data-id="${p.id}">
+                    </td>
+                    <td class="px-3 py-2.5 text-sm font-medium text-gray-800">${dataFormatada}</td>
+                    <td class="px-3 py-2.5">
+                        <span class="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded-lg text-xs font-bold">
+                            ${p.machineId}
+                        </span>
+                    </td>
+                    <td class="px-3 py-2.5 text-sm text-gray-700 max-w-xs truncate" title="${motivo}">${motivo}</td>
+                    <td class="px-3 py-2.5 text-center text-sm font-medium text-gray-600">${horaInicio}</td>
+                    <td class="px-3 py-2.5 text-center text-sm font-medium text-gray-600">${horaFim}</td>
+                    <td class="px-3 py-2.5 text-center">
+                        <span class="px-2 py-1 bg-orange-100 text-orange-700 rounded-lg text-xs font-bold">${duracaoFormatada}</span>
+                    </td>
+                    <td class="px-3 py-2.5 text-center">
+                        <span class="px-2 py-1 rounded-full text-xs font-semibold ${statusClass}">${statusLabel}</span>
+                    </td>
+                    <td class="px-3 py-2.5 text-center">
+                        <div class="flex items-center justify-center gap-1">
+                            <button onclick="adminParadasEditar('${p.id}')" class="p-1.5 text-blue-600 hover:bg-blue-100 rounded-lg transition" title="Editar">
+                                <i data-lucide="pencil" class="w-4 h-4"></i>
+                            </button>
+                            <button onclick="adminParadasExcluir('${p.id}')" class="p-1.5 text-red-600 hover:bg-red-100 rounded-lg transition" title="Excluir">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        adminParadasAtualizarPaginacao(inicio + 1, fim, totalRegistros, totalPaginas);
+        adminParadasAtualizarContagem();
+    }
+    
+    function adminParadasAtualizarPaginacao(inicio, fim, total, totalPaginas) {
+        document.getElementById('admin-paradas-pag-inicio').textContent = total > 0 ? inicio : 0;
+        document.getElementById('admin-paradas-pag-fim').textContent = fim;
+        document.getElementById('admin-paradas-pag-total').textContent = total;
+        document.getElementById('admin-paradas-pag-atual').textContent = adminParadasPaginaAtual;
+        document.getElementById('admin-paradas-pag-total-paginas').textContent = totalPaginas;
+        
+        const btnAnterior = document.getElementById('admin-paradas-pag-anterior');
+        const btnProxima = document.getElementById('admin-paradas-pag-proxima');
+        if (btnAnterior) btnAnterior.disabled = adminParadasPaginaAtual <= 1;
+        if (btnProxima) btnProxima.disabled = adminParadasPaginaAtual >= totalPaginas;
+    }
+    
+    function adminParadasToggleAll(e) {
+        const checked = e.target.checked;
+        document.querySelectorAll('.admin-paradas-check').forEach(cb => {
+            cb.checked = checked;
+        });
+        adminParadasAtualizarContagem();
+    }
+    
+    function adminParadasAtualizarContagem() {
+        const selecionados = document.querySelectorAll('.admin-paradas-check:checked').length;
+        const el = document.getElementById('admin-paradas-selecionados');
+        if (el) el.textContent = selecionados;
+    }
+    
+    window.adminParadasEditar = async function(id) {
+        const parada = adminParadasDados.find(p => p.id === id);
+        if (!parada) {
+            alert('Parada não encontrada');
+            return;
+        }
+        
+        adminParadaEmEdicao = id;
+        
+        document.getElementById('admin-paradas-edit-id').value = id;
+        document.getElementById('admin-paradas-edit-maquina').value = parada.machineId || '';
+        document.getElementById('admin-paradas-edit-data').value = parada.date || '';
+        document.getElementById('admin-paradas-edit-motivo').value = parada.reason || '';
+        document.getElementById('admin-paradas-edit-motivo-custom').value = parada.reason || '';
+        document.getElementById('admin-paradas-edit-inicio').value = parada.start_time || parada.startTime || '';
+        document.getElementById('admin-paradas-edit-fim').value = parada.end_time || parada.endTime || '';
+        
+        adminParadasCalcDuracao();
+        
+        const modal = document.getElementById('admin-paradas-modal');
+        modal?.classList.remove('hidden');
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    };
+    
+    function adminParadasCalcDuracao() {
+        const inicio = document.getElementById('admin-paradas-edit-inicio')?.value;
+        const fim = document.getElementById('admin-paradas-edit-fim')?.value;
+        const duracaoEl = document.getElementById('admin-paradas-edit-duracao');
+        
+        if (!inicio || !fim || !duracaoEl) {
+            if (duracaoEl) duracaoEl.textContent = '0 min';
+            return;
+        }
+        
+        const [hI, mI] = inicio.split(':').map(Number);
+        const [hF, mF] = fim.split(':').map(Number);
+        
+        let minInicio = hI * 60 + mI;
+        let minFim = hF * 60 + mF;
+        
+        // Se fim < início, assumir que passou da meia-noite
+        if (minFim < minInicio) minFim += 24 * 60;
+        
+        const duracao = minFim - minInicio;
+        const horas = Math.floor(duracao / 60);
+        const mins = duracao % 60;
+        
+        duracaoEl.textContent = horas > 0 ? `${horas}h ${mins}min` : `${mins} min`;
+    }
+    
+    async function adminParadasSalvar() {
+        const id = document.getElementById('admin-paradas-edit-id')?.value;
+        if (!id) return;
+        
+        const motivoSelect = document.getElementById('admin-paradas-edit-motivo')?.value;
+        const motivoCustom = document.getElementById('admin-paradas-edit-motivo-custom')?.value;
+        const motivo = motivoSelect === 'Outro' || !motivoSelect ? motivoCustom : motivoSelect;
+        
+        const data = document.getElementById('admin-paradas-edit-data')?.value;
+        const inicio = document.getElementById('admin-paradas-edit-inicio')?.value;
+        const fim = document.getElementById('admin-paradas-edit-fim')?.value;
+        
+        // Calcular duração
+        let duracao = 0;
+        if (inicio && fim) {
+            const [hI, mI] = inicio.split(':').map(Number);
+            const [hF, mF] = fim.split(':').map(Number);
+            let minInicio = hI * 60 + mI;
+            let minFim = hF * 60 + mF;
+            if (minFim < minInicio) minFim += 24 * 60;
+            duracao = minFim - minInicio;
+        }
+        
+        const updates = {
+            reason: motivo,
+            motivo: motivo,
+            date: data,
+            start_time: inicio,
+            startTime: inicio,
+            end_time: fim,
+            endTime: fim,
+            duration: duracao,
+            durationMinutes: duracao,
+            lastEditedAt: new Date().toISOString(),
+            lastEditedBy: getSetupCurrentUserName ? getSetupCurrentUserName() : 'Admin'
+        };
+        
+        // Se tem hora de fim, marcar como finalizada
+        if (fim) {
+            updates.status = 'finished';
+            updates.isActive = false;
+        }
+        
+        try {
+            await db.collection('downtime_entries').doc(id).update(updates);
+            
+            // Atualizar dados locais
+            const idx = adminParadasDados.findIndex(p => p.id === id);
+            if (idx !== -1) {
+                adminParadasDados[idx] = { ...adminParadasDados[idx], ...updates, machineId: adminParadasDados[idx].machineId };
+            }
+            
+            // Fechar modal e atualizar
+            document.getElementById('admin-paradas-modal')?.classList.add('hidden');
+            adminParadaEmEdicao = null;
+            adminParadasRenderStats();
+            adminParadasRenderTabela();
+            
+            alert('Parada atualizada com sucesso!');
+            
+        } catch (error) {
+            console.error('[ADMIN-PARADAS] Erro ao salvar:', error);
+            alert('Erro ao salvar: ' + error.message);
+        }
+    }
+    
+    window.adminParadasExcluir = async function(id) {
+        if (!confirm('Tem certeza que deseja excluir esta parada?')) return;
+        
+        try {
+            await db.collection('downtime_entries').doc(id).delete();
+            
+            // Remover dos dados locais
+            adminParadasDados = adminParadasDados.filter(p => p.id !== id);
+            adminParadasRenderStats();
+            adminParadasRenderTabela();
+            
+            alert('Parada excluída com sucesso!');
+            
+        } catch (error) {
+            console.error('[ADMIN-PARADAS] Erro ao excluir:', error);
+            alert('Erro ao excluir: ' + error.message);
+        }
+    };
+    
+    function adminParadasExportarCSV() {
+        if (adminParadasDados.length === 0) {
+            alert('Nenhum dado para exportar');
+            return;
+        }
+        
+        const headers = ['Data', 'Máquina', 'Motivo', 'Hora Início', 'Hora Fim', 'Duração (min)', 'Status'];
+        const rows = adminParadasDados.map(p => [
+            p.date || '',
+            p.machineId || '',
+            (p.reason || p.motivo || '').replace(/"/g, '""'),
+            p.start_time || p.startTime || '',
+            p.end_time || p.endTime || '',
+            p.duration || p.durationMinutes || 0,
+            p.isActive ? 'Ativa' : 'Finalizada'
+        ]);
+        
+        let csv = headers.join(';') + '\n';
+        rows.forEach(row => {
+            csv += row.map(cell => `"${cell}"`).join(';') + '\n';
+        });
+        
+        const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `paradas_${new Date().toISOString().split('T')[0]}.csv`;
+        link.click();
+    }
+    
+    // ============================================
+    // FIM - NOVA GESTÃO DE PARADAS
+    // ============================================
+
     async function adminAnalyzeDowntimeProblems() {
         adminLog('Iniciando análise de registros de paradas...', 'info');
         
@@ -34014,24 +34492,22 @@ ${content.innerHTML}
             const isDisabled = !isAvailable;
 
             const card = document.createElement('div');
-            card.className = 'relative rounded-xl p-3 text-center transition-all duration-200 border-2 select-none flex flex-col items-center';
+            card.className = 'relative rounded-lg p-1.5 sm:p-2 text-center transition-all duration-200 border-2 select-none flex flex-col items-center justify-center min-h-[50px] sm:min-h-[60px]';
             card.dataset.machineId = mid;
 
             if (hasActiveDowntime) {
                 // Máquina já com parada ativa
                 card.className += ' bg-red-50 border-red-200 opacity-60 cursor-not-allowed';
                 card.innerHTML = `
-                    <div class="text-sm font-bold text-red-500">${mid}</div>
-                    <div class="text-[10px] text-red-400 mt-0.5 truncate">${m.model}</div>
-                    <div class="text-[10px] text-red-400 mt-1">⏸ Parada Ativa</div>
+                    <div class="text-xs sm:text-sm font-bold text-red-500">${mid}</div>
+                    <div class="text-[8px] sm:text-[10px] text-red-400 mt-0.5">⏸ Parada</div>
                 `;
             } else if (!hasOP) {
                 // Máquina sem OP (não está produzindo)
                 card.className += ' bg-gray-100 border-gray-200 opacity-50 cursor-not-allowed';
                 card.innerHTML = `
-                    <div class="text-sm font-bold text-gray-400">${mid}</div>
-                    <div class="text-[10px] text-gray-300 mt-0.5 truncate">${m.model}</div>
-                    <div class="text-[10px] text-gray-400 mt-1">Sem OP</div>
+                    <div class="text-xs sm:text-sm font-bold text-gray-400">${mid}</div>
+                    <div class="text-[8px] sm:text-[10px] text-gray-400 mt-0.5">Sem OP</div>
                 `;
             } else {
                 // Máquina produzindo (com OP) - disponível para seleção
@@ -34040,11 +34516,10 @@ ${content.innerHTML}
                     ? ' bg-amber-100 border-amber-400 ring-2 ring-amber-200 cursor-pointer'
                     : ' bg-emerald-50 border-emerald-300 hover:bg-amber-50 hover:border-amber-300 cursor-pointer';
                 card.innerHTML = `
-                    <div class="text-sm font-bold ${isSelected ? 'text-amber-700' : 'text-emerald-700'}">${mid}</div>
-                    <div class="text-[10px] ${isSelected ? 'text-amber-500' : 'text-emerald-500'} mt-0.5 truncate">${m.model}</div>
-                    <div class="text-[10px] ${isSelected ? 'text-amber-600 font-semibold' : 'text-emerald-600'} mt-1 batch-status-text">${isSelected ? '✓ Selecionada' : '▶ Produzindo'}</div>
-                    <div class="absolute top-2 right-2 w-4 h-4 border-2 ${isSelected ? 'bg-amber-500 border-amber-500' : 'border-emerald-400'} rounded flex items-center justify-center">
-                        ${isSelected ? '<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>' : ''}
+                    <div class="text-xs sm:text-sm font-bold ${isSelected ? 'text-amber-700' : 'text-emerald-700'}">${mid}</div>
+                    <div class="text-[8px] sm:text-[10px] ${isSelected ? 'text-amber-600 font-semibold' : 'text-emerald-600'} mt-0.5 batch-status-text">${isSelected ? '✓' : '▶'}</div>
+                    <div class="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 w-3 h-3 sm:w-4 sm:h-4 border ${isSelected ? 'bg-amber-500 border-amber-500' : 'border-emerald-400'} rounded flex items-center justify-center">
+                        ${isSelected ? '<svg class="w-2 h-2 sm:w-3 sm:h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>' : ''}
                     </div>
                 `;
                 card.onclick = () => toggleBatchMachineClick(mid);
@@ -44722,17 +45197,26 @@ function renderSetupStats(setups) {
     const planejadosEl = document.getElementById('setup-planejados');
     const naoPlanejadosEl = document.getElementById('setup-nao-planejados');
     const tempoMedioEl = document.getElementById('setup-tempo-medio');
+    const tempoTotalEl = document.getElementById('setup-tempo-total');
 
     const planejados = setups.filter(s => s.tipo === 'planejado');
     const naoPlanejados = setups.filter(s => s.tipo === 'nao_planejado');
     
     const tempoTotal = setups.reduce((acc, s) => acc + (s.duracaoMinutos || 0), 0);
     const tempoMedio = setups.length > 0 ? Math.round(tempoTotal / setups.length) : 0;
+    
+    // Formatar tempo total (horas e minutos)
+    const horasTotal = Math.floor(tempoTotal / 60);
+    const minsTotal = tempoTotal % 60;
+    const tempoTotalFormatado = horasTotal > 0 
+        ? `${horasTotal}h${minsTotal > 0 ? ` ${minsTotal}m` : ''}` 
+        : `${minsTotal}min`;
 
     if (totalEl) totalEl.textContent = setups.length;
     if (planejadosEl) planejadosEl.textContent = planejados.length;
     if (naoPlanejadosEl) naoPlanejadosEl.textContent = naoPlanejados.length;
     if (tempoMedioEl) tempoMedioEl.textContent = `${tempoMedio}min`;
+    if (tempoTotalEl) tempoTotalEl.textContent = tempoTotalFormatado;
 }
 
 // Renderizar tabela (entrada principal - armazena dados e chama paginação)

@@ -1886,56 +1886,229 @@
                                 </div>
                             </div>
 
-                            <!-- Aba: Correção de Paradas -->
+                            <!-- Aba: Gestão de Paradas -->
                             <div id="admin-tab-paradas" class="admin-tab-content hidden">
-                                <div class="grid grid-cols-4 gap-4 mb-6">
-                                    <div class="bg-blue-50 rounded-xl p-4 text-center border border-blue-100">
-                                        <div id="admin-stat-total" class="text-2xl font-bold text-blue-600">-</div>
-                                        <div class="text-xs text-blue-700">Total analisados</div>
-                                    </div>
-                                    <div class="bg-yellow-50 rounded-xl p-4 text-center border border-yellow-100">
-                                        <div id="admin-stat-problems" class="text-2xl font-bold text-yellow-600">-</div>
-                                        <div class="text-xs text-yellow-700">Com problemas</div>
-                                    </div>
-                                    <div class="bg-green-50 rounded-xl p-4 text-center border border-green-100">
-                                        <div id="admin-stat-fixed" class="text-2xl font-bold text-green-600">-</div>
-                                        <div class="text-xs text-green-700">Corrigidos</div>
-                                    </div>
-                                    <div class="bg-red-50 rounded-xl p-4 text-center border border-red-100">
-                                        <div id="admin-stat-deleted" class="text-2xl font-bold text-red-600">-</div>
-                                        <div class="text-xs text-red-700">Excluídos</div>
+                                <!-- Filtros -->
+                                <div class="bg-gray-50 rounded-xl p-4 mb-4 border border-gray-200">
+                                    <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                                        <i data-lucide="filter" class="w-4 h-4"></i>
+                                        Filtros de Busca
+                                    </h4>
+                                    <div class="flex flex-wrap items-end gap-3">
+                                        <!-- Período -->
+                                        <div class="flex-1 min-w-[140px] max-w-[180px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Período</label>
+                                            <select id="admin-paradas-periodo" class="w-full appearance-none bg-white border border-gray-200 rounded-lg py-2 pl-3 pr-8 text-sm focus:ring-2 focus:ring-blue-500 transition cursor-pointer">
+                                                <option value="today">Hoje</option>
+                                                <option value="yesterday">Ontem</option>
+                                                <option value="7days" selected>Últimos 7 dias</option>
+                                                <option value="30days">Últimos 30 dias</option>
+                                                <option value="custom">Personalizado</option>
+                                            </select>
+                                        </div>
+                                        <!-- Data Início -->
+                                        <div class="min-w-[130px] hidden" id="admin-paradas-custom-dates">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Data Início</label>
+                                            <input type="date" id="admin-paradas-data-inicio" class="w-full bg-white border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 transition">
+                                        </div>
+                                        <!-- Data Fim -->
+                                        <div class="min-w-[130px] hidden" id="admin-paradas-custom-dates-fim">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Data Fim</label>
+                                            <input type="date" id="admin-paradas-data-fim" class="w-full bg-white border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 transition">
+                                        </div>
+                                        <!-- Máquina -->
+                                        <div class="flex-1 min-w-[140px] max-w-[160px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Máquina</label>
+                                            <select id="admin-paradas-maquina" class="w-full appearance-none bg-white border border-gray-200 rounded-lg py-2 pl-3 pr-8 text-sm focus:ring-2 focus:ring-blue-500 transition cursor-pointer">
+                                                <option value="">Todas</option>
+                                            </select>
+                                        </div>
+                                        <!-- Status -->
+                                        <div class="flex-1 min-w-[120px] max-w-[150px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Status</label>
+                                            <select id="admin-paradas-status" class="w-full appearance-none bg-white border border-gray-200 rounded-lg py-2 pl-3 pr-8 text-sm focus:ring-2 focus:ring-blue-500 transition cursor-pointer">
+                                                <option value="">Todos</option>
+                                                <option value="active">Ativas</option>
+                                                <option value="finished">Finalizadas</option>
+                                            </select>
+                                        </div>
+                                        <!-- Botão Buscar -->
+                                        <button id="admin-paradas-buscar" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2">
+                                            <i data-lucide="search" class="w-4 h-4"></i>
+                                            Buscar
+                                        </button>
                                     </div>
                                 </div>
 
-                                <div class="flex flex-wrap gap-3 mb-4">
-                                    <button id="admin-btn-analyze" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2">
-                                        <i data-lucide="search" class="w-4 h-4"></i>
-                                        Analisar Problemas
-                                    </button>
-                                    <button id="admin-btn-fix" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2" disabled>
-                                        <i data-lucide="wrench" class="w-4 h-4"></i>
-                                        Corrigir Registros
-                                    </button>
-                                    <button id="admin-btn-clear-log" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2">
-                                        <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                        Limpar Log
-                                    </button>
+                                <!-- Estatísticas -->
+                                <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+                                    <div class="bg-blue-50 rounded-xl p-3 text-center border border-blue-100">
+                                        <div id="admin-paradas-stat-total" class="text-2xl font-bold text-blue-600">0</div>
+                                        <div class="text-xs text-blue-700">Total</div>
+                                    </div>
+                                    <div class="bg-red-50 rounded-xl p-3 text-center border border-red-100">
+                                        <div id="admin-paradas-stat-ativas" class="text-2xl font-bold text-red-600">0</div>
+                                        <div class="text-xs text-red-700">Ativas</div>
+                                    </div>
+                                    <div class="bg-green-50 rounded-xl p-3 text-center border border-green-100">
+                                        <div id="admin-paradas-stat-finalizadas" class="text-2xl font-bold text-green-600">0</div>
+                                        <div class="text-xs text-green-700">Finalizadas</div>
+                                    </div>
+                                    <div class="bg-orange-50 rounded-xl p-3 text-center border border-orange-100">
+                                        <div id="admin-paradas-stat-tempo" class="text-2xl font-bold text-orange-600">0h</div>
+                                        <div class="text-xs text-orange-700">Tempo Total</div>
+                                    </div>
+                                    <div class="bg-purple-50 rounded-xl p-3 text-center border border-purple-100">
+                                        <div id="admin-paradas-stat-medio" class="text-2xl font-bold text-purple-600">0min</div>
+                                        <div class="text-xs text-purple-700">Tempo Médio</div>
+                                    </div>
                                 </div>
 
-                                <div class="flex items-center gap-4 mb-4 p-3 bg-gray-50 rounded-lg">
-                                    <label class="flex items-center gap-2 text-sm cursor-pointer">
-                                        <input type="checkbox" id="admin-chk-dry-run" checked class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-                                        <span>Modo simulação (não altera dados)</span>
-                                    </label>
-                                    <label class="flex items-center gap-2 text-sm cursor-pointer text-red-600">
-                                        <input type="checkbox" id="admin-chk-delete-invalid" class="rounded border-red-300 text-red-600 focus:ring-red-500">
-                                        <span>Excluir registros irrecuperáveis</span>
-                                    </label>
+                                <!-- Ações em Lote -->
+                                <div class="flex flex-wrap items-center gap-3 mb-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                                    <span class="text-sm font-medium text-amber-800">Ações:</span>
+                                    <button id="admin-paradas-exportar" class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1.5">
+                                        <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                                        Exportar CSV
+                                    </button>
+                                    <button id="admin-paradas-corrigir-lote" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1.5">
+                                        <i data-lucide="check-check" class="w-3.5 h-3.5"></i>
+                                        Corrigir Selecionados
+                                    </button>
+                                    <span class="text-xs text-amber-700 ml-2">
+                                        <span id="admin-paradas-selecionados">0</span> selecionado(s)
+                                    </span>
                                 </div>
 
-                                <div class="bg-gray-900 rounded-lg overflow-hidden">
-                                    <div class="bg-gray-800 px-4 py-2 font-semibold text-white text-sm">📋 Log de Execução</div>
-                                    <div id="admin-log-container" class="h-64 overflow-y-auto p-2 font-mono text-xs"></div>
+                                <!-- Tabela de Paradas -->
+                                <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-sm" id="admin-paradas-tabela">
+                                            <thead class="bg-gray-100 text-gray-700">
+                                                <tr>
+                                                    <th class="px-3 py-3 text-left w-10">
+                                                        <input type="checkbox" id="admin-paradas-check-all" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                                    </th>
+                                                    <th class="px-3 py-3 text-left font-semibold">Data</th>
+                                                    <th class="px-3 py-3 text-left font-semibold">Máquina</th>
+                                                    <th class="px-3 py-3 text-left font-semibold">Motivo</th>
+                                                    <th class="px-3 py-3 text-center font-semibold">Início</th>
+                                                    <th class="px-3 py-3 text-center font-semibold">Fim</th>
+                                                    <th class="px-3 py-3 text-center font-semibold">Duração</th>
+                                                    <th class="px-3 py-3 text-center font-semibold">Status</th>
+                                                    <th class="px-3 py-3 text-center font-semibold">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="admin-paradas-tbody" class="divide-y divide-gray-100">
+                                                <tr>
+                                                    <td colspan="9" class="text-center py-12 text-gray-400">
+                                                        <i data-lucide="pause-circle" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                                                        <p>Clique em "Buscar" para carregar as paradas</p>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    
+                                    <!-- Paginação -->
+                                    <div id="admin-paradas-paginacao" class="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t border-gray-200 bg-gray-50">
+                                        <div class="text-sm text-gray-600">
+                                            Mostrando <span id="admin-paradas-pag-inicio" class="font-semibold">0</span> - <span id="admin-paradas-pag-fim" class="font-semibold">0</span> de <span id="admin-paradas-pag-total" class="font-semibold">0</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <button id="admin-paradas-pag-anterior" class="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed" disabled>
+                                                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                                            </button>
+                                            <span class="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold">
+                                                Página <span id="admin-paradas-pag-atual">1</span> de <span id="admin-paradas-pag-total-paginas">1</span>
+                                            </span>
+                                            <button id="admin-paradas-pag-proxima" class="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed" disabled>
+                                                <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Modal de Edição -->
+                                <div id="admin-paradas-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+                                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+                                        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4">
+                                            <div class="flex items-center justify-between">
+                                                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                                                    <i data-lucide="edit-3" class="w-5 h-5"></i>
+                                                    Editar Parada
+                                                </h3>
+                                                <button id="admin-paradas-modal-close" class="text-white/80 hover:text-white transition">
+                                                    <i data-lucide="x" class="w-5 h-5"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <form id="admin-paradas-form" class="p-6 space-y-4">
+                                            <input type="hidden" id="admin-paradas-edit-id">
+                                            
+                                            <div class="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Máquina</label>
+                                                    <input type="text" id="admin-paradas-edit-maquina" class="w-full bg-gray-100 border border-gray-200 rounded-lg py-2 px-3 text-sm" readonly>
+                                                </div>
+                                                <div>
+                                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Data</label>
+                                                    <input type="date" id="admin-paradas-edit-data" class="w-full bg-white border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500">
+                                                </div>
+                                            </div>
+                                            
+                                            <div>
+                                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Motivo da Parada</label>
+                                                <select id="admin-paradas-edit-motivo" class="w-full bg-white border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500">
+                                                    <option value="">Selecione o motivo</option>
+                                                    <option value="Manutenção Preventiva">Manutenção Preventiva</option>
+                                                    <option value="Manutenção Corretiva">Manutenção Corretiva</option>
+                                                    <option value="Setup/Troca de Molde">Setup/Troca de Molde</option>
+                                                    <option value="Falta de Material">Falta de Material</option>
+                                                    <option value="Falta de Operador">Falta de Operador</option>
+                                                    <option value="Aguardando Qualidade">Aguardando Qualidade</option>
+                                                    <option value="Problema de Qualidade">Problema de Qualidade</option>
+                                                    <option value="Parada Programada">Parada Programada</option>
+                                                    <option value="Refeição/Intervalo">Refeição/Intervalo</option>
+                                                    <option value="Limpeza">Limpeza</option>
+                                                    <option value="Outro">Outro</option>
+                                                </select>
+                                            </div>
+                                            
+                                            <div>
+                                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Motivo Personalizado</label>
+                                                <input type="text" id="admin-paradas-edit-motivo-custom" class="w-full bg-white border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500" placeholder="Descreva o motivo específico...">
+                                            </div>
+                                            
+                                            <div class="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Hora Início</label>
+                                                    <input type="time" id="admin-paradas-edit-inicio" class="w-full bg-white border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500">
+                                                </div>
+                                                <div>
+                                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Hora Fim</label>
+                                                    <input type="time" id="admin-paradas-edit-fim" class="w-full bg-white border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500">
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-sm text-blue-700">Duração calculada:</span>
+                                                    <span id="admin-paradas-edit-duracao" class="text-lg font-bold text-blue-600">0 min</span>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="flex gap-3 pt-2">
+                                                <button type="button" id="admin-paradas-modal-cancel" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-lg font-semibold transition">
+                                                    Cancelar
+                                                </button>
+                                                <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-semibold transition flex items-center justify-center gap-2">
+                                                    <i data-lucide="save" class="w-4 h-4"></i>
+                                                    Salvar Alterações
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -2051,7 +2224,7 @@
                         </div>
 
                         <!-- Estatísticas -->
-                        <div class="p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div class="p-4 grid grid-cols-2 md:grid-cols-5 gap-3">
                             <div class="bg-orange-50 rounded-xl p-3 text-center border border-orange-100">
                                 <p class="text-2xl font-bold text-orange-600" id="setup-total">0</p>
                                 <p class="text-xs text-orange-700">Total de Setups</p>
@@ -2067,6 +2240,10 @@
                             <div class="bg-blue-50 rounded-xl p-3 text-center border border-blue-100">
                                 <p class="text-2xl font-bold text-blue-600" id="setup-tempo-medio">0min</p>
                                 <p class="text-xs text-blue-700">Tempo Médio</p>
+                            </div>
+                            <div class="bg-purple-50 rounded-xl p-3 text-center border border-purple-100">
+                                <p class="text-2xl font-bold text-purple-600" id="setup-tempo-total">0h</p>
+                                <p class="text-xs text-purple-700">Tempo Total</p>
                             </div>
                         </div>
 
@@ -6330,6 +6507,9 @@
                         <optgroup label="QUALIDADE">
                             <option value="INSPEÇÃO DE LINHA">INSPEÇÃO DE LINHA</option>
                         </optgroup>
+                        <optgroup label="ADMINISTRATIVO">
+                            <option value="SUCATA/QUEDA DE ENERGIA">SUCATA/QUEDA DE ENERGIA</option>
+                        </optgroup>
                     </select>
                 </div>
                 <div>
@@ -6631,6 +6811,9 @@
                             </optgroup>
                             <optgroup label="QUALIDADE">
                                 <option value="INSPEÇÃO DE LINHA">INSPEÇÃO DE LINHA</option>
+                            </optgroup>
+                            <optgroup label="ADMINISTRATIVO">
+                                <option value="SUCATA/QUEDA DE ENERGIA">SUCATA/QUEDA DE ENERGIA</option>
                             </optgroup>
                         </select>
                     </div>
@@ -7424,17 +7607,17 @@
     </div>
 
     <!-- Modal de Parada em Lote (Todas as Máquinas) -->
-    <div id="batch-downtime-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[60] flex justify-center items-center p-4">
-        <div class="bg-white rounded-2xl shadow-xl w-full max-w-xl border border-gray-100 max-h-[90vh] overflow-hidden flex flex-col">
+    <div id="batch-downtime-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[60] flex justify-center items-center p-2 sm:p-4">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-4xl border border-gray-100 max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
             <!-- Header -->
-            <div class="flex justify-between items-center border-b border-gray-100 px-6 py-4 shrink-0 bg-gradient-to-r from-amber-50 to-orange-50">
-                <div class="flex items-center gap-3">
-                    <div class="p-2 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl">
-                        <i data-lucide="zap" class="w-5 h-5 text-white"></i>
+            <div class="flex justify-between items-center border-b border-gray-100 px-4 sm:px-6 py-3 sm:py-4 shrink-0 bg-gradient-to-r from-amber-50 to-orange-50">
+                <div class="flex items-center gap-2 sm:gap-3">
+                    <div class="p-1.5 sm:p-2 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl">
+                        <i data-lucide="zap" class="w-4 h-4 sm:w-5 sm:h-5 text-white"></i>
                     </div>
                     <div>
-                        <h3 class="text-lg font-semibold text-gray-800">Parada em Lote</h3>
-                        <p class="text-xs text-gray-500">Registrar parada em múltiplas máquinas simultaneamente</p>
+                        <h3 class="text-base sm:text-lg font-semibold text-gray-800">Parada em Lote</h3>
+                        <p class="text-[10px] sm:text-xs text-gray-500 hidden sm:block">Registrar parada em múltiplas máquinas simultaneamente</p>
                     </div>
                 </div>
                 <button onclick="closeBatchDowntimeModal()" class="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
@@ -7444,54 +7627,56 @@
             <!-- Form -->
             <form id="batch-downtime-form" class="flex flex-col flex-1 overflow-hidden">
                 <!-- Campos fixos -->
-                <div class="p-4 space-y-4 border-b border-gray-100 shrink-0">
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Código do Operador <span class="text-red-500">*</span></label>
-                        <input type="number" id="batch-downtime-user" name="user" min="0" max="999" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all" placeholder="Digite seu código (ex: 42)" required inputmode="numeric">
-                        <p class="text-xs text-gray-400 mt-1" id="batch-downtime-user-name">Digite o código para ver o nome</p>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Motivo da Parada <span class="text-red-500">*</span></label>
-                        <select id="batch-downtime-reason" name="reason" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all" required>
-                            <option value="">Selecione o motivo...</option>
-                            <!-- Populado dinamicamente -->
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Observações</label>
-                        <textarea id="batch-downtime-obs" name="observations" rows="2" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all" placeholder="Ex: Queda de energia afetou toda a fábrica"></textarea>
+                <div class="p-3 sm:p-4 space-y-3 sm:space-y-4 border-b border-gray-100 shrink-0">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Código do Operador <span class="text-red-500">*</span></label>
+                            <input type="number" id="batch-downtime-user" name="user" min="0" max="999" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 sm:py-2.5 px-3 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all" placeholder="Digite seu código (ex: 42)" required inputmode="numeric">
+                            <p class="text-xs text-gray-400 mt-1" id="batch-downtime-user-name">Digite o código para ver o nome</p>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Motivo da Parada <span class="text-red-500">*</span></label>
+                            <select id="batch-downtime-reason" name="reason" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 sm:py-2.5 px-3 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all" required>
+                                <option value="">Selecione o motivo...</option>
+                                <!-- Populado dinamicamente -->
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Observações</label>
+                            <input type="text" id="batch-downtime-obs" name="observations" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 sm:py-2.5 px-3 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all" placeholder="Ex: Queda de energia">
+                        </div>
                     </div>
                 </div>
                 <!-- Seleção de Máquinas -->
-                <div class="px-4 py-3 bg-gray-50 border-b border-gray-100 shrink-0 flex flex-col gap-2">
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm font-semibold text-gray-700">Selecionar Máquinas:</span>
-                        <div class="flex items-center gap-3">
-                            <span class="text-xs text-gray-500"><span id="batch-selected-count">0</span> selecionadas</span>
-                            <button type="button" onclick="batchSelectAllMachines()" class="text-xs text-amber-600 hover:text-amber-700 font-semibold">Selecionar Todas</button>
-                            <button type="button" onclick="batchDeselectAllMachines()" class="text-xs text-gray-500 hover:text-gray-700">Limpar</button>
+                <div class="px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 border-b border-gray-100 shrink-0 flex flex-col gap-1.5 sm:gap-2">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <span class="text-xs sm:text-sm font-semibold text-gray-700">Selecionar Máquinas:</span>
+                        <div class="flex items-center gap-2 sm:gap-3">
+                            <span class="text-[10px] sm:text-xs text-gray-500"><span id="batch-selected-count">0</span> selecionadas</span>
+                            <button type="button" onclick="batchSelectAllMachines()" class="text-[10px] sm:text-xs text-amber-600 hover:text-amber-700 font-semibold">Selecionar Todas</button>
+                            <button type="button" onclick="batchDeselectAllMachines()" class="text-[10px] sm:text-xs text-gray-500 hover:text-gray-700">Limpar</button>
                         </div>
                     </div>
-                    <div class="flex items-center gap-4 text-[10px] text-gray-500">
-                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-emerald-400 rounded-sm"></span> Produzindo (disponível)</span>
-                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-amber-400 rounded-sm"></span> Selecionada</span>
-                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-red-400 rounded-sm"></span> Parada Ativa</span>
-                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-gray-300 rounded-sm"></span> Sem OP</span>
+                    <div class="flex flex-wrap items-center gap-2 sm:gap-4 text-[9px] sm:text-[10px] text-gray-500">
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-emerald-400 rounded-sm"></span> Produzindo</span>
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-amber-400 rounded-sm"></span> Selecionada</span>
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-red-400 rounded-sm"></span> Parada Ativa</span>
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-gray-300 rounded-sm"></span> Sem OP</span>
                     </div>
                 </div>
                 <!-- Grid de Máquinas com Checkbox -->
-                <div class="p-4 overflow-y-auto flex-1">
-                    <div id="batch-machine-grid" class="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                <div class="p-2 sm:p-4 overflow-y-auto flex-1 min-h-[200px]">
+                    <div id="batch-machine-grid" class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-1.5 sm:gap-2">
                         <!-- Populado via JS -->
                     </div>
                 </div>
                 <!-- Footer/Botões -->
-                <div class="flex gap-3 p-4 border-t border-gray-100 bg-gray-50 shrink-0">
-                    <button type="button" onclick="closeBatchDowntimeModal()" class="flex-1 py-2.5 px-4 bg-gray-200 text-gray-700 rounded-xl font-medium text-sm hover:bg-gray-300 transition-colors">
+                <div class="flex gap-2 sm:gap-3 p-3 sm:p-4 border-t border-gray-100 bg-gray-50 shrink-0">
+                    <button type="button" onclick="closeBatchDowntimeModal()" class="flex-1 py-2 sm:py-2.5 px-3 sm:px-4 bg-gray-200 text-gray-700 rounded-xl font-medium text-xs sm:text-sm hover:bg-gray-300 transition-colors">
                         Cancelar
                     </button>
-                    <button type="submit" id="batch-downtime-submit-btn" class="flex-1 py-2.5 px-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                        <i data-lucide="zap" class="w-4 h-4 inline mr-1"></i> Iniciar Paradas em Lote
+                    <button type="submit" id="batch-downtime-submit-btn" class="flex-1 py-2 sm:py-2.5 px-3 sm:px-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-semibold text-xs sm:text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        <i data-lucide="zap" class="w-3 h-3 sm:w-4 sm:h-4 inline mr-1"></i> Iniciar Paradas
                     </button>
                 </div>
             </form>
