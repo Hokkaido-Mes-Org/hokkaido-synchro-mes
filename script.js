@@ -33854,6 +33854,10 @@ ${content.innerHTML}
             // Persistir cada segmento
             const currentUser = getActiveUser();
             for (const seg of segments) {
+                // Inferir turno do segmento
+                const segShift = typeof inferShiftFromSegment === 'function' 
+                    ? inferShiftFromSegment(seg.date, seg.startTime, seg.endTime) 
+                    : null;
                 const downtimeData = {
                     machine: selectedMachineData.machine,
                     date: seg.date,
@@ -33862,6 +33866,8 @@ ${content.innerHTML}
                     duration: seg.duration,
                     reason: reason,
                     observations: obs,
+                    shift: segShift,
+                    turno: segShift,
                     // Dados do operador
                     userCod: userCod,
                     nomeUsuario: nomeUsuario,
@@ -34312,6 +34318,7 @@ ${content.innerHTML}
 
             // Salvar cada segmento na coleção downtime_entries
             const currentUser = getActiveUser();
+            const shiftValue = activeData.startShift || activeData.shift || activeData.turno || null;
             for (const seg of segments) {
                 const downtimeData = {
                     machine: machineId,
@@ -34321,7 +34328,10 @@ ${content.innerHTML}
                     duration: seg.duration,
                     reason: activeData.reason || '',
                     observations: activeData.observations || '',
+                    shift: shiftValue,
+                    turno: shiftValue,
                     semOP: true,
+                    batchDowntime: activeData.batchDowntime || false,
                     userCod: activeData.userCod || null,
                     nomeUsuario: activeData.nomeUsuario || null,
                     registradoPor: currentUser?.username || null,
@@ -34394,13 +34404,18 @@ ${content.innerHTML}
         // Limpar seleções anteriores
         _batchSelectedMachines.clear();
 
-        // Carregar paradas ativas de TODAS as máquinas (não só sem OP)
+        // Limpar cache de paradas ativas e recarregar
+        _standaloneActiveDowntimes = {};
+        
+        // Carregar paradas ativas de TODAS as máquinas
         try {
             const allDowntimeStatus = await getAllMachinesDowntimeStatus(true); // forceRefresh
-            // Mesclar com _standaloneActiveDowntimes para ter visão completa
+            console.log('[BATCH-DOWNTIME] Paradas ativas carregadas:', Object.keys(allDowntimeStatus).length);
+            // Copiar apenas paradas ATIVAS para o cache
             Object.keys(allDowntimeStatus).forEach(mid => {
-                if (!_standaloneActiveDowntimes[mid]) {
-                    _standaloneActiveDowntimes[mid] = allDowntimeStatus[mid];
+                const status = allDowntimeStatus[mid];
+                if (status && status.status === 'active') {
+                    _standaloneActiveDowntimes[mid] = status;
                 }
             });
         } catch (e) {
@@ -34469,16 +34484,30 @@ ${content.innerHTML}
 
     /**
      * Renderiza o grid de máquinas com checkboxes para seleção
-     * Mostra máquinas COM OP (produzindo) como disponíveis para parada em lote
+     * Parada em lote permite selecionar QUALQUER máquina (ex: queda de energia afeta toda fábrica)
      */
     function renderBatchMachineGrid() {
         const grid = document.getElementById('batch-machine-grid');
-        if (!grid) return;
+        if (!grid) {
+            console.error('[BATCH-DOWNTIME] Grid batch-machine-grid não encontrado!');
+            return;
+        }
 
-        const machines = window.machineDatabase || [];
+        const machines = window.machineDatabase || window.databaseModule?.machineDatabase || [];
         const machinesWithOP = getMachinesWithActiveOP();
+        
+        console.log('[BATCH-DOWNTIME] Renderizando grid:', {
+            totalMachines: machines.length,
+            machinesWithOP: machinesWithOP.size,
+            paradasAtivas: Object.keys(_standaloneActiveDowntimes).length
+        });
 
         grid.innerHTML = '';
+
+        if (machines.length === 0) {
+            grid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-4">Nenhuma máquina encontrada</div>';
+            return;
+        }
 
         machines.forEach(m => {
             const mid = m.id;
@@ -34486,39 +34515,36 @@ ${content.innerHTML}
             const hasOP = machinesWithOP.has(mid) || machinesWithOP.has(normalizedId);
             const hasActiveDowntime = _standaloneActiveDowntimes[mid] || _standaloneActiveDowntimes[normalizedId];
             
-            // Máquina disponível = tem OP (produzindo) e NÃO tem parada ativa
-            const isAvailable = hasOP && !hasActiveDowntime;
-            // Máquina indisponível = já tem parada ativa OU não tem OP (não está produzindo)
-            const isDisabled = !isAvailable;
+            // Parada em lote: disponível se NÃO tem parada ativa (independente de ter OP)
+            const isAvailable = !hasActiveDowntime;
 
             const card = document.createElement('div');
             card.className = 'relative rounded-lg p-1.5 sm:p-2 text-center transition-all duration-200 border-2 select-none flex flex-col items-center justify-center min-h-[50px] sm:min-h-[60px]';
             card.dataset.machineId = mid;
 
             if (hasActiveDowntime) {
-                // Máquina já com parada ativa
+                // Máquina já com parada ativa - não pode selecionar
                 card.className += ' bg-red-50 border-red-200 opacity-60 cursor-not-allowed';
                 card.innerHTML = `
                     <div class="text-xs sm:text-sm font-bold text-red-500">${mid}</div>
                     <div class="text-[8px] sm:text-[10px] text-red-400 mt-0.5">⏸ Parada</div>
                 `;
-            } else if (!hasOP) {
-                // Máquina sem OP (não está produzindo)
-                card.className += ' bg-gray-100 border-gray-200 opacity-50 cursor-not-allowed';
-                card.innerHTML = `
-                    <div class="text-xs sm:text-sm font-bold text-gray-400">${mid}</div>
-                    <div class="text-[8px] sm:text-[10px] text-gray-400 mt-0.5">Sem OP</div>
-                `;
             } else {
-                // Máquina produzindo (com OP) - disponível para seleção
+                // Máquina disponível para seleção
                 const isSelected = _batchSelectedMachines.has(mid);
-                card.className += isSelected 
-                    ? ' bg-amber-100 border-amber-400 ring-2 ring-amber-200 cursor-pointer'
-                    : ' bg-emerald-50 border-emerald-300 hover:bg-amber-50 hover:border-amber-300 cursor-pointer';
+                const bgClass = hasOP 
+                    ? (isSelected ? 'bg-amber-100 border-amber-400 ring-2 ring-amber-200' : 'bg-emerald-50 border-emerald-300 hover:bg-amber-50 hover:border-amber-300')
+                    : (isSelected ? 'bg-amber-100 border-amber-400 ring-2 ring-amber-200' : 'bg-gray-50 border-gray-300 hover:bg-amber-50 hover:border-amber-300');
+                const textClass = hasOP 
+                    ? (isSelected ? 'text-amber-700' : 'text-emerald-700')
+                    : (isSelected ? 'text-amber-700' : 'text-gray-600');
+                const statusText = hasOP ? (isSelected ? '✓' : '▶') : (isSelected ? '✓' : '○');
+                
+                card.className += ` ${bgClass} cursor-pointer`;
                 card.innerHTML = `
-                    <div class="text-xs sm:text-sm font-bold ${isSelected ? 'text-amber-700' : 'text-emerald-700'}">${mid}</div>
-                    <div class="text-[8px] sm:text-[10px] ${isSelected ? 'text-amber-600 font-semibold' : 'text-emerald-600'} mt-0.5 batch-status-text">${isSelected ? '✓' : '▶'}</div>
-                    <div class="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 w-3 h-3 sm:w-4 sm:h-4 border ${isSelected ? 'bg-amber-500 border-amber-500' : 'border-emerald-400'} rounded flex items-center justify-center">
+                    <div class="text-xs sm:text-sm font-bold ${textClass}">${mid}</div>
+                    <div class="text-[8px] sm:text-[10px] ${isSelected ? 'text-amber-600 font-semibold' : (hasOP ? 'text-emerald-600' : 'text-gray-500')} mt-0.5 batch-status-text">${statusText}</div>
+                    <div class="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 w-3 h-3 sm:w-4 sm:h-4 border ${isSelected ? 'bg-amber-500 border-amber-500' : (hasOP ? 'border-emerald-400' : 'border-gray-400')} rounded flex items-center justify-center">
                         ${isSelected ? '<svg class="w-2 h-2 sm:w-3 sm:h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>' : ''}
                     </div>
                 `;
@@ -34533,11 +34559,13 @@ ${content.innerHTML}
      * Toggle de máquina via click direto (sem checkbox)
      */
     function toggleBatchMachineClick(machineId) {
+        console.log('[BATCH-DOWNTIME] Toggle máquina:', machineId, 'Atual:', _batchSelectedMachines.has(machineId));
         if (_batchSelectedMachines.has(machineId)) {
             _batchSelectedMachines.delete(machineId);
         } else {
             _batchSelectedMachines.add(machineId);
         }
+        console.log('[BATCH-DOWNTIME] Selecionadas após toggle:', _batchSelectedMachines.size);
         // Re-renderizar grid para atualizar visual
         renderBatchMachineGrid();
         updateBatchSelectedCount();
@@ -34552,25 +34580,25 @@ ${content.innerHTML}
     }
 
     /**
-     * Selecionar todas as máquinas disponíveis (produzindo)
+     * Selecionar todas as máquinas disponíveis (sem parada ativa)
      */
     function batchSelectAllMachines() {
-        const machines = window.machineDatabase || [];
-        const machinesWithOP = getMachinesWithActiveOP();
+        const machines = window.machineDatabase || window.databaseModule?.machineDatabase || [];
+        console.log('[BATCH-DOWNTIME] Selecionando todas:', machines.length, 'máquinas');
         
         machines.forEach(m => {
             const mid = m.id;
             const normalizedId = normalizeMachineId(mid);
-            const hasOP = machinesWithOP.has(mid) || machinesWithOP.has(normalizedId);
             const hasActiveDowntime = _standaloneActiveDowntimes[mid] || _standaloneActiveDowntimes[normalizedId];
-            // Selecionar apenas máquinas COM OP (produzindo) e SEM parada ativa
-            const isAvailable = hasOP && !hasActiveDowntime;
+            // Selecionar apenas máquinas SEM parada ativa
+            const isAvailable = !hasActiveDowntime;
             
             if (isAvailable && !_batchSelectedMachines.has(mid)) {
                 _batchSelectedMachines.add(mid);
             }
         });
         
+        console.log('[BATCH-DOWNTIME] Total selecionadas:', _batchSelectedMachines.size);
         renderBatchMachineGrid();
         updateBatchSelectedCount();
         if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -34594,12 +34622,15 @@ ${content.innerHTML}
         const submitBtn = document.getElementById('batch-downtime-submit-btn');
         const count = _batchSelectedMachines.size;
 
+        console.log('[BATCH-DOWNTIME] Atualizando contador:', count, 'Botão encontrado:', !!submitBtn);
+
         if (countEl) countEl.textContent = count;
         if (submitBtn) {
             submitBtn.disabled = count === 0;
+            console.log('[BATCH-DOWNTIME] Botão disabled:', submitBtn.disabled);
             submitBtn.innerHTML = count > 0 
-                ? `<i data-lucide="zap" class="w-4 h-4 inline mr-1"></i> Iniciar ${count} Parada${count > 1 ? 's' : ''}`
-                : '<i data-lucide="zap" class="w-4 h-4 inline mr-1"></i> Iniciar Paradas em Lote';
+                ? `<i data-lucide="zap" class="w-3 h-3 sm:w-4 sm:h-4 inline mr-1"></i> Iniciar ${count} Parada${count > 1 ? 's' : ''}`
+                : '<i data-lucide="zap" class="w-3 h-3 sm:w-4 sm:h-4 inline mr-1"></i> Iniciar Paradas';
             if (typeof lucide !== 'undefined') lucide.createIcons();
         }
     }
@@ -34787,6 +34818,9 @@ ${content.innerHTML}
                     ...currentDowntimeStart,
                     endTime,
                     duration: 1,
+                    shift: currentDowntimeStart.startShift || currentDowntimeStart.shift || currentDowntimeStart.turno || null,
+                    turno: currentDowntimeStart.startShift || currentDowntimeStart.shift || currentDowntimeStart.turno || null,
+                    batchDowntime: currentDowntimeStart.batchDowntime || false,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
                 await db.collection('downtime_entries').add(downtimeData);
@@ -34797,6 +34831,7 @@ ${content.innerHTML}
                     alert('⚠️ Erro: Motivo da parada não foi informado.\n\nEsta parada não pode ser finalizada sem um motivo válido.');
                     return;
                 }
+                const shiftValue = currentDowntimeStart.startShift || currentDowntimeStart.shift || currentDowntimeStart.turno || null;
                 for (const seg of segments) {
                     const downtimeData = {
                         machine: currentDowntimeStart.machine,
@@ -34806,6 +34841,9 @@ ${content.innerHTML}
                         duration: seg.duration,
                         reason: currentDowntimeStart.reason,
                         observations: currentDowntimeStart.observations || '',
+                        shift: shiftValue,
+                        turno: shiftValue,
+                        batchDowntime: currentDowntimeStart.batchDowntime || false,
                         userCod: currentDowntimeStart.userCod ?? null,
                         nomeUsuario: currentDowntimeStart.nomeUsuario || null,
                         createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -39148,6 +39186,9 @@ function sendDowntimeNotification() {
             if (isActiveDowttimeRecord) {
                 // Para paradas em active_downtimes: registrar histórico e depois deletar
                 
+                // Obter turno da parada (para filtros de OEE)
+                const shiftValue = downtimeData.startShift || downtimeData.shift || downtimeData.turno || null;
+                
                 // Primeiro, registrar em downtime_entries para histórico
                 const downtimeEntryData = {
                     machine: normalizedMachineId,
@@ -39156,7 +39197,10 @@ function sendDowntimeNotification() {
                     endTime: endTime,
                     duration: durationMinutes,
                     reason: reasonText,
+                    shift: shiftValue,
+                    turno: shiftValue,
                     observations: downtimeData.observations || '',
+                    batchDowntime: downtimeData.batchDowntime || false,
                     registradoPor: getActiveUser()?.username || null,
                     registradoPorNome: getActiveUser()?.name || 'Sistema',
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
