@@ -159,6 +159,30 @@ document.addEventListener('DOMContentLoaded', async function() {
                     console.log('🔒 Subaba Relatórios oculta para usuário: ' + (user?.name || 'desconhecido'));
                 }
             }
+            
+            // Mostrar/ocultar aba Relatórios (página principal) apenas para Leandro Camargo e Roberto Fernandes
+            const relatoriosNavBtn = document.querySelector('[data-page="relatorios"]');
+            const allowedRelatoriosUsers = ['leandro camargo', 'roberto fernandes'];
+            const isAllowedForRelatorios = user && allowedRelatoriosUsers.includes(userNameLower);
+            
+            console.log('[RELATORIOS-DEBUG] Verificando acesso Relatórios:', {
+                userName: user?.name,
+                userNameLower: userNameLower,
+                allowedRelatoriosUsers: allowedRelatoriosUsers,
+                isAllowedForRelatorios: isAllowedForRelatorios
+            });
+            
+            if (relatoriosNavBtn) {
+                if (isAllowedForRelatorios) {
+                    relatoriosNavBtn.style.display = '';  // Mostrar
+                    console.log('✅ Aba Relatórios visível para ' + user.name);
+                } else {
+                    relatoriosNavBtn.style.display = 'none';  // Ocultar
+                    console.log('🔒 Aba Relatórios oculta para usuário: ' + (user?.name || 'desconhecido'));
+                }
+            } else {
+                console.warn('⚠️ Botão da aba Relatórios não encontrado no DOM');
+            }
         } catch (e) {
             console.warn('Erro ao aplicar restrição da aba PMP:', e);
         }
@@ -3879,6 +3903,9 @@ document.addEventListener('DOMContentLoaded', function() {
             ],
             "QUALIDADE": [
                 "INSPEÇÃO DE LINHA"
+            ],
+            "OUTROS": [
+                "PERDAS/QUEDA DE ENERGIA"
             ]
         };
     }
@@ -15711,6 +15738,17 @@ ${content.innerHTML}
         }
 
         if (page === 'relatorios') {
+            // Verificar permissão - apenas Leandro Camargo e Roberto Fernandes
+            const user = window.authSystem?.getCurrentUser?.();
+            const userNameLower = (user?.name || '').toLowerCase().trim();
+            const allowedRelatoriosUsers = ['leandro camargo', 'roberto fernandes'];
+            
+            if (!user || !allowedRelatoriosUsers.includes(userNameLower)) {
+                console.warn('🔒 Acesso negado à página Relatórios para:', user?.name || 'desconhecido');
+                showNotification('Você não tem permissão para acessar esta página.', 'warning');
+                showPage('lancamento'); // Redirecionar para página inicial
+                return;
+            }
             setupRelatoriosPage();
         }
 
@@ -23053,8 +23091,31 @@ ${content.innerHTML}
         openModal('quick-production-modal');
     }
     
+    // Função para popular motivos de perdas dinamicamente
+    function populateLossReasonsSelect(selectId) {
+        const reasonSelect = document.getElementById(selectId);
+        if (!reasonSelect) return;
+        
+        const groupedReasons = getGroupedLossReasons();
+        let options = '<option value="">Selecione o motivo...</option>';
+        
+        Object.entries(groupedReasons).forEach(([group, reasons]) => {
+            options += `<optgroup label="${group}">`;
+            reasons.forEach(reason => {
+                options += `<option value="${reason}">${reason}</option>`;
+            });
+            options += '</optgroup>';
+        });
+        
+        reasonSelect.innerHTML = options;
+        console.log('[PERDAS] Motivos carregados em ' + selectId + ':', Object.keys(groupedReasons).length, 'categorias');
+    }
+    
     function openLossesModal() {
         currentEditContext = null;
+        
+        // Popular motivos de perdas dinamicamente
+        populateLossReasonsSelect('quick-losses-reason');
         
         // ✅ POKA-YOKE: Bloquear lançamento se OP não estiver ativada
         if (!validateOrderActivated()) {
@@ -23316,6 +23377,9 @@ ${content.innerHTML}
 
     function openManualLossesModal() {
         currentEditContext = null;
+        
+        // Popular motivos de perdas dinamicamente
+        populateLossReasonsSelect('manual-losses-reason');
         
         // ✅ POKA-YOKE: Bloquear lançamento se OP não estiver ativada
         if (!validateOrderActivated()) {
@@ -23758,9 +23822,32 @@ ${content.innerHTML}
         showNotification(`Máquina parada às ${formatTimeHM(now)} (${shiftLabel}) - Motivo: ${reason}. Clique em START quando retomar.`, 'warning');
     }
     
+    // Função para popular motivos de parada rápida dinamicamente
+    function populateQuickDowntimeReasons() {
+        const reasonSelect = document.getElementById('quick-downtime-reason');
+        if (!reasonSelect) return;
+        
+        const groupedReasons = getGroupedDowntimeReasons();
+        let options = '<option value="">Selecione o motivo...</option>';
+        
+        Object.entries(groupedReasons).forEach(([group, reasons]) => {
+            options += `<optgroup label="${group}">`;
+            reasons.forEach(reason => {
+                options += `<option value="${reason}">${reason}</option>`;
+            });
+            options += '</optgroup>';
+        });
+        
+        reasonSelect.innerHTML = options;
+        console.log('[PARADA-RAPIDA] Motivos carregados:', Object.keys(groupedReasons).length, 'categorias');
+    }
+    
     // Função para abrir modal solicitando motivo da parada ao INICIAR (nova dinâmica)
     function openDowntimeReasonModal() {
         console.log('[TRACE][openDowntimeReasonModal] called - Solicitando motivo para INICIAR parada');
+        
+        // Popular motivos dinamicamente
+        populateQuickDowntimeReasons();
         
         // Limpar formulário
         const reasonSelect = document.getElementById('quick-downtime-reason');
@@ -26093,6 +26180,28 @@ ${content.innerHTML}
             e.preventDefault();
             await adminParadasSalvar();
         });
+        
+        // Popular select de motivos quando o modal é aberto
+        populateAdminParadasMotivos();
+    }
+    
+    function populateAdminParadasMotivos() {
+        const motivoSelect = document.getElementById('admin-paradas-edit-motivo');
+        if (!motivoSelect) return;
+        
+        const groupedReasons = getGroupedDowntimeReasons();
+        let options = '<option value="">Selecione o motivo</option>';
+        
+        Object.entries(groupedReasons).forEach(([group, reasons]) => {
+            options += `<optgroup label="${group}">`;
+            reasons.forEach(reason => {
+                options += `<option value="${reason}">${reason}</option>`;
+            });
+            options += '</optgroup>';
+        });
+        
+        motivoSelect.innerHTML = options;
+        console.log('[ADMIN-PARADAS] Motivos carregados:', Object.keys(groupedReasons).length, 'categorias');
     }
     
     async function adminParadasBuscar() {
@@ -43489,18 +43598,21 @@ function getProductNameByCode(code) {
     return '';
 }
 
-// Cache global para OPs (orderId -> order_number)
+// Cache global para OPs (orderId -> {orderNumber, partCode})
 let relOPsCache = new Map();
 let relOPsCacheLoaded = false;
 
-// Função para carregar cache de OPs
+// Função para carregar cache de OPs com número da OP e código do produto
 async function relLoadOPsCache() {
     if (relOPsCacheLoaded) return;
     try {
         const snapshot = await db.collection('production_orders').limit(2000).get();
         snapshot.docs.forEach(doc => {
             const data = doc.data();
-            relOPsCache.set(doc.id, data.order_number || data.order_number_original || doc.id);
+            relOPsCache.set(doc.id, {
+                orderNumber: data.order_number || data.order_number_original || doc.id,
+                partCode: data.part_code || data.product_cod || data.product_code || ''
+            });
         });
         relOPsCacheLoaded = true;
         console.log('[RELATORIOS] Cache de OPs carregado:', relOPsCache.size, 'registros');
@@ -43515,7 +43627,15 @@ function relGetOrderNumber(orderId) {
     // Se já é um número (não é ID do Firebase), retorna direto
     if (/^\d+$/.test(orderId)) return orderId;
     // Busca no cache
-    return relOPsCache.get(orderId) || orderId;
+    const cached = relOPsCache.get(orderId);
+    return cached?.orderNumber || orderId;
+}
+
+// Função para obter código do produto a partir do orderId
+function relGetProductCode(orderId) {
+    if (!orderId || orderId === '-') return '';
+    const cached = relOPsCache.get(orderId);
+    return cached?.partCode || '';
 }
 
 // Função auxiliar global para obter data de produção (considera turno que inicia às 6h30)
@@ -43741,12 +43861,13 @@ async function relBuscarProducao() {
             const dataDoc = d.data || d.date || '-';
             const maq = d.machine || d.machine_id || d.maquina || '-';
             const turnoDoc = d.turno || d.shift || '-';
-            const codProd = d.mp || d.product_code || d.productCode || d.codigo || '-';
+            const opId = d.orderId || d.order_id || d.order_number || d.op || '-';
+            const opNum = relGetOrderNumber(opId);
+            // Priorizar código do produto da OP (part_code), fallback para mp
+            const codProd = relGetProductCode(opId) || d.mp || d.product_code || d.productCode || d.codigo || '-';
             const nomeProd = getProductNameByCode(codProd) || d.product_name || d.productName || d.descricao || '-';
             const qty = d.produzido || d.quantity || d.qty || d.quantidade || 0;
             const peso = d.peso_bruto || d.weight_kg || d.peso || d.peso_kg || 0;
-            const opId = d.orderId || d.order_id || d.order_number || d.op || '-';
-            const opNum = relGetOrderNumber(opId);
             const hora = d.horaInformada || (d.timestamp?.toDate ? d.timestamp.toDate().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '-');
             
             html += `
@@ -43798,9 +43919,9 @@ function relExportarProducaoCSV() {
     
     const headers = ['Data', 'Máquina', 'Turno', 'OP', 'Código Produto', 'Nome Produto', 'Quantidade', 'Peso (kg)', 'Refugo (kg)'];
     const rows = relProducaoDados.map(d => {
-        const codProd = d.mp || d.product_code || d.productCode || d.codigo || '';
-        const nomeProd = getProductNameByCode(codProd) || d.product_name || d.productName || d.descricao || '';
         const opId = d.orderId || d.order_id || d.order_number || d.op || '';
+        const codProd = relGetProductCode(opId) || d.mp || d.product_code || d.productCode || d.codigo || '';
+        const nomeProd = getProductNameByCode(codProd) || d.product_name || d.productName || d.descricao || '';
         return [
             d.data || d.date || '',
             d.machine || d.machine_id || d.maquina || '',
@@ -44021,14 +44142,15 @@ async function relBuscarPerdas() {
             const dataDoc = d.data || d.date || '-';
             const maq = d.machine || d.machine_id || d.maquina || '-';
             const turnoDoc = d.turno || d.shift || '-';
-            const codProd = d.mp || d.product_code || d.productCode || d.codigo || '-';
+            const opId = d.orderId || d.order_id || d.order_number || d.op || '-';
+            const opNum = relGetOrderNumber(opId);
+            // Priorizar código do produto da OP (part_code), fallback para mp
+            const codProd = relGetProductCode(opId) || d.mp || d.product_code || d.productCode || d.codigo || '-';
             const nomeProd = getProductNameByCode(codProd) || d.product_name || d.productName || d.descricao || '-';
             const refugo = Number(d.refugo_kg || 0);
             const borra = Number(d.borra_kg || 0);
             const sucata = Number(d.sucata_kg || 0);
             const motivo = d.perdas || d.motivo_perda || d.loss_reason || '-';
-            const opId = d.orderId || d.order_id || d.order_number || d.op || '-';
-            const opNum = relGetOrderNumber(opId);
             
             html += `
                 <div class="bg-white rounded-lg p-3 border border-gray-200 hover:border-red-300 transition">
@@ -44079,9 +44201,9 @@ function relExportarPerdasCSV() {
     
     const headers = ['Data', 'Máquina', 'Turno', 'OP', 'Código Produto', 'Nome Produto', 'Refugo (kg)', 'Borra (kg)', 'Sucata (kg)', 'Motivo'];
     const rows = relPerdasDados.map(d => {
-        const codProd = d.mp || d.product_code || d.productCode || d.codigo || '';
-        const nomeProd = getProductNameByCode(codProd) || d.product_name || d.productName || d.descricao || '';
         const opId = d.orderId || d.order_id || d.order_number || d.op || '';
+        const codProd = relGetProductCode(opId) || d.mp || d.product_code || d.productCode || d.codigo || '';
+        const nomeProd = getProductNameByCode(codProd) || d.product_name || d.productName || d.descricao || '';
         return [
             d.data || d.date || '',
             d.machine || d.machine_id || d.maquina || '',
@@ -44441,10 +44563,10 @@ function relExportarProducaoTabela() {
         </thead>
         <tbody>
             ${relProducaoDados.map(d => {
-                const codProd = d.mp || d.product_code || d.productCode || d.codigo || '-';
-                const nomeProd = getProductNameByCode(codProd) || d.product_name || d.productName || d.descricao || '-';
                 const opId = d.orderId || d.order_id || d.order_number || d.op || '-';
                 const opNum = relGetOrderNumber(opId);
+                const codProd = relGetProductCode(opId) || d.mp || d.product_code || d.productCode || d.codigo || '-';
+                const nomeProd = getProductNameByCode(codProd) || d.product_name || d.productName || d.descricao || '-';
                 return `<tr>
                     <td>${d.data || d.date || '-'}</td>
                     <td>${d.machine || d.machine_id || d.maquina || '-'}</td>
@@ -44552,10 +44674,10 @@ function relExportarPerdasTabela() {
         </thead>
         <tbody>
             ${relPerdasDados.map(d => {
-                const codProd = d.mp || d.product_code || d.productCode || d.codigo || '-';
-                const nomeProd = getProductNameByCode(codProd) || d.product_name || d.productName || d.descricao || '-';
                 const opId = d.orderId || d.order_id || d.order_number || d.op || '-';
                 const opNum = relGetOrderNumber(opId);
+                const codProd = relGetProductCode(opId) || d.mp || d.product_code || d.productCode || d.codigo || '-';
+                const nomeProd = getProductNameByCode(codProd) || d.product_name || d.productName || d.descricao || '-';
                 return `<tr>
                     <td>${d.data || d.date || '-'}</td>
                     <td>${d.machine || d.machine_id || d.maquina || '-'}</td>
