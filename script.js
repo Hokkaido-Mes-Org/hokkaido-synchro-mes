@@ -15710,6 +15710,10 @@ ${content.innerHTML}
             setupAdminDadosPage();
         }
 
+        if (page === 'relatorios') {
+            setupRelatoriosPage();
+        }
+
         if (page === 'lideranca-producao') {
             setupLiderancaProducaoPage();
         }
@@ -24178,20 +24182,55 @@ ${content.innerHTML}
             'COMERCIAL': ['SEM PEDIDO', 'BAIXA DEMANDA', 'PARADA COMERCIAL']
         };
         
-        // Preencher grid de máquinas
-        function renderMaquinasGrid() {
+        // Cache de paradas ativas para este container
+        let _paradaLoteActiveDowntimes = {};
+        
+        // Preencher grid de máquinas - CORRIGIDO: verificar paradas ativas
+        async function renderMaquinasGrid() {
             if (!gridMaquinas) return;
-            gridMaquinas.innerHTML = validMachines.map(m => `
-                <label class="flex items-center justify-center p-2 border-2 border-gray-200 rounded-lg cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-all maquina-lote-item" data-machine="${m}">
-                    <input type="checkbox" name="maquinas-lote" value="${m}" class="sr-only maquina-lote-checkbox">
-                    <span class="text-sm font-bold text-gray-700">${m}</span>
-                </label>
-            `).join('');
+            
+            // Carregar paradas ativas
+            try {
+                _paradaLoteActiveDowntimes = await getAllMachinesDowntimeStatus(true);
+                console.log('[PARADA-LOTE] Paradas ativas carregadas:', Object.keys(_paradaLoteActiveDowntimes).length);
+            } catch (e) {
+                console.warn('[PARADA-LOTE] Erro ao carregar paradas ativas:', e);
+                _paradaLoteActiveDowntimes = {};
+            }
+            
+            gridMaquinas.innerHTML = validMachines.map(m => {
+                const normalizedId = normalizeMachineId(m);
+                const hasActiveDowntime = _paradaLoteActiveDowntimes[m] || _paradaLoteActiveDowntimes[normalizedId];
+                
+                if (hasActiveDowntime) {
+                    // Máquina já parada - desabilitar
+                    return `
+                        <label class="flex flex-col items-center justify-center p-2 border-2 border-red-200 rounded-lg bg-red-50 opacity-60 cursor-not-allowed maquina-lote-item" data-machine="${m}" data-disabled="true">
+                            <input type="checkbox" name="maquinas-lote" value="${m}" class="sr-only maquina-lote-checkbox" disabled>
+                            <span class="text-sm font-bold text-red-500">${m}</span>
+                            <span class="text-[8px] text-red-400">⏸ Parada</span>
+                        </label>`;
+                } else {
+                    // Máquina disponível
+                    return `
+                        <label class="flex items-center justify-center p-2 border-2 border-gray-200 rounded-lg cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-all maquina-lote-item" data-machine="${m}">
+                            <input type="checkbox" name="maquinas-lote" value="${m}" class="sr-only maquina-lote-checkbox">
+                            <span class="text-sm font-bold text-gray-700">${m}</span>
+                        </label>`;
+                }
+            }).join('');
             
             // Adicionar event listeners aos checkboxes
             gridMaquinas.querySelectorAll('.maquina-lote-item').forEach(item => {
                 item.addEventListener('click', () => {
+                    // Ignorar máquinas já paradas (desabilitadas)
+                    if (item.dataset.disabled === 'true') {
+                        return;
+                    }
+                    
                     const checkbox = item.querySelector('.maquina-lote-checkbox');
+                    if (checkbox.disabled) return;
+                    
                     checkbox.checked = !checkbox.checked;
                     if (checkbox.checked) {
                         item.classList.add('bg-orange-100', 'border-orange-500');
@@ -24229,12 +24268,12 @@ ${content.innerHTML}
         }
         
         // Abrir/fechar container
-        btnAbrir.addEventListener('click', () => {
+        btnAbrir.addEventListener('click', async () => {
             console.log('[PARADA-LOTE] Botão clicado, container hidden antes:', container.classList.contains('hidden'));
             container.classList.toggle('hidden');
             if (!container.classList.contains('hidden')) {
                 console.log('[PARADA-LOTE] Abrindo container, renderizando grid...');
-                renderMaquinasGrid();
+                await renderMaquinasGrid();
                 setCurrentDateTime();
                 updateMotivos();
                 setTimeout(() => lucide.createIcons(), 100);
@@ -24249,11 +24288,16 @@ ${content.innerHTML}
             });
         }
         
-        // Selecionar todas
+        // Selecionar todas (apenas máquinas disponíveis)
         if (btnSelecionarTodas) {
             btnSelecionarTodas.addEventListener('click', () => {
                 gridMaquinas.querySelectorAll('.maquina-lote-item').forEach(item => {
+                    // Ignorar máquinas desabilitadas (já paradas)
+                    if (item.dataset.disabled === 'true') return;
+                    
                     const checkbox = item.querySelector('.maquina-lote-checkbox');
+                    if (checkbox.disabled) return;
+                    
                     checkbox.checked = true;
                     item.classList.add('bg-orange-100', 'border-orange-500');
                     item.querySelector('span').classList.add('text-orange-700');
@@ -24266,7 +24310,12 @@ ${content.innerHTML}
         if (btnLimparSelecao) {
             btnLimparSelecao.addEventListener('click', () => {
                 gridMaquinas.querySelectorAll('.maquina-lote-item').forEach(item => {
+                    // Ignorar máquinas desabilitadas
+                    if (item.dataset.disabled === 'true') return;
+                    
                     const checkbox = item.querySelector('.maquina-lote-checkbox');
+                    if (checkbox.disabled) return;
+                    
                     checkbox.checked = false;
                     item.classList.remove('bg-orange-100', 'border-orange-500');
                     item.querySelector('span').classList.remove('text-orange-700');
@@ -24328,7 +24377,34 @@ ${content.innerHTML}
                 try {
                     if (submitBtn) submitBtn.disabled = true;
                     if (statusDiv) {
-                        statusDiv.textContent = `Registrando paradas para ${maquinasSelecionadas.length} máquinas...`;
+                        statusDiv.textContent = `Verificando máquinas...`;
+                        statusDiv.className = 'text-sm font-semibold h-5 text-center text-blue-600';
+                    }
+                    
+                    // CORREÇÃO: Verificar novamente quais máquinas já estão paradas
+                    const currentDowntimes = await getAllMachinesDowntimeStatus(true);
+                    const maquinasDisponiveis = maquinasSelecionadas.filter(machineId => {
+                        const normalizedId = normalizeMachineId(machineId);
+                        return !currentDowntimes[machineId] && !currentDowntimes[normalizedId];
+                    });
+                    
+                    const maquinasJaParadas = maquinasSelecionadas.length - maquinasDisponiveis.length;
+                    
+                    if (maquinasDisponiveis.length === 0) {
+                        if (statusDiv) {
+                            statusDiv.textContent = '❌ Todas as máquinas selecionadas já estão paradas';
+                            statusDiv.className = 'text-sm font-semibold h-5 text-center text-red-600';
+                        }
+                        if (submitBtn) submitBtn.disabled = false;
+                        return;
+                    }
+                    
+                    if (maquinasJaParadas > 0) {
+                        console.log(`[PARADA-LOTE] ${maquinasJaParadas} máquinas já estavam paradas, ignorando...`);
+                    }
+                    
+                    if (statusDiv) {
+                        statusDiv.textContent = `Registrando paradas para ${maquinasDisponiveis.length} máquinas...`;
                         statusDiv.className = 'text-sm font-semibold h-5 text-center text-blue-600';
                     }
                     
@@ -24336,8 +24412,8 @@ ${content.innerHTML}
                     const userName = getActiveUser()?.name || 'Sistema';
                     const batch = db.batch();
                     
-                    // Criar documento para cada máquina
-                    maquinasSelecionadas.forEach(machineId => {
+                    // Criar documento para cada máquina DISPONÍVEL
+                    maquinasDisponiveis.forEach(machineId => {
                         const docRef = db.collection('extended_downtime_logs').doc();
                         batch.set(docRef, {
                             machine_id: machineId,
@@ -24361,20 +24437,23 @@ ${content.innerHTML}
                     
                     await batch.commit();
                     
-                    console.log('[PARADA-LOTE] ✅ Paradas registradas:', maquinasSelecionadas.length, 'máquinas');
+                    console.log('[PARADA-LOTE] ✅ Paradas registradas:', maquinasDisponiveis.length, 'máquinas');
                     
                     if (statusDiv) {
-                        statusDiv.textContent = `✅ Parada registrada para ${maquinasSelecionadas.length} máquinas!`;
+                        let msg = `✅ Parada registrada para ${maquinasDisponiveis.length} máquinas!`;
+                        if (maquinasJaParadas > 0) {
+                            msg += ` (${maquinasJaParadas} já estavam paradas)`;
+                        }
+                        statusDiv.textContent = msg;
                         statusDiv.className = 'text-sm font-semibold h-5 text-center text-green-600';
                     }
                     
-                    // Limpar formulário
-                    gridMaquinas.querySelectorAll('.maquina-lote-item').forEach(item => {
-                        const checkbox = item.querySelector('.maquina-lote-checkbox');
-                        checkbox.checked = false;
-                        item.classList.remove('bg-orange-100', 'border-orange-500');
-                        item.querySelector('span').classList.remove('text-orange-700');
-                    });
+                    // Limpar formulário e recarregar grid
+                    if (categoriaSelect) categoriaSelect.value = '';
+                    if (motivoSelect) motivoSelect.innerHTML = '<option value="">Selecione o motivo...</option>';
+                    
+                    // Recarregar grid de máquinas para mostrar atualizações
+                    await renderMaquinasGrid();
                     updateCount();
                     if (categoriaSelect) categoriaSelect.value = '';
                     if (motivoSelect) motivoSelect.innerHTML = '<option value="">Selecione o motivo...</option>';
@@ -26055,6 +26134,7 @@ ${content.innerHTML}
         
         const filtroMaquina = document.getElementById('admin-paradas-maquina')?.value || '';
         const filtroStatus = document.getElementById('admin-paradas-status')?.value || '';
+        const filtroCodProduto = (document.getElementById('admin-paradas-cod-produto')?.value || '').trim().toUpperCase();
         
         try {
             console.log('[ADMIN-PARADAS] Buscando paradas de', dataInicio, 'a', dataFim);
@@ -26078,6 +26158,12 @@ ${content.innerHTML}
                 const isActive = data.status === 'active' || data.isActive === true;
                 if (filtroStatus === 'active' && !isActive) return;
                 if (filtroStatus === 'finished' && isActive) return;
+                
+                // Filtro de Código de Produto
+                if (filtroCodProduto) {
+                    const codProd = (data.product_code || data.productCode || data.codigo || data.part_code || '').toString().toUpperCase();
+                    if (!codProd.includes(filtroCodProduto)) return;
+                }
                 
                 paradas.push({
                     id: doc.id,
@@ -26858,14 +26944,15 @@ ${content.innerHTML}
         const dataFiltro = document.getElementById('admin-producao-data')?.value;
         const maquina = document.getElementById('admin-producao-maquina')?.value;
         const turno = document.getElementById('admin-producao-turno')?.value;
+        const codProdutoFiltro = document.getElementById('admin-producao-cod-produto')?.value?.trim();
         const listaDiv = document.getElementById('admin-producao-lista');
         
-        if (!dataFiltro) {
-            alert('Selecione uma data');
+        if (!dataFiltro && !codProdutoFiltro) {
+            alert('Selecione uma data ou informe um Código de Produto');
             return;
         }
         
-        console.log('[ADMIN-PRODUCAO] Buscando registros:', { dataFiltro, maquina, turno });
+        console.log('[ADMIN-PRODUCAO] Buscando registros:', { dataFiltro, maquina, turno, codProdutoFiltro });
         
         try {
             listaDiv.innerHTML = '<div class="text-center py-4 text-gray-500"><div class="animate-spin inline-block w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full mb-2"></div><p>Carregando registros...</p></div>';
@@ -27010,6 +27097,14 @@ ${content.innerHTML}
                 docs = docs.filter(d => {
                     const docTurno = String(d.shift || d.turno || '');
                     return docTurno === turno;
+                });
+            }
+            
+            // Filtrar por Código de Produto se especificado
+            if (codProdutoFiltro) {
+                docs = docs.filter(d => {
+                    const codProd = String(d._product_code || d.product_code || d.productCode || d.codigo || d.part_code || '');
+                    return codProd.includes(codProdutoFiltro);
                 });
             }
             
@@ -27694,14 +27789,15 @@ ${content.innerHTML}
         const maquina = document.getElementById('admin-perdas-maquina')?.value;
         const turno = document.getElementById('admin-perdas-turno')?.value;
         const tipo = document.getElementById('admin-perdas-tipo')?.value;
+        const codProdutoFiltro = document.getElementById('admin-perdas-cod-produto')?.value?.trim();
         const listaDiv = document.getElementById('admin-perdas-lista');
         
-        if (!dataFiltro) {
-            alert('Selecione uma data');
+        if (!dataFiltro && !codProdutoFiltro) {
+            alert('Selecione uma data ou informe um Código de Produto');
             return;
         }
         
-        console.log('[ADMIN-PERDAS] Buscando registros:', { dataFiltro, maquina, turno, tipo });
+        console.log('[ADMIN-PERDAS] Buscando registros:', { dataFiltro, maquina, turno, tipo, codProdutoFiltro });
         
         try {
             listaDiv.innerHTML = '<div class="text-center py-4 text-gray-500"><div class="animate-spin inline-block w-6 h-6 border-2 border-red-500 border-t-transparent rounded-full mb-2"></div><p>Carregando perdas...</p></div>';
@@ -27780,6 +27876,14 @@ ${content.innerHTML}
                     if (tipo === 'refugo') return motivo.includes('refugo') || motivo.includes('setup') || motivo.includes('ajuste') || motivo.includes('qualidade');
                     if (tipo === 'sucata') return motivo.includes('sucata') || motivo.includes('descarte');
                     return true;
+                });
+            }
+            
+            // Filtrar por Código de Produto se especificado
+            if (codProdutoFiltro) {
+                docs = docs.filter(d => {
+                    const codProd = String(d.product_code || d.productCode || d.codigo || d.part_code || '');
+                    return codProd.includes(codProdutoFiltro);
                 });
             }
             
@@ -28330,32 +28434,61 @@ ${content.innerHTML}
     async function adminBuscarPlanejamento() {
         const data = document.getElementById('admin-planejamento-data')?.value;
         const maquina = document.getElementById('admin-planejamento-maquina')?.value;
+        const codProdutoFiltro = document.getElementById('admin-planejamento-cod-produto')?.value?.trim();
         const listaDiv = document.getElementById('admin-planejamento-lista');
         
-        if (!data) {
-            alert('Selecione uma data');
+        if (!data && !codProdutoFiltro) {
+            alert('Selecione uma data ou informe um Código de Produto');
             return;
         }
+        
+        console.log('[ADMIN-PLANEJAMENTO] Buscando registros:', { data, maquina, codProdutoFiltro });
         
         try {
             listaDiv.innerHTML = '<div class="text-center py-4 text-gray-500"><i class="animate-spin">⏳</i> Carregando...</div>';
             
-            let query = db.collection('planning').where('date', '==', data);
+            let query = db.collection('planning');
+            
+            // Se tiver data, filtra por data
+            if (data) {
+                query = query.where('date', '==', data);
+            }
+            
+            // Se tiver máquina, filtra por máquina
             if (maquina) {
                 query = query.where('machine', '==', maquina);
             }
             
-            const snapshot = await query.get();
+            // Se tiver código de produto, busca sem data (busca mais ampla)
+            if (codProdutoFiltro && !data) {
+                // Buscar planejamentos dos últimos 90 dias
+                const hoje = new Date();
+                const antes90dias = new Date(hoje);
+                antes90dias.setDate(antes90dias.getDate() - 90);
+                const dataMinima = antes90dias.toISOString().split('T')[0];
+                query = query.where('date', '>=', dataMinima);
+            }
             
-            if (snapshot.empty) {
-                listaDiv.innerHTML = '<div class="text-center py-8 text-gray-400">Nenhum planejamento encontrado para esta data.</div>';
+            const snapshot = await query.limit(500).get();
+            
+            let docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            // Filtrar por Código de Produto se especificado
+            if (codProdutoFiltro) {
+                docs = docs.filter(d => {
+                    const codProd = String(d.product_code || d.productCode || d.part_code || d.codigo || '');
+                    return codProd.includes(codProdutoFiltro);
+                });
+            }
+            
+            if (docs.length === 0) {
+                listaDiv.innerHTML = '<div class="text-center py-8 text-gray-400">Nenhum planejamento encontrado para os filtros selecionados.</div>';
                 return;
             }
             
             let html = '';
             
-            snapshot.forEach(doc => {
-                const d = doc.data();
+            docs.forEach(d => {
                 const cicloT1 = d.real_cycle_t1 || '-';
                 const cavT1 = d.active_cavities_t1 || '-';
                 const cicloT2 = d.real_cycle_t2 || '-';
@@ -28373,7 +28506,7 @@ ${content.innerHTML}
                                     <p class="text-xs text-gray-500">MP: ${d.mp || '-'} | Código: ${d.product_cod || '-'}</p>
                                 </div>
                             </div>
-                            <button class="admin-btn-edit-planejamento bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2" data-id="${doc.id}">
+                            <button class="admin-btn-edit-planejamento bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2" data-id="${d.id}">
                                 <i data-lucide="edit-2" class="w-4 h-4"></i>
                                 Editar
                             </button>
@@ -34689,10 +34822,33 @@ ${content.innerHTML}
             const workday = getWorkdayForDateTime(now);
             const batch = db.batch();
             const machinesArray = Array.from(_batchSelectedMachines);
+            
+            // CORREÇÃO: Verificar novamente quais máquinas já estão paradas
+            const currentDowntimes = await getAllMachinesDowntimeStatus(true);
+            const machinesDisponiveis = machinesArray.filter(machineId => {
+                const normalizedId = normalizeMachineId(machineId);
+                return !currentDowntimes[machineId] && !currentDowntimes[normalizedId];
+            });
+            
+            const machinesJaParadas = machinesArray.length - machinesDisponiveis.length;
+            
+            if (machinesDisponiveis.length === 0) {
+                showNotification('Todas as máquinas selecionadas já estão paradas', 'warning');
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    updateBatchSelectedCount();
+                }
+                return;
+            }
+            
+            if (machinesJaParadas > 0) {
+                console.log(`[BATCH-DOWNTIME] ${machinesJaParadas} máquinas já estavam paradas, ignorando...`);
+            }
+            
             let successCount = 0;
             let errorCount = 0;
 
-            for (const machineId of machinesArray) {
+            for (const machineId of machinesDisponiveis) {
                 try {
                     const normalizedId = normalizeMachineId(machineId);
 
@@ -34735,16 +34891,17 @@ ${content.innerHTML}
 
             // Executar batch
             await batch.commit();
-            console.log(`[BATCH-DOWNTIME] Parada em lote concluída: ${successCount} sucesso, ${errorCount} erros`);
+            console.log(`[BATCH-DOWNTIME] Parada em lote concluída: ${successCount} sucesso, ${errorCount} erros, ${machinesJaParadas} já paradas`);
 
             // Log
             if (typeof logSystemAction === 'function') {
-                logSystemAction('parada_lote', `Parada em lote iniciada: ${machinesArray.join(', ')} - ${reason}`, {
-                    maquinas: machinesArray,
+                logSystemAction('parada_lote', `Parada em lote iniciada: ${machinesDisponiveis.join(', ')} - ${reason}`, {
+                    maquinas: machinesDisponiveis,
                     motivo: reason,
                     turno: currentShift,
                     batchDowntime: true,
-                    totalMaquinas: machinesArray.length
+                    totalMaquinas: machinesDisponiveis.length,
+                    maquinasJaParadas: machinesJaParadas
                 });
             }
 
@@ -34762,7 +34919,11 @@ ${content.innerHTML}
 
             // Notificação de sucesso
             if (errorCount === 0) {
-                showNotification(`⚡ Parada em lote iniciada com sucesso em ${successCount} máquina(s)!`, 'success');
+                let msg = `⚡ Parada em lote iniciada com sucesso em ${successCount} máquina(s)!`;
+                if (machinesJaParadas > 0) {
+                    msg += ` (${machinesJaParadas} já estavam paradas)`;
+                }
+                showNotification(msg, 'success');
             } else {
                 showNotification(`⚠️ Parada em lote: ${successCount} sucesso, ${errorCount} erros`, 'warning');
             }
@@ -39046,7 +39207,38 @@ function sendDowntimeNotification() {
                 }
             });
             
-            // Paradas longas (extended_downtime_logs) removidas - Unificação 02/2026
+            // 2. Buscar paradas ativas de extended_downtime_logs (paradas em lote antigas)
+            // CORRIGIDO: Evitar que máquinas já paradas apareçam disponíveis
+            try {
+                const extendedSnap = await window.db.collection('extended_downtime_logs')
+                    .where('status', '==', 'active')
+                    .get();
+                    
+                extendedSnap.forEach(doc => {
+                    const data = doc.data();
+                    // Usar machine_id ou machine como identificador
+                    const machineId = data.machine_id || data.machine;
+                    if (machineId) {
+                        const mid = normalizeMachineId(machineId);
+                        // Não sobrescrever se já existe em active_downtimes (prioridade)
+                        if (!statusMap[mid]) {
+                            statusMap[mid] = {
+                                recordId: doc.id,
+                                type: 'extended_downtime',
+                                reason: data.reason || data.type || 'Parada registrada',
+                                startDate: data.start_date || data.date,
+                                endDate: null,
+                                status: 'active',
+                                durationMinutes: null,
+                                category: data.category
+                            };
+                        }
+                    }
+                });
+                console.log('[MACHINE-STATUS] extended_downtime_logs ativos:', extendedSnap.size);
+            } catch (extendedError) {
+                console.warn('[MACHINE-STATUS] Erro ao buscar extended_downtime_logs:', extendedError);
+            }
             
             // Atualizar cache
             _downtimeStatusCache = statusMap;
@@ -43146,6 +43338,1362 @@ function liderancaShowToast(message, type = 'info') {
         
         console.log(`[Liderança ${type.toUpperCase()}] ${message}`);
     }
+}
+
+// ================================================================================
+// RELATÓRIOS - Visualização e Análise (Somente Leitura)
+// ================================================================================
+let relatoriosSetupDone = false;
+let relProducaoDados = [];
+let relPerdasDados = [];
+let relParadasDados = [];
+let relParadasPaginaAtual = 1;
+const REL_PARADAS_POR_PAGINA = 20;
+
+function setupRelatoriosPage() {
+    if (relatoriosSetupDone) {
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        return;
+    }
+    relatoriosSetupDone = true;
+    
+    console.log('[RELATORIOS] Inicializando página de relatórios...');
+    
+    // Setup das abas internas
+    document.querySelectorAll('.rel-tab-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const tab = e.currentTarget.dataset.relTab;
+            switchRelTab(tab);
+        });
+    });
+    
+    // Popular selects de máquinas
+    populateRelMaquinasSelect('rel-producao-maquina');
+    populateRelMaquinasSelect('rel-perdas-maquina');
+    populateRelMaquinasSelect('rel-paradas-maquina');
+    
+    // Botões de busca
+    document.getElementById('rel-btn-buscar-producao')?.addEventListener('click', relBuscarProducao);
+    document.getElementById('rel-btn-buscar-perdas')?.addEventListener('click', relBuscarPerdas);
+    document.getElementById('rel-paradas-buscar')?.addEventListener('click', relBuscarParadas);
+    
+    // Botões de exportação CSV
+    document.getElementById('rel-btn-exportar-producao')?.addEventListener('click', relExportarProducaoCSV);
+    document.getElementById('rel-btn-exportar-perdas')?.addEventListener('click', relExportarPerdasCSV);
+    document.getElementById('rel-btn-exportar-paradas')?.addEventListener('click', relExportarParadasCSV);
+    
+    // Botões de exportação Tabela (HTML formatado)
+    document.getElementById('rel-btn-exportar-producao-tabela')?.addEventListener('click', relExportarProducaoTabela);
+    document.getElementById('rel-btn-exportar-perdas-tabela')?.addEventListener('click', relExportarPerdasTabela);
+    document.getElementById('rel-btn-exportar-paradas-tabela')?.addEventListener('click', relExportarParadasTabela);
+    
+    // Período customizado produção
+    document.getElementById('rel-producao-periodo')?.addEventListener('change', (e) => {
+        const custom = e.target.value === 'custom';
+        document.getElementById('rel-producao-custom-dates')?.classList.toggle('hidden', !custom);
+        document.getElementById('rel-producao-custom-dates-fim')?.classList.toggle('hidden', !custom);
+    });
+    
+    // Período customizado perdas
+    document.getElementById('rel-perdas-periodo')?.addEventListener('change', (e) => {
+        const custom = e.target.value === 'custom';
+        document.getElementById('rel-perdas-custom-dates')?.classList.toggle('hidden', !custom);
+        document.getElementById('rel-perdas-custom-dates-fim')?.classList.toggle('hidden', !custom);
+    });
+    
+    // Período customizado paradas
+    document.getElementById('rel-paradas-periodo')?.addEventListener('change', (e) => {
+        const custom = e.target.value === 'custom';
+        document.getElementById('rel-paradas-custom-dates')?.classList.toggle('hidden', !custom);
+        document.getElementById('rel-paradas-custom-dates-fim')?.classList.toggle('hidden', !custom);
+    });
+    
+    // Paginação paradas
+    document.getElementById('rel-paradas-pag-anterior')?.addEventListener('click', () => {
+        if (relParadasPaginaAtual > 1) {
+            relParadasPaginaAtual--;
+            relRenderParadasTabela();
+        }
+    });
+    document.getElementById('rel-paradas-pag-proxima')?.addEventListener('click', () => {
+        const totalPaginas = Math.ceil(relParadasDados.length / REL_PARADAS_POR_PAGINA);
+        if (relParadasPaginaAtual < totalPaginas) {
+            relParadasPaginaAtual++;
+            relRenderParadasTabela();
+        }
+    });
+    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function switchRelTab(tab) {
+    document.querySelectorAll('.rel-tab-btn').forEach(btn => {
+        btn.classList.remove('active', 'bg-blue-500', 'text-white');
+        btn.classList.add('bg-gray-100', 'text-gray-600');
+    });
+    const activeBtn = document.querySelector(`.rel-tab-btn[data-rel-tab="${tab}"]`);
+    if (activeBtn) {
+        activeBtn.classList.add('active', 'bg-blue-500', 'text-white');
+        activeBtn.classList.remove('bg-gray-100', 'text-gray-600');
+    }
+    
+    document.querySelectorAll('.rel-tab-content').forEach(c => c.classList.add('hidden'));
+    const content = document.getElementById(`rel-tab-${tab}`);
+    if (content) content.classList.remove('hidden');
+    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function populateRelMaquinasSelect(selectId) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    
+    select.innerHTML = '<option value="">Todas</option>';
+    if (typeof machineDatabase !== 'undefined') {
+        machineDatabase.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.id;
+            opt.textContent = `${m.id} - ${m.model}`;
+            select.appendChild(opt);
+        });
+    }
+}
+
+// Função auxiliar para buscar nome do produto pelo código
+function getProductNameByCode(code) {
+    if (!code) return '';
+    const codNum = Number(code);
+    const codStr = String(code).trim();
+    
+    if (typeof productDatabase !== 'undefined') {
+        // Primeiro tenta buscar por número (campo "cod")
+        let product = productDatabase.find(p => p.cod === codNum);
+        
+        // Se não encontrar, tenta buscar como string
+        if (!product) {
+            product = productDatabase.find(p => 
+                String(p.cod || p.code || p.codigo || p.product_code || '').trim() === codStr
+            );
+        }
+        
+        if (product) {
+            return product.name || product.nome || product.description || product.descricao || '';
+        }
+    }
+    
+    // Tentar buscar no productByCode Map
+    if (typeof productByCode !== 'undefined' && productByCode.has(codStr)) {
+        const product = productByCode.get(codStr);
+        return product.name || product.nome || product.description || product.descricao || '';
+    }
+    return '';
+}
+
+// Cache global para OPs (orderId -> order_number)
+let relOPsCache = new Map();
+let relOPsCacheLoaded = false;
+
+// Função para carregar cache de OPs
+async function relLoadOPsCache() {
+    if (relOPsCacheLoaded) return;
+    try {
+        const snapshot = await db.collection('production_orders').limit(2000).get();
+        snapshot.docs.forEach(doc => {
+            const data = doc.data();
+            relOPsCache.set(doc.id, data.order_number || data.order_number_original || doc.id);
+        });
+        relOPsCacheLoaded = true;
+        console.log('[RELATORIOS] Cache de OPs carregado:', relOPsCache.size, 'registros');
+    } catch (e) {
+        console.warn('[RELATORIOS] Erro ao carregar cache de OPs:', e.message);
+    }
+}
+
+// Função para obter número da OP a partir do orderId
+function relGetOrderNumber(orderId) {
+    if (!orderId || orderId === '-') return '-';
+    // Se já é um número (não é ID do Firebase), retorna direto
+    if (/^\d+$/.test(orderId)) return orderId;
+    // Busca no cache
+    return relOPsCache.get(orderId) || orderId;
+}
+
+// Função auxiliar global para obter data de produção (considera turno que inicia às 6h30)
+function relGetProductionDateString(date = new Date()) {
+    const dateObj = date instanceof Date ? date : new Date(date);
+    const hour = dateObj.getHours();
+    const minute = dateObj.getMinutes();
+    
+    // Se for antes das 6h30, pertence ao dia de trabalho anterior
+    if (hour < 6 || (hour === 6 && minute < 30)) {
+        const prevDay = new Date(dateObj);
+        prevDay.setDate(prevDay.getDate() - 1);
+        return new Date(prevDay.getTime() - (prevDay.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+    }
+    
+    return new Date(dateObj.getTime() - (dateObj.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+}
+
+// Função auxiliar global para normalizar ID de máquina
+function relNormalizeMachineId(id) {
+    if (!id) return null;
+    const s = String(id).toUpperCase().replace(/\s+/g, '');
+    // Aceita H-01, H01, h01 etc.; mantém dois dígitos
+    const match = s.match(/^H[-_]?(\d{1,2})$/);
+    if (match) {
+        return `H${match[1].padStart(2, '0')}`;
+    }
+    // Se vier apenas dígitos (ex.: 1, 01), prefixa H
+    const n = s.match(/^(\d{1,2})$/);
+    if (n) {
+        return `H${n[1].padStart(2, '0')}`;
+    }
+    // Fallback: remove hífens e tenta novamente
+    const cleaned = s.replace(/-/g, '');
+    const m2 = cleaned.match(/^H(\d{1,2})$/);
+    if (m2) return `H${m2[1].padStart(2, '0')}`;
+    return s; // Retorna como está se não conseguir normalizar
+}
+
+// ==================== RELATÓRIO DE PRODUÇÃO ====================
+async function relBuscarProducao() {
+    // Carregar cache de OPs
+    await relLoadOPsCache();
+    
+    // Obter período
+    const periodo = document.getElementById('rel-producao-periodo')?.value || 'today';
+    let dataInicio, dataFim;
+    const hoje = new Date();
+    const hojeStr = relGetProductionDateString(hoje);
+    
+    switch (periodo) {
+        case 'today':
+            dataInicio = dataFim = hojeStr;
+            break;
+        case 'yesterday':
+            const ontem = new Date(hoje);
+            ontem.setDate(ontem.getDate() - 1);
+            dataInicio = dataFim = relGetProductionDateString(ontem);
+            break;
+        case '7days':
+            const seteDias = new Date(hoje);
+            seteDias.setDate(seteDias.getDate() - 7);
+            dataInicio = relGetProductionDateString(seteDias);
+            dataFim = hojeStr;
+            break;
+        case '30days':
+            const trintaDias = new Date(hoje);
+            trintaDias.setDate(trintaDias.getDate() - 30);
+            dataInicio = relGetProductionDateString(trintaDias);
+            dataFim = hojeStr;
+            break;
+        case 'custom':
+            dataInicio = document.getElementById('rel-producao-data-inicio')?.value;
+            dataFim = document.getElementById('rel-producao-data-fim')?.value;
+            if (!dataInicio || !dataFim) {
+                alert('Selecione as datas do período personalizado');
+                return;
+            }
+            break;
+    }
+    
+    const maquina = document.getElementById('rel-producao-maquina')?.value;
+    const turno = document.getElementById('rel-producao-turno')?.value;
+    const codProdutoFiltro = document.getElementById('rel-producao-cod-produto')?.value?.trim();
+    const opFiltro = document.getElementById('rel-producao-op')?.value?.trim();
+    const listaDiv = document.getElementById('rel-producao-lista');
+    
+    console.log('[RELATORIOS-PRODUCAO] Buscando registros:', { dataInicio, dataFim, maquina, turno, codProdutoFiltro, opFiltro });
+    
+    try {
+        listaDiv.innerHTML = '<div class="text-center py-4 text-gray-500"><div class="animate-spin inline-block w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full mb-2"></div><p>Carregando registros...</p></div>';
+        
+        const allDocs = new Map();
+        
+        // Buscar com range de datas - tenta múltiplas abordagens
+        try {
+            const snapshotDate = await db.collection('production_entries')
+                .where('date', '>=', dataInicio)
+                .where('date', '<=', dataFim)
+                .limit(1000).get();
+            
+            snapshotDate.docs.forEach(doc => {
+                allDocs.set(doc.id, { id: doc.id, ...doc.data() });
+            });
+            console.log('[RELATORIOS-PRODUCAO] Campo date encontrou:', snapshotDate.size, 'docs');
+        } catch (e) {
+            console.warn('[RELATORIOS-PRODUCAO] Query com campo date falhou:', e.message);
+        }
+        
+        try {
+            const snapshotData = await db.collection('production_entries')
+                .where('data', '>=', dataInicio)
+                .where('data', '<=', dataFim)
+                .limit(1000).get();
+            
+            snapshotData.docs.forEach(doc => {
+                if (!allDocs.has(doc.id)) {
+                    allDocs.set(doc.id, { id: doc.id, ...doc.data() });
+                }
+            });
+            console.log('[RELATORIOS-PRODUCAO] Campo data encontrou:', snapshotData.size, 'docs');
+        } catch (e) {
+            console.warn('[RELATORIOS-PRODUCAO] Query com campo data falhou:', e.message);
+        }
+        
+        // Se nenhuma query funcionou, busca todos e filtra no cliente
+        if (allDocs.size === 0) {
+            console.log('[RELATORIOS-PRODUCAO] Tentando busca alternativa sem range...');
+            try {
+                const snapshotAll = await db.collection('production_entries')
+                    .orderBy('timestamp', 'desc')
+                    .limit(2000).get();
+                
+                snapshotAll.docs.forEach(doc => {
+                    const d = doc.data();
+                    const docDate = d.date || d.data || '';
+                    if (docDate >= dataInicio && docDate <= dataFim) {
+                        allDocs.set(doc.id, { id: doc.id, ...d });
+                    }
+                });
+                console.log('[RELATORIOS-PRODUCAO] Busca alternativa encontrou:', allDocs.size, 'docs');
+            } catch (e) {
+                console.error('[RELATORIOS-PRODUCAO] Busca alternativa falhou:', e.message);
+            }
+        }
+        
+        // Converter para array e aplicar filtros
+        let docs = Array.from(allDocs.values());
+        
+        console.log('[RELATORIOS-PRODUCAO] Total de documentos após merge:', docs.length);
+        
+        // Filtro de máquina
+        if (maquina) {
+            docs = docs.filter(d => {
+                const docMaq = relNormalizeMachineId(d.machine || d.machine_id || d.maquina || '');
+                return docMaq === maquina;
+            });
+        }
+        
+        // Filtro de turno
+        if (turno) {
+            docs = docs.filter(d => {
+                const docTurno = String(d.shift || d.turno || '');
+                return docTurno === turno;
+            });
+        }
+        
+        // Filtro de código de produto
+        if (codProdutoFiltro) {
+            docs = docs.filter(d => {
+                const codProd = String(d.product_code || d.productCode || d.codigo || d.part_code || '');
+                return codProd.includes(codProdutoFiltro);
+            });
+        }
+        
+        // Filtro de OP
+        if (opFiltro) {
+            docs = docs.filter(d => {
+                const op = String(d.order_number || d.op || d.orderId || d.order_id || '');
+                return op.includes(opFiltro);
+            });
+        }
+        
+        // Ordenar por data e timestamp decrescente
+        docs.sort((a, b) => {
+            const dateA = a.date || a.data || '';
+            const dateB = b.date || b.data || '';
+            if (dateA !== dateB) return dateB.localeCompare(dateA);
+            const tsA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp?.seconds || 0) * 1000;
+            const tsB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp?.seconds || 0) * 1000;
+            return tsB - tsA;
+        });
+        
+        relProducaoDados = docs.slice(0, 500);
+        
+        // Atualizar estatísticas
+        let totalPecas = 0, totalPeso = 0, totalRefugo = 0;
+        relProducaoDados.forEach(d => {
+            totalPecas += Number(d.produzido || d.quantity || d.qty || d.quantidade || 0);
+            totalPeso += Number(d.peso_bruto || d.weight_kg || d.peso || d.peso_kg || 0);
+            totalRefugo += Number(d.refugo_kg || d.scrap_kg || 0);
+        });
+        
+        document.getElementById('rel-prod-total').textContent = relProducaoDados.length;
+        document.getElementById('rel-prod-pecas').textContent = totalPecas.toLocaleString('pt-BR');
+        document.getElementById('rel-prod-peso').textContent = totalPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        document.getElementById('rel-prod-refugo').textContent = totalRefugo.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        
+        if (relProducaoDados.length === 0) {
+            listaDiv.innerHTML = `
+                <div class="text-center py-8 text-gray-400">
+                    <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                    <p class="font-semibold">Nenhum registro encontrado</p>
+                    <p class="text-sm">Período: ${dataInicio} a ${dataFim}</p>
+                </div>`;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            return;
+        }
+        
+        // Renderizar cards
+        let html = '';
+        relProducaoDados.forEach(d => {
+            const dataDoc = d.data || d.date || '-';
+            const maq = d.machine || d.machine_id || d.maquina || '-';
+            const turnoDoc = d.turno || d.shift || '-';
+            const codProd = d.mp || d.product_code || d.productCode || d.codigo || '-';
+            const nomeProd = getProductNameByCode(codProd) || d.product_name || d.productName || d.descricao || '-';
+            const qty = d.produzido || d.quantity || d.qty || d.quantidade || 0;
+            const peso = d.peso_bruto || d.weight_kg || d.peso || d.peso_kg || 0;
+            const opId = d.orderId || d.order_id || d.order_number || d.op || '-';
+            const opNum = relGetOrderNumber(opId);
+            const hora = d.horaInformada || (d.timestamp?.toDate ? d.timestamp.toDate().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '-');
+            
+            html += `
+                <div class="bg-white rounded-lg p-3 border border-gray-200 hover:border-blue-300 transition">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-4">
+                            <span class="text-xs bg-gray-200 px-2 py-1 rounded">${dataDoc}</span>
+                            <span class="font-bold text-blue-600">${maq}</span>
+                            <span class="text-xs bg-gray-100 px-2 py-1 rounded">T${turnoDoc}</span>
+                            <span class="text-xs text-gray-500">${hora}</span>
+                        </div>
+                        <span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">OP: ${opNum}</span>
+                    </div>
+                    <div class="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                        <div>
+                            <span class="text-gray-500">Código:</span>
+                            <span class="font-semibold ml-1">${codProd}</span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="text-gray-500">Produto:</span>
+                            <span class="font-semibold ml-1 text-indigo-700">${nomeProd}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">Qtd:</span>
+                            <span class="font-semibold ml-1">${Number(qty).toLocaleString('pt-BR')}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">Peso:</span>
+                            <span class="font-semibold ml-1">${Number(peso).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} kg</span>
+                        </div>
+                    </div>
+                </div>`;
+        });
+        
+        listaDiv.innerHTML = html;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        
+    } catch (error) {
+        console.error('[RELATORIOS-PRODUCAO] Erro:', error);
+        listaDiv.innerHTML = `<div class="text-center py-8 text-red-500">Erro ao buscar: ${error.message}</div>`;
+    }
+}
+
+function relExportarProducaoCSV() {
+    if (relProducaoDados.length === 0) {
+        alert('Nenhum dado para exportar. Faça uma busca primeiro.');
+        return;
+    }
+    
+    const headers = ['Data', 'Máquina', 'Turno', 'OP', 'Código Produto', 'Nome Produto', 'Quantidade', 'Peso (kg)', 'Refugo (kg)'];
+    const rows = relProducaoDados.map(d => {
+        const codProd = d.mp || d.product_code || d.productCode || d.codigo || '';
+        const nomeProd = getProductNameByCode(codProd) || d.product_name || d.productName || d.descricao || '';
+        const opId = d.orderId || d.order_id || d.order_number || d.op || '';
+        return [
+            d.data || d.date || '',
+            d.machine || d.machine_id || d.maquina || '',
+            d.turno || d.shift || '',
+            relGetOrderNumber(opId),
+            codProd,
+            nomeProd,
+            d.produzido || d.quantity || d.qty || d.quantidade || 0,
+            d.peso_bruto || d.weight_kg || d.peso || d.peso_kg || 0,
+            d.refugo_kg || d.scrap_kg || 0
+        ];
+    });
+    
+    exportToCSV('relatorio_producao', headers, rows);
+}
+
+// ==================== RELATÓRIO DE PERDAS ====================
+async function relBuscarPerdas() {
+    // Carregar cache de OPs
+    await relLoadOPsCache();
+    
+    // Obter período
+    const periodo = document.getElementById('rel-perdas-periodo')?.value || 'today';
+    let dataInicio, dataFim;
+    const hoje = new Date();
+    const hojeStr = relGetProductionDateString(hoje);
+    
+    switch (periodo) {
+        case 'today':
+            dataInicio = dataFim = hojeStr;
+            break;
+        case 'yesterday':
+            const ontem = new Date(hoje);
+            ontem.setDate(ontem.getDate() - 1);
+            dataInicio = dataFim = relGetProductionDateString(ontem);
+            break;
+        case '7days':
+            const seteDias = new Date(hoje);
+            seteDias.setDate(seteDias.getDate() - 7);
+            dataInicio = relGetProductionDateString(seteDias);
+            dataFim = hojeStr;
+            break;
+        case '30days':
+            const trintaDias = new Date(hoje);
+            trintaDias.setDate(trintaDias.getDate() - 30);
+            dataInicio = relGetProductionDateString(trintaDias);
+            dataFim = hojeStr;
+            break;
+        case 'custom':
+            dataInicio = document.getElementById('rel-perdas-data-inicio')?.value;
+            dataFim = document.getElementById('rel-perdas-data-fim')?.value;
+            if (!dataInicio || !dataFim) {
+                alert('Selecione as datas do período personalizado');
+                return;
+            }
+            break;
+    }
+    
+    const maquina = document.getElementById('rel-perdas-maquina')?.value;
+    const turno = document.getElementById('rel-perdas-turno')?.value;
+    const tipo = document.getElementById('rel-perdas-tipo')?.value;
+    const codProdutoFiltro = document.getElementById('rel-perdas-cod-produto')?.value?.trim();
+    const opFiltro = document.getElementById('rel-perdas-op')?.value?.trim();
+    const listaDiv = document.getElementById('rel-perdas-lista');
+    
+    console.log('[RELATORIOS-PERDAS] Buscando registros:', { dataInicio, dataFim, maquina, turno, tipo, codProdutoFiltro, opFiltro });
+    
+    try {
+        listaDiv.innerHTML = '<div class="text-center py-4 text-gray-500"><div class="animate-spin inline-block w-6 h-6 border-2 border-red-500 border-t-transparent rounded-full mb-2"></div><p>Carregando perdas...</p></div>';
+        
+        const allDocs = new Map();
+        
+        const addIfHasLosses = (doc) => {
+            const d = doc.data();
+            const refugoKg = Number(d.refugo_kg || 0);
+            const borraKg = Number(d.borra_kg || 0);
+            const sucataKg = Number(d.sucata_kg || 0);
+            
+            if (refugoKg > 0 || borraKg > 0 || sucataKg > 0) {
+                allDocs.set(doc.id, { id: doc.id, ...d });
+            }
+        };
+        
+        // Buscar com range de datas - tenta múltiplas abordagens
+        try {
+            const snapshotDate = await db.collection('production_entries')
+                .where('date', '>=', dataInicio)
+                .where('date', '<=', dataFim)
+                .limit(1000).get();
+            
+            snapshotDate.docs.forEach(addIfHasLosses);
+            console.log('[RELATORIOS-PERDAS] Campo date encontrou:', snapshotDate.size, 'docs');
+        } catch (e) {
+            console.warn('[RELATORIOS-PERDAS] Query com campo date falhou:', e.message);
+        }
+        
+        try {
+            const snapshotData = await db.collection('production_entries')
+                .where('data', '>=', dataInicio)
+                .where('data', '<=', dataFim)
+                .limit(1000).get();
+            
+            snapshotData.docs.forEach(doc => {
+                if (!allDocs.has(doc.id)) addIfHasLosses(doc);
+            });
+            console.log('[RELATORIOS-PERDAS] Campo data encontrou:', snapshotData.size, 'docs');
+        } catch (e) {
+            console.warn('[RELATORIOS-PERDAS] Query com campo data falhou:', e.message);
+        }
+        
+        // Se nenhuma query funcionou, busca todos e filtra no cliente
+        if (allDocs.size === 0) {
+            console.log('[RELATORIOS-PERDAS] Tentando busca alternativa sem range...');
+            try {
+                const snapshotAll = await db.collection('production_entries')
+                    .orderBy('timestamp', 'desc')
+                    .limit(2000).get();
+                
+                snapshotAll.docs.forEach(doc => {
+                    const d = doc.data();
+                    const docDate = d.date || d.data || '';
+                    if (docDate >= dataInicio && docDate <= dataFim) {
+                        addIfHasLosses(doc);
+                    }
+                });
+                console.log('[RELATORIOS-PERDAS] Busca alternativa encontrou docs com perda:', allDocs.size);
+            } catch (e) {
+                console.error('[RELATORIOS-PERDAS] Busca alternativa falhou:', e.message);
+            }
+        }
+        
+        let docs = Array.from(allDocs.values());
+        
+        console.log('[RELATORIOS-PERDAS] Total de documentos com perdas:', docs.length);
+        
+        // Filtros
+        if (maquina) {
+            docs = docs.filter(d => {
+                const docMaq = relNormalizeMachineId(d.machine || d.machine_id || d.maquina || '');
+                return docMaq === maquina;
+            });
+        }
+        
+        if (turno) {
+            docs = docs.filter(d => {
+                const docTurno = String(d.shift || d.turno || '');
+                return docTurno === turno;
+            });
+        }
+        
+        if (tipo) {
+            docs = docs.filter(d => {
+                if (tipo === 'refugo') return Number(d.refugo_kg || 0) > 0;
+                if (tipo === 'borra') return Number(d.borra_kg || 0) > 0;
+                if (tipo === 'sucata') return Number(d.sucata_kg || 0) > 0;
+                return true;
+            });
+        }
+        
+        if (codProdutoFiltro) {
+            docs = docs.filter(d => {
+                const codProd = String(d.product_code || d.productCode || d.codigo || d.part_code || '');
+                return codProd.includes(codProdutoFiltro);
+            });
+        }
+        
+        // Filtro de OP
+        if (opFiltro) {
+            docs = docs.filter(d => {
+                const op = String(d.order_number || d.op || d.orderId || d.order_id || '');
+                return op.includes(opFiltro);
+            });
+        }
+        
+        // Ordenar por data e timestamp decrescente
+        docs.sort((a, b) => {
+            const dateA = a.date || a.data || '';
+            const dateB = b.date || b.data || '';
+            if (dateA !== dateB) return dateB.localeCompare(dateA);
+            const tsA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp?.seconds || 0) * 1000;
+            const tsB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp?.seconds || 0) * 1000;
+            return tsB - tsA;
+        });
+        
+        relPerdasDados = docs.slice(0, 500);
+        
+        // Estatísticas
+        let totalPeso = 0, totalBorra = 0, totalRefugo = 0, totalSucata = 0;
+        relPerdasDados.forEach(d => {
+            const refugo = Number(d.refugo_kg || 0);
+            const borra = Number(d.borra_kg || 0);
+            const sucata = Number(d.sucata_kg || 0);
+            totalRefugo += refugo;
+            totalBorra += borra;
+            totalSucata += sucata;
+            totalPeso += refugo + borra + sucata;
+        });
+        
+        document.getElementById('rel-perdas-total').textContent = relPerdasDados.length;
+        document.getElementById('rel-perdas-peso').textContent = totalPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        document.getElementById('rel-perdas-borra').textContent = totalBorra.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        document.getElementById('rel-perdas-refugo').textContent = totalRefugo.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        document.getElementById('rel-perdas-sucata').textContent = totalSucata.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        
+        if (relPerdasDados.length === 0) {
+            listaDiv.innerHTML = `
+                <div class="text-center py-8 text-gray-400">
+                    <i data-lucide="trash-2" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                    <p class="font-semibold">Nenhuma perda encontrada</p>
+                    <p class="text-sm">Período: ${dataInicio} a ${dataFim}</p>
+                </div>`;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            return;
+        }
+        
+        let html = '';
+        relPerdasDados.forEach(d => {
+            const dataDoc = d.data || d.date || '-';
+            const maq = d.machine || d.machine_id || d.maquina || '-';
+            const turnoDoc = d.turno || d.shift || '-';
+            const codProd = d.mp || d.product_code || d.productCode || d.codigo || '-';
+            const nomeProd = getProductNameByCode(codProd) || d.product_name || d.productName || d.descricao || '-';
+            const refugo = Number(d.refugo_kg || 0);
+            const borra = Number(d.borra_kg || 0);
+            const sucata = Number(d.sucata_kg || 0);
+            const motivo = d.perdas || d.motivo_perda || d.loss_reason || '-';
+            const opId = d.orderId || d.order_id || d.order_number || d.op || '-';
+            const opNum = relGetOrderNumber(opId);
+            
+            html += `
+                <div class="bg-white rounded-lg p-3 border border-gray-200 hover:border-red-300 transition">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-4">
+                            <span class="text-xs bg-gray-200 px-2 py-1 rounded">${dataDoc}</span>
+                            <span class="font-bold text-red-600">${maq}</span>
+                            <span class="text-xs bg-gray-100 px-2 py-1 rounded">T${turnoDoc}</span>
+                        </div>
+                        <span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">OP: ${opNum}</span>
+                    </div>
+                    <div class="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                        <div>
+                            <span class="text-gray-500">Código:</span>
+                            <span class="font-semibold ml-1">${codProd}</span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="text-gray-500">Produto:</span>
+                            <span class="font-semibold ml-1 text-indigo-700">${nomeProd}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">Motivo:</span>
+                            <span class="font-semibold ml-1 text-orange-600">${motivo}</span>
+                        </div>
+                    </div>
+                    <div class="mt-2 flex flex-wrap gap-3 text-sm">
+                        ${refugo > 0 ? `<span class="bg-red-100 text-red-700 px-2 py-1 rounded">Refugo: ${refugo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} kg</span>` : ''}
+                        ${borra > 0 ? `<span class="bg-amber-100 text-amber-700 px-2 py-1 rounded">Borra: ${borra.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} kg</span>` : ''}
+                        ${sucata > 0 ? `<span class="bg-purple-100 text-purple-700 px-2 py-1 rounded">Sucata: ${sucata.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} kg</span>` : ''}
+                    </div>
+                </div>`;
+        });
+        
+        listaDiv.innerHTML = html;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        
+    } catch (error) {
+        console.error('[RELATORIOS-PERDAS] Erro:', error);
+        listaDiv.innerHTML = `<div class="text-center py-8 text-red-500">Erro ao buscar: ${error.message}</div>`;
+    }
+}
+
+function relExportarPerdasCSV() {
+    if (relPerdasDados.length === 0) {
+        alert('Nenhum dado para exportar. Faça uma busca primeiro.');
+        return;
+    }
+    
+    const headers = ['Data', 'Máquina', 'Turno', 'OP', 'Código Produto', 'Nome Produto', 'Refugo (kg)', 'Borra (kg)', 'Sucata (kg)', 'Motivo'];
+    const rows = relPerdasDados.map(d => {
+        const codProd = d.mp || d.product_code || d.productCode || d.codigo || '';
+        const nomeProd = getProductNameByCode(codProd) || d.product_name || d.productName || d.descricao || '';
+        const opId = d.orderId || d.order_id || d.order_number || d.op || '';
+        return [
+            d.data || d.date || '',
+            d.machine || d.machine_id || d.maquina || '',
+            d.turno || d.shift || '',
+            relGetOrderNumber(opId),
+            codProd,
+            nomeProd,
+            d.refugo_kg || 0,
+            d.borra_kg || 0,
+            d.sucata_kg || 0,
+            d.perdas || d.motivo_perda || d.loss_reason || ''
+        ];
+    });
+    
+    exportToCSV('relatorio_perdas', headers, rows);
+}
+
+// ==================== RELATÓRIO DE PARADAS ====================
+async function relBuscarParadas() {
+    // Carregar cache de OPs
+    await relLoadOPsCache();
+    
+    const periodo = document.getElementById('rel-paradas-periodo')?.value || 'today';
+    let dataInicio, dataFim;
+    const hoje = new Date();
+    const hojeStr = relGetProductionDateString(hoje);
+    
+    switch (periodo) {
+        case 'today':
+            dataInicio = dataFim = hojeStr;
+            break;
+        case 'yesterday':
+            const ontem = new Date(hoje);
+            ontem.setDate(ontem.getDate() - 1);
+            dataInicio = dataFim = relGetProductionDateString(ontem);
+            break;
+        case '7days':
+            const seteDias = new Date(hoje);
+            seteDias.setDate(seteDias.getDate() - 7);
+            dataInicio = relGetProductionDateString(seteDias);
+            dataFim = hojeStr;
+            break;
+        case '30days':
+            const trintaDias = new Date(hoje);
+            trintaDias.setDate(trintaDias.getDate() - 30);
+            dataInicio = relGetProductionDateString(trintaDias);
+            dataFim = hojeStr;
+            break;
+        case 'custom':
+            dataInicio = document.getElementById('rel-paradas-data-inicio')?.value;
+            dataFim = document.getElementById('rel-paradas-data-fim')?.value;
+            if (!dataInicio || !dataFim) {
+                alert('Selecione as datas do período personalizado');
+                return;
+            }
+            break;
+    }
+    
+    const filtroMaquina = document.getElementById('rel-paradas-maquina')?.value || '';
+    const filtroStatus = document.getElementById('rel-paradas-status')?.value || '';
+    const filtroCodProduto = (document.getElementById('rel-paradas-cod-produto')?.value || '').trim().toUpperCase();
+    const filtroOP = (document.getElementById('rel-paradas-op')?.value || '').trim();
+    
+    try {
+        console.log('[RELATORIOS-PARADAS] Buscando paradas de', dataInicio, 'a', dataFim, '| OP:', filtroOP);
+        
+        let paradas = [];
+        let docsEncontrados = [];
+        
+        // Tenta buscar com range no campo date
+        try {
+            const snapshot = await db.collection('downtime_entries')
+                .where('date', '>=', dataInicio)
+                .where('date', '<=', dataFim)
+                .orderBy('date', 'desc')
+                .limit(1000).get();
+            
+            snapshot.docs.forEach(doc => docsEncontrados.push({ id: doc.id, ...doc.data() }));
+            console.log('[RELATORIOS-PARADAS] Campo date encontrou:', snapshot.size, 'docs');
+        } catch (e) {
+            console.warn('[RELATORIOS-PARADAS] Query com campo date falhou:', e.message);
+        }
+        
+        // Se não encontrou, tenta buscar sem range
+        if (docsEncontrados.length === 0) {
+            try {
+                const snapshot = await db.collection('downtime_entries')
+                    .orderBy('date', 'desc')
+                    .limit(1000).get();
+                
+                snapshot.docs.forEach(doc => {
+                    const d = doc.data();
+                    const docDate = d.date || '';
+                    if (docDate >= dataInicio && docDate <= dataFim) {
+                        docsEncontrados.push({ id: doc.id, ...d });
+                    }
+                });
+                console.log('[RELATORIOS-PARADAS] Busca alternativa encontrou:', docsEncontrados.length, 'docs');
+            } catch (e) {
+                console.error('[RELATORIOS-PARADAS] Busca alternativa falhou:', e.message);
+            }
+        }
+        
+        // Aplicar filtros
+        docsEncontrados.forEach(data => {
+            const machineId = relNormalizeMachineId(data.machine || data.machine_id || '');
+            if (filtroMaquina && machineId !== filtroMaquina) return;
+            
+            const isActive = data.status === 'active' || data.isActive === true;
+            if (filtroStatus === 'active' && !isActive) return;
+            if (filtroStatus === 'finished' && isActive) return;
+            
+            if (filtroCodProduto) {
+                const codProd = (data.product_code || data.productCode || data.codigo || data.part_code || '').toString().toUpperCase();
+                if (!codProd.includes(filtroCodProduto)) return;
+            }
+            
+            // Filtro de OP
+            if (filtroOP) {
+                const op = String(data.order_number || data.op || data.orderId || data.order_id || '');
+                if (!op.includes(filtroOP)) return;
+            }
+            
+            paradas.push({
+                id: data.id,
+                ...data,
+                machineId: machineId,
+                isActive: isActive
+            });
+        });
+        
+        paradas.sort((a, b) => {
+            if (a.date !== b.date) return (b.date || '').localeCompare(a.date || '');
+            const horaA = a.start_time || a.startTime || '00:00';
+            const horaB = b.start_time || b.startTime || '00:00';
+            return horaB.localeCompare(horaA);
+        });
+        
+        relParadasDados = paradas;
+        relParadasPaginaAtual = 1;
+        relRenderParadasStats();
+        relRenderParadasTabela();
+        
+        console.log('[RELATORIOS-PARADAS] Encontradas', paradas.length, 'paradas');
+        
+    } catch (error) {
+        console.error('[RELATORIOS-PARADAS] Erro ao buscar:', error);
+        alert('Erro ao buscar paradas: ' + error.message);
+    }
+}
+
+function relRenderParadasStats() {
+    const paradas = relParadasDados;
+    const ativas = paradas.filter(p => p.isActive);
+    const finalizadas = paradas.filter(p => !p.isActive);
+    
+    let tempoTotal = 0;
+    paradas.forEach(p => {
+        tempoTotal += p.duration || p.durationMinutes || 0;
+    });
+    
+    const tempoMedio = paradas.length > 0 ? Math.round(tempoTotal / paradas.length) : 0;
+    const horasTotal = Math.floor(tempoTotal / 60);
+    const minsTotal = tempoTotal % 60;
+    
+    document.getElementById('rel-paradas-stat-total').textContent = paradas.length;
+    document.getElementById('rel-paradas-stat-ativas').textContent = ativas.length;
+    document.getElementById('rel-paradas-stat-finalizadas').textContent = finalizadas.length;
+    document.getElementById('rel-paradas-stat-tempo').textContent = `${horasTotal}h${minsTotal > 0 ? minsTotal + 'm' : ''}`;
+    document.getElementById('rel-paradas-stat-medio').textContent = `${tempoMedio}min`;
+}
+
+function relRenderParadasTabela() {
+    const tbody = document.getElementById('rel-paradas-tbody');
+    if (!tbody) return;
+    
+    const totalPaginas = Math.ceil(relParadasDados.length / REL_PARADAS_POR_PAGINA) || 1;
+    const inicio = (relParadasPaginaAtual - 1) * REL_PARADAS_POR_PAGINA;
+    const fim = Math.min(inicio + REL_PARADAS_POR_PAGINA, relParadasDados.length);
+    const paradasPagina = relParadasDados.slice(inicio, fim);
+    
+    if (paradasPagina.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center py-12 text-gray-400">
+                    <i data-lucide="pause-circle" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                    <p>Nenhuma parada encontrada</p>
+                </td>
+            </tr>`;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        return;
+    }
+    
+    let html = '';
+    paradasPagina.forEach(p => {
+        const statusClass = p.isActive 
+            ? 'bg-red-100 text-red-700' 
+            : 'bg-green-100 text-green-700';
+        const statusText = p.isActive ? 'Ativa' : 'Finalizada';
+        const motivo = p.reason || p.motivo || p.downtime_reason || '-';
+        const horaInicio = p.start_time || p.startTime || '-';
+        const horaFim = p.end_time || p.endTime || (p.isActive ? 'Em andamento' : '-');
+        const duracao = p.duration || p.durationMinutes || 0;
+        const codProd = p.product_code || p.productCode || p.codigo || '-';
+        const nomeProd = getProductNameByCode(codProd) || p.product_name || p.productName || '-';
+        
+        html += `
+            <tr class="hover:bg-gray-50 transition">
+                <td class="px-3 py-3 text-sm">${p.date || '-'}</td>
+                <td class="px-3 py-3 text-sm font-semibold text-blue-600">${p.machineId || '-'}</td>
+                <td class="px-3 py-3 text-sm">
+                    <div class="text-xs text-gray-500">${codProd}</div>
+                    <div class="font-medium text-indigo-700">${nomeProd}</div>
+                </td>
+                <td class="px-3 py-3 text-sm">${motivo}</td>
+                <td class="px-3 py-3 text-sm text-center">${horaInicio}</td>
+                <td class="px-3 py-3 text-sm text-center">${horaFim}</td>
+                <td class="px-3 py-3 text-sm text-center font-semibold">${duracao} min</td>
+                <td class="px-3 py-3 text-center">
+                    <span class="px-2 py-1 rounded-full text-xs font-semibold ${statusClass}">${statusText}</span>
+                </td>
+            </tr>`;
+    });
+    
+    tbody.innerHTML = html;
+    
+    // Atualizar paginação
+    document.getElementById('rel-paradas-pag-inicio').textContent = relParadasDados.length > 0 ? inicio + 1 : 0;
+    document.getElementById('rel-paradas-pag-fim').textContent = fim;
+    document.getElementById('rel-paradas-pag-total').textContent = relParadasDados.length;
+    document.getElementById('rel-paradas-pag-atual').textContent = relParadasPaginaAtual;
+    document.getElementById('rel-paradas-pag-total-paginas').textContent = totalPaginas;
+    
+    document.getElementById('rel-paradas-pag-anterior').disabled = relParadasPaginaAtual <= 1;
+    document.getElementById('rel-paradas-pag-proxima').disabled = relParadasPaginaAtual >= totalPaginas;
+    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function relExportarParadasCSV() {
+    if (relParadasDados.length === 0) {
+        alert('Nenhum dado para exportar. Faça uma busca primeiro.');
+        return;
+    }
+    
+    const headers = ['Data', 'Máquina', 'Código Produto', 'Nome Produto', 'Motivo', 'Hora Início', 'Hora Fim', 'Duração (min)', 'Status'];
+    const rows = relParadasDados.map(p => {
+        const codProd = p.product_code || p.productCode || p.codigo || '';
+        const nomeProd = getProductNameByCode(codProd) || p.product_name || p.productName || '';
+        return [
+            p.date || '',
+            p.machineId || p.machine || '',
+            codProd,
+            nomeProd,
+            p.reason || p.motivo || p.downtime_reason || '',
+            p.start_time || p.startTime || '',
+            p.end_time || p.endTime || '',
+            p.duration || p.durationMinutes || 0,
+            p.isActive ? 'Ativa' : 'Finalizada'
+        ];
+    });
+    
+    exportToCSV('relatorio_paradas', headers, rows);
+}
+
+// Função auxiliar para exportar CSV (caso não exista)
+function exportToCSV(filename, headers, rows) {
+    const BOM = '\uFEFF';
+    const csvContent = BOM + [
+        headers.join(';'),
+        ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';'))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${filename}_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+// ==================== EXPORTAR TABELA FORMATADA ====================
+function relExportarProducaoTabela() {
+    if (relProducaoDados.length === 0) {
+        alert('Nenhum dado para exportar. Faça uma busca primeiro.');
+        return;
+    }
+    
+    const periodo = document.getElementById('rel-producao-periodo')?.value || '7days';
+    const periodoTexto = {
+        'today': 'Hoje',
+        'yesterday': 'Ontem',
+        '7days': 'Últimos 7 dias',
+        '30days': 'Últimos 30 dias',
+        'custom': 'Personalizado'
+    }[periodo] || periodo;
+    
+    let totalPecas = 0, totalPeso = 0;
+    relProducaoDados.forEach(d => {
+        totalPecas += Number(d.produzido || d.quantity || d.qty || d.quantidade || 0);
+        totalPeso += Number(d.peso_bruto || d.weight_kg || d.peso || d.peso_kg || 0);
+    });
+    
+    const html = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Relatório de Produção - Hokkaido MES</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+        .header { text-align: center; margin-bottom: 20px; }
+        .header h1 { color: #1e3a8a; font-size: 24px; }
+        .header p { color: #666; font-size: 14px; margin-top: 5px; }
+        .stats { display: flex; gap: 20px; justify-content: center; margin-bottom: 20px; }
+        .stat { background: #fff; padding: 15px 25px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+        .stat-value { font-size: 24px; font-weight: bold; color: #1e40af; }
+        .stat-label { color: #666; font-size: 12px; }
+        table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        th { background: #1e3a8a; color: #fff; padding: 12px 8px; text-align: left; font-size: 12px; }
+        td { padding: 10px 8px; border-bottom: 1px solid #eee; font-size: 12px; }
+        tr:nth-child(even) { background: #f9f9f9; }
+        tr:hover { background: #e8f4ff; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .footer { text-align: center; margin-top: 20px; color: #888; font-size: 11px; }
+        @media print { body { background: #fff; } .no-print { display: none; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>RELATÓRIO DE PRODUÇÃO</h1>
+        <p>Período: ${periodoTexto} | Gerado em: ${new Date().toLocaleString('pt-BR')}</p>
+    </div>
+    <div class="stats">
+        <div class="stat"><div class="stat-value">${relProducaoDados.length}</div><div class="stat-label">Registros</div></div>
+        <div class="stat"><div class="stat-value">${totalPecas.toLocaleString('pt-BR')}</div><div class="stat-label">Total Peças</div></div>
+        <div class="stat"><div class="stat-value">${totalPeso.toLocaleString('pt-BR', {minimumFractionDigits: 2})} kg</div><div class="stat-label">Total Peso</div></div>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Data</th>
+                <th>Máquina</th>
+                <th class="text-center">Turno</th>
+                <th>OP</th>
+                <th>Cód. Produto</th>
+                <th>Nome Produto</th>
+                <th class="text-right">Quantidade</th>
+                <th class="text-right">Peso (kg)</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${relProducaoDados.map(d => {
+                const codProd = d.mp || d.product_code || d.productCode || d.codigo || '-';
+                const nomeProd = getProductNameByCode(codProd) || d.product_name || d.productName || d.descricao || '-';
+                const opId = d.orderId || d.order_id || d.order_number || d.op || '-';
+                const opNum = relGetOrderNumber(opId);
+                return `<tr>
+                    <td>${d.data || d.date || '-'}</td>
+                    <td>${d.machine || d.machine_id || d.maquina || '-'}</td>
+                    <td class="text-center">${d.turno || d.shift || '-'}</td>
+                    <td>${opNum}</td>
+                    <td>${codProd}</td>
+                    <td>${nomeProd}</td>
+                    <td class="text-right">${Number(d.produzido || d.quantity || d.qty || d.quantidade || 0).toLocaleString('pt-BR')}</td>
+                    <td class="text-right">${Number(d.peso_bruto || d.weight_kg || d.peso || d.peso_kg || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                </tr>`;
+            }).join('')}
+        </tbody>
+    </table>
+    <div class="footer">
+        <p>Hokkaido MES - Sistema de Execução de Manufatura</p>
+    </div>
+    <script>window.print();</script>
+</body>
+</html>`;
+    
+    const novaJanela = window.open('', '_blank');
+    novaJanela.document.write(html);
+    novaJanela.document.close();
+}
+
+function relExportarPerdasTabela() {
+    if (relPerdasDados.length === 0) {
+        alert('Nenhum dado para exportar. Faça uma busca primeiro.');
+        return;
+    }
+    
+    const periodo = document.getElementById('rel-perdas-periodo')?.value || '7days';
+    const periodoTexto = {
+        'today': 'Hoje',
+        'yesterday': 'Ontem',
+        '7days': 'Últimos 7 dias',
+        '30days': 'Últimos 30 dias',
+        'custom': 'Personalizado'
+    }[periodo] || periodo;
+    
+    let totalRefugo = 0, totalBorra = 0, totalSucata = 0;
+    relPerdasDados.forEach(d => {
+        totalRefugo += Number(d.refugo_kg || 0);
+        totalBorra += Number(d.borra_kg || 0);
+        totalSucata += Number(d.sucata_kg || 0);
+    });
+    const totalGeral = totalRefugo + totalBorra + totalSucata;
+    
+    const html = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Relatório de Perdas - Hokkaido MES</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+        .header { text-align: center; margin-bottom: 20px; }
+        .header h1 { color: #dc2626; font-size: 24px; }
+        .header p { color: #666; font-size: 14px; margin-top: 5px; }
+        .stats { display: flex; gap: 20px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
+        .stat { background: #fff; padding: 15px 25px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+        .stat-value { font-size: 20px; font-weight: bold; color: #dc2626; }
+        .stat-label { color: #666; font-size: 12px; }
+        .stat-refugo .stat-value { color: #dc2626; }
+        .stat-borra .stat-value { color: #d97706; }
+        .stat-sucata .stat-value { color: #7c3aed; }
+        table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        th { background: #dc2626; color: #fff; padding: 12px 8px; text-align: left; font-size: 12px; }
+        td { padding: 10px 8px; border-bottom: 1px solid #eee; font-size: 12px; }
+        tr:nth-child(even) { background: #f9f9f9; }
+        tr:hover { background: #fee2e2; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .footer { text-align: center; margin-top: 20px; color: #888; font-size: 11px; }
+        @media print { body { background: #fff; } .no-print { display: none; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>RELATÓRIO DE PERDAS</h1>
+        <p>Período: ${periodoTexto} | Gerado em: ${new Date().toLocaleString('pt-BR')}</p>
+    </div>
+    <div class="stats">
+        <div class="stat"><div class="stat-value">${relPerdasDados.length}</div><div class="stat-label">Registros</div></div>
+        <div class="stat stat-refugo"><div class="stat-value">${totalRefugo.toLocaleString('pt-BR', {minimumFractionDigits: 2})} kg</div><div class="stat-label">Refugo</div></div>
+        <div class="stat stat-borra"><div class="stat-value">${totalBorra.toLocaleString('pt-BR', {minimumFractionDigits: 2})} kg</div><div class="stat-label">Borra</div></div>
+        <div class="stat stat-sucata"><div class="stat-value">${totalSucata.toLocaleString('pt-BR', {minimumFractionDigits: 2})} kg</div><div class="stat-label">Sucata</div></div>
+        <div class="stat"><div class="stat-value">${totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})} kg</div><div class="stat-label">Total Geral</div></div>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Data</th>
+                <th>Máquina</th>
+                <th class="text-center">Turno</th>
+                <th>OP</th>
+                <th>Cód. Produto</th>
+                <th>Nome Produto</th>
+                <th class="text-right">Refugo (kg)</th>
+                <th class="text-right">Borra (kg)</th>
+                <th class="text-right">Sucata (kg)</th>
+                <th>Motivo</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${relPerdasDados.map(d => {
+                const codProd = d.mp || d.product_code || d.productCode || d.codigo || '-';
+                const nomeProd = getProductNameByCode(codProd) || d.product_name || d.productName || d.descricao || '-';
+                const opId = d.orderId || d.order_id || d.order_number || d.op || '-';
+                const opNum = relGetOrderNumber(opId);
+                return `<tr>
+                    <td>${d.data || d.date || '-'}</td>
+                    <td>${d.machine || d.machine_id || d.maquina || '-'}</td>
+                    <td class="text-center">${d.turno || d.shift || '-'}</td>
+                    <td>${opNum}</td>
+                    <td>${codProd}</td>
+                    <td>${nomeProd}</td>
+                    <td class="text-right">${Number(d.refugo_kg || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                    <td class="text-right">${Number(d.borra_kg || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                    <td class="text-right">${Number(d.sucata_kg || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                    <td>${d.perdas || d.motivo_perda || d.loss_reason || '-'}</td>
+                </tr>`;
+            }).join('')}
+        </tbody>
+    </table>
+    <div class="footer">
+        <p>Hokkaido MES - Sistema de Execução de Manufatura</p>
+    </div>
+    <script>window.print();</script>
+</body>
+</html>`;
+    
+    const novaJanela = window.open('', '_blank');
+    novaJanela.document.write(html);
+    novaJanela.document.close();
+}
+
+function relExportarParadasTabela() {
+    if (relParadasDados.length === 0) {
+        alert('Nenhum dado para exportar. Faça uma busca primeiro.');
+        return;
+    }
+    
+    const periodo = document.getElementById('rel-paradas-periodo')?.value || '7days';
+    const periodoTexto = {
+        'today': 'Hoje',
+        'yesterday': 'Ontem',
+        '7days': 'Últimos 7 dias',
+        '30days': 'Últimos 30 dias',
+        'custom': 'Personalizado'
+    }[periodo] || periodo;
+    
+    const ativas = relParadasDados.filter(p => p.isActive).length;
+    const finalizadas = relParadasDados.filter(p => !p.isActive).length;
+    let tempoTotal = 0;
+    relParadasDados.forEach(p => {
+        tempoTotal += p.duration || p.durationMinutes || 0;
+    });
+    const horasTotal = Math.floor(tempoTotal / 60);
+    const minsTotal = tempoTotal % 60;
+    
+    const html = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Relatório de Paradas - Hokkaido MES</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+        .header { text-align: center; margin-bottom: 20px; }
+        .header h1 { color: #7c3aed; font-size: 24px; }
+        .header p { color: #666; font-size: 14px; margin-top: 5px; }
+        .stats { display: flex; gap: 20px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
+        .stat { background: #fff; padding: 15px 25px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+        .stat-value { font-size: 20px; font-weight: bold; color: #7c3aed; }
+        .stat-label { color: #666; font-size: 12px; }
+        .stat-ativas .stat-value { color: #dc2626; }
+        .stat-finalizadas .stat-value { color: #16a34a; }
+        table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        th { background: #7c3aed; color: #fff; padding: 12px 8px; text-align: left; font-size: 12px; }
+        td { padding: 10px 8px; border-bottom: 1px solid #eee; font-size: 12px; }
+        tr:nth-child(even) { background: #f9f9f9; }
+        tr:hover { background: #f3e8ff; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .status-ativa { background: #fee2e2; color: #dc2626; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+        .status-finalizada { background: #dcfce7; color: #16a34a; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+        .footer { text-align: center; margin-top: 20px; color: #888; font-size: 11px; }
+        @media print { body { background: #fff; } .no-print { display: none; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>RELATÓRIO DE PARADAS</h1>
+        <p>Período: ${periodoTexto} | Gerado em: ${new Date().toLocaleString('pt-BR')}</p>
+    </div>
+    <div class="stats">
+        <div class="stat"><div class="stat-value">${relParadasDados.length}</div><div class="stat-label">Total de Paradas</div></div>
+        <div class="stat stat-ativas"><div class="stat-value">${ativas}</div><div class="stat-label">Ativas</div></div>
+        <div class="stat stat-finalizadas"><div class="stat-value">${finalizadas}</div><div class="stat-label">Finalizadas</div></div>
+        <div class="stat"><div class="stat-value">${horasTotal}h${minsTotal > 0 ? minsTotal + 'm' : ''}</div><div class="stat-label">Tempo Total</div></div>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Data</th>
+                <th>Máquina</th>
+                <th>Cód. Produto</th>
+                <th>Nome Produto</th>
+                <th>Motivo</th>
+                <th class="text-center">Início</th>
+                <th class="text-center">Fim</th>
+                <th class="text-right">Duração</th>
+                <th class="text-center">Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${relParadasDados.map(p => {
+                const codProd = p.product_code || p.productCode || p.codigo || '-';
+                const nomeProd = getProductNameByCode(codProd) || p.product_name || p.productName || '-';
+                const statusClass = p.isActive ? 'status-ativa' : 'status-finalizada';
+                const statusText = p.isActive ? 'Ativa' : 'Finalizada';
+                const duracao = p.duration || p.durationMinutes || 0;
+                return `<tr>
+                    <td>${p.date || '-'}</td>
+                    <td>${p.machineId || p.machine || '-'}</td>
+                    <td>${codProd}</td>
+                    <td>${nomeProd}</td>
+                    <td>${p.reason || p.motivo || p.downtime_reason || '-'}</td>
+                    <td class="text-center">${p.start_time || p.startTime || '-'}</td>
+                    <td class="text-center">${p.end_time || p.endTime || (p.isActive ? 'Em andamento' : '-')}</td>
+                    <td class="text-right">${duracao}min</td>
+                    <td class="text-center"><span class="${statusClass}">${statusText}</span></td>
+                </tr>`;
+            }).join('')}
+        </tbody>
+    </table>
+    <div class="footer">
+        <p>Hokkaido MES - Sistema de Execução de Manufatura</p>
+    </div>
+    <script>window.print();</script>
+</body>
+</html>`;
+    
+    const novaJanela = window.open('', '_blank');
+    novaJanela.document.write(html);
+    novaJanela.document.close();
 }
 
 function setupLiderancaProducaoPage() {

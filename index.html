@@ -364,6 +364,10 @@
                     <i data-lucide="history" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Histórico</span>
                     <span class="nav-tooltip">Histórico</span>
                 </a>
+                <a href="#" class="nav-btn group" data-page="relatorios" title="Relatórios e Análises">
+                    <i data-lucide="file-bar-chart" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Relatórios</span>
+                    <span class="nav-tooltip">Relatórios</span>
+                </a>
                 <a href="#" class="nav-btn group" data-page="admin-dados" title="Administração de Dados">
                     <i data-lucide="database" class="w-5 h-5 flex-shrink-0"></i><span class="nav-text transition-opacity duration-300">Admin Dados</span>
                     <span class="nav-tooltip">Admin Dados</span>
@@ -1608,6 +1612,10 @@
                                                 <option value="3">3º Turno</option>
                                             </select>
                                         </div>
+                                        <div class="flex-1 min-w-[150px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Cód. Produto</label>
+                                            <input type="text" id="admin-producao-cod-produto" placeholder="Ex: 10001234" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                                        </div>
                                         <button id="admin-btn-buscar-producao" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2.5 rounded-lg font-semibold transition flex items-center gap-2">
                                             <i data-lucide="search" class="w-4 h-4"></i>
                                             Buscar
@@ -1682,6 +1690,10 @@
                                                 <option value="sucata">Sucata</option>
                                             </select>
                                         </div>
+                                        <div class="flex-1 min-w-[150px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Cód. Produto</label>
+                                            <input type="text" id="admin-perdas-cod-produto" placeholder="Ex: 10001234" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500">
+                                        </div>
                                         <button id="admin-btn-buscar-perdas" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-lg font-semibold transition flex items-center gap-2">
                                             <i data-lucide="search" class="w-4 h-4"></i>
                                             Buscar
@@ -1741,6 +1753,10 @@
                                             <select id="admin-planejamento-maquina" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500">
                                                 <option value="">Todas</option>
                                             </select>
+                                        </div>
+                                        <div class="flex-1 min-w-[150px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Cód. Produto</label>
+                                            <input type="text" id="admin-planejamento-cod-produto" placeholder="Ex: 10001234" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500">
                                         </div>
                                         <button id="admin-btn-buscar-planejamento" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2.5 rounded-lg font-semibold transition flex items-center gap-2">
                                             <i data-lucide="search" class="w-4 h-4"></i>
@@ -1931,6 +1947,11 @@
                                                 <option value="active">Ativas</option>
                                                 <option value="finished">Finalizadas</option>
                                             </select>
+                                        </div>
+                                        <!-- Cód. Produto -->
+                                        <div class="flex-1 min-w-[140px] max-w-[160px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Cód. Produto</label>
+                                            <input type="text" id="admin-paradas-cod-produto" placeholder="Ex: 10001234" class="w-full bg-white border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 transition">
                                         </div>
                                         <!-- Botão Buscar -->
                                         <button id="admin-paradas-buscar" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2">
@@ -3045,6 +3066,399 @@
                                     <i data-lucide="save" class="w-4 h-4"></i>
                                     Salvar
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PÁGINA: Relatórios (Somente Visualização) -->
+                <div id="relatorios-page" class="page-content hidden space-y-4 p-2">
+                    <div class="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+                        <!-- Header -->
+                        <div class="bg-gradient-to-r from-indigo-600 to-blue-700 px-6 py-4">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="p-2 bg-white/10 rounded-xl">
+                                        <i data-lucide="file-bar-chart" class="w-6 h-6 text-white"></i>
+                                    </div>
+                                    <div>
+                                        <h2 class="text-xl font-bold text-white">Relatórios</h2>
+                                        <p class="text-blue-200 text-sm">Visualização e análise de dados</p>
+                                    </div>
+                                </div>
+                                <span class="bg-blue-500/30 px-3 py-1 rounded-full text-xs font-bold text-white uppercase tracking-wider">
+                                    📊 Somente Leitura
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Abas internas -->
+                        <div class="border-b border-gray-200">
+                            <nav class="flex gap-1 px-4 pt-2 overflow-x-auto">
+                                <button class="rel-tab-btn active px-4 py-2 text-sm font-semibold rounded-t-lg transition bg-blue-500 text-white whitespace-nowrap" data-rel-tab="producao">
+                                    <i data-lucide="bar-chart-2" class="w-4 h-4 inline mr-1"></i> Produção
+                                </button>
+                                <button class="rel-tab-btn px-4 py-2 text-sm font-semibold rounded-t-lg transition bg-gray-100 text-gray-600 hover:bg-gray-200 whitespace-nowrap" data-rel-tab="perdas">
+                                    <i data-lucide="trash-2" class="w-4 h-4 inline mr-1"></i> Perdas
+                                </button>
+                                <button class="rel-tab-btn px-4 py-2 text-sm font-semibold rounded-t-lg transition bg-gray-100 text-gray-600 hover:bg-gray-200 whitespace-nowrap" data-rel-tab="paradas">
+                                    <i data-lucide="pause-circle" class="w-4 h-4 inline mr-1"></i> Paradas
+                                </button>
+                            </nav>
+                        </div>
+
+                        <!-- Conteúdo das abas -->
+                        <div class="p-4">
+                            <!-- Aba: Produção -->
+                            <div id="rel-tab-producao" class="rel-tab-content">
+                                <div class="mb-6">
+                                    <h3 class="text-lg font-semibold mb-3 flex items-center gap-2">
+                                        <i data-lucide="eye" class="w-5 h-5 text-blue-600"></i>
+                                        Relatório de Produção
+                                    </h3>
+                                    <p class="text-sm text-gray-600 mb-4">Consulte e analise os lançamentos de produção.</p>
+                                    
+                                    <div class="flex flex-wrap items-end gap-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                                        <!-- Período -->
+                                        <div class="flex-1 min-w-[140px] max-w-[180px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Período</label>
+                                            <select id="rel-producao-periodo" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                                                <option value="today" selected>Hoje</option>
+                                                <option value="yesterday">Ontem</option>
+                                                <option value="7days">Últimos 7 dias</option>
+                                                <option value="30days">Últimos 30 dias</option>
+                                                <option value="custom">Personalizado</option>
+                                            </select>
+                                        </div>
+                                        <!-- Data Início -->
+                                        <div class="min-w-[130px] hidden" id="rel-producao-custom-dates">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Data Início</label>
+                                            <input type="date" id="rel-producao-data-inicio" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                                        </div>
+                                        <!-- Data Fim -->
+                                        <div class="min-w-[130px] hidden" id="rel-producao-custom-dates-fim">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Data Fim</label>
+                                            <input type="date" id="rel-producao-data-fim" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                                        </div>
+                                        <div class="flex-1 min-w-[130px] max-w-[160px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Máquina</label>
+                                            <select id="rel-producao-maquina" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                                                <option value="">Todas</option>
+                                            </select>
+                                        </div>
+                                        <div class="flex-1 min-w-[80px] max-w-[100px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Turno</label>
+                                            <select id="rel-producao-turno" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                                                <option value="">Todos</option>
+                                                <option value="1">1º Turno</option>
+                                                <option value="2">2º Turno</option>
+                                                <option value="3">3º Turno</option>
+                                            </select>
+                                        </div>
+                                        <div class="flex-1 min-w-[120px] max-w-[150px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Cód. Produto</label>
+                                            <input type="text" id="rel-producao-cod-produto" placeholder="Ex: 10001234" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                                        </div>
+                                        <div class="flex-1 min-w-[120px] max-w-[150px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Ordem (OP)</label>
+                                            <input type="text" id="rel-producao-op" placeholder="Ex: 123456" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                                        </div>
+                                        <button id="rel-btn-buscar-producao" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2.5 rounded-lg font-semibold transition flex items-center gap-2">
+                                            <i data-lucide="search" class="w-4 h-4"></i>
+                                            Buscar
+                                        </button>
+                                        <button id="rel-btn-exportar-producao" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2.5 rounded-lg font-semibold transition flex items-center gap-2">
+                                            <i data-lucide="download" class="w-4 h-4"></i>
+                                            Exportar CSV
+                                        </button>
+                                        <button id="rel-btn-exportar-producao-tabela" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2.5 rounded-lg font-semibold transition flex items-center gap-2">
+                                            <i data-lucide="table" class="w-4 h-4"></i>
+                                            Exportar Tabela
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Estatísticas da busca -->
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 mb-4">
+                                    <div class="bg-blue-50 rounded-lg p-2 md:p-3 text-center border border-blue-100">
+                                        <div id="rel-prod-total" class="text-lg md:text-xl font-bold text-blue-600">0</div>
+                                        <div class="text-xs text-blue-700">Total Registros</div>
+                                    </div>
+                                    <div class="bg-green-50 rounded-lg p-2 md:p-3 text-center border border-green-100">
+                                        <div id="rel-prod-pecas" class="text-lg md:text-xl font-bold text-green-600">0</div>
+                                        <div class="text-xs text-green-700">Total Peças</div>
+                                    </div>
+                                    <div class="bg-amber-50 rounded-lg p-2 md:p-3 text-center border border-amber-100">
+                                        <div id="rel-prod-peso" class="text-lg md:text-xl font-bold text-amber-600">0</div>
+                                        <div class="text-xs text-amber-700">Peso Total (kg)</div>
+                                    </div>
+                                    <div class="bg-red-50 rounded-lg p-2 md:p-3 text-center border border-red-100">
+                                        <div id="rel-prod-refugo" class="text-lg md:text-xl font-bold text-red-600">0</div>
+                                        <div class="text-xs text-red-700">Refugo (kg)</div>
+                                    </div>
+                                </div>
+
+                                <!-- Lista de registros de produção -->
+                                <div id="rel-producao-lista" class="space-y-2 max-h-[50vh] md:max-h-[500px] overflow-y-auto border rounded-lg p-2 bg-gray-50">
+                                    <div class="text-center py-8 text-gray-400">
+                                        <i data-lucide="bar-chart-2" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                                        <p>Selecione filtros e clique em "Buscar"</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Aba: Perdas -->
+                            <div id="rel-tab-perdas" class="rel-tab-content hidden">
+                                <div class="mb-6">
+                                    <h3 class="text-lg font-semibold mb-3 flex items-center gap-2">
+                                        <i data-lucide="eye" class="w-5 h-5 text-red-600"></i>
+                                        Relatório de Perdas
+                                    </h3>
+                                    <p class="text-sm text-gray-600 mb-4">Consulte e analise refugos, borras e sucatas.</p>
+                                    
+                                    <div class="flex flex-wrap items-end gap-3 p-4 bg-red-50 rounded-lg border border-red-200">
+                                        <!-- Período -->
+                                        <div class="flex-1 min-w-[140px] max-w-[180px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Período</label>
+                                            <select id="rel-perdas-periodo" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500">
+                                                <option value="today" selected>Hoje</option>
+                                                <option value="yesterday">Ontem</option>
+                                                <option value="7days">Últimos 7 dias</option>
+                                                <option value="30days">Últimos 30 dias</option>
+                                                <option value="custom">Personalizado</option>
+                                            </select>
+                                        </div>
+                                        <!-- Data Início -->
+                                        <div class="min-w-[130px] hidden" id="rel-perdas-custom-dates">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Data Início</label>
+                                            <input type="date" id="rel-perdas-data-inicio" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500">
+                                        </div>
+                                        <!-- Data Fim -->
+                                        <div class="min-w-[130px] hidden" id="rel-perdas-custom-dates-fim">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Data Fim</label>
+                                            <input type="date" id="rel-perdas-data-fim" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500">
+                                        </div>
+                                        <div class="flex-1 min-w-[130px] max-w-[160px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Máquina</label>
+                                            <select id="rel-perdas-maquina" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500">
+                                                <option value="">Todas</option>
+                                            </select>
+                                        </div>
+                                        <div class="flex-1 min-w-[80px] max-w-[100px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Turno</label>
+                                            <select id="rel-perdas-turno" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500">
+                                                <option value="">Todos</option>
+                                                <option value="1">1º Turno</option>
+                                                <option value="2">2º Turno</option>
+                                                <option value="3">3º Turno</option>
+                                            </select>
+                                        </div>
+                                        <div class="flex-1 min-w-[100px] max-w-[120px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Tipo</label>
+                                            <select id="rel-perdas-tipo" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500">
+                                                <option value="">Todos</option>
+                                                <option value="refugo">Refugo</option>
+                                                <option value="borra">Borra</option>
+                                                <option value="sucata">Sucata</option>
+                                            </select>
+                                        </div>
+                                        <div class="flex-1 min-w-[110px] max-w-[140px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Cód. Produto</label>
+                                            <input type="text" id="rel-perdas-cod-produto" placeholder="Ex: 10001234" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500">
+                                        </div>
+                                        <div class="flex-1 min-w-[110px] max-w-[140px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Ordem (OP)</label>
+                                            <input type="text" id="rel-perdas-op" placeholder="Ex: 123456" class="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500">
+                                        </div>
+                                        <button id="rel-btn-buscar-perdas" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-lg font-semibold transition flex items-center gap-2">
+                                            <i data-lucide="search" class="w-4 h-4"></i>
+                                            Buscar
+                                        </button>
+                                        <button id="rel-btn-exportar-perdas" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2.5 rounded-lg font-semibold transition flex items-center gap-2">
+                                            <i data-lucide="download" class="w-4 h-4"></i>
+                                            Exportar CSV
+                                        </button>
+                                        <button id="rel-btn-exportar-perdas-tabela" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2.5 rounded-lg font-semibold transition flex items-center gap-2">
+                                            <i data-lucide="table" class="w-4 h-4"></i>
+                                            Exportar Tabela
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Estatísticas da busca -->
+                                <div class="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-3 mb-4">
+                                    <div class="bg-blue-50 rounded-lg p-2 md:p-3 text-center border border-blue-100">
+                                        <div id="rel-perdas-total" class="text-lg md:text-xl font-bold text-blue-600">0</div>
+                                        <div class="text-xs text-blue-700">Total Registros</div>
+                                    </div>
+                                    <div class="bg-red-50 rounded-lg p-2 md:p-3 text-center border border-red-100">
+                                        <div id="rel-perdas-peso" class="text-lg md:text-xl font-bold text-red-600">0</div>
+                                        <div class="text-xs text-red-700">Peso Total (kg)</div>
+                                    </div>
+                                    <div class="bg-amber-50 rounded-lg p-2 md:p-3 text-center border border-amber-100">
+                                        <div id="rel-perdas-borra" class="text-lg md:text-xl font-bold text-amber-600">0</div>
+                                        <div class="text-xs text-amber-700">Borras (kg)</div>
+                                    </div>
+                                    <div class="bg-orange-50 rounded-lg p-2 md:p-3 text-center border border-orange-100">
+                                        <div id="rel-perdas-refugo" class="text-lg md:text-xl font-bold text-orange-600">0</div>
+                                        <div class="text-xs text-orange-700">Refugo (kg)</div>
+                                    </div>
+                                    <div class="bg-purple-50 rounded-lg p-2 md:p-3 text-center border border-purple-100">
+                                        <div id="rel-perdas-sucata" class="text-lg md:text-xl font-bold text-purple-600">0</div>
+                                        <div class="text-xs text-purple-700">Sucata (kg)</div>
+                                    </div>
+                                </div>
+
+                                <!-- Lista de registros de perdas -->
+                                <div id="rel-perdas-lista" class="space-y-2 max-h-[50vh] md:max-h-[500px] overflow-y-auto border rounded-lg p-2 bg-gray-50">
+                                    <div class="text-center py-8 text-gray-400">
+                                        <i data-lucide="trash-2" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                                        <p>Selecione filtros e clique em "Buscar"</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Aba: Paradas -->
+                            <div id="rel-tab-paradas" class="rel-tab-content hidden">
+                                <!-- Filtros -->
+                                <div class="bg-gray-50 rounded-xl p-4 mb-4 border border-gray-200">
+                                    <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                                        <i data-lucide="filter" class="w-4 h-4"></i>
+                                        Filtros de Busca
+                                    </h4>
+                                    <div class="flex flex-wrap items-end gap-3">
+                                        <!-- Período -->
+                                        <div class="flex-1 min-w-[140px] max-w-[180px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Período</label>
+                                            <select id="rel-paradas-periodo" class="w-full appearance-none bg-white border border-gray-200 rounded-lg py-2 pl-3 pr-8 text-sm focus:ring-2 focus:ring-blue-500 transition cursor-pointer">
+                                                <option value="today" selected>Hoje</option>
+                                                <option value="yesterday">Ontem</option>
+                                                <option value="7days">Últimos 7 dias</option>
+                                                <option value="30days">Últimos 30 dias</option>
+                                                <option value="custom">Personalizado</option>
+                                            </select>
+                                        </div>
+                                        <!-- Data Início -->
+                                        <div class="min-w-[130px] hidden" id="rel-paradas-custom-dates">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Data Início</label>
+                                            <input type="date" id="rel-paradas-data-inicio" class="w-full bg-white border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 transition">
+                                        </div>
+                                        <!-- Data Fim -->
+                                        <div class="min-w-[130px] hidden" id="rel-paradas-custom-dates-fim">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Data Fim</label>
+                                            <input type="date" id="rel-paradas-data-fim" class="w-full bg-white border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 transition">
+                                        </div>
+                                        <!-- Máquina -->
+                                        <div class="flex-1 min-w-[140px] max-w-[160px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Máquina</label>
+                                            <select id="rel-paradas-maquina" class="w-full appearance-none bg-white border border-gray-200 rounded-lg py-2 pl-3 pr-8 text-sm focus:ring-2 focus:ring-blue-500 transition cursor-pointer">
+                                                <option value="">Todas</option>
+                                            </select>
+                                        </div>
+                                        <!-- Status -->
+                                        <div class="flex-1 min-w-[120px] max-w-[150px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Status</label>
+                                            <select id="rel-paradas-status" class="w-full appearance-none bg-white border border-gray-200 rounded-lg py-2 pl-3 pr-8 text-sm focus:ring-2 focus:ring-blue-500 transition cursor-pointer">
+                                                <option value="">Todos</option>
+                                                <option value="active">Ativas</option>
+                                                <option value="finished">Finalizadas</option>
+                                            </select>
+                                        </div>
+                                        <!-- Cód. Produto -->
+                                        <div class="flex-1 min-w-[120px] max-w-[150px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Cód. Produto</label>
+                                            <input type="text" id="rel-paradas-cod-produto" placeholder="Ex: 10001234" class="w-full bg-white border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 transition">
+                                        </div>
+                                        <!-- Ordem (OP) -->
+                                        <div class="flex-1 min-w-[120px] max-w-[150px]">
+                                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Ordem (OP)</label>
+                                            <input type="text" id="rel-paradas-op" placeholder="Ex: 123456" class="w-full bg-white border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 transition">
+                                        </div>
+                                        <!-- Botão Buscar -->
+                                        <button id="rel-paradas-buscar" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2">
+                                            <i data-lucide="search" class="w-4 h-4"></i>
+                                            Buscar
+                                        </button>
+                                        <button id="rel-btn-exportar-paradas" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2">
+                                            <i data-lucide="download" class="w-4 h-4"></i>
+                                            Exportar CSV
+                                        </button>
+                                        <button id="rel-btn-exportar-paradas-tabela" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2">
+                                            <i data-lucide="table" class="w-4 h-4"></i>
+                                            Exportar Tabela
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Estatísticas -->
+                                <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+                                    <div class="bg-blue-50 rounded-xl p-3 text-center border border-blue-100">
+                                        <div id="rel-paradas-stat-total" class="text-2xl font-bold text-blue-600">0</div>
+                                        <div class="text-xs text-blue-700">Total</div>
+                                    </div>
+                                    <div class="bg-red-50 rounded-xl p-3 text-center border border-red-100">
+                                        <div id="rel-paradas-stat-ativas" class="text-2xl font-bold text-red-600">0</div>
+                                        <div class="text-xs text-red-700">Ativas</div>
+                                    </div>
+                                    <div class="bg-green-50 rounded-xl p-3 text-center border border-green-100">
+                                        <div id="rel-paradas-stat-finalizadas" class="text-2xl font-bold text-green-600">0</div>
+                                        <div class="text-xs text-green-700">Finalizadas</div>
+                                    </div>
+                                    <div class="bg-orange-50 rounded-xl p-3 text-center border border-orange-100">
+                                        <div id="rel-paradas-stat-tempo" class="text-2xl font-bold text-orange-600">0h</div>
+                                        <div class="text-xs text-orange-700">Tempo Total</div>
+                                    </div>
+                                    <div class="bg-purple-50 rounded-xl p-3 text-center border border-purple-100">
+                                        <div id="rel-paradas-stat-medio" class="text-2xl font-bold text-purple-600">0min</div>
+                                        <div class="text-xs text-purple-700">Tempo Médio</div>
+                                    </div>
+                                </div>
+
+                                <!-- Tabela de Paradas (Somente Leitura) -->
+                                <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-sm" id="rel-paradas-tabela">
+                                            <thead class="bg-gray-100 text-gray-700">
+                                                <tr>
+                                                    <th class="px-3 py-3 text-left font-semibold">Data</th>
+                                                    <th class="px-3 py-3 text-left font-semibold">Máquina</th>
+                                                    <th class="px-3 py-3 text-left font-semibold">Produto</th>
+                                                    <th class="px-3 py-3 text-left font-semibold">Motivo</th>
+                                                    <th class="px-3 py-3 text-center font-semibold">Início</th>
+                                                    <th class="px-3 py-3 text-center font-semibold">Fim</th>
+                                                    <th class="px-3 py-3 text-center font-semibold">Duração</th>
+                                                    <th class="px-3 py-3 text-center font-semibold">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="rel-paradas-tbody" class="divide-y divide-gray-100">
+                                                <tr>
+                                                    <td colspan="8" class="text-center py-12 text-gray-400">
+                                                        <i data-lucide="pause-circle" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                                                        <p>Clique em "Buscar" para carregar as paradas</p>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    
+                                    <!-- Paginação -->
+                                    <div id="rel-paradas-paginacao" class="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t border-gray-200 bg-gray-50">
+                                        <div class="text-sm text-gray-600">
+                                            Mostrando <span id="rel-paradas-pag-inicio" class="font-semibold">0</span> - <span id="rel-paradas-pag-fim" class="font-semibold">0</span> de <span id="rel-paradas-pag-total" class="font-semibold">0</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <button id="rel-paradas-pag-anterior" class="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed" disabled>
+                                                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                                            </button>
+                                            <span class="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold">
+                                                Página <span id="rel-paradas-pag-atual">1</span> de <span id="rel-paradas-pag-total-paginas">1</span>
+                                            </span>
+                                            <button id="rel-paradas-pag-proxima" class="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed" disabled>
+                                                <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -7658,10 +8072,10 @@
                         </div>
                     </div>
                     <div class="flex flex-wrap items-center gap-2 sm:gap-4 text-[9px] sm:text-[10px] text-gray-500">
-                        <span class="flex items-center gap-1"><span class="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-emerald-400 rounded-sm"></span> Produzindo</span>
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-emerald-400 rounded-sm"></span> Com OP</span>
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-gray-300 rounded-sm"></span> Sem OP</span>
                         <span class="flex items-center gap-1"><span class="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-amber-400 rounded-sm"></span> Selecionada</span>
                         <span class="flex items-center gap-1"><span class="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-red-400 rounded-sm"></span> Parada Ativa</span>
-                        <span class="flex items-center gap-1"><span class="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-gray-300 rounded-sm"></span> Sem OP</span>
                     </div>
                 </div>
                 <!-- Grid de Máquinas com Checkbox -->
