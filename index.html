@@ -8009,6 +8009,63 @@
         </div>
     </div>
 
+    <!-- Modal de Finalização de Parada (Clique no Card) -->
+    <div id="card-finish-downtime-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-100 overflow-hidden animate-fade-in">
+            <!-- Header -->
+            <div class="flex justify-between items-center border-b border-gray-100 px-6 py-4 bg-gradient-to-r from-red-50 to-orange-50">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-gradient-to-br from-red-400 to-red-600 rounded-xl shadow-md">
+                        <i data-lucide="octagon" class="w-5 h-5 text-white"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-800">Finalizar Parada</h3>
+                        <p id="card-finish-downtime-machine" class="text-sm text-red-600 font-medium">H00</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeCardFinishDowntimeModal()" class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <!-- Body -->
+            <div class="p-6">
+                <div class="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+                    <div class="flex items-center gap-3 mb-2">
+                        <i data-lucide="alert-circle" class="w-5 h-5 text-red-600 animate-pulse"></i>
+                        <span class="text-sm font-bold text-red-700">PARADA ATIVA</span>
+                    </div>
+                    <div class="pl-8 space-y-1">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Motivo:</span>
+                            <span id="card-finish-downtime-reason" class="font-semibold text-red-700">-</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Início:</span>
+                            <span id="card-finish-downtime-start" class="font-medium text-gray-800">-</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Duração:</span>
+                            <span id="card-finish-downtime-duration" class="font-bold text-red-600">-</span>
+                        </div>
+                    </div>
+                </div>
+                <p class="text-sm text-gray-600 text-center mb-4">
+                    Deseja finalizar esta parada agora?
+                </p>
+            </div>
+            <!-- Footer -->
+            <div class="flex gap-3 px-6 pb-6">
+                <button type="button" onclick="closeCardFinishDowntimeModal()" class="flex-1 py-2.5 px-4 bg-gray-100 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-200 transition-colors">
+                    Cancelar
+                </button>
+                <button type="button" id="card-finish-downtime-confirm-btn" onclick="confirmCardFinishDowntime()" class="flex-1 py-2.5 px-4 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all">
+                    <i data-lucide="check-circle" class="w-4 h-4 inline mr-1"></i>
+                    Finalizar Parada
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal de Parada em Lote (Todas as Máquinas) -->
     <div id="batch-downtime-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[60] flex justify-center items-center p-2 sm:p-4">
         <div class="bg-white rounded-2xl shadow-xl w-full max-w-4xl border border-gray-100 max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
@@ -8827,7 +8884,7 @@
     <script src="advanced-kpis.js"></script>
     <script src="auto-pareto-analysis.js"></script>
     <script src="machine-queue.js?v=20260206"></script>
-    <script src="script.js?v=20260123-shift-distribution"></script>
+    <script src="script.js?v=20260214-polling-optimization"></script>
     
     <!-- Script de inicialização -->
     <script>
@@ -8836,6 +8893,49 @@
             console.log('[INIT] Sistema carregado!');
         });
     })();
+
+    // FUNÇÃO DE DIAGNÓSTICO E LIMPEZA - disponível globalmente no console
+    // Limpa parada fantasma de qualquer máquina
+    window.forceStopDowntime = async function(machineId) {
+        if (!machineId) { console.error('Uso: forceStopDowntime("H06")'); return; }
+        var waitDb = function() {
+            return new Promise(function(resolve) {
+                var check = setInterval(function() {
+                    if (window.db) { clearInterval(check); resolve(); }
+                }, 500);
+                setTimeout(function() { clearInterval(check); resolve(); }, 10000);
+            });
+        };
+        if (!window.db) { console.log('Aguardando banco de dados...'); await waitDb(); }
+        if (!window.db) { console.error('Banco de dados não disponível.'); return; }
+        var mid = machineId.toUpperCase().trim();
+        console.log('Forçando limpeza de paradas para:', mid);
+        var count = 0;
+        try {
+            // 1. active_downtimes
+            var d1 = await window.db.collection('active_downtimes').doc(mid).get();
+            if (d1.exists) {
+                await window.db.collection('active_downtimes').doc(mid).delete();
+                console.log('Removido de active_downtimes:', mid); count++;
+            } else { console.log('Nao encontrado em active_downtimes:', mid); }
+            // 2. extended_downtime_logs
+            var snap = await window.db.collection('extended_downtime_logs').where('status', '==', 'active').get();
+            for (var i = 0; i < snap.docs.length; i++) {
+                var doc = snap.docs[i]; var data = doc.data();
+                var dm = (data.machine_id || data.machine || '').toUpperCase().trim();
+                if (dm === mid) {
+                    await doc.ref.update({ status: 'inactive', end_date: new Date().toISOString().split('T')[0], end_time: new Date().toTimeString().substring(0,5), force_stopped: true });
+                    console.log('Finalizado em extended_downtime_logs:', doc.id); count++;
+                }
+            }
+            // 3. Invalidar caches
+            if (window.invalidateDowntimeCache) window.invalidateDowntimeCache(mid);
+            if (window.DataStore) window.DataStore.invalidate('activeDowntimes');
+            if (window._downtimeStatusCache) { delete window._downtimeStatusCache[mid]; window._downtimeStatusCacheTimestamp = 0; }
+            console.log('Limpeza concluida!', count, 'registro(s). Recarregue (F5).');
+        } catch (e) { console.error('Erro:', e); }
+    };
+    console.log('[INIT] forceStopDowntime() disponivel. Use: forceStopDowntime("H06")');
     </script>
 </body>
 </html>

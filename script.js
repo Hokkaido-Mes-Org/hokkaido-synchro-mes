@@ -4,6 +4,61 @@
 const DISABLED_MACHINES = ['H11'];
 // ====================================================
 
+// FUNÇÃO GLOBAL: Forçar limpeza de parada para uma máquina específica
+// Definida no topo do arquivo para garantir disponibilidade imediata no console
+window.forceStopDowntime = async function(machineId) {
+    if (!machineId) {
+        console.error('Uso: forceStopDowntime("H06")');
+        return;
+    }
+    if (!window.db) {
+        console.error('Banco de dados não inicializado. Aguarde o carregamento completo da página.');
+        return;
+    }
+    const mid = machineId.toUpperCase().trim();
+    console.log('Forçando limpeza de paradas para máquina:', mid);
+    let removedCount = 0;
+    try {
+        // 1. Remover de active_downtimes
+        const doc1 = await window.db.collection('active_downtimes').doc(mid).get();
+        if (doc1.exists) {
+            await window.db.collection('active_downtimes').doc(mid).delete();
+            console.log('  Removido de active_downtimes:', mid);
+            removedCount++;
+        } else {
+            console.log('  Não encontrado em active_downtimes:', mid);
+        }
+        // 2. Remover de extended_downtime_logs com status active
+        const snap = await window.db.collection('extended_downtime_logs')
+            .where('status', '==', 'active').get();
+        for (const doc of snap.docs) {
+            const data = doc.data();
+            const docMachine = (data.machine_id || data.machine || '').toUpperCase().trim();
+            if (docMachine === mid) {
+                await doc.ref.update({ 
+                    status: 'inactive', 
+                    end_date: new Date().toISOString().split('T')[0],
+                    end_time: new Date().toTimeString().substring(0, 5),
+                    force_stopped: true,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                console.log('  Finalizado em extended_downtime_logs:', doc.id);
+                removedCount++;
+            }
+        }
+        // 3. Invalidar caches
+        if (typeof window.invalidateDowntimeCache === 'function') {
+            window.invalidateDowntimeCache(mid);
+        }
+        if (window.DataStore) {
+            window.DataStore.invalidate('activeDowntimes');
+        }
+        console.log('Limpeza concluída!', removedCount, 'registro(s) afetado(s). Recarregue a página (F5).');
+    } catch (error) {
+        console.error('Erro ao limpar paradas:', error);
+    }
+};
+
 window.closeModal = function(modalId) {
     const modal = document.getElementById(modalId);
     if (!modal) {
@@ -705,6 +760,22 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = this._data[collection];
             if (!data) return [];
             return data.filter(predicate);
+        },
+        
+        // Invalidar cache de uma collection (forçar reload na próxima leitura)
+        invalidate(collection) {
+            if (collection) {
+                this._data[collection] = null;
+                this._timestamps[collection] = 0;
+                console.log(`🗑️ DataStore: cache de ${collection} invalidado`);
+            } else {
+                // Invalidar tudo
+                for (const key of Object.keys(this._data)) {
+                    this._data[key] = null;
+                    this._timestamps[key] = 0;
+                }
+                console.log('🗑️ DataStore: todos os caches invalidados');
+            }
         }
     };
     
@@ -5791,8 +5862,27 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
 
         // Obter categorias excluídas do OEE
         const oeeExcludedCategories = window.databaseModule?.oeeExcludedCategories || [];
+        
+        // NOVO: Criar set de máquinas com plano ativo para validação
+        const machinesWithPlan = new Set();
+        planData.forEach(p => {
+            if (p && p.machine) {
+                machinesWithPlan.add(normalizeMachineId(p.machine));
+            }
+        });
 
         downtimeData.forEach(item => {
+            // CORREÇÃO: Verificar se é parada semOP (sem OP planejada)
+            // Paradas semOP só devem ser contabilizadas se a máquina tem planejamento
+            const isSemOP = item.raw?.semOP === true;
+            const machineId = normalizeMachineId(item.machine || '');
+            
+            if (isSemOP && !machinesWithPlan.has(machineId)) {
+                // Máquina SEM OP e SEM planejamento - NÃO contabilizar no OEE
+                console.log('[TRACE][aggregateOeeMetrics] Parada semOP ignorada (máquina sem planejamento):', machineId, item.reason);
+                return;
+            }
+            
             const group = getOrCreateGroup(item);
             if (!group) return;
             
@@ -5818,6 +5908,13 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
             const planCandidates = planData.filter(p => p && p.raw && p.machine === group.machine);
             
             if (!planCandidates.length) {
+                // CORREÇÃO: Se não há plano E não há produção, ignorar do OEE
+                // Isso evita contabilizar máquinas que estão apenas "paradas" sem planejamento
+                if (group.production === 0) {
+                    console.log('[TRACE][aggregateOeeMetrics] ignorando máquina sem plano e sem produção:', group.machine);
+                    return;
+                }
+                
                 console.log('[TRACE][aggregateOeeMetrics] sem plano para máquina', group.machine, 'usando valores padrão');
                 // CORREÇÃO: Usar valores padrão quando não há plano disponível
                 const metrics = calculateShiftOEE(
@@ -20118,6 +20215,7 @@ ${content.innerHTML}
                     console.warn('[DOWNTIME][CHECK] Dados de parada ativa incompletos, removendo...');
                     const normalizedMachineForDelete = normalizeMachineId(selectedMachineData.machine);
                     await db.collection('active_downtimes').doc(normalizedMachineForDelete).delete();
+                    if (typeof invalidateDowntimeCache === 'function') invalidateDowntimeCache(normalizedMachineForDelete);
                     return;
                 }
                 
@@ -20136,6 +20234,7 @@ ${content.innerHTML}
                     console.warn('[DOWNTIME][CHECK] Timestamp de início inválido, removendo parada...');
                     const normalizedMachineForDelete = normalizeMachineId(selectedMachineData.machine);
                     await db.collection('active_downtimes').doc(normalizedMachineForDelete).delete();
+                    if (typeof invalidateDowntimeCache === 'function') invalidateDowntimeCache(normalizedMachineForDelete);
                     return;
                 }
                 
@@ -20158,6 +20257,7 @@ ${content.innerHTML}
                     if (!confirmar) {
                         const normalizedMachineForDelete = normalizeMachineId(selectedMachineData.machine);
                         await db.collection('active_downtimes').doc(normalizedMachineForDelete).delete();
+                        if (typeof invalidateDowntimeCache === 'function') invalidateDowntimeCache(normalizedMachineForDelete);
                         console.log('[DOWNTIME][CHECK] Parada antiga removida pelo usuário');
                         return;
                     }
@@ -21348,16 +21448,23 @@ ${content.innerHTML}
             try {
                 // OTIMIZAÇÃO: Usar função com cache (TTL 30s para dados em tempo real)
                 const downtimes = await getActiveDowntimesCached(false);
-                // Filtrar apenas máquinas que existem no machineDatabase
-                const allDowntimeIds = downtimes.map(d => d.id);
-                const validDowntimeIds = allDowntimeIds.filter(id => {
-                    const normalizedId = normalizeMachineId(id);
-                    const isValid = validMachineIdsSet.has(normalizedId);
-                    if (!isValid) {
-                        console.warn(`[pollActiveDowntimes] Máquina "${id}" em active_downtimes não existe no machineDatabase`);
-                    }
-                    return isValid;
-                });
+                // CORREÇÃO CRÍTICA: Filtrar apenas máquinas que existem no machineDatabase
+                // E que têm isActive !== false (paradas realmente ativas)
+                const validDowntimeIds = downtimes
+                    .filter(d => {
+                        // CORREÇÃO: Ignorar documentos com isActive explicitamente false
+                        if (d.isActive === false) return false;
+                        return true;
+                    })
+                    .map(d => d.id)
+                    .filter(id => {
+                        const normalizedId = normalizeMachineId(id);
+                        const isValid = validMachineIdsSet.has(normalizedId);
+                        if (!isValid) {
+                            console.warn(`[pollActiveDowntimes] Máquina "${id}" em active_downtimes não existe no machineDatabase`);
+                        }
+                        return isValid;
+                    });
                 activeDowntimeSet = new Set(validDowntimeIds);
                 scheduleRender();
             } catch (error) {
@@ -21368,14 +21475,29 @@ ${content.innerHTML}
         // Executar imediatamente na primeira vez
         pollActiveDowntimes();
         
-        // Configurar polling a cada 15 segundos (otimizado para reduzir custos - era 5s)
+        // Configurar polling a cada 60 segundos (otimizado para reduzir custos Firebase - era 15s)
         window._startActiveDowntimesPolling = () => {
             if (window._activeDowntimesPolling) {
                 clearInterval(window._activeDowntimesPolling);
             }
-            window._activeDowntimesPolling = setInterval(pollActiveDowntimes, 15000);
+            window._activeDowntimesPolling = setInterval(pollActiveDowntimes, 60000);
         };
         window._startActiveDowntimesPolling();
+        
+        // Pausar polling quando aba não está visível (economia de leituras Firebase)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                console.log('[POLLING] Pausando polling - aba oculta');
+                if (window._activeDowntimesPolling) {
+                    clearInterval(window._activeDowntimesPolling);
+                    window._activeDowntimesPolling = null;
+                }
+            } else {
+                console.log('[POLLING] Retomando polling - aba visível');
+                pollActiveDowntimes(); // Atualiza imediatamente ao voltar
+                window._startActiveDowntimesPolling();
+            }
+        });
     }
 
     function renderPlanningTable(items) {
@@ -22082,12 +22204,31 @@ ${content.innerHTML}
                     await handleCardActivateNextClick(activateNextBtn);
                     return;
                 }
+                
+                // NOVO: Botão finalizar parada no card parado
+                const finishDowntimeBtn = event.target.closest('.card-finish-downtime-btn');
+                if (finishDowntimeBtn) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const card = finishDowntimeBtn.closest('.machine-card');
+                    if (card && card.dataset.machine) {
+                        openCardFinishDowntimeModal(card.dataset.machine, card.dataset.downtimeReason || '', card.dataset.downtimeStart || '');
+                    }
+                    return;
+                }
 
                 // Seleção do card da máquina
                 const card = event.target.closest('.machine-card');
                 if (!card) return;
                 const machine = card.dataset.machine;
                 if (!machine) return;
+                
+                // Se é um card parado (sem OP), abrir modal de finalização
+                if (card.classList.contains('machine-stopped') && !card.dataset.planId) {
+                    openCardFinishDowntimeModal(machine, card.dataset.downtimeReason || '', card.dataset.downtimeStart || '');
+                    return;
+                }
+                
                 // Scroll automático apenas quando usuário clica diretamente no card
                 await onMachineSelected(machine, { scrollToPanel: true });
             });
@@ -34494,6 +34635,21 @@ ${content.innerHTML}
             renderStandaloneMachineGrid();
             if (typeof lucide !== 'undefined') lucide.createIcons();
 
+            // CORREÇÃO: Invalidar caches e atualizar cards principais imediatamente
+            if (typeof invalidateDowntimeCache === 'function') {
+                invalidateDowntimeCache(machineId);
+            }
+            
+            // Invalidar DataStore para forçar reload
+            if (window.DataStore) {
+                window.DataStore.invalidate('activeDowntimes');
+            }
+            
+            // Atualizar cards principais - AWAIT para garantir atualização imediata
+            if (typeof populateMachineSelector === 'function') {
+                await populateMachineSelector();
+            }
+
             showNotification(`⏸️ Parada iniciada: ${machineId} - ${reason}`, 'warning');
 
             // Log
@@ -34513,8 +34669,10 @@ ${content.innerHTML}
 
     /**
      * FINALIZAR parada: calcula duração, salva em downtime_entries, remove de active_downtimes
+     * @param {string} machineId - ID da máquina
+     * @param {boolean} skipConfirm - Se true, pula a confirmação (usado quando chamado de modal que já confirmou)
      */
-    async function finalizeStandaloneDowntime(machineId) {
+    async function finalizeStandaloneDowntime(machineId, skipConfirm = false) {
         const normalizedId = normalizeMachineId(machineId);
         const activeData = _standaloneActiveDowntimes[machineId] || _standaloneActiveDowntimes[normalizedId];
 
@@ -34523,10 +34681,12 @@ ${content.innerHTML}
             return;
         }
 
-        // Confirmar finalização
-        const elapsed = getStandaloneElapsedText(activeData);
-        const confirmMsg = `Finalizar parada da máquina ${machineId}?\n\nMotivo: ${activeData.reason || '-'}\nTempo: ${elapsed}\n\nDeseja finalizar?`;
-        if (!confirm(confirmMsg)) return;
+        // Confirmar finalização (pular se skipConfirm for true)
+        if (!skipConfirm) {
+            const elapsed = getStandaloneElapsedText(activeData);
+            const confirmMsg = `Finalizar parada da máquina ${machineId}?\n\nMotivo: ${activeData.reason || '-'}\nTempo: ${elapsed}\n\nDeseja finalizar?`;
+            if (!confirm(confirmMsg)) return;
+        }
 
         try {
             const now = new Date();
@@ -34588,34 +34748,60 @@ ${content.innerHTML}
             await db.collection('active_downtimes').doc(docId).delete();
             console.log('[STANDALONE] Parada finalizada e salva:', machineId);
 
-            // Atualizar cache local
-            delete _standaloneActiveDowntimes[machineId];
-            delete _standaloneActiveDowntimes[normalizedId];
-
-            // Re-renderizar grid
-            renderStandaloneMachineGrid();
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-
-            // Atualizar dados
+            // Calcular duração ANTES de mostrar notificação de sucesso
             const totalDuration = segments.reduce((s, seg) => s + (seg.duration || 0), 0);
             const totalMinutes = Math.round(totalDuration);
 
+            // ====== ATUALIZAR CACHES IMEDIATAMENTE ======
+            // Atualizar cache local standalone
+            delete _standaloneActiveDowntimes[machineId];
+            delete _standaloneActiveDowntimes[normalizedId];
+            
+            // Invalidar TODOS os caches de downtime antes de atualizar UI
+            if (typeof invalidateDowntimeCache === 'function') {
+                invalidateDowntimeCache(machineId);
+            }
+            
+            // Invalidar DataStore para forçar reload
+            if (window.DataStore) {
+                window.DataStore.invalidate('activeDowntimes');
+            }
+
+            // ====== ATUALIZAR UI IMEDIATAMENTE (ANTES da notificação) ======
+            try {
+                // Re-renderizar grid standalone
+                renderStandaloneMachineGrid();
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+
+                // Atualizar cards principais - AWAIT para garantir atualização imediata
+                if (typeof populateMachineSelector === 'function') {
+                    await populateMachineSelector();
+                }
+            } catch (uiError) {
+                console.warn('[STANDALONE] Erro ao atualizar UI:', uiError);
+            }
+
+            // ====== SUCESSO CONFIRMADO - Mostrar notificação ======
             showNotification(`✅ Parada finalizada: ${machineId} - ${totalMinutes} min registrados`, 'success');
 
-            // Atualizar stats em background
+            // ====== OPERAÇÕES EM BACKGROUND (não bloqueia) ======
             Promise.all([
-                loadTodayStats(),
-                loadRecentEntries(false)
+                loadTodayStats?.() || Promise.resolve(),
+                loadRecentEntries?.(false) || Promise.resolve()
             ]).catch(() => {});
 
-            // Log
-            if (typeof logSystemAction === 'function') {
-                logSystemAction('parada', `Parada sem OP finalizada: ${machineId}`, {
-                    maquina: machineId,
-                    motivo: activeData.reason,
-                    duracao: totalDuration,
-                    semOP: true
-                });
+            // Log em background
+            try {
+                if (typeof logSystemAction === 'function') {
+                    logSystemAction('parada', `Parada sem OP finalizada: ${machineId}`, {
+                        maquina: machineId,
+                        motivo: activeData.reason,
+                        duracao: totalDuration,
+                        semOP: true
+                    });
+                }
+            } catch (logError) {
+                console.warn('[STANDALONE] Erro ao registrar log:', logError);
             }
         } catch (error) {
             console.error('[STANDALONE] Erro ao finalizar parada:', error);
@@ -34629,6 +34815,148 @@ ${content.innerHTML}
         stopStandaloneTimerUpdate();
         closeModal('standalone-downtime-modal');
     };
+
+    // =============================================
+    // FINALIZAR PARADA VIA CARD (Aba Lançamento)
+    // =============================================
+    
+    // Armazena dados da parada sendo finalizada via card
+    let _cardFinishDowntimeMachine = null;
+    
+    /**
+     * Abre o modal de finalização de parada clicando no card
+     */
+    async function openCardFinishDowntimeModal(machineId, reason, startTime) {
+        console.log('[CARD-FINISH-DOWNTIME] Abrindo modal para:', machineId);
+        _cardFinishDowntimeMachine = normalizeMachineId(machineId);
+        
+        const modal = document.getElementById('card-finish-downtime-modal');
+        if (!modal) {
+            console.error('[CARD-FINISH-DOWNTIME] Modal não encontrado');
+            return;
+        }
+        
+        // Buscar dados atualizados da parada no Firebase
+        let downtimeData = null;
+        try {
+            const doc = await db.collection('active_downtimes').doc(_cardFinishDowntimeMachine).get();
+            if (doc.exists) {
+                downtimeData = doc.data();
+            }
+        } catch (e) {
+            console.warn('[CARD-FINISH-DOWNTIME] Erro ao buscar parada:', e);
+        }
+        
+        // Preencher dados no modal
+        const machineEl = document.getElementById('card-finish-downtime-machine');
+        const reasonEl = document.getElementById('card-finish-downtime-reason');
+        const startEl = document.getElementById('card-finish-downtime-start');
+        const durationEl = document.getElementById('card-finish-downtime-duration');
+        
+        if (machineEl) machineEl.textContent = _cardFinishDowntimeMachine;
+        if (reasonEl) reasonEl.textContent = downtimeData?.reason || reason || 'Não informado';
+        
+        // Calcular início e duração
+        let startTimestamp = null;
+        if (downtimeData?.startTimestampLocal) {
+            startTimestamp = new Date(downtimeData.startTimestampLocal);
+        } else if (downtimeData?.startDate && downtimeData?.startTime) {
+            startTimestamp = new Date(`${downtimeData.startDate}T${downtimeData.startTime}:00`);
+        } else if (startTime) {
+            startTimestamp = new Date(startTime);
+        }
+        
+        if (startEl) {
+            if (startTimestamp && !isNaN(startTimestamp.getTime())) {
+                startEl.textContent = startTimestamp.toLocaleString('pt-BR', { 
+                    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' 
+                });
+            } else {
+                startEl.textContent = downtimeData?.startTime || '-';
+            }
+        }
+        
+        if (durationEl) {
+            if (startTimestamp && !isNaN(startTimestamp.getTime())) {
+                const now = new Date();
+                const diffMs = now - startTimestamp;
+                const diffMin = Math.floor(diffMs / 60000);
+                const hours = Math.floor(diffMin / 60);
+                const mins = diffMin % 60;
+                durationEl.textContent = hours > 0 ? `${hours}h ${mins}min` : `${mins}min`;
+            } else {
+                durationEl.textContent = '-';
+            }
+        }
+        
+        // Mostrar modal
+        modal.classList.remove('hidden');
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+    
+    /**
+     * Fecha o modal de finalização via card
+     */
+    function closeCardFinishDowntimeModal() {
+        const modal = document.getElementById('card-finish-downtime-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+        _cardFinishDowntimeMachine = null;
+    }
+    
+    /**
+     * Confirma e executa a finalização da parada via card
+     */
+    async function confirmCardFinishDowntime() {
+        if (!_cardFinishDowntimeMachine) {
+            showNotification('Nenhuma máquina selecionada', 'error');
+            return;
+        }
+        
+        const machineId = _cardFinishDowntimeMachine;
+        const normalizedId = normalizeMachineId(machineId);
+        console.log('[CARD-FINISH-DOWNTIME] Finalizando parada:', machineId);
+        
+        // Verificar se existe no cache standalone
+        let activeData = _standaloneActiveDowntimes[machineId] || _standaloneActiveDowntimes[normalizedId];
+        
+        // Se não estiver no cache, buscar do Firebase
+        if (!activeData) {
+            console.log('[CARD-FINISH-DOWNTIME] Buscando dados do Firebase...');
+            try {
+                const doc = await db.collection('active_downtimes').doc(normalizedId).get();
+                if (doc.exists) {
+                    activeData = { ...doc.data(), docId: doc.id };
+                    // Adicionar ao cache para a função finalizeStandaloneDowntime funcionar
+                    _standaloneActiveDowntimes[normalizedId] = activeData;
+                }
+            } catch (e) {
+                console.warn('[CARD-FINISH-DOWNTIME] Erro ao buscar Firebase:', e);
+            }
+        }
+        
+        if (!activeData) {
+            showNotification('Parada não encontrada no sistema', 'warning');
+            closeCardFinishDowntimeModal();
+            // Atualizar cards mesmo assim
+            if (typeof invalidateDowntimeCache === 'function') invalidateDowntimeCache(machineId);
+            if (typeof populateMachineSelector === 'function') populateMachineSelector();
+            return;
+        }
+        
+        // Fechar modal ANTES de finalizar (evita erro se algo falhar no meio)
+        closeCardFinishDowntimeModal();
+        
+        // Usar a função existente de finalização standalone (skipConfirm=true pois modal já confirma)
+        // A função tem seu próprio tratamento de erros e mostra notificações
+        await finalizeStandaloneDowntime(machineId, true);
+    }
+    
+    // Expor funções globalmente
+    window.openCardFinishDowntimeModal = openCardFinishDowntimeModal;
+    window.closeCardFinishDowntimeModal = closeCardFinishDowntimeModal;
+    window.confirmCardFinishDowntime = confirmCardFinishDowntime;
 
     // =============================================
     // PARADA EM LOTE - Múltiplas Máquinas ao Mesmo Tempo
@@ -36908,9 +37236,12 @@ function sendDowntimeNotification() {
         if (plans.length === 0 && hasActiveDowntime) {
             const dtInfo = machinesDowntime ? machinesDowntime[machine] : null;
             const reasonText = dtInfo?.reason || 'Parada ativa';
+            const startTime = dtInfo?.startDate || dtInfo?.startTime || '';
             machineProgressInfo[machine] = { normalizedProgress: 0, progressPercent: 0, palette: {} };
             return `
-                <div class="machine-card group relative bg-white rounded-lg border-2 border-red-400 shadow-sm hover:shadow-md transition-all duration-200 p-3 machine-stopped" data-machine="${machine}" data-plan-id="" data-order-id="" data-part-code="" data-multi-plan="false">
+                <div class="machine-card group relative bg-white rounded-lg border-2 border-red-400 shadow-sm hover:shadow-lg transition-all duration-200 p-3 machine-stopped cursor-pointer" 
+                     data-machine="${machine}" data-plan-id="" data-order-id="" data-part-code="" data-multi-plan="false"
+                     data-downtime-reason="${reasonText}" data-downtime-start="${startTime}">
                     <div class="flex items-center justify-between mb-3">
                         <div class="flex items-center gap-2">
                             <div class="machine-identifier w-8 h-8 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
@@ -36935,7 +37266,10 @@ function sendDowntimeNotification() {
                         </div>
                         <div class="text-sm font-semibold text-red-800 mb-1">${reasonText}</div>
                     </div>
-                    <div class="text-center text-[10px] text-slate-400 uppercase">Nenhuma OP atribuída</div>
+                    <button type="button" class="card-finish-downtime-btn w-full py-2 px-3 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded-lg text-xs font-bold shadow-md hover:shadow-lg hover:from-emerald-600 hover:to-green-700 transition-all flex items-center justify-center gap-2">
+                        <i data-lucide="check-circle" class="w-4 h-4"></i>
+                        Finalizar Parada
+                    </button>
                 </div>
             `;
         }
@@ -37172,19 +37506,33 @@ function sendDowntimeNotification() {
 
                 <!-- Mini card de parada ativa -->
                 ${(() => {
-                    // Verifica se há parada ativa (downtime sem fim) para esta máquina
-                    // Priorizar dados de machinesDowntime (mais completo com motivo)
-                    const downtimeInfo = machinesDowntime ? machinesDowntime[machine] : null;
-                    const paradaAtiva = downtimeInfo || filteredDowntimeEntries.some(dt => dt && dt.machine === machine && (!dt.endTime && !dt.endDate));
+                    // CORREÇÃO COMPLETA: Verificar se realmente há parada ATIVA
+                    // Priorizar activeDowntimeSet (fonte de verdade)
+                    const hasActiveDowntimeFromSet = activeDowntimeSet.has(machine);
                     
-                    if (!paradaAtiva) return '';
+                    // Se não está no activeDowntimeSet E não está em machinesDowntime, não tem parada
+                    const downtimeInfo = machinesDowntime ? machinesDowntime[machine] : null;
+                    
+                    // IMPORTANTE: Só considerar parada ativa se:
+                    // 1. Está no activeDowntimeSet (parada confirmada) OU
+                    // 2. Tem downtimeInfo com status explicitamente 'active'
+                    const isDowntimeInfoActive = downtimeInfo && 
+                        (downtimeInfo.status === 'active' || downtimeInfo.isActive === true);
+                    
+                    // Se não tem parada ativa confirmada, não mostrar o card
+                    if (!hasActiveDowntimeFromSet && !isDowntimeInfoActive) return '';
                     
                     // Obter motivo da parada
                     let reasonText = downtimeInfo?.reason || '';
                     
                     // Se não tiver motivo em machinesDowntime, tentar buscar nas entradas
-                    if (!reasonText) {
-                        const dtEntry = filteredDowntimeEntries.find(dt => dt && dt.machine === machine && (!dt.endTime && !dt.endDate));
+                    if (!reasonText && filteredDowntimeEntries) {
+                        const dtEntry = filteredDowntimeEntries.find(dt => {
+                            if (!dt || dt.machine !== machine) return false;
+                            const hasEndTime = dt.endTime || dt.end_time;
+                            const statusFinished = ['inactive', 'finalizada', 'finished', 'closed'].includes(String(dt.status || '').toLowerCase());
+                            return !hasEndTime && !statusFinished;
+                        });
                         reasonText = dtEntry?.reason || dtEntry?.motivo || dtEntry?.downtime_reason || '';
                     }
                     
@@ -37461,8 +37809,15 @@ function sendDowntimeNotification() {
             let activeDowntimeSet = new Set();
             try {
                 const activeSnapshot = await db.collection('active_downtimes').get();
-                // Filtrar apenas máquinas que existem no machineDatabase
+                // CORREÇÃO CRÍTICA: Filtrar apenas máquinas que existem no machineDatabase
+                // E que têm isActive !== false (paradas realmente ativas)
                 const validDowntimeIds = activeSnapshot.docs
+                    .filter(doc => {
+                        const data = doc.data();
+                        // Ignorar documentos com isActive explicitamente false
+                        if (data && data.isActive === false) return false;
+                        return true;
+                    })
                     .map(doc => doc.id)
                     .filter(id => {
                         const normalizedId = normalizeMachineId(id);
@@ -39282,7 +39637,34 @@ function sendDowntimeNotification() {
     // Evita múltiplas leituras Firebase para cada máquina
     let _downtimeStatusCache = null;
     let _downtimeStatusCacheTimestamp = 0;
-    const DOWNTIME_CACHE_TTL = 15000; // 15 segundos - mesmo intervalo do polling
+    const DOWNTIME_CACHE_TTL = 60000; // 60 segundos - mesmo intervalo do polling (otimizado)
+
+    // NOVO: Função para invalidar todos os caches de downtime
+    function invalidateDowntimeCache(machineId = null) {
+        console.log('[CACHE] Invalidando cache de downtime', machineId ? `para ${machineId}` : '(completo)');
+        
+        // Invalidar cache interno
+        _downtimeStatusCache = null;
+        _downtimeStatusCacheTimestamp = 0;
+        
+        // Invalidar cache global
+        if (machineId) {
+            const mid = normalizeMachineId(machineId);
+            if (window.downtimeStatusCache) delete window.downtimeStatusCache[mid];
+            if (downtimeStatusCache) delete downtimeStatusCache[mid];
+        } else {
+            window.downtimeStatusCache = {};
+            if (typeof downtimeStatusCache !== 'undefined') downtimeStatusCache = {};
+        }
+        
+        // Invalidar DataStore cache
+        if (window.DataStore) {
+            window.DataStore.invalidate('activeDowntimes');
+        }
+    }
+    
+    // Expor globalmente para uso em outros módulos
+    window.invalidateDowntimeCache = invalidateDowntimeCache;
 
     // OTIMIZADO: Função para buscar status de todas as máquinas com cache
     async function getAllMachinesDowntimeStatus(forceRefresh = false) {
@@ -39539,13 +39921,11 @@ function sendDowntimeNotification() {
                 durationMinutes: `${hours}h ${mins}m`
             });
 
-            // 5. Limpar cache e timers
+            // 5. Limpar TODOS os caches de downtime
             const mid = normalizedMachineId;
             
-            // Limpar status cache
-            if (window.downtimeStatusCache && window.downtimeStatusCache[mid]) {
-                delete window.downtimeStatusCache[mid];
-            }
+            // CORRIGIDO: Usar função centralizada para invalidar todos os caches
+            invalidateDowntimeCache(mid);
 
             // Limpar timer de cronômetro
             if (window.downtimeTimers && window.downtimeTimers.has(mid)) {
@@ -40028,12 +40408,18 @@ window.forceOpenModal = function(modalId) {
             }
         }
         
+        // Invalidar cache após limpeza
+        if (typeof invalidateDowntimeCache === 'function') {
+            invalidateDowntimeCache();
+        }
+        
         console.log('🎉 Limpeza concluída! Recarregue a página para atualizar os dados.');
     };
     
     console.log('[GLOBAL-EXPOSURES] Funções de parada expostas no window global');
     console.log('[DEBUG] Use debugActiveDowntimes() no console para diagnosticar paradas órfãs');
     console.log('[DEBUG] Use cleanOrphanDowntimes(false) para remover paradas órfãs');
+    console.log('[DEBUG] Use forceStopDowntime("H06") para forçar limpeza de uma máquina específica');
 });
 
 // Funções globais para navegação de subtabs Analytics IA
