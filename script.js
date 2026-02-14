@@ -59,6 +59,77 @@ window.forceStopDowntime = async function(machineId) {
     }
 };
 
+// FUNÇÃO GLOBAL: Excluir TODAS as paradas de um motivo específico
+// Uso no console: adminExcluirParadasPorMotivo("Fim de semana")
+window.adminExcluirParadasPorMotivo = async function(motivoBusca) {
+    if (!motivoBusca) {
+        console.error('Uso: adminExcluirParadasPorMotivo("Fim de semana")');
+        return;
+    }
+    if (!window.db) {
+        console.error('Banco de dados não inicializado. Aguarde o carregamento completo da página.');
+        return;
+    }
+    
+    const motivoUpper = motivoBusca.trim().toUpperCase();
+    console.log(`[ADMIN] Buscando TODAS as paradas com motivo contendo "${motivoBusca}"...`);
+    
+    try {
+        const snapshot = await window.db.collection('downtime_entries').get();
+        
+        const encontradas = [];
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const reason = (data.reason || data.motivo || '').trim().toUpperCase();
+            if (reason.includes(motivoUpper)) {
+                encontradas.push({
+                    id: doc.id,
+                    ref: doc.ref,
+                    date: data.date || '',
+                    machine: data.machine || data.machine_id || '',
+                    reason: data.reason || data.motivo || '',
+                    duration: data.duration || 0
+                });
+            }
+        });
+        
+        if (encontradas.length === 0) {
+            console.log(`Nenhuma parada encontrada com motivo "${motivoBusca}"`);
+            alert(`Nenhuma parada encontrada com motivo "${motivoBusca}"`);
+            return;
+        }
+        
+        console.table(encontradas.map(e => ({
+            ID: e.id, Data: e.date, Máquina: e.machine, Motivo: e.reason, Duração: e.duration + ' min'
+        })));
+        
+        const confirmar = confirm(
+            `Encontradas ${encontradas.length} paradas com motivo "${motivoBusca}".\n\n` +
+            encontradas.slice(0, 5).map(e => `• ${e.date} | ${e.machine} | ${e.reason} | ${e.duration}min`).join('\n') +
+            (encontradas.length > 5 ? `\n... e mais ${encontradas.length - 5} registros` : '') +
+            `\n\nDeseja EXCLUIR TODAS?`
+        );
+        
+        if (!confirmar) { console.log('[ADMIN] Cancelado.'); return; }
+        
+        let excluidas = 0;
+        const batchSize = 500;
+        for (let i = 0; i < encontradas.length; i += batchSize) {
+            const batch = window.db.batch();
+            encontradas.slice(i, i + batchSize).forEach(item => batch.delete(item.ref));
+            await batch.commit();
+            excluidas += Math.min(batchSize, encontradas.length - i);
+            console.log(`[ADMIN] Excluídas ${excluidas}/${encontradas.length}...`);
+        }
+        
+        alert(`✅ ${excluidas} paradas "${motivoBusca}" excluídas! Recarregue a página (F5).`);
+        console.log(`[ADMIN] ✅ ${excluidas} paradas excluídas com sucesso!`);
+    } catch (error) {
+        console.error('[ADMIN] Erro:', error);
+        alert('Erro: ' + error.message);
+    }
+};
+
 window.closeModal = function(modalId) {
     const modal = document.getElementById(modalId);
     if (!modal) {
@@ -4218,6 +4289,25 @@ document.addEventListener('DOMContentLoaded', function() {
                         await loadOrdersAnalysis();
                     }
                 }
+                
+                // 🔄 Invalidar cache de paradas e recarregar aba se necessário
+                if (collectionToDelete === 'downtime_entries') {
+                    cachedDowntimeDetails = []; // Limpar cache da tabela de detalhes
+                    cachedDowntimeDataForChart = []; // Limpar cache do gráfico de paradas
+                    if (typeof invalidateDowntimeCache === 'function') {
+                        invalidateDowntimeCache();
+                    }
+                    if (window.DataStore) {
+                        window.DataStore.invalidate('downtimeEntries');
+                    }
+                    if (window.CacheManager) {
+                        window.CacheManager.invalidate('downtime_entries');
+                    }
+                    // Se estiver na view de paradas, recarregar
+                    if (currentAnalysisView === 'downtime') {
+                        await loadDowntimeAnalysis();
+                    }
+                }
             }
 
 
@@ -6916,9 +7006,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const { startDate, endDate, machine, shift } = currentAnalysisFilters;
         console.log('[TRACE][loadDowntimeAnalysis] fetching data', { startDate, endDate, machine, shift });
         
-        // Carregar paradas normais (do turno)
+        // ✅ SEMPRE limpar caches antes de carregar dados frescos do Firebase
+        cachedDowntimeDetails = [];
+        cachedDowntimeDataForChart = [];
+        
+        // Carregar paradas normais (do turno) - busca direto do Firebase
         const downtimeSegments = await getFilteredData('downtime', startDate, endDate, machine, shift);
         const downtimeData = consolidateDowntimeEvents(downtimeSegments);
+        
+        // Debug: log dos motivos encontrados
+        const uniqueReasons = [...new Set(downtimeData.map(d => d.reason || 'Sem motivo'))];
+        console.log('[loadDowntimeAnalysis] Motivos encontrados no Firebase:', uniqueReasons);
+        console.log('[loadDowntimeAnalysis] Total de segmentos:', downtimeSegments.length, '| Eventos consolidados:', downtimeData.length);
 
         console.log('[TRACE][loadDowntimeAnalysis] normal downtime received', {
             segments: downtimeSegments.length,
@@ -12903,9 +13002,10 @@ ${content.innerHTML}
         const ctx = document.getElementById('downtime-reasons-chart');
         if (!ctx) return;
 
-        // Se recebeu novos dados, armazenar no cache
-        if (downtimeData && downtimeData.length >= 0) {
-            cachedDowntimeDataForChart = downtimeData;
+        // Se recebeu novos dados, SUBSTITUIR o cache (nunca mesclar com dados antigos)
+        if (downtimeData !== null && downtimeData !== undefined) {
+            cachedDowntimeDataForChart = Array.isArray(downtimeData) ? [...downtimeData] : [];
+            console.log('[generateDowntimeReasonsChart] Cache atualizado com', cachedDowntimeDataForChart.length, 'eventos');
         }
         
         // Usar modo passado ou o modo atual
@@ -26698,6 +26798,38 @@ ${content.innerHTML}
             adminParadasRenderStats();
             adminParadasRenderTabela();
             
+            // ✅ Invalidar TODOS os caches de paradas para refletir a exclusão em todas as abas
+            cachedDowntimeDetails = []; // Cache da tabela de detalhes Análise - Paradas
+            cachedDowntimeDataForChart = []; // Cache do gráfico Paradas por Motivo/Categoria
+            recentEntriesCache.delete(id); // Cache de lançamentos recentes
+            
+            if (typeof invalidateDowntimeCache === 'function') {
+                invalidateDowntimeCache(); // Caches de status de máquinas
+            }
+            
+            if (window.DataStore) {
+                window.DataStore.invalidate('downtimeEntries'); // DataStore cache
+                window.DataStore.invalidate('activeDowntimes'); 
+            }
+            
+            if (window.CacheManager) {
+                window.CacheManager.invalidate('downtime_entries'); // CacheManager
+            }
+            
+            // Se estiver na aba de análise de paradas, recarregar
+            if (typeof currentAnalysisView !== 'undefined' && currentAnalysisView === 'downtime') {
+                await loadDowntimeAnalysis();
+            }
+            
+            // Registrar log da exclusão
+            if (typeof registrarLogSistema === 'function') {
+                registrarLogSistema('EXCLUSÃO DE REGISTRO', 'downtime_entries', {
+                    docId: id,
+                    collection: 'downtime_entries',
+                    source: 'admin-paradas'
+                });
+            }
+            
             alert('Parada excluída com sucesso!');
             
         } catch (error) {
@@ -26706,6 +26838,107 @@ ${content.innerHTML}
         }
     };
     
+    // 🔧 Utilidade: Excluir TODAS as paradas de um motivo específico (ex: "Fim de semana")
+    window.adminExcluirParadasPorMotivo = async function(motivoBusca) {
+        if (!motivoBusca) {
+            alert('Informe o motivo. Ex: adminExcluirParadasPorMotivo("Fim de semana")');
+            return;
+        }
+        
+        const motivoUpper = motivoBusca.trim().toUpperCase();
+        console.log(`[ADMIN] Buscando TODAS as paradas com motivo contendo "${motivoBusca}"...`);
+        
+        try {
+            // Buscar TODA a coleção downtime_entries (sem filtro de data)
+            const snapshot = await db.collection('downtime_entries').get();
+            
+            const encontradas = [];
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                const reason = (data.reason || data.motivo || '').trim().toUpperCase();
+                if (reason.includes(motivoUpper)) {
+                    encontradas.push({
+                        id: doc.id,
+                        ref: doc.ref,
+                        date: data.date || '',
+                        machine: data.machine || data.machine_id || '',
+                        reason: data.reason || data.motivo || '',
+                        duration: data.duration || 0
+                    });
+                }
+            });
+            
+            if (encontradas.length === 0) {
+                alert(`Nenhuma parada encontrada com motivo "${motivoBusca}"`);
+                console.log('[ADMIN] Nenhuma parada encontrada.');
+                return;
+            }
+            
+            // Mostrar o que será excluído
+            console.table(encontradas.map(e => ({
+                ID: e.id,
+                Data: e.date,
+                Máquina: e.machine,
+                Motivo: e.reason,
+                Duração: e.duration + ' min'
+            })));
+            
+            const confirmar = confirm(
+                `Encontradas ${encontradas.length} paradas com motivo "${motivoBusca}".\n\n` +
+                encontradas.slice(0, 5).map(e => `• ${e.date} | ${e.machine} | ${e.reason} | ${e.duration}min`).join('\n') +
+                (encontradas.length > 5 ? `\n... e mais ${encontradas.length - 5} registros` : '') +
+                `\n\nDeseja EXCLUIR TODAS?`
+            );
+            
+            if (!confirmar) {
+                console.log('[ADMIN] Exclusão cancelada pelo usuário.');
+                return;
+            }
+            
+            // Excluir em batches de 500
+            let excluidas = 0;
+            const batchSize = 500;
+            for (let i = 0; i < encontradas.length; i += batchSize) {
+                const batch = db.batch();
+                const chunk = encontradas.slice(i, i + batchSize);
+                chunk.forEach(item => batch.delete(item.ref));
+                await batch.commit();
+                excluidas += chunk.length;
+                console.log(`[ADMIN] Excluídas ${excluidas}/${encontradas.length}...`);
+            }
+            
+            // Invalidar todos os caches
+            cachedDowntimeDetails = [];
+            cachedDowntimeDataForChart = [];
+            if (typeof invalidateDowntimeCache === 'function') invalidateDowntimeCache();
+            if (window.DataStore) {
+                window.DataStore.invalidate('downtimeEntries');
+                window.DataStore.invalidate('activeDowntimes');
+            }
+            if (window.CacheManager) window.CacheManager.invalidate('downtime_entries');
+            
+            // Registrar log
+            if (typeof registrarLogSistema === 'function') {
+                registrarLogSistema('EXCLUSÃO EM MASSA', 'downtime_entries', {
+                    motivo: motivoBusca,
+                    quantidade: excluidas
+                });
+            }
+            
+            alert(`✅ ${excluidas} paradas "${motivoBusca}" excluídas com sucesso!\n\nRecarregue a aba de análise.`);
+            console.log(`[ADMIN] ✅ ${excluidas} paradas excluídas com sucesso!`);
+            
+            // Recarregar se estiver no admin
+            if (typeof adminParadasBuscar === 'function') {
+                await adminParadasBuscar();
+            }
+            
+        } catch (error) {
+            console.error('[ADMIN] Erro ao excluir paradas:', error);
+            alert('Erro: ' + error.message);
+        }
+    };
+
     function adminParadasExportarCSV() {
         if (adminParadasDados.length === 0) {
             alert('Nenhum dado para exportar');

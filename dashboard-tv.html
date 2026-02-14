@@ -4337,8 +4337,26 @@
                     }
                 });
                 
-                // Agrupar paradas
+                // CORREÇÃO: Criar set de máquinas com plano ativo para validação
+                const machinesWithPlan = new Set();
+                planData.forEach(p => {
+                    if (p && p.machine) {
+                        machinesWithPlan.add(normalizeMachineId(p.machine));
+                    }
+                });
+                
+                // Agrupar paradas - CORREÇÃO: Filtrar semOP sem planejamento
                 downtimeData.forEach(item => {
+                    // Verificar se é parada semOP (sem OP planejada)
+                    const isSemOP = item.raw?.semOP === true;
+                    const machineId = normalizeMachineId(item.machine || '');
+                    
+                    // Paradas semOP só devem ser contabilizadas se a máquina tem planejamento
+                    if (isSemOP && !machinesWithPlan.has(machineId)) {
+                        console.log('[Dashboard TV OEE] Parada semOP ignorada (máquina sem planejamento):', machineId);
+                        return;
+                    }
+                    
                     const group = getOrCreateGroup(item);
                     if (group) group.downtimeMin += item.duration || 0;
                 });
@@ -4352,6 +4370,12 @@
                 Object.values(grouped).forEach(group => {
                     // Buscar plano para essa máquina
                     const planCandidates = planData.filter(p => p && p.machine === group.machine);
+                    
+                    // CORREÇÃO: Se não há plano E não há produção, ignorar do OEE
+                    if (!planCandidates.length && group.production === 0) {
+                        console.log('[Dashboard TV OEE] Ignorando máquina sem plano e sem produção:', group.machine);
+                        return;
+                    }
                     
                     let cicloReal = 30;
                     let cavAtivas = 2;
