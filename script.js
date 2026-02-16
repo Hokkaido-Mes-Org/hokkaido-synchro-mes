@@ -1256,7 +1256,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const snapshot = await db.collection('machine_priorities').get();
         const priorities = {};
         snapshot.docs.forEach(doc => {
-            priorities[doc.id] = doc.data().priority || 99;
+            const p = doc.data().priority;
+            priorities[doc.id] = (p !== null && p !== undefined && !isNaN(p)) ? Number(p) : 99;
         });
         
         if (window.DataStore) {
