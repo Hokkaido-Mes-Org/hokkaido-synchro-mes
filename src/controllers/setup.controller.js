@@ -62,7 +62,14 @@ function getSetupCurrentUserName() {
 }
 
 // ─── Setup principal ─────────────────────────────────
+let _setupMaquinasInitialized = false;
 export function setupSetupMaquinasPage() {
+    if (_setupMaquinasInitialized) {
+        console.debug('[Setup·mod] Já inicializado — recarregando dados');
+        loadSetups();
+        return;
+    }
+    _setupMaquinasInitialized = true;
     console.log('[Setup·mod] Inicializando módulo de Setup de Máquinas');
 
     const page = document.getElementById('setup-maquinas-page');

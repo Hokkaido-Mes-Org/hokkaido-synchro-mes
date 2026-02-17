@@ -1085,6 +1085,12 @@ function exportPCPToExcel() {
  * Substituição direta de setupPCPPage() do script.js.
  */
 export function setupPCPPage() {
+    if (pcpState.initialized) {
+        console.debug('[PCP·mod] Já inicializado — recarregando dados');
+        const shiftFilter = document.getElementById('pcp-shift-selector')?.value || 'current';
+        loadPCPData(pcpState.currentDate || getPCPProductionDateString(), shiftFilter);
+        return;
+    }
     console.log('[PCP·mod] Inicializando página de Planejamento e Controle da Produção...');
 
     try {

@@ -26,6 +26,11 @@ function notify(msg, type) {
 
 // ─── Setup principal ─────────────────────────────────
 export function setupFerramentariaPage() {
+    if (ferramentariaState.initialized) {
+        console.debug('[Ferram·mod] Já inicializado — recarregando moldes');
+        carregarMoldesFerramentaria();
+        return;
+    }
     console.log('[Ferram·mod] Inicializando módulo...');
 
     carregarMoldesFerramentaria();

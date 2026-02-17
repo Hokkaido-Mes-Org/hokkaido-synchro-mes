@@ -2217,46 +2217,60 @@ const machineCardProductionCache = (() => {
         const orderTotalCache = new Map();
 
         const render = async () => {
+            // OTIMIZAÇÃO: Buscar todas as OPs em paralelo (era sequencial — N reads)
             // CORREÇÃO CONSISTÊNCIA: Enriquecer plannings com total_produzido da OP vinculada
-            // Isso garante que os cards das máquinas mostrem o MESMO valor que a aba Admin > Dados > Ordens
-            // IMPORTANTE: Sempre usar o valor da OP como fonte de verdade
-            for (const plan of planningItems) {
-                const orderId = plan.production_order_id || plan.production_order || plan.order_id;
-                if (orderId) {
+            const plansWithOrders = planningItems.filter(plan => 
+                plan.production_order_id || plan.production_order || plan.order_id
+            );
+            const uniqueOrderIds = [...new Set(plansWithOrders.map(plan => 
+                plan.production_order_id || plan.production_order || plan.order_id
+            ))];
+
+            // Buscar todas as OPs em paralelo via Promise.all
+            const orderResults = await Promise.all(
+                uniqueOrderIds.map(async (orderId) => {
                     try {
-                        // Buscar sempre da OP (ignorar cache para garantir valor atualizado)
-                        const orderDoc = await getDb().collection('production_orders').doc(orderId).get();
-                        if (orderDoc.exists) {
-                            const orderData = orderDoc.data() || {};
-                            const orderTotal = coerceToNumber(orderData.total_produzido ?? orderData.totalProduced, 0);
-                            orderTotalCache.set(orderId, orderTotal);
-                            
-                            const planTotal = coerceToNumber(plan.total_produzido, 0);
-                            
-                            // SEMPRE usar o valor da OP como fonte de verdade
-                            // O Admin mostra o valor da OP, então os cards devem mostrar o mesmo
-                            if (orderTotal !== planTotal) {
-                                console.log(`[SYNC-CONSISTENCIA] Planning ${plan.id} tem total_produzido (${planTotal}) diferente da OP ${orderId} (${orderTotal}). Sincronizando...`);
-                                // Atualizar cache local imediatamente com valor da OP
-                                plan.total_produzido = orderTotal;
-                                plan.totalProduced = orderTotal;
-                                // Atualizar Firebase em background (não esperar)
-                                getDb().collection('planning').doc(plan.id).update({
-                                    total_produzido: orderTotal,
-                                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                                }).catch(e => console.warn('[SYNC-CONSISTENCIA] Falha ao sincronizar planning:', e));
-                            } else {
-                                // Valores já estão sincronizados
-                                plan.total_produzido = orderTotal;
-                                plan.totalProduced = orderTotal;
-                            }
-                        } else {
-                            orderTotalCache.set(orderId, 0);
+                        // Tentar cache global primeiro (evita Firestore se já temos)
+                        if (typeof window.findProductionOrderCached === 'function') {
+                            const cached = await window.findProductionOrderCached(orderId);
+                            if (cached) return { orderId, data: cached, exists: true };
                         }
+                        const orderDoc = await getDb().collection('production_orders').doc(orderId).get();
+                        return { orderId, data: orderDoc.exists ? orderDoc.data() : null, exists: orderDoc.exists };
                     } catch (e) {
                         console.warn('[SYNC-CONSISTENCIA] Erro ao buscar OP:', orderId, e);
-                        orderTotalCache.set(orderId, 0);
+                        return { orderId, data: null, exists: false };
                     }
+                })
+            );
+
+            // Aplicar resultados a cada planning
+            const orderDataMap = new Map(orderResults.map(r => [r.orderId, r]));
+            for (const plan of planningItems) {
+                const orderId = plan.production_order_id || plan.production_order || plan.order_id;
+                if (!orderId) continue;
+                const result = orderDataMap.get(orderId);
+                if (result && result.exists && result.data) {
+                    const orderData = result.data;
+                    const orderTotal = coerceToNumber(orderData.total_produzido ?? orderData.totalProduced, 0);
+                    orderTotalCache.set(orderId, orderTotal);
+                    
+                    const planTotal = coerceToNumber(plan.total_produzido, 0);
+                    
+                    if (orderTotal !== planTotal) {
+                        console.log(`[SYNC-CONSISTENCIA] Planning ${plan.id} tem total_produzido (${planTotal}) diferente da OP ${orderId} (${orderTotal}). Sincronizando...`);
+                        plan.total_produzido = orderTotal;
+                        plan.totalProduced = orderTotal;
+                        getDb().collection('planning').doc(plan.id).update({
+                            total_produzido: orderTotal,
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        }).catch(e => console.warn('[SYNC-CONSISTENCIA] Falha ao sincronizar planning:', e));
+                    } else {
+                        plan.total_produzido = orderTotal;
+                        plan.totalProduced = orderTotal;
+                    }
+                } else {
+                    orderTotalCache.set(orderId, 0);
                 }
             }
             
@@ -2713,8 +2727,14 @@ const machineCardProductionCache = (() => {
     }
 
 // --- Entry point ---
+let _planejamentoInitialized = false;
 export function setupPlanejamentoPage() {
-    console.log('[Plan-mod] Controller modular carregado');
-    setupPlanningTab();
+    if (!_planejamentoInitialized) {
+        console.log('[Plan-mod] Controller modular carregado');
+        setupPlanningTab();
+        _planejamentoInitialized = true;
+    } else {
+        console.debug('[Plan-mod] Já inicializado — apenas recarregando dados');
+    }
     listenToPlanningChanges(getProductionDateString());
 }

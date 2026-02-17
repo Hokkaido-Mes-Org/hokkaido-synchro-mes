@@ -1786,7 +1786,14 @@ async function loadExtendedDowntimeAnalysis(startDate, endDate, machine) {
  * Inicializa o controller de paradas longas.
  * Chamado via dynamic import no handleNavClick.
  */
+let _extendedDowntimeInitialized = false;
 export function setupExtendedDowntimePage() {
+    if (_extendedDowntimeInitialized) {
+        console.debug('[EXTENDED-DOWNTIME-CTRL] Já inicializado — recarregando lista');
+        if (typeof loadExtendedDowntimeList === 'function') loadExtendedDowntimeList();
+        return;
+    }
+    _extendedDowntimeInitialized = true;
     console.log('[EXTENDED-DOWNTIME-CTRL] Inicializando controller...');
     setupExtendedDowntimeTab();
     initEditExtendedDowntimeModal();

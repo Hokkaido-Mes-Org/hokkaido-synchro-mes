@@ -65,6 +65,39 @@ let currentSelectedOrderForAnalysis = null;
 let currentActiveOrder = null;
 let currentOrderProgress = { executed: 0, planned: 0, expected: 0 };
 
+// ═══════════════════════════════════════════════════════════════════
+// OTIMIZAÇÃO: Cache de getFilteredData para evitar re-queries Firestore
+// em cada troca de sub-aba. Chave = collection:startDate:endDate
+// Invalidado quando filtros mudam via applyAnalysisFilters().
+// ═══════════════════════════════════════════════════════════════════
+const _filteredDataCache = new Map();
+const _FILTERED_DATA_TTL = 180000; // 3 minutos
+
+function _getFilteredDataCacheKey(collection, startDate, endDate) {
+    return `${collection}:${startDate}:${endDate}`;
+}
+
+function _getFilteredDataFromCache(collection, startDate, endDate) {
+    const key = _getFilteredDataCacheKey(collection, startDate, endDate);
+    const entry = _filteredDataCache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.ts > _FILTERED_DATA_TTL) {
+        _filteredDataCache.delete(key);
+        return null;
+    }
+    return entry.data;
+}
+
+function _setFilteredDataCache(collection, startDate, endDate, data) {
+    const key = _getFilteredDataCacheKey(collection, startDate, endDate);
+    _filteredDataCache.set(key, { data, ts: Date.now() });
+}
+
+function _invalidateFilteredDataCache() {
+    _filteredDataCache.clear();
+    console.debug('🗑️ [Analysis] Cache de getFilteredData invalidado');
+}
+
 //  Extracted Analysis Functions 
     function setupAnalysisTab() {
         console.log('🔧 Configurando aba de análise...');
@@ -234,6 +267,9 @@ let currentOrderProgress = { executed: 0, planned: 0, expected: 0 };
         // Atualizar dados com filtros
         currentAnalysisFilters = { startDate, endDate, machine, shift };
         
+        // OTIMIZAÇÃO: invalidar cache ao mudar filtros de período
+        _invalidateFilteredDataCache();
+
         // Recarregar a view atual
         const activeView = document.querySelector('.analysis-tab-btn.active')?.getAttribute('data-view') || 'overview';
         loadAnalysisData(activeView);
@@ -3555,6 +3591,22 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     async function getFilteredData(collection, startDate, endDate, machine = 'all', shift = 'all') {
         try {
             console.log('[TRACE][getFilteredData] called', { collection, startDate, endDate, machine, shift });
+
+            // OTIMIZAÇÃO: verificar cache antes de ir ao Firestore
+            const cachedRaw = _getFilteredDataFromCache(collection, startDate, endDate);
+            if (cachedRaw) {
+                console.debug(`📦 [Analysis] Cache hit: ${collection} (${cachedRaw.length} docs)`);
+                // Aplicar filtros de máquina e turno localmente sobre o cache
+                let data = cachedRaw;
+                if (machine !== 'all') {
+                    const target = normalizeMachineId(machine);
+                    data = data.filter(item => normalizeMachineId(item.machine) === target);
+                }
+                if (shift !== 'all') {
+                    data = data.filter(item => Number(item.shift || 0) === Number(shift));
+                }
+                return data;
+            }
             
             const normalizeShift = (value) => {
                 if (value === undefined || value === null) return null;
@@ -3784,6 +3836,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     return rawWeight > 0;
                 });
             }
+
+            // OTIMIZAÇÃO: salvar no cache ANTES dos filtros de máquina/turno
+            // para que trocas de filtro reutilizem os dados brutos
+            _setFilteredDataCache(collection, startDate, endDate, data);
 
             if (machine !== 'all') {
                 const target = normalizeMachineId(machine);
@@ -9217,11 +9273,17 @@ ${content.innerHTML}
     }
 
 // --- Entry point ---
+let _analiseInitialized = false;
 export function setupAnalisePage() {
+    if (_analiseInitialized) {
+        console.debug('[Anal-mod] Já inicializado — apenas recarregando view ativa');
+        const activeView = document.querySelector('.analysis-tab-btn.active')?.getAttribute('data-view') || 'overview';
+        loadAnalysisData(activeView);
+        return;
+    }
+    _analiseInitialized = true;
     console.log('[Anal-mod] Controller modular carregado');
     setupAnalysisTab();
-    // Nota: setupAnalysisTab() já chama diagnosticFirestoreData(), setAnalysisDefaultDates()
-    // e loadAnalysisData('overview') internamente — não duplicar aqui.
 
     // Exportar refreshAnalysisIfActive para window (substitui versão legada do script.js)
     window.refreshAnalysisIfActive = refreshAnalysisIfActive;

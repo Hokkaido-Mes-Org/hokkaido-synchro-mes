@@ -4196,7 +4196,14 @@ function sendDowntimeNotification() {
 
 
 // --- Entry point ---
+let _lancamentoInitialized = false;
 export function setupLancamentoPage() {
+    if (_lancamentoInitialized) {
+        console.debug('[Launch-mod] Já inicializado — apenas recarregando dados');
+        loadLaunchPanel();
+        return;
+    }
+    _lancamentoInitialized = true;
     console.log('[Launch-mod] Controller modular carregado');
     loadLaunchPanel();
 }

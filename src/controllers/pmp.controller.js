@@ -62,7 +62,13 @@ function debounce(func, wait) {
 // ENTRY POINT
 // ═══════════════════════════════════════════════
 
+let _pmpInitialized = false;
 export function setupPMPPage() {
+    if (_pmpInitialized) {
+        console.debug('[PMP·mod] Já inicializado — ignorando re-setup');
+        return;
+    }
+    _pmpInitialized = true;
     console.log('[PMP·mod] Controller modular carregado');
     initPMPPage();
     EventBus.emit('pmp:initialized');

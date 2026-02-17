@@ -1172,7 +1172,14 @@ function setupOrderFormListeners() {
  * Ponto de entrada do módulo de Ordens.
  * Substitui a chamada legada loadProductionOrders() no gate de feature flag.
  */
+let _ordensInitialized = false;
 export function setupOrdensPage() {
+    if (_ordensInitialized) {
+        console.debug('[Ordens·mod] Já inicializado — apenas recarregando dados');
+        loadProductionOrders();
+        return;
+    }
+    _ordensInitialized = true;
     console.log('[Ordens·mod] Controller modular carregado');
     loadProductionOrders();
     setupOrderFormListeners();

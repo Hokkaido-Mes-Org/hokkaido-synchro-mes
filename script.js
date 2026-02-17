@@ -710,7 +710,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // AÇÃO 5: CacheManager para relatórios - evita consultas repetidas
     const CacheManager = {
         _cache: new Map(),
-        _ttl: 60000, // 60 segundos de TTL padrão
+        _ttl: 180000, // OTIMIZAÇÃO: 180s de TTL padrão (era 60s)
         
         // Gera chave única para o cache
         _generateKey(collection, filters) {
@@ -848,8 +848,8 @@ document.addEventListener('DOMContentLoaded', function() {
         },
         
         // Verificar se dados estão "frescos" (recentes)
-        // TTL aumentado de 30s para 120s para reduzir leituras Firebase
-        isFresh(collection, maxAgeMs = 120000) {
+        // OTIMIZAÇÃO: TTL aumentado para 300s (5min) para reduzir leituras Firebase entre abas
+        isFresh(collection, maxAgeMs = 300000) {
             const ts = this._timestamps[collection];
             if (!ts) return false;
             return Date.now() - ts < maxAgeMs;
@@ -896,7 +896,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Buscar do Firebase com cache inteligente
         async fetchIfNeeded(collection, queryBuilder = null, forceRefresh = false) {
             // Se dados existem e são frescos, usar do cache
-            if (!forceRefresh && this.isFresh(collection, 60000) && this._data[collection]) {
+            // OTIMIZAÇÃO: TTL aumentado para 180s (era 60s)
+            if (!forceRefresh && this.isFresh(collection, 180000) && this._data[collection]) {
                 console.debug(`📦 DataStore: usando cache de ${collection}`);
                 return this._data[collection];
             }
@@ -1376,7 +1377,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Verificar DataStore primeiro
         if (!forceRefresh && window.DataStore) {
             const cached = window.DataStore.get('activeDowntimes');
-            if (cached && window.DataStore.isFresh('activeDowntimes', 30000)) {
+            // OTIMIZAÇÃO: TTL de active_downtimes aumentado para 60s (era 30s)
+            if (cached && window.DataStore.isFresh('activeDowntimes', 60000)) {
                 console.debug('📦 Usando DataStore.activeDowntimes');
                 if (window.FirebaseMonitor) window.FirebaseMonitor.trackRead('active_downtimes', true);
                 return cached;
@@ -8989,6 +8991,70 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
     }
 
     // --- NAVEGAÇÃO ---
+    // OTIMIZAÇÃO: Mapa de controladores para evitar cadeia de if/else
+    const _controllerRegistry = {
+        'lancamento':        { path: './src/controllers/launch.controller.js',            fn: 'setupLancamentoPage' },
+        'planejamento':      { path: './src/controllers/planning.controller.js',          fn: 'setupPlanejamentoPage' },
+        'ordens':            { path: './src/controllers/orders.controller.js',            fn: 'setupOrdensPage' },
+        'analise':           { path: './src/controllers/analysis.controller.js',          fn: 'setupAnalisePage',
+                               pre: () => { setupProductionOrdersTab(); listenToProductionOrders(); } },
+        'paradas-longas':    { path: './src/controllers/extended-downtime.controller.js', fn: 'setupExtendedDowntimePage' },
+        'acompanhamento':    { path: './src/controllers/monitoring.controller.js',        fn: 'setupAcompanhamentoPage' },
+        'historico-sistema': { path: './src/controllers/historico.controller.js',         fn: 'setupHistoricoPage' },
+        'admin-dados':       { path: './src/controllers/admin.controller.js',             fn: 'setupAdminDadosPage' },
+        'relatorios':        { path: './src/controllers/reports.controller.js',           fn: 'setupRelatoriosPage',
+                               gate: () => {
+                                   const user = window.authSystem?.getCurrentUser?.();
+                                   const userNameLower = (user?.name || '').toLowerCase().trim();
+                                   const allowed = ['leandro camargo', 'roberto fernandes'];
+                                   if (!user || !allowed.includes(userNameLower)) {
+                                       console.warn('🔒 Acesso negado à página Relatórios para:', user?.name || 'desconhecido');
+                                       showNotification('Você não tem permissão para acessar esta página.', 'warning');
+                                       showPage('lancamento');
+                                       return false;
+                                   }
+                                   return true;
+                               }},
+        'lideranca-producao':{ path: './src/controllers/leadership.controller.js',       fn: 'setupLiderancaProducaoPage' },
+        'setup-maquinas':    { path: './src/controllers/setup.controller.js',            fn: 'setupSetupMaquinasPage' },
+        'ferramentaria':     { path: './src/controllers/tooling.controller.js',          fn: 'setupFerramentariaPage' },
+        'pcp':               { path: './src/controllers/pcp.controller.js',              fn: 'setupPCPPage',
+                               post: () => { if (typeof lucide !== 'undefined') lucide.createIcons(); } },
+        'pmp':               { path: './src/controllers/pmp.controller.js',              fn: 'setupPMPPage',
+                               post: () => { if (typeof lucide !== 'undefined') lucide.createIcons(); } }
+    };
+
+    // OTIMIZAÇÃO: Prefetch de coleções quentes em background ao entrar em abas que compartilham dados
+    const _prefetchCollections = {
+        'lancamento':   ['planning', 'production_entries', 'active_downtimes'],
+        'planejamento': ['planning', 'production_entries', 'active_downtimes'],
+        'analise':      ['production_entries', 'planning'],
+        'pcp':          ['planning', 'active_downtimes', 'production_entries'],
+        'ordens':       ['production_orders']
+    };
+
+    function _prefetchForPage(page) {
+        const collections = _prefetchCollections[page];
+        if (!collections) return;
+        const today = getProductionDateString();
+        collections.forEach(col => {
+            switch (col) {
+                case 'planning':
+                    if (window.getPlanningCached) window.getPlanningCached(today).catch(() => {});
+                    break;
+                case 'production_entries':
+                    if (window.getProductionEntriesCached) window.getProductionEntriesCached(today).catch(() => {});
+                    break;
+                case 'active_downtimes':
+                    if (window.getActiveDowntimesCached) window.getActiveDowntimesCached().catch(() => {});
+                    break;
+                case 'production_orders':
+                    if (window.getProductionOrdersCached) window.getProductionOrdersCached().catch(() => {});
+                    break;
+            }
+        });
+    }
+
     function handleNavClick(e) {
         const page = e.currentTarget.dataset.page;
         
@@ -9019,145 +9085,23 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         
         detachActiveListener();
 
-        if (page === 'lancamento') {
-            import('./src/controllers/launch.controller.js').then(mod => {
-                mod.setupLancamentoPage();
-            }).catch(err => {
-                console.error('[Lançamento] Erro ao carregar módulo:', err);
-                showNotification('Erro ao carregar módulo Lançamento. Recarregue a página.', 'error');
-            });
-        }
-        if (page === 'planejamento') {
-            import('./src/controllers/planning.controller.js').then(mod => {
-                mod.setupPlanejamentoPage();
-            }).catch(err => {
-                console.error('[Planejamento] Erro ao carregar módulo:', err);
-                showNotification('Erro ao carregar módulo Planejamento. Recarregue a página.', 'error');
-            });
-        }
-        if (page === 'ordens') {
-            import('./src/controllers/orders.controller.js').then(mod => {
-                mod.setupOrdensPage();
-            }).catch(err => {
-                console.error('[Ordens] Erro ao carregar módulo:', err);
-                showNotification('Erro ao carregar módulo Ordens. Recarregue a página.', 'error');
-            });
-        }
-        if (page === 'analise') {
-            // ─── Fase 3: Orders setup sempre roda (closure-scoped, não faz parte do módulo Analysis) ───
-            setupProductionOrdersTab();
-            listenToProductionOrders();
+        // OTIMIZAÇÃO: prefetch de coleções compartilhadas em background
+        _prefetchForPage(page);
 
-            // ─── Fase 4: Módulo Análise (sem fallback legado) ───
-            import('./src/controllers/analysis.controller.js').then(mod => {
-                mod.setupAnalisePage();
+        // OTIMIZAÇÃO: Registry-based dispatch — substitui 15 blocos if/else
+        const entry = _controllerRegistry[page];
+        if (entry) {
+            // Gate de permissão adicional (ex: Relatórios)
+            if (entry.gate && !entry.gate()) return;
+            // Pré-execução (ex: Análise chama setupProductionOrdersTab)
+            if (entry.pre) entry.pre();
+            // Import dinâmico
+            import(entry.path).then(mod => {
+                mod[entry.fn]();
+                if (entry.post) entry.post();
             }).catch(err => {
-                console.error('[Análise] Erro ao carregar módulo:', err);
-                showNotification('Erro ao carregar módulo Análise. Recarregue a página.', 'error');
-            });
-        }
-
-        // Página paradas-longas: controller carregado sob demanda
-        if (page === 'paradas-longas') {
-            import('./src/controllers/extended-downtime.controller.js').then(mod => {
-                mod.setupExtendedDowntimePage();
-            }).catch(err => {
-                console.error('[Paradas-Longas] Erro ao carregar módulo:', err);
-                showNotification('Erro ao carregar módulo Paradas Longas. Recarregue a página.', 'error');
-            });
-        }
-
-        if (page === 'acompanhamento') {
-            import('./src/controllers/monitoring.controller.js').then(mod => {
-                mod.setupAcompanhamentoPage();
-            }).catch(err => {
-                console.error('[Monitoramento] Erro ao carregar módulo:', err);
-                showNotification('Erro ao carregar módulo Monitoramento. Recarregue a página.', 'error');
-            });
-        }
-
-        if (page === 'historico-sistema') {
-            import('./src/controllers/historico.controller.js').then(mod => {
-                mod.setupHistoricoPage();
-            }).catch(err => {
-                console.error('[Histórico] Erro ao carregar módulo:', err);
-                showNotification('Erro ao carregar módulo Histórico. Recarregue a página.', 'error');
-            });
-        }
-
-        if (page === 'admin-dados') {
-            import('./src/controllers/admin.controller.js').then(mod => {
-                mod.setupAdminDadosPage();
-            }).catch(err => {
-                console.error('[Admin] Erro ao carregar módulo:', err);
-                showNotification('Erro ao carregar módulo Admin. Recarregue a página.', 'error');
-            });
-        }
-
-        if (page === 'relatorios') {
-            // Verificar permissão - apenas Leandro Camargo e Roberto Fernandes
-            const user = window.authSystem?.getCurrentUser?.();
-            const userNameLower = (user?.name || '').toLowerCase().trim();
-            const allowedRelatoriosUsers = ['leandro camargo', 'roberto fernandes'];
-            
-            if (!user || !allowedRelatoriosUsers.includes(userNameLower)) {
-                console.warn('🔒 Acesso negado à página Relatórios para:', user?.name || 'desconhecido');
-                showNotification('Você não tem permissão para acessar esta página.', 'warning');
-                showPage('lancamento'); // Redirecionar para página inicial
-                return;
-            }
-            import('./src/controllers/reports.controller.js').then(mod => {
-                mod.setupRelatoriosPage();
-            }).catch(err => {
-                console.error('[Relatórios] Erro ao carregar módulo:', err);
-                showNotification('Erro ao carregar módulo Relatórios. Recarregue a página.', 'error');
-            });
-        }
-
-        if (page === 'lideranca-producao') {
-            import('./src/controllers/leadership.controller.js').then(mod => {
-                mod.setupLiderancaProducaoPage();
-            }).catch(err => {
-                console.error('[Liderança] Erro ao carregar módulo:', err);
-                showNotification('Erro ao carregar módulo Liderança. Recarregue a página.', 'error');
-            });
-        }
-
-        if (page === 'setup-maquinas') {
-            import('./src/controllers/setup.controller.js').then(mod => {
-                mod.setupSetupMaquinasPage();
-            }).catch(err => {
-                console.error('[Setup] Erro ao carregar módulo:', err);
-                showNotification('Erro ao carregar módulo Setup. Recarregue a página.', 'error');
-            });
-        }
-
-        if (page === 'ferramentaria') {
-            import('./src/controllers/tooling.controller.js').then(mod => {
-                mod.setupFerramentariaPage();
-            }).catch(err => {
-                console.error('[Ferramentaria] Erro ao carregar módulo:', err);
-                showNotification('Erro ao carregar módulo Ferramentaria. Recarregue a página.', 'error');
-            });
-        }
-
-        if (page === 'pcp') {
-            import('./src/controllers/pcp.controller.js').then(mod => {
-                mod.setupPCPPage();
-                if (typeof lucide !== 'undefined') lucide.createIcons();
-            }).catch(err => {
-                console.error('[PCP] Erro ao carregar módulo:', err);
-                showNotification('Erro ao carregar módulo PCP. Recarregue a página.', 'error');
-            });
-        }
-
-        if (page === 'pmp') {
-            import('./src/controllers/pmp.controller.js').then(mod => {
-                mod.setupPMPPage();
-                if (typeof lucide !== 'undefined') lucide.createIcons();
-            }).catch(err => {
-                console.error('[PMP] Erro ao carregar módulo:', err);
-                showNotification('Erro ao carregar módulo PMP. Recarregue a página.', 'error');
+                console.error(`[${page}] Erro ao carregar módulo:`, err);
+                showNotification('Erro ao carregar módulo. Recarregue a página.', 'error');
             });
         }
 
