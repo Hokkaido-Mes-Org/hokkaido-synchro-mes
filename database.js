@@ -1033,8 +1033,7 @@ var userDatabase = [
     { cod: 280, nomeUsuario: "ANALYTICS", nomeCompleto: "Não Informado" },
     { cod: 281, nomeUsuario: "ANALYTICS1", nomeCompleto: "Não Informado" },
     { cod: 282, nomeUsuario: "GABRIEL F.", nomeCompleto: "GABRIEL FIRMINO DE LIMA SOUZA" },
-    { cod: 283, nomeUsuario: "FRANCISCA", nomeCompleto: "FRANCISCA ZACARIAS" },
-    { cod: 285, nomeUsuario: "AURINEIDE", nomeCompleto: "AURINEIDE MARIA" }
+    { cod: 283, nomeUsuario: "FRANCISCA", nomeCompleto: "FRANCISCA ZACARIAS" }
 ];
 
 // Índice para busca rápida de usuários por código

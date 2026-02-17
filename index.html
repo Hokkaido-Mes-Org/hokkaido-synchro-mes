@@ -3188,10 +3188,30 @@
                                 </div>
 
                                 <!-- Lista de registros de produção -->
-                                <div id="rel-producao-lista" class="space-y-2 max-h-[50vh] md:max-h-[500px] overflow-y-auto border rounded-lg p-2 bg-gray-50">
-                                    <div class="text-center py-8 text-gray-400">
-                                        <i data-lucide="bar-chart-2" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
-                                        <p>Selecione filtros e clique em "Buscar"</p>
+                                <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                                    <div class="overflow-x-auto max-h-[50vh] md:max-h-[500px]">
+                                        <table class="w-full text-sm" id="rel-producao-tabela">
+                                            <thead class="bg-gray-100 text-gray-700 sticky top-0">
+                                                <tr>
+                                                    <th class="px-3 py-2 text-left font-semibold">Data</th>
+                                                    <th class="px-3 py-2 text-left font-semibold">Máquina</th>
+                                                    <th class="px-3 py-2 text-left font-semibold">Turno</th>
+                                                    <th class="px-3 py-2 text-left font-semibold">OP</th>
+                                                    <th class="px-3 py-2 text-left font-semibold">Código</th>
+                                                    <th class="px-3 py-2 text-left font-semibold">Produto</th>
+                                                    <th class="px-3 py-2 text-right font-semibold">Qtd</th>
+                                                    <th class="px-3 py-2 text-right font-semibold">Refugo</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="rel-producao-tbody" class="divide-y divide-gray-100">
+                                                <tr>
+                                                    <td colspan="8" class="text-center py-8 text-gray-400">
+                                                        <i data-lucide="bar-chart-2" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                                                        <p>Selecione filtros e clique em "Buscar"</p>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
                                     </div>
                                 </div>
                             </div>
@@ -3299,10 +3319,30 @@
                                 </div>
 
                                 <!-- Lista de registros de perdas -->
-                                <div id="rel-perdas-lista" class="space-y-2 max-h-[50vh] md:max-h-[500px] overflow-y-auto border rounded-lg p-2 bg-gray-50">
-                                    <div class="text-center py-8 text-gray-400">
-                                        <i data-lucide="trash-2" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
-                                        <p>Selecione filtros e clique em "Buscar"</p>
+                                <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                                    <div class="overflow-x-auto max-h-[50vh] md:max-h-[500px]">
+                                        <table class="w-full text-sm" id="rel-perdas-tabela">
+                                            <thead class="bg-gray-100 text-gray-700 sticky top-0">
+                                                <tr>
+                                                    <th class="px-3 py-2 text-left font-semibold">Data</th>
+                                                    <th class="px-3 py-2 text-left font-semibold">Máquina</th>
+                                                    <th class="px-3 py-2 text-left font-semibold">Turno</th>
+                                                    <th class="px-3 py-2 text-left font-semibold">OP</th>
+                                                    <th class="px-3 py-2 text-left font-semibold">Código</th>
+                                                    <th class="px-3 py-2 text-left font-semibold">Produto</th>
+                                                    <th class="px-3 py-2 text-right font-semibold">Perdas</th>
+                                                    <th class="px-3 py-2 text-left font-semibold">Motivo</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="rel-perdas-tbody" class="divide-y divide-gray-100">
+                                                <tr>
+                                                    <td colspan="8" class="text-center py-8 text-gray-400">
+                                                        <i data-lucide="trash-2" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                                                        <p>Selecione filtros e clique em "Buscar"</p>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
                                     </div>
                                 </div>
                             </div>
@@ -4009,427 +4049,6 @@
                             </div>
                         </div><!-- Fim content-absenteismo -->
 
-                    </div>
-                </div>
-
-                <!-- PÁGINA: Checklist Diário de Processo e Manutenção -->
-                <div id="checklist-processo-page" class="page-content hidden space-y-4 p-2">
-                    <div class="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-                        <!-- Header -->
-                        <div class="bg-gradient-to-r from-blue-700 to-blue-800 px-6 py-4">
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center gap-3">
-                                    <div class="p-2 bg-white/10 rounded-xl">
-                                        <i data-lucide="clipboard-list" class="w-6 h-6 text-white"></i>
-                                    </div>
-                                    <div>
-                                        <h2 class="text-xl font-bold text-white">Checklist Diário</h2>
-                                        <p class="text-blue-200 text-sm">Processo e Manutenção Autônoma - Hokkaido Plastics</p>
-                                    </div>
-                                </div>
-                                <button onclick="window.print()" class="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition flex items-center gap-2 font-semibold">
-                                    <i data-lucide="printer" class="w-4 h-4"></i>
-                                    Imprimir
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Filtros -->
-                        <div class="border-b border-gray-200 p-4 bg-gray-50">
-                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                <div>
-                                    <label class="block text-xs font-semibold text-gray-600 mb-1">Data</label>
-                                    <input type="date" id="checklist-data" class="w-full p-2 border border-gray-300 rounded text-sm">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold text-gray-600 mb-1">Máquina/TAG</label>
-                                    <input type="text" id="checklist-maquina" placeholder="H-01" class="w-full p-2 border border-gray-300 rounded text-sm" value="H-">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold text-gray-600 mb-1">OP (Ordem Produção)</label>
-                                    <input type="text" id="checklist-op" placeholder="OP123456" class="w-full p-2 border border-gray-300 rounded text-sm">
-                                </div>
-                                <div class="flex items-end">
-                                    <button id="btn-atualizar-checklist" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-semibold transition">
-                                        <i data-lucide="refresh-cw" class="w-4 h-4 inline mr-1"></i>Atualizar
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Conteúdo do Checklist para Impressão -->
-                        <div id="checklist-print-content" class="p-6 print:p-4">
-                            <!-- Cabeçalho -->
-                            <div class="text-center mb-4 pb-3 border-b-2 border-gray-400">
-                                <h1 class="text-2xl font-bold text-gray-900 mb-1 print:text-xl">CHECKLIST DIÁRIO DE PROCESSO E MANUTENÇÃO AUTÔNOMA</h1>
-                                <p class="text-sm font-semibold text-gray-700">HOKKAIDO PLASTICS - INJEÇÃO</p>
-                                <div class="grid grid-cols-2 gap-4 mt-3 text-sm font-semibold print:text-xs">
-                                    <div class="text-left">
-                                        <span class="font-bold">DATA:</span> <span id="checklist-data-display">__/__/____</span>
-                                    </div>
-                                    <div class="text-right">
-                                        <span class="font-bold">MÁQUINA/TAG:</span> <span id="checklist-maquina-display">________</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Tabela de Verificação -->
-                            <div class="overflow-x-auto print:overflow-visible">
-                                <table class="w-full border-collapse text-sm print:text-xs">
-                                    <thead>
-                                        <tr class="bg-gray-200 print:bg-gray-300">
-                                            <th class="border border-gray-400 p-2 text-left font-bold">ITENS DE VERIFICAÇÃO</th>
-                                            <th class="border border-gray-400 p-2 text-center font-bold whitespace-nowrap">
-                                                1º TURNO<br><span class="text-xs font-normal">(06:30 - 14:59)</span>
-                                            </th>
-                                            <th class="border border-gray-400 p-2 text-center font-bold whitespace-nowrap">
-                                                2º TURNO<br><span class="text-xs font-normal">(15:00 - 23:19)</span>
-                                            </th>
-                                            <th class="border border-gray-400 p-2 text-center font-bold whitespace-nowrap">
-                                                3º TURNO<br><span class="text-xs font-normal">(23:20 - 06:29)</span>
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <!-- Dados Operacionais -->
-                                        <tr>
-                                            <td colspan="4" class="border border-gray-400 bg-gray-100 p-2 font-bold text-gray-800">Dados Operacionais</td>
-                                        </tr>
-                                        <tr>
-                                            <td class="border border-gray-400 p-2 font-semibold">Nome do Operador</td>
-                                            <td class="border border-gray-400 p-2 h-12 print:h-8"></td>
-                                            <td class="border border-gray-400 p-2 h-12 print:h-8"></td>
-                                            <td class="border border-gray-400 p-2 h-12 print:h-8"></td>
-                                        </tr>
-                                        <tr>
-                                            <td class="border border-gray-400 p-2 font-semibold">Ordem de Produção (OP)</td>
-                                            <td class="border border-gray-400 p-2 h-12 print:h-8"></td>
-                                            <td class="border border-gray-400 p-2 h-12 print:h-8"></td>
-                                            <td class="border border-gray-400 p-2 h-12 print:h-8"></td>
-                                        </tr>
-
-                                        <!-- Pontos de Controle Críticos -->
-                                        <tr>
-                                            <td colspan="4" class="border border-gray-400 bg-gray-100 p-2 font-bold text-gray-800">Pontos de Controle Críticos (Segurança e Qualidade)</td>
-                                        </tr>
-
-                                        <!-- Item 1 -->
-                                        <tr>
-                                            <td class="border border-gray-400 p-2">
-                                                <div class="font-semibold text-gray-900">1. Vazamento no Bico</div>
-                                                <div class="text-xs text-gray-600">Verificar bico, flange e resistências.</div>
-                                            </td>
-                                            <td class="border border-gray-400 p-2 text-center">
-                                                <div class="space-y-1">
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> OK
-                                                    </label>
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> N.OK
-                                                    </label>
-                                                </div>
-                                            </td>
-                                            <td class="border border-gray-400 p-2 text-center">
-                                                <div class="space-y-1">
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> OK
-                                                    </label>
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> N.OK
-                                                    </label>
-                                                </div>
-                                            </td>
-                                            <td class="border border-gray-400 p-2 text-center">
-                                                <div class="space-y-1">
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> OK
-                                                    </label>
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> N.OK
-                                                    </label>
-                                                </div>
-                                            </td>
-                                        </tr>
-
-                                        <!-- Item 2 -->
-                                        <tr>
-                                            <td class="border border-gray-400 p-2">
-                                                <div class="font-semibold text-gray-900">2. Vazamento de Óleo</div>
-                                                <div class="text-xs text-gray-600">Mangueiras, Unidade Hidráulica e Chão.</div>
-                                            </td>
-                                            <td class="border border-gray-400 p-2 text-center">
-                                                <div class="space-y-1">
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> OK
-                                                    </label>
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> N.OK
-                                                    </label>
-                                                </div>
-                                            </td>
-                                            <td class="border border-gray-400 p-2 text-center">
-                                                <div class="space-y-1">
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> OK
-                                                    </label>
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> N.OK
-                                                    </label>
-                                                </div>
-                                            </td>
-                                            <td class="border border-gray-400 p-2 text-center">
-                                                <div class="space-y-1">
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> OK
-                                                    </label>
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> N.OK
-                                                    </label>
-                                                </div>
-                                            </td>
-                                        </tr>
-
-                                        <!-- Item 3 -->
-                                        <tr>
-                                            <td class="border border-gray-400 p-2">
-                                                <div class="font-semibold text-gray-900">3. Limpeza e Organização (5S)</div>
-                                                <div class="text-xs text-gray-600">Ferramentas guardadas, área limpa.</div>
-                                            </td>
-                                            <td class="border border-gray-400 p-2 text-center">
-                                                <div class="space-y-1">
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> OK
-                                                    </label>
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> N.OK
-                                                    </label>
-                                                </div>
-                                            </td>
-                                            <td class="border border-gray-400 p-2 text-center">
-                                                <div class="space-y-1">
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> OK
-                                                    </label>
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> N.OK
-                                                    </label>
-                                                </div>
-                                            </td>
-                                            <td class="border border-gray-400 p-2 text-center">
-                                                <div class="space-y-1">
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> OK
-                                                    </label>
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> N.OK
-                                                    </label>
-                                                </div>
-                                            </td>
-                                        </tr>
-
-                                        <!-- Item 4 -->
-                                        <tr>
-                                            <td class="border border-gray-400 p-2">
-                                                <div class="font-semibold text-gray-900">4. Apontamento de Produção</div>
-                                                <div class="text-xs text-gray-600">Contador bate com as fichas/sistema?</div>
-                                            </td>
-                                            <td class="border border-gray-400 p-2 text-center">
-                                                <div class="space-y-1">
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> OK
-                                                    </label>
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> N.OK
-                                                    </label>
-                                                </div>
-                                            </td>
-                                            <td class="border border-gray-400 p-2 text-center">
-                                                <div class="space-y-1">
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> OK
-                                                    </label>
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> N.OK
-                                                    </label>
-                                                </div>
-                                            </td>
-                                            <td class="border border-gray-400 p-2 text-center">
-                                                <div class="space-y-1">
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> OK
-                                                    </label>
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> N.OK
-                                                    </label>
-                                                </div>
-                                            </td>
-                                        </tr>
-
-                                        <!-- Item 5 -->
-                                        <tr>
-                                            <td class="border border-gray-400 p-2">
-                                                <div class="font-semibold text-gray-900">5. Segurança de Molde</div>
-                                                <div class="text-xs text-gray-600">Peças presas, extratores ou pinos.</div>
-                                            </td>
-                                            <td class="border border-gray-400 p-2 text-center">
-                                                <div class="space-y-1">
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> OK
-                                                    </label>
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> N.OK
-                                                    </label>
-                                                </div>
-                                            </td>
-                                            <td class="border border-gray-400 p-2 text-center">
-                                                <div class="space-y-1">
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> OK
-                                                    </label>
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> N.OK
-                                                    </label>
-                                                </div>
-                                            </td>
-                                            <td class="border border-gray-400 p-2 text-center">
-                                                <div class="space-y-1">
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> OK
-                                                    </label>
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> N.OK
-                                                    </label>
-                                                </div>
-                                            </td>
-                                        </tr>
-
-                                        <!-- Item 6 -->
-                                        <tr>
-                                            <td class="border border-gray-400 p-2">
-                                                <div class="font-semibold text-gray-900">6. Parâmetros de Processo</div>
-                                                <div class="text-xs text-gray-600">Conferência visual da Ficha Técnica.</div>
-                                            </td>
-                                            <td class="border border-gray-400 p-2 text-center">
-                                                <div class="space-y-1">
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> OK
-                                                    </label>
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> N.OK
-                                                    </label>
-                                                </div>
-                                            </td>
-                                            <td class="border border-gray-400 p-2 text-center">
-                                                <div class="space-y-1">
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> OK
-                                                    </label>
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> N.OK
-                                                    </label>
-                                                </div>
-                                            </td>
-                                            <td class="border border-gray-400 p-2 text-center">
-                                                <div class="space-y-1">
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> OK
-                                                    </label>
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> N.OK
-                                                    </label>
-                                                </div>
-                                            </td>
-                                        </tr>
-
-                                        <!-- Item 7 -->
-                                        <tr>
-                                            <td class="border border-gray-400 p-2">
-                                                <div class="font-semibold text-gray-900">7. Dispositivos de Segurança</div>
-                                                <div class="text-xs text-gray-600">Portas, grades e botão de emergência.</div>
-                                            </td>
-                                            <td class="border border-gray-400 p-2 text-center">
-                                                <div class="space-y-1">
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> OK
-                                                    </label>
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> N.OK
-                                                    </label>
-                                                </div>
-                                            </td>
-                                            <td class="border border-gray-400 p-2 text-center">
-                                                <div class="space-y-1">
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> OK
-                                                    </label>
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> N.OK
-                                                    </label>
-                                                </div>
-                                            </td>
-                                            <td class="border border-gray-400 p-2 text-center">
-                                                <div class="space-y-1">
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> OK
-                                                    </label>
-                                                    <label class="flex items-center justify-center gap-2 text-xs">
-                                                        <input type="checkbox" class="w-4 h-4"> N.OK
-                                                    </label>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <!-- Observações -->
-                            <div class="mt-4 print:mt-2">
-                                <h3 class="font-bold text-gray-900 mb-2 text-sm">Ocorrências e Observações de Turno</h3>
-                                <table class="w-full border-collapse text-xs print:text-xs">
-                                    <tbody>
-                                        <tr>
-                                            <td class="border border-gray-400 bg-gray-200 p-2 font-bold w-20">1º TURNO</td>
-                                            <td class="border border-gray-400 p-2 h-16 print:h-12 align-top"></td>
-                                        </tr>
-                                        <tr>
-                                            <td class="border border-gray-400 bg-gray-200 p-2 font-bold">2º TURNO</td>
-                                            <td class="border border-gray-400 p-2 h-16 print:h-12 align-top"></td>
-                                        </tr>
-                                        <tr>
-                                            <td class="border border-gray-400 bg-gray-200 p-2 font-bold">3º TURNO</td>
-                                            <td class="border border-gray-400 p-2 h-16 print:h-12 align-top"></td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <!-- Assinaturas -->
-                            <div class="mt-4 print:mt-2">
-                                <table class="w-full text-xs print:text-xs">
-                                    <tbody>
-                                        <tr>
-                                            <td class="border-t-2 border-gray-400 p-2 text-center h-12 print:h-8">
-                                                <div class="text-xs font-bold text-gray-700">Visto Líder/Qualidade</div>
-                                                <div class="text-xs text-gray-600">(1º Turno)</div>
-                                            </td>
-                                            <td class="border-t-2 border-gray-400 p-2 text-center h-12 print:h-8">
-                                                <div class="text-xs font-bold text-gray-700">Visto Líder/Qualidade</div>
-                                                <div class="text-xs text-gray-600">(2º Turno)</div>
-                                            </td>
-                                            <td class="border-t-2 border-gray-400 p-2 text-center h-12 print:h-8">
-                                                <div class="text-xs font-bold text-gray-700">Visto Líder/Qualidade</div>
-                                                <div class="text-xs text-gray-600">(3º Turno)</div>
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <!-- Rodapé -->
-                            <div class="text-center mt-4 pt-3 border-t border-gray-300 text-xs text-gray-600 print:mt-2">
-                                Documento controlado - Hokkaido Plastics - Rev. 01 - Melhoria Contínua
-                            </div>
-                        </div>
                     </div>
                 </div>
 
@@ -8875,16 +8494,15 @@
         </div>
     </div>
 
-    <!-- Estes módulos consomem muitos recursos. Reativar após migrar para Blaze -->
-    <!-- <script src="predictive-analytics.js"></script> -->
-    <!-- <script src="spc-controller.js"></script> -->
-    <!-- <script src="analytics-ia-core.js"></script> -->
-    <!-- <script src="reports-module.js?v=20251201-v5"></script> -->
-    <!-- FIM DOS MÓDULOS DESATIVADOS -->
     <script src="advanced-kpis.js"></script>
     <script src="auto-pareto-analysis.js"></script>
     <script src="machine-queue.js?v=20260206"></script>
-    <script src="script.js?v=20260216-fix-priority-zero"></script>
+    <script src="script.js?v=20260217-phase10"></script>
+    <script src="erp-import.js?v=20260217"></script>
+    <script src="machine-schedule.js?v=20260217"></script>
+    
+    <!-- Módulos ES6 (Fase 1: roda em paralelo, sem alterar o legado) -->
+    <script type="module" src="src/index.js"></script>
     
     <!-- Script de inicialização -->
     <script>

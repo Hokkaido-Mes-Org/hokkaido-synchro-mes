@@ -576,6 +576,24 @@ input:focus, select:focus {
         padding: 4px;
         border: 1px solid #ccc;
     }
+    
+    /* Inline Reports Print Styles */
+    #report-content-container {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+    }
+    #report-content {
+        box-shadow: none !important;
+        border: none !important;
+    }
+    #report-action-buttons,
+    #reports-view > .flex:first-of-type,
+    #reports-view .lg\\:w-80 {
+        display: none !important;
+    }
+    
     @page {
         size: landscape;
         margin: 1cm;
