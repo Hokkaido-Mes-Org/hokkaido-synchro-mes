@@ -383,6 +383,7 @@ async function carregarDadosAcompanhamentoPerdas() {
 
     try {
         const perdasPorMaquina = new Map();
+        const docsProcessados = new Set();
 
         // OTIMIZAÇÃO Fase 2: executar todas as 6 queries em paralelo (3 turnos x 2 campos)
         const queryPromises = [];
@@ -400,6 +401,8 @@ async function carregarDadosAcompanhamentoPerdas() {
 
         results.forEach(({ turno: t, docs }) => {
             docs.forEach(doc => {
+                if (docsProcessados.has(doc.id)) return;
+                docsProcessados.add(doc.id);
                 const d = doc.data();
                 const machine = d.machine || d.machine_id || d.maquina || 'N/A';
                 const refugo = parseFloat(d.refugo_kg || d.refugo || 0);
@@ -668,10 +671,10 @@ async function carregarTimelineParadas() {
         escalaEl.innerHTML = escalaMarcas.map(h => `<span>${h}</span>`).join('');
 
         const maquinasPlanejamento = new Set();
-        const planejamentoSnapshot = await db().collection('planejamento').where('data', '==', data).get();
+        const planejamentoSnapshot = await db().collection('planning').where('date', '==', data).get();
         planejamentoSnapshot.forEach(doc => {
             const d = doc.data();
-            if (d.maquina || d.machine) maquinasPlanejamento.add(d.maquina || d.machine);
+            if (d.machine || d.maquina) maquinasPlanejamento.add(normalizeMachineId(d.machine || d.maquina));
         });
 
         if (maquinasPlanejamento.size === 0) {
@@ -698,18 +701,20 @@ async function carregarTimelineParadas() {
 
         paradasSnapshot.forEach(doc => {
             const d = doc.data();
-            const machine = d.machine || d.maquina;
+            const machine = normalizeMachineId(d.machine || d.maquina || '');
             if (!machine || !maquinasPlanejamento.has(machine)) return;
             if (turnoFiltro !== 'all') {
                 const turnoParada = d.turno || d.shift;
                 if (String(turnoParada) !== turnoFiltro) return;
             }
             if (!paradasPorMaquina.has(machine)) paradasPorMaquina.set(machine, []);
+            // duration é armazenado em MINUTOS no Firestore — converter para horas para a timeline
+            const durationMinutes = parseFloat(d.duration || d.duracao || 0);
             paradasPorMaquina.get(machine).push({
-                inicio: d.horaInicio || d.startTime || d.hora_inicio,
-                fim: d.horaFim || d.endTime || d.hora_fim,
-                duracao: parseFloat(d.duracao || d.duration || 0),
-                motivo: d.motivo || d.reason || d.observacao || 'Não informado',
+                inicio: d.startTime || d.horaInicio || d.hora_inicio,
+                fim: d.endTime || d.horaFim || d.hora_fim,
+                duracao: durationMinutes / 60,
+                motivo: d.reason || d.motivo || d.observacao || 'Não informado',
                 tipo: (d.tipo || d.type || '').toLowerCase()
             });
         });
