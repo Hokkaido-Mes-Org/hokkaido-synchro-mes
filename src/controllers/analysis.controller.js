@@ -5410,24 +5410,44 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const productFullNames = {}; // Mapa de label → descrição completa do produto
         lossesData.forEach(item => {
             const raw = item.raw || {};
-            // Resolver código/descrição do produto (prioridade: código do produto > MP)
-            let productCode = raw.product_cod || raw.product_code || raw.cod_produto || raw.product || raw.produto || raw.mp || '';
-            let productLabel = productCode || 'Sem produto';
+            // Resolver código do produto (SEM fallback para MP - usamos somente dados do produto)
+            let productCode = raw.product_cod || raw.product_code || raw.cod_produto || '';
+            let productLabel = '';
             let productFullName = '';
+            let resolved = false;
             
-            // Tentar resolver nome do produto
+            // 1. Tentar resolver pelo código do produto no database
             if (productCode && typeof getProductByCode === 'function') {
                 const prodInfo = getProductByCode(productCode);
                 if (prodInfo) {
                     productFullName = prodInfo.name || prodInfo.descricao || '';
                     productLabel = `${prodInfo.cod || productCode} - ${productFullName.substring(0, 25)}`;
+                    resolved = true;
                 }
-            } else if (productCode && typeof getDescricaoMP === 'function') {
-                const desc = getDescricaoMP(productCode);
-                if (desc && desc !== productCode) {
-                    productFullName = desc;
-                    productLabel = `${productCode} - ${desc.substring(0, 25)}`;
+            }
+            
+            // 2. Se não achou, tentar campos alternativos (product/produto) que podem conter código
+            if (!resolved) {
+                const altCode = raw.product || raw.produto || '';
+                if (altCode && typeof getProductByCode === 'function') {
+                    const prodInfo = getProductByCode(altCode);
+                    if (prodInfo) {
+                        productCode = String(prodInfo.cod || altCode);
+                        productFullName = prodInfo.name || prodInfo.descricao || '';
+                        productLabel = `${prodInfo.cod || altCode} - ${productFullName.substring(0, 25)}`;
+                        resolved = true;
+                    }
                 }
+                // Se product/produto é texto descritivo (não encontrou no DB), usar como label
+                if (!resolved && altCode) {
+                    productCode = altCode;
+                    productLabel = String(altCode).substring(0, 30);
+                }
+            }
+            
+            // 3. Fallback final - sem dados de produto
+            if (!productLabel) {
+                productLabel = 'Sem produto';
             }
             
             const lossKg = raw.refugo_kg || item.scrapKg || item.quantity || 0;
