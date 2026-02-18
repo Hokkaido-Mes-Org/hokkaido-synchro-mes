@@ -5407,27 +5407,34 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         clearNoDataMessage('losses-by-product-chart');
         
         const productLosses = {};
+        const productFullNames = {}; // Mapa de label → descrição completa do produto
         lossesData.forEach(item => {
             const raw = item.raw || {};
             // Resolver código/descrição do produto (prioridade: código do produto > MP)
             let productCode = raw.product_cod || raw.product_code || raw.cod_produto || raw.product || raw.produto || raw.mp || '';
             let productLabel = productCode || 'Sem produto';
+            let productFullName = '';
             
             // Tentar resolver nome do produto
             if (productCode && typeof getProductByCode === 'function') {
                 const prodInfo = getProductByCode(productCode);
                 if (prodInfo) {
-                    productLabel = `${prodInfo.cod || productCode} - ${(prodInfo.name || prodInfo.descricao || '').substring(0, 25)}`;
+                    productFullName = prodInfo.name || prodInfo.descricao || '';
+                    productLabel = `${prodInfo.cod || productCode} - ${productFullName.substring(0, 25)}`;
                 }
             } else if (productCode && typeof getDescricaoMP === 'function') {
                 const desc = getDescricaoMP(productCode);
                 if (desc && desc !== productCode) {
+                    productFullName = desc;
                     productLabel = `${productCode} - ${desc.substring(0, 25)}`;
                 }
             }
             
             const lossKg = raw.refugo_kg || item.scrapKg || item.quantity || 0;
             productLosses[productLabel] = (productLosses[productLabel] || 0) + lossKg;
+            if (!productFullNames[productLabel]) {
+                productFullNames[productLabel] = productFullName || productCode || 'Sem produto';
+            }
         });
         
         // Ordenar por maior perda
@@ -5442,6 +5449,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         ];
         
         const isMobile = window.innerWidth < 768;
+        
+        // Guardar referência ao mapa de nomes para uso no tooltip
+        const _productFullNamesRef = productFullNames;
+        const _labelsRef = labels;
         
         new Chart(ctx, {
             type: 'bar',
@@ -5472,8 +5483,18 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
+                            title: function(tooltipItems) {
+                                const label = _labelsRef[tooltipItems[0].dataIndex] || '';
+                                const fullName = _productFullNamesRef[label] || label;
+                                // Extrair código do label (formato "COD - descricao truncada")
+                                const codPart = label.split(' - ')[0] || label;
+                                if (fullName && fullName !== codPart) {
+                                    return `${codPart} - ${fullName}`;
+                                }
+                                return label;
+                            },
                             label: function(ctx) {
-                                return `${ctx.parsed.x.toFixed(3)} kg`;
+                                return `Perdas: ${ctx.parsed.x.toFixed(3)} kg`;
                             }
                         }
                     }
