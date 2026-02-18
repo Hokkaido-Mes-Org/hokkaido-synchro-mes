@@ -199,16 +199,13 @@ document.addEventListener('DOMContentLoaded', async function() {
                 console.warn('⚠️ Botão da aba Dashboard TV não encontrado no DOM');
             }
             
-            // Mostrar/ocultar subaba Relatórios (dentro de Análise) apenas para Leandro Camargo
+            // Mostrar/ocultar subaba Relatórios (dentro de Análise) — baseado na permissão 'relatorios'
             const reportsTabBtn = document.querySelector('.analysis-tab-btn[data-view="reports"]');
-            const isLeandroForReports = user && (
-                user.name === 'Leandro Camargo' || 
-                user.username === 'leandro.camargo' ||
-                user.email === 'leandro@hokkaido.com.br'
-            );
+            const userPermissions = user && user.permissions ? user.permissions : [];
+            const hasRelatoriosPermission = userPermissions.includes('relatorios');
             
             if (reportsTabBtn) {
-                if (isLeandroForReports) {
+                if (hasRelatoriosPermission) {
                     reportsTabBtn.style.display = '';  // Mostrar
                     console.log('✅ Subaba Relatórios visível para ' + user.name);
                 } else {
@@ -217,20 +214,18 @@ document.addEventListener('DOMContentLoaded', async function() {
                 }
             }
             
-            // Mostrar/ocultar aba Relatórios (página principal) apenas para Leandro Camargo e Roberto Fernandes
+            // Mostrar/ocultar aba Relatórios (página principal) — baseado na permissão 'relatorios'
             const relatoriosNavBtn = document.querySelector('[data-page="relatorios"]');
-            const allowedRelatoriosUsers = ['leandro camargo', 'roberto fernandes'];
-            const isAllowedForRelatorios = user && allowedRelatoriosUsers.includes(userNameLower);
             
             console.log('[RELATORIOS-DEBUG] Verificando acesso Relatórios:', {
                 userName: user?.name,
                 userNameLower: userNameLower,
-                allowedRelatoriosUsers: allowedRelatoriosUsers,
-                isAllowedForRelatorios: isAllowedForRelatorios
+                permissions: userPermissions,
+                hasRelatoriosPermission: hasRelatoriosPermission
             });
             
             if (relatoriosNavBtn) {
-                if (isAllowedForRelatorios) {
+                if (hasRelatoriosPermission) {
                     relatoriosNavBtn.style.display = '';  // Mostrar
                     console.log('✅ Aba Relatórios visível para ' + user.name);
                 } else {
