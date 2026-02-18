@@ -5406,60 +5406,99 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         clearNoDataMessage('losses-by-product-chart');
         
-        const productLosses = {};
-        const productFullNames = {}; // Mapa de label → descrição completa do produto
+        // ── Construir mapa planId → product_cod a partir do planejamento ──
+        // Isso permite resolver o produto de entries antigos que não salvaram product_cod
+        const planProductMap = {}; // planId → { cod, name }
+        try {
+            const { startDate, endDate, machine, shift } = currentAnalysisFilters;
+            const planData = await getFilteredData('plan', startDate, endDate, machine, shift);
+            planData.forEach(plan => {
+                if (!plan.id) return;
+                const raw = plan.raw || {};
+                const pCode = raw.part_code || raw.product_cod || raw.product_code || '';
+                if (pCode && typeof getProductByCode === 'function') {
+                    const info = getProductByCode(pCode);
+                    if (info) {
+                        planProductMap[plan.id] = { cod: String(info.cod || pCode), name: info.name || info.descricao || '' };
+                    }
+                }
+                // Também tentar pelo campo product do planejamento (pode ser o nome ou cod)
+                if (!planProductMap[plan.id] && raw.product && typeof getProductByCode === 'function') {
+                    const info = getProductByCode(raw.product);
+                    if (info) {
+                        planProductMap[plan.id] = { cod: String(info.cod || raw.product), name: info.name || info.descricao || '' };
+                    }
+                }
+            });
+            console.log('[CHART][ByProduct] planProductMap built with', Object.keys(planProductMap).length, 'entries');
+        } catch (e) {
+            console.warn('[CHART][ByProduct] Failed to load planData for cross-reference:', e);
+        }
+        
+        const productLosses = {};       // cod → kg acumulado
+        const productDescriptions = {}; // cod → descrição completa do produto
+        
         lossesData.forEach(item => {
             const raw = item.raw || {};
-            // Resolver código do produto (SEM fallback para MP - usamos somente dados do produto)
-            let productCode = raw.product_cod || raw.product_code || raw.cod_produto || '';
-            let productLabel = '';
-            let productFullName = '';
+            let prodCod = '';
+            let prodName = '';
             let resolved = false;
             
-            // 1. Tentar resolver pelo código do produto no database
-            if (productCode && typeof getProductByCode === 'function') {
-                const prodInfo = getProductByCode(productCode);
-                if (prodInfo) {
-                    productFullName = prodInfo.name || prodInfo.descricao || '';
-                    productLabel = `${prodInfo.cod || productCode} - ${productFullName.substring(0, 25)}`;
+            // 1. Tentar campo product_cod salvo diretamente no entry
+            const directCode = raw.product_cod || raw.product_code || raw.cod_produto || '';
+            if (directCode && typeof getProductByCode === 'function') {
+                const info = getProductByCode(directCode);
+                if (info) {
+                    prodCod = String(info.cod || directCode);
+                    prodName = info.name || info.descricao || '';
                     resolved = true;
                 }
             }
             
-            // 2. Se não achou, tentar campos alternativos (product/produto) que podem conter código
+            // 2. Tentar cross-reference pelo planId no mapa de planejamento
+            if (!resolved) {
+                const planId = raw.planId || raw.plan_id || '';
+                if (planId && planProductMap[planId]) {
+                    prodCod = planProductMap[planId].cod;
+                    prodName = planProductMap[planId].name;
+                    resolved = true;
+                }
+            }
+            
+            // 3. Tentar campo product/produto como código no database
             if (!resolved) {
                 const altCode = raw.product || raw.produto || '';
                 if (altCode && typeof getProductByCode === 'function') {
-                    const prodInfo = getProductByCode(altCode);
-                    if (prodInfo) {
-                        productCode = String(prodInfo.cod || altCode);
-                        productFullName = prodInfo.name || prodInfo.descricao || '';
-                        productLabel = `${prodInfo.cod || altCode} - ${productFullName.substring(0, 25)}`;
+                    const info = getProductByCode(altCode);
+                    if (info) {
+                        prodCod = String(info.cod || altCode);
+                        prodName = info.name || info.descricao || '';
                         resolved = true;
                     }
                 }
-                // Se product/produto é texto descritivo (não encontrou no DB), usar como label
-                if (!resolved && altCode) {
-                    productCode = altCode;
-                    productLabel = String(altCode).substring(0, 30);
-                }
             }
             
-            // 3. Fallback final - sem dados de produto
-            if (!productLabel) {
-                productLabel = 'Sem produto';
+            // 4. Fallback: sem produto identificado
+            if (!resolved || !prodCod) {
+                prodCod = 'Sem produto';
+                prodName = '';
             }
             
             const lossKg = raw.refugo_kg || item.scrapKg || item.quantity || 0;
-            productLosses[productLabel] = (productLosses[productLabel] || 0) + lossKg;
-            if (!productFullNames[productLabel]) {
-                productFullNames[productLabel] = productFullName || productCode || 'Sem produto';
+            productLosses[prodCod] = (productLosses[prodCod] || 0) + lossKg;
+            if (!productDescriptions[prodCod]) {
+                productDescriptions[prodCod] = prodName;
             }
         });
         
         // Ordenar por maior perda
         const sorted = Object.entries(productLosses).sort((a, b) => b[1] - a[1]).slice(0, 15);
-        const labels = sorted.map(s => s[0]);
+        // Labels do eixo Y: "COD - descrição truncada" para caber no gráfico
+        const labels = sorted.map(([cod]) => {
+            const desc = productDescriptions[cod];
+            return desc ? `${cod} - ${desc.substring(0, 25)}` : cod;
+        });
+        const codes = sorted.map(s => s[0]);  // códigos puros para lookup
         const data = sorted.map(s => s[1]);
         
         const colors = [
@@ -5470,9 +5509,9 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         const isMobile = window.innerWidth < 768;
         
-        // Guardar referência ao mapa de nomes para uso no tooltip
-        const _productFullNamesRef = productFullNames;
-        const _labelsRef = labels;
+        // Referências para tooltip
+        const _codes = codes;
+        const _descriptions = productDescriptions;
         
         new Chart(ctx, {
             type: 'bar',
@@ -5504,14 +5543,11 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     tooltip: {
                         callbacks: {
                             title: function(tooltipItems) {
-                                const label = _labelsRef[tooltipItems[0].dataIndex] || '';
-                                const fullName = _productFullNamesRef[label] || label;
-                                // Extrair código do label (formato "COD - descricao truncada")
-                                const codPart = label.split(' - ')[0] || label;
-                                if (fullName && fullName !== codPart) {
-                                    return `${codPart} - ${fullName}`;
-                                }
-                                return label;
+                                const idx = tooltipItems[0].dataIndex;
+                                const cod = _codes[idx] || '';
+                                const desc = _descriptions[cod] || '';
+                                // Tooltip mostra código + descrição COMPLETA (sem truncar)
+                                return desc ? `${cod} - ${desc}` : cod;
                             },
                             label: function(ctx) {
                                 return `Perdas: ${ctx.parsed.x.toFixed(3)} kg`;

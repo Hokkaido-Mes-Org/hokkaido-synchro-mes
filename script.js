@@ -14810,6 +14810,8 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
                 machine: selectedMachineData.machine || null,
                 mp: mpValue,
                 tipoMateriaPrima: tipoMateriaPrima,  // ✅ NOVO: Tipo de matéria prima do banco de dados
+                product_cod: selectedMachineData.product_cod || '',
+                product: selectedMachineData.product || '',
                 orderId: selectedMachineData.order_id || null,
                 manual: true,
                 horaInformada: hourValue || null,
@@ -15038,6 +15040,8 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
             machine: machineRef || null,
             mp: mpValue,
             tipoMateriaPrima: tipoMateriaPrima,  // ✅ NOVO: Tipo de matéria prima do banco de dados
+            product_cod: isEditing ? (originalData?.product_cod || selectedMachineData?.product_cod || '') : (selectedMachineData?.product_cod || ''),
+            product: isEditing ? (originalData?.product || selectedMachineData?.product || '') : (selectedMachineData?.product || ''),
             orderId: selectedMachineData?.order_id || null,
             orderNumber: selectedMachineData?.order_number || null,
             userCod: userCod,
