@@ -624,7 +624,7 @@ function db() { return getDb(); }
             duration: duracao,
             durationMinutes: duracao,
             lastEditedAt: new Date().toISOString(),
-            lastEditedBy: getSetupCurrentUserName ? getCurrentUserName() : 'Admin'
+            lastEditedBy: typeof getCurrentUserName === 'function' ? getCurrentUserName() : 'Admin'
         };
         
         // Se tem hora de fim, marcar como finalizada
@@ -670,7 +670,7 @@ function db() { return getDb(); }
             // ✅ Invalidar TODOS os caches de paradas para refletir a exclusão em todas as abas
             if (typeof cachedDowntimeDetails !== "undefined") cachedDowntimeDetails = []; // Cache da tabela de detalhes Análise - Paradas
             if (typeof cachedDowntimeDataForChart !== "undefined") cachedDowntimeDataForChart = []; // Cache do gráfico Paradas por Motivo/Categoria
-            window._recentEntriesCache.delete(id); // Cache de lançamentos recentes
+            if (window._recentEntriesCache) window._recentEntriesCache.delete(id); // Cache de lançamentos recentes
             
             if (typeof invalidateDowntimeCache === 'function') {
                 (typeof invalidateDowntimeCache === "function" ? invalidateDowntimeCache : () => {})(); // Caches de status de máquinas
