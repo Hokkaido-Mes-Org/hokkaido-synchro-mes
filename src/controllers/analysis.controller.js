@@ -39,6 +39,26 @@ const getPlanQuantity = (...args) => window.getPlanQuantity?.(...args) ?? 0;
 const parseTimeToMinutes = (...args) => window.parseTimeToMinutes?.(...args);
 const resolveProductionDateTime = (...args) => window.resolveProductionDateTime?.(...args);
 
+// --- calculateShiftOEE: usa window.* do resumo.controller, com fallback inline
+// para evitar race-condition no carregamento assíncrono dos módulos ---
+function calculateShiftOEE(produzido, tempoParadaMin, refugoPcs, cicloReal, cavAtivas) {
+    if (typeof window.calculateShiftOEE === 'function') {
+        return window.calculateShiftOEE(produzido, tempoParadaMin, refugoPcs, cicloReal, cavAtivas);
+    }
+    // Fallback inline (mesma lógica do resumo.controller.js)
+    const tempoTurnoMin = 480;
+    const tempoProgramado = tempoTurnoMin;
+    const tempoProduzindo = Math.max(0, tempoProgramado - Math.max(0, tempoParadaMin));
+    const disponibilidade = tempoProgramado > 0 ? (tempoProduzindo / tempoProgramado) : 0;
+    const producaoTeorica = cicloReal > 0 && cavAtivas > 0 ? (tempoProduzindo * 60 / cicloReal) * cavAtivas : 0;
+    const performance = producaoTeorica > 0 ? Math.min(1, produzido / producaoTeorica) : (produzido > 0 ? 1 : 0);
+    const totalProduzido = Math.max(0, produzido) + Math.max(0, refugoPcs);
+    const qualidade = totalProduzido > 0 ? (Math.max(0, produzido) / totalProduzido) : (produzido > 0 ? 1 : 0);
+    const oee = disponibilidade * performance * qualidade;
+    const s = (v) => isNaN(v) || !isFinite(v) ? 0 : Math.max(0, Math.min(1, v));
+    return { disponibilidade: s(disponibilidade), performance: s(performance), qualidade: s(qualidade), oee: s(oee) };
+}
+
 // --- isPageVisible (small utility, copied from script.js L4600) ---
 function isPageVisible() {
     return document.visibilityState === 'visible';
@@ -48,6 +68,32 @@ function isPageVisible() {
 let analysisHourlyChartInstance = null;
 let hourlyChartInstance = null;
 let machineProductionTimelineInstance = null;
+
+// --- Gauge chart state (era closure-scoped no script.js, agora local ao módulo) ---
+const gaugeChartInstances = {};
+const gaugeChartStyles = {
+    'availability-gauge': {
+        color: '#10B981',
+        warningColor: '#F59E0B',
+        dangerColor: '#EF4444'
+    },
+    'performance-gauge': {
+        color: '#3B82F6',
+        warningColor: '#8B5CF6',
+        dangerColor: '#EF4444'
+    },
+    'quality-gauge': {
+        color: '#F59E0B',
+        warningColor: '#F97316',
+        dangerColor: '#EF4444'
+    },
+    'oee-main-gauge': {
+        color: '#8B5CF6',
+        warningColor: '#F59E0B',
+        dangerColor: '#EF4444'
+    }
+};
+
 let cachedProductionDataset = {
     productionData: [],
     planData: [],
@@ -105,7 +151,8 @@ function _invalidateFilteredDataCache() {
         // Event listeners para as abas de análise
         document.querySelectorAll('.analysis-tab-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                const view = e.target.getAttribute('data-view');
+                // CORREÇÃO: usar currentTarget (o botão) em vez de target (pode ser <span>/<i>/<div> filho)
+                const view = e.currentTarget.getAttribute('data-view');
                 if (view) switchAnalysisView(view);
             });
         });
@@ -2111,9 +2158,13 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
 
     // Função para carregar análise de eficiência
     async function loadEfficiencyAnalysis() {
-        const { startDate, endDate, machine, shift } = currentAnalysisFilters;
+        let { startDate, endDate, machine, shift } = currentAnalysisFilters;
         console.log('[TRACE][loadEfficiencyAnalysis] calculating', { startDate, endDate, machine, shift });
-        
+        if (!startDate || !endDate) {
+            console.warn('[TRACE][loadEfficiencyAnalysis] missing date filters, initializing defaults');
+            setAnalysisDefaultDates();
+            ({ startDate, endDate, machine, shift } = currentAnalysisFilters);
+        }
         const oeeData = await calculateDetailedOEE(startDate, endDate, machine, shift);
 
         console.log('[TRACE][loadEfficiencyAnalysis] oeeData', oeeData);
@@ -2123,9 +2174,12 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         updateGauge('performance-gauge', oeeData.performance);
         updateGauge('quality-gauge', oeeData.quality);
         
-        document.getElementById('availability-value').textContent = `${oeeData.availability.toFixed(1)}%`;
-        document.getElementById('performance-value').textContent = `${oeeData.performance.toFixed(1)}%`;
-        document.getElementById('quality-value').textContent = `${oeeData.quality.toFixed(1)}%`;
+        const availabilityEl = document.getElementById('availability-value');
+        const performanceEl = document.getElementById('performance-value');
+        const qualityEl = document.getElementById('quality-value');
+        if (availabilityEl) availabilityEl.textContent = `${oeeData.availability.toFixed(1)}%`;
+        if (performanceEl) performanceEl.textContent = `${oeeData.performance.toFixed(1)}%`;
+        if (qualityEl) qualityEl.textContent = `${oeeData.quality.toFixed(1)}%`;
 
         // ========== PREENCHER OEE GERAL ==========
         const oeeGeneral = oeeData.oee || ((oeeData.availability * oeeData.performance * oeeData.quality) / 10000);
@@ -9264,14 +9318,6 @@ ${content.innerHTML}
     window.borraTablePrevPage = borraTablePrevPage;
     window.exportBorraTable = exportBorraTable;
         
-
-// --- Outlier function (from script.js ~L19235) ---
-    function handleAnalysisTabClick(e) {
-        const view = e.currentTarget.dataset.view;
-        if (view) {
-            switchAnalysisView(view);
-        }
-    }
 
 // --- Entry point ---
 let _analiseInitialized = false;
