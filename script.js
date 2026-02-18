@@ -1377,8 +1377,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Verificar DataStore primeiro
         if (!forceRefresh && window.DataStore) {
             const cached = window.DataStore.get('activeDowntimes');
-            // OTIMIZAÇÃO: TTL de active_downtimes aumentado para 60s (era 30s)
-            if (cached && window.DataStore.isFresh('activeDowntimes', 60000)) {
+            // OTIMIZAÇÃO: TTL de active_downtimes aumentado para 120s (era 60s)
+            if (cached && window.DataStore.isFresh('activeDowntimes', 120000)) {
                 console.debug('📦 Usando DataStore.activeDowntimes');
                 if (window.FirebaseMonitor) window.FirebaseMonitor.trackRead('active_downtimes', true);
                 return cached;
@@ -1412,7 +1412,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (!forceRefresh && window.DataStore) {
             const cached = window.DataStore.get(cacheKey);
-            if (cached && window.DataStore.isFresh(cacheKey, 60000)) { // 1 min TTL
+            if (cached && window.DataStore.isFresh(cacheKey, 120000)) { // 2 min TTL (otimizado - era 1 min)
                 console.debug('📦 Usando cache downtime_entries');
                 return cached;
             }
@@ -11291,12 +11291,12 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         // Executar imediatamente na primeira vez
         pollActiveDowntimes();
         
-        // Configurar polling a cada 60 segundos (otimizado para reduzir custos Firebase - era 15s)
+        // Configurar polling a cada 120 segundos (otimizado para reduzir custos Firebase - era 60s)
         window._startActiveDowntimesPolling = () => {
             if (window._activeDowntimesPolling) {
                 clearInterval(window._activeDowntimesPolling);
             }
-            window._activeDowntimesPolling = setInterval(pollActiveDowntimes, 60000);
+            window._activeDowntimesPolling = setInterval(pollActiveDowntimes, 120000);
         };
         window._startActiveDowntimesPolling();
         
@@ -17768,9 +17768,21 @@ function sendDowntimeNotification() {
             const planSnapshot = await db.collection('planning').where('date', '==', today).get();
             let plans = planSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-            // Enriquecer planos com dados da OP (lot size, execução acumulada)
+            // OTIMIZAÇÃO FIREBASE: Carregar todas as OPs do cache em vez de N+1 queries individuais
+            // Antes: cada plano fazia 1-3 leituras individuais (doc.get, query part_code, query production_entries)
+            // Agora: 1 leitura bulk (cached) + lookups em memória
+            const allCachedOrders = await getProductionOrdersCached();
+            const orderCacheById = new Map(allCachedOrders.map(o => [o.id, o]));
             const orderCacheByPartCode = new Map();
-            const orderCacheById = new Map();
+            allCachedOrders.forEach(o => {
+                const pc = String(o.part_code || '').trim();
+                if (pc) {
+                    if (!orderCacheByPartCode.has(pc)) orderCacheByPartCode.set(pc, []);
+                    orderCacheByPartCode.get(pc).push(o);
+                }
+            });
+            // Pré-carregar production entries do dia para evitar N queries por orderId
+            const todayProdEntries = await getProductionEntriesCached(today);
             const productionTotalsByOrderId = new Map();
 
             for (const plan of plans) {
@@ -17780,48 +17792,22 @@ function sendDowntimeNotification() {
                 // Priorizar vínculo direto com a OP se existir no planejamento
                 const linkedOrderId = plan.production_order_id || plan.production_order || plan.order_id || null;
                 if (linkedOrderId) {
-                    try {
-                        if (!orderCacheById.has(linkedOrderId)) {
-                            const doc = await db.collection('production_orders').doc(linkedOrderId).get();
-                            if (doc.exists) {
-                                orderCacheById.set(linkedOrderId, { id: doc.id, ...doc.data() });
-                            } else {
-                                orderCacheById.set(linkedOrderId, null);
-                            }
-                        }
-                        resolvedOrder = orderCacheById.get(linkedOrderId);
-                    } catch (e) {
-                        console.warn('Falha ao carregar OP vinculada ao plano', plan.id, linkedOrderId, e);
-                    }
+                    resolvedOrder = orderCacheById.get(linkedOrderId) || null;
                 }
 
                 if (!resolvedOrder && partCode) {
-                    if (!orderCacheByPartCode.has(partCode)) {
-                        try {
-                            const ordersSnapshot = await db.collection('production_orders')
-                                .where('part_code', '==', partCode)
-                                .get();
-
-                            const orders = ordersSnapshot.docs
-                                .map(doc => ({ id: doc.id, ...doc.data() }))
-                                .sort((a, b) => {
-                                    // Ordenar da mais antiga para a mais recente para priorizar a OP antiga
-                                    const aTs = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?._seconds ? a.createdAt._seconds * 1000 : 0);
-                                    const bTs = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?._seconds ? b.createdAt._seconds * 1000 : 0);
-                                    if (aTs && bTs && aTs !== bTs) return aTs - bTs; // mais antiga primeiro
-                                    // Fallback por número da OP (numérico ascendente)
-                                    const toNum = (v) => { const n = parseInt(String(v||'').replace(/\D/g,''), 10); return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY; };
-                                    return toNum(a.order_number) - toNum(b.order_number);
-                                });
-
-                            orderCacheByPartCode.set(partCode, orders);
-                        } catch (orderError) {
-                            console.warn('Não foi possível recuperar OPs para o código', partCode, orderError);
-                            orderCacheByPartCode.set(partCode, []);
-                        }
+                    let cachedOrders = orderCacheByPartCode.get(partCode) || [];
+                    if (cachedOrders.length > 1) {
+                        // Ordenar da mais antiga para a mais recente para priorizar a OP antiga
+                        cachedOrders = [...cachedOrders].sort((a, b) => {
+                            const aTs = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?._seconds ? a.createdAt._seconds * 1000 : 0);
+                            const bTs = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?._seconds ? b.createdAt._seconds * 1000 : 0);
+                            if (aTs && bTs && aTs !== bTs) return aTs - bTs;
+                            const toNum = (v) => { const n = parseInt(String(v||'').replace(/\D/g,''), 10); return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY; };
+                            return toNum(a.order_number) - toNum(b.order_number);
+                        });
                     }
 
-                    const cachedOrders = orderCacheByPartCode.get(partCode) || [];
                     if (cachedOrders.length > 0) {
                         // Preferir OP ativa/andamento na mesma máquina do plano
                         const sameMachine = cachedOrders.filter(o => (o.machine_id || o.machine) === plan.machine);
@@ -17839,23 +17825,12 @@ function sendDowntimeNotification() {
                     plan.order_id = resolvedOrder.id;
                     plan.order_number = resolvedOrder.order_number || resolvedOrder.order_number_original || resolvedOrder.id;
 
-                    // Buscar produção acumulada da OP se ainda não calculada
+                    // OTIMIZAÇÃO FIREBASE: Calcular produção acumulada da OP a partir dos entries já carregados
                     if (!productionTotalsByOrderId.has(resolvedOrder.id)) {
-                        try {
-                            const prodSnapshot = await db.collection('production_entries')
-                                .where('orderId', '==', resolvedOrder.id)
-                                .get();
-
-                            const totalProduced = prodSnapshot.docs.reduce((sum, doc) => {
-                                const entry = doc.data();
-                                return sum + (Number(entry.produzido || entry.quantity || 0) || 0);
-                            }, 0);
-
-                            productionTotalsByOrderId.set(resolvedOrder.id, totalProduced);
-                        } catch (prodError) {
-                            console.warn('Não foi possível recuperar lançamentos da OP', resolvedOrder.id, prodError);
-                            productionTotalsByOrderId.set(resolvedOrder.id, 0);
-                        }
+                        const totalProduced = todayProdEntries
+                            .filter(e => e.orderId === resolvedOrder.id)
+                            .reduce((sum, entry) => sum + (Number(entry.produzido || entry.quantity || 0) || 0), 0);
+                        productionTotalsByOrderId.set(resolvedOrder.id, totalProduced);
                     }
 
                     const accumulated = productionTotalsByOrderId.get(resolvedOrder.id) || 0;
@@ -18338,17 +18313,12 @@ function sendDowntimeNotification() {
             const productions = prodSnapshot.docs.map(doc => doc.data());
             
                         // Buscar paradas de hoje e de amanhã (duas consultas simples)
-                        const [dtSnapToday, dtSnapTomorrow] = await Promise.all([
-                                db.collection('downtime_entries')
+                        // OTIMIZAÇÃO FIREBASE: Usar 1 query com 'in' em vez de 2 queries separadas
+                        const dtSnapshot = await db.collection('downtime_entries')
                                     .where('machine', '==', selectedMachineData.machine)
-                                    .where('date', '==', today)
-                                    .get(),
-                                db.collection('downtime_entries')
-                                    .where('machine', '==', selectedMachineData.machine)
-                                    .where('date', '==', tomorrow)
-                                    .get()
-                        ]);
-                        const downtimes = [...dtSnapToday.docs, ...dtSnapTomorrow.docs].map(doc => doc.data());
+                                    .where('date', 'in', [today, tomorrow])
+                                    .get();
+                        const downtimes = dtSnapshot.docs.map(doc => doc.data());
             
             // Calcular totais e produção por turno
             let totalProduced = 0;
@@ -18521,7 +18491,7 @@ function sendDowntimeNotification() {
     // Evita múltiplas leituras Firebase para cada máquina
     let _downtimeStatusCache = null;
     let _downtimeStatusCacheTimestamp = 0;
-    const DOWNTIME_CACHE_TTL = 60000; // 60 segundos - mesmo intervalo do polling (otimizado)
+    const DOWNTIME_CACHE_TTL = 120000; // 120 segundos - alinhado com intervalo de polling (otimizado)
 
     // NOVO: Função para invalidar todos os caches de downtime
     function invalidateDowntimeCache(machineId = null) {
@@ -18566,21 +18536,24 @@ function sendDowntimeNotification() {
             // Máquinas válidas do machineDatabase
             const validMachineIdsSet = new Set(machineDatabase.map(m => normalizeMachineId(m.id)));
 
-            // 1. Buscar todas as paradas ativas de active_downtimes
-            const activeDowntimesSnap = await window.db.collection('active_downtimes').get();
-            activeDowntimesSnap.forEach(doc => {
-                const data = doc.data();
-                const mid = normalizeMachineId(doc.id);
+            // OTIMIZAÇÃO FIREBASE: Usar funções cached em vez de leituras diretas
+            // Antes: 2 leituras diretas ao Firebase (active_downtimes.get() + extended_downtime_logs query)
+            // Agora: Reutiliza dados do DataStore/cache (getActiveDowntimesCached + getExtendedDowntimesCached)
+            
+            // 1. Buscar paradas ativas via cache (compartilha cache com pollActiveDowntimes)
+            const activeDowntimesList = await getActiveDowntimesCached(forceRefresh);
+            activeDowntimesList.forEach(data => {
+                const mid = normalizeMachineId(data.id);
                 
                 // FIX: Exigir isActive === true (não apenas truthy)
                 if (!data || data.isActive !== true) {
-                    staleDocIds.push({ collection: 'active_downtimes', id: doc.id });
+                    staleDocIds.push({ collection: 'active_downtimes', id: data.id });
                     return;
                 }
                 
                 // FIX: Ignorar se máquina não existe no database
                 if (!validMachineIdsSet.has(mid)) {
-                    staleDocIds.push({ collection: 'active_downtimes', id: doc.id });
+                    staleDocIds.push({ collection: 'active_downtimes', id: data.id });
                     return;
                 }
                 
@@ -18595,14 +18568,11 @@ function sendDowntimeNotification() {
                 };
             });
             
-            // 2. Buscar paradas ativas de extended_downtime_logs (paradas em lote antigas)
+            // 2. Buscar extended_downtime_logs ativos via cache
             try {
-                const extendedSnap = await window.db.collection('extended_downtime_logs')
-                    .where('status', '==', 'active')
-                    .get();
+                const extendedList = await getExtendedDowntimesCached(forceRefresh, true);
                     
-                extendedSnap.forEach(doc => {
-                    const data = doc.data();
+                extendedList.forEach(data => {
                     const machineId = data.machine_id || data.machine;
                     if (machineId) {
                         const mid = normalizeMachineId(machineId);
@@ -18612,7 +18582,7 @@ function sendDowntimeNotification() {
                             if (!validMachineIdsSet.has(mid)) return;
                             
                             statusMap[mid] = {
-                                recordId: doc.id,
+                                recordId: data.id,
                                 type: 'extended_downtime',
                                 reason: data.reason || data.type || 'Parada registrada',
                                 startDate: data.start_date || data.date,
@@ -18624,7 +18594,7 @@ function sendDowntimeNotification() {
                         }
                     }
                 });
-                console.debug('[MACHINE-STATUS] extended_downtime_logs ativos:', extendedSnap.size);
+                console.debug('[MACHINE-STATUS] extended_downtime_logs ativos:', extendedList.length);
             } catch (extendedError) {
                 console.warn('[MACHINE-STATUS] Erro ao buscar extended_downtime_logs:', extendedError);
             }

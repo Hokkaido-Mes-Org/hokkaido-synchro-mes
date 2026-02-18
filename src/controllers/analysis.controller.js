@@ -117,7 +117,7 @@ let currentOrderProgress = { executed: 0, planned: 0, expected: 0 };
 // Invalidado quando filtros mudam via applyAnalysisFilters().
 // ═══════════════════════════════════════════════════════════════════
 const _filteredDataCache = new Map();
-const _FILTERED_DATA_TTL = 180000; // 3 minutos
+const _FILTERED_DATA_TTL = 300000; // 5 minutos (otimizado - era 3 min)
 
 function _getFilteredDataCacheKey(collection, startDate, endDate) {
     return `${collection}:${startDate}:${endDate}`;

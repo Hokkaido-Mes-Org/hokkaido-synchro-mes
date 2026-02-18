@@ -3515,9 +3515,23 @@ function sendDowntimeNotification() {
             const planSnapshot = await getDb().collection('planning').where('date', '==', today).get();
             let plans = planSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-            // Enriquecer planos com dados da OP (lot size, execução acumulada)
+            // OTIMIZAÇÃO FIREBASE: Carregar todas as OPs do cache em vez de N+1 queries individuais
+            const allCachedOrders = typeof window.getProductionOrdersCached === 'function'
+                ? await window.getProductionOrdersCached()
+                : (await getDb().collection('production_orders').get()).docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const orderCacheById = new Map(allCachedOrders.map(o => [o.id, o]));
             const orderCacheByPartCode = new Map();
-            const orderCacheById = new Map();
+            allCachedOrders.forEach(o => {
+                const pc = String(o.part_code || '').trim();
+                if (pc) {
+                    if (!orderCacheByPartCode.has(pc)) orderCacheByPartCode.set(pc, []);
+                    orderCacheByPartCode.get(pc).push(o);
+                }
+            });
+            // Pré-carregar production entries do dia para evitar N queries por orderId
+            const todayProdEntries = typeof window.getProductionEntriesCached === 'function'
+                ? await window.getProductionEntriesCached(today)
+                : (await getDb().collection('production_entries').where('data', '==', today).get()).docs.map(doc => ({ id: doc.id, ...doc.data() }));
             const productionTotalsByOrderId = new Map();
 
             for (const plan of plans) {
@@ -3527,48 +3541,22 @@ function sendDowntimeNotification() {
                 // Priorizar vínculo direto com a OP se existir no planejamento
                 const linkedOrderId = plan.production_order_id || plan.production_order || plan.order_id || null;
                 if (linkedOrderId) {
-                    try {
-                        if (!orderCacheById.has(linkedOrderId)) {
-                            const doc = await getDb().collection('production_orders').doc(linkedOrderId).get();
-                            if (doc.exists) {
-                                orderCacheById.set(linkedOrderId, { id: doc.id, ...doc.data() });
-                            } else {
-                                orderCacheById.set(linkedOrderId, null);
-                            }
-                        }
-                        resolvedOrder = orderCacheById.get(linkedOrderId);
-                    } catch (e) {
-                        console.warn('Falha ao carregar OP vinculada ao plano', plan.id, linkedOrderId, e);
-                    }
+                    resolvedOrder = orderCacheById.get(linkedOrderId) || null;
                 }
 
                 if (!resolvedOrder && partCode) {
-                    if (!orderCacheByPartCode.has(partCode)) {
-                        try {
-                            const ordersSnapshot = await getDb().collection('production_orders')
-                                .where('part_code', '==', partCode)
-                                .get();
-
-                            const orders = ordersSnapshot.docs
-                                .map(doc => ({ id: doc.id, ...doc.data() }))
-                                .sort((a, b) => {
-                                    // Ordenar da mais antiga para a mais recente para priorizar a OP antiga
-                                    const aTs = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?._seconds ? a.createdAt._seconds * 1000 : 0);
-                                    const bTs = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?._seconds ? b.createdAt._seconds * 1000 : 0);
-                                    if (aTs && bTs && aTs !== bTs) return aTs - bTs; // mais antiga primeiro
-                                    // Fallback por número da OP (numérico ascendente)
-                                    const toNum = (v) => { const n = parseInt(String(v||'').replace(/\D/g,''), 10); return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY; };
-                                    return toNum(a.order_number) - toNum(b.order_number);
-                                });
-
-                            orderCacheByPartCode.set(partCode, orders);
-                        } catch (orderError) {
-                            console.warn('Não foi possível recuperar OPs para o código', partCode, orderError);
-                            orderCacheByPartCode.set(partCode, []);
-                        }
+                    let cachedOrders = orderCacheByPartCode.get(partCode) || [];
+                    if (cachedOrders.length > 1) {
+                        // Ordenar da mais antiga para a mais recente para priorizar a OP antiga
+                        cachedOrders = [...cachedOrders].sort((a, b) => {
+                            const aTs = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?._seconds ? a.createdAt._seconds * 1000 : 0);
+                            const bTs = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?._seconds ? b.createdAt._seconds * 1000 : 0);
+                            if (aTs && bTs && aTs !== bTs) return aTs - bTs;
+                            const toNum = (v) => { const n = parseInt(String(v||'').replace(/\D/g,''), 10); return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY; };
+                            return toNum(a.order_number) - toNum(b.order_number);
+                        });
                     }
 
-                    const cachedOrders = orderCacheByPartCode.get(partCode) || [];
                     if (cachedOrders.length > 0) {
                         // Preferir OP ativa/andamento na mesma máquina do plano
                         const sameMachine = cachedOrders.filter(o => (o.machine_id || o.machine) === plan.machine);
@@ -3586,23 +3574,12 @@ function sendDowntimeNotification() {
                     plan.order_id = resolvedOrder.id;
                     plan.order_number = resolvedOrder.order_number || resolvedOrder.order_number_original || resolvedOrder.id;
 
-                    // Buscar produção acumulada da OP se ainda não calculada
+                    // OTIMIZAÇÃO FIREBASE: Calcular produção acumulada da OP a partir dos entries já carregados
                     if (!productionTotalsByOrderId.has(resolvedOrder.id)) {
-                        try {
-                            const prodSnapshot = await getDb().collection('production_entries')
-                                .where('orderId', '==', resolvedOrder.id)
-                                .get();
-
-                            const totalProduced = prodSnapshot.docs.reduce((sum, doc) => {
-                                const entry = doc.data();
-                                return sum + (Number(entry.produzido || entry.quantity || 0) || 0);
-                            }, 0);
-
-                            productionTotalsByOrderId.set(resolvedOrder.id, totalProduced);
-                        } catch (prodError) {
-                            console.warn('Não foi possível recuperar lançamentos da OP', resolvedOrder.id, prodError);
-                            productionTotalsByOrderId.set(resolvedOrder.id, 0);
-                        }
+                        const totalProduced = todayProdEntries
+                            .filter(e => e.orderId === resolvedOrder.id)
+                            .reduce((sum, entry) => sum + (Number(entry.produzido || entry.quantity || 0) || 0), 0);
+                        productionTotalsByOrderId.set(resolvedOrder.id, totalProduced);
                     }
 
                     const accumulated = productionTotalsByOrderId.get(resolvedOrder.id) || 0;
