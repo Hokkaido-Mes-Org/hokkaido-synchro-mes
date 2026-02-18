@@ -2512,18 +2512,28 @@ document.addEventListener('DOMContentLoaded', function() {
     // ── Sidebar: open / close / collapse / restore ──
     function openSidebar() {
         if (!sidebar) return;
+        sidebar.classList.add('sidebar-open');
         sidebar.classList.add('translate-x-0');
         sidebar.classList.remove('-translate-x-full');
         sidebar.setAttribute('aria-hidden', 'false');
-        if (sidebarOverlay) sidebarOverlay.classList.remove('hidden');
+        if (sidebarOverlay) {
+            sidebarOverlay.classList.add('active');
+            sidebarOverlay.classList.remove('hidden');
+        }
+        document.body.classList.add('sidebar-is-open');
     }
 
     function closeSidebar() {
         if (!sidebar) return;
+        sidebar.classList.remove('sidebar-open');
         sidebar.classList.remove('translate-x-0');
         sidebar.classList.add('-translate-x-full');
         sidebar.setAttribute('aria-hidden', 'true');
-        if (sidebarOverlay) sidebarOverlay.classList.add('hidden');
+        if (sidebarOverlay) {
+            sidebarOverlay.classList.remove('active');
+            sidebarOverlay.classList.add('hidden');
+        }
+        document.body.classList.remove('sidebar-is-open');
     }
 
     function toggleSidebarCollapse() {
@@ -2552,6 +2562,40 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         } catch (_) {}
     }
+
+    // ── Swipe gesture para abrir/fechar sidebar no mobile ──
+    (function initTouchSwipe() {
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let swiping = false;
+        const SWIPE_THRESHOLD = 60;
+        const EDGE_ZONE = 30; // pixels da borda esquerda para iniciar swipe
+
+        document.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+            // Só detectar swipe para abrir se começou na borda esquerda
+            const isSidebarOpen = sidebar && sidebar.classList.contains('sidebar-open');
+            swiping = isSidebarOpen || touchStartX < EDGE_ZONE;
+        }, { passive: true });
+
+        document.addEventListener('touchend', (e) => {
+            if (!swiping || window.innerWidth >= 768) return;
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+            const deltaX = touchEndX - touchStartX;
+            const deltaY = Math.abs(touchEndY - touchStartY);
+            // Ignorar se o movimento vertical for maior que horizontal
+            if (deltaY > Math.abs(deltaX)) return;
+
+            if (deltaX > SWIPE_THRESHOLD) {
+                openSidebar();
+            } else if (deltaX < -SWIPE_THRESHOLD) {
+                closeSidebar();
+            }
+            swiping = false;
+        }, { passive: true });
+    })();
 
     const planningDateSelector = document.getElementById('planning-date-selector');
     const planningForm = document.getElementById('planning-form');
@@ -4372,7 +4416,9 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(updateRealTimeOeeData, 2000);
             
             // Adicionar listener para redimensionar gráficos
-            window.addEventListener('resize', debounce(handleWindowResize, 250));
+            const debouncedResize = debounce(handleWindowResize, 250);
+            window.addEventListener('resize', debouncedResize);
+            window.addEventListener('orientationchange', () => setTimeout(debouncedResize, 300));
             
             // Final da inicialização - carregar aba de lançamento por padrão
             loadLaunchPanel();
