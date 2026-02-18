@@ -199,13 +199,15 @@ document.addEventListener('DOMContentLoaded', async function() {
                 console.warn('⚠️ Botão da aba Dashboard TV não encontrado no DOM');
             }
             
-            // Mostrar/ocultar subaba Relatórios (dentro de Análise) — baseado na permissão 'relatorios'
+            // Mostrar/ocultar subaba Relatórios (dentro de Análise) — baseado na permissão 'relatorios' ou role gestor/suporte/lider
             const reportsTabBtn = document.querySelector('.analysis-tab-btn[data-view="reports"]');
             const userPermissions = user && user.permissions ? user.permissions : [];
-            const hasRelatoriosPermission = userPermissions.includes('relatorios');
+            const userRole = user && user.role ? user.role : '';
+            const hasRelatoriosAccess = userPermissions.includes('relatorios') || 
+                                        userRole === 'gestor' || userRole === 'suporte' || userRole === 'lider';
             
             if (reportsTabBtn) {
-                if (hasRelatoriosPermission) {
+                if (hasRelatoriosAccess) {
                     reportsTabBtn.style.display = '';  // Mostrar
                     console.log('✅ Subaba Relatórios visível para ' + user.name);
                 } else {
@@ -214,18 +216,19 @@ document.addEventListener('DOMContentLoaded', async function() {
                 }
             }
             
-            // Mostrar/ocultar aba Relatórios (página principal) — baseado na permissão 'relatorios'
+            // Mostrar/ocultar aba Relatórios (página principal) — baseado na permissão 'relatorios' ou role gestor/suporte/lider
             const relatoriosNavBtn = document.querySelector('[data-page="relatorios"]');
             
             console.log('[RELATORIOS-DEBUG] Verificando acesso Relatórios:', {
                 userName: user?.name,
                 userNameLower: userNameLower,
+                role: userRole,
                 permissions: userPermissions,
-                hasRelatoriosPermission: hasRelatoriosPermission
+                hasRelatoriosAccess: hasRelatoriosAccess
             });
             
             if (relatoriosNavBtn) {
-                if (hasRelatoriosPermission) {
+                if (hasRelatoriosAccess) {
                     relatoriosNavBtn.style.display = '';  // Mostrar
                     console.log('✅ Aba Relatórios visível para ' + user.name);
                 } else {
@@ -9043,18 +9046,7 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         'acompanhamento':    { path: './src/controllers/monitoring.controller.js',        fn: 'setupAcompanhamentoPage' },
         'historico-sistema': { path: './src/controllers/historico.controller.js',         fn: 'setupHistoricoPage' },
         'admin-dados':       { path: './src/controllers/admin.controller.js',             fn: 'setupAdminDadosPage' },
-        'relatorios':        { path: './src/controllers/reports.controller.js',           fn: 'setupRelatoriosPage',
-                               gate: () => {
-                                   const user = window.authSystem?.getCurrentUser?.();
-                                   const perms = user?.permissions || [];
-                                   if (!user || !perms.includes('relatorios')) {
-                                       console.warn('🔒 Acesso negado à página Relatórios para:', user?.name || 'desconhecido');
-                                       showNotification('Você não tem permissão para acessar esta página.', 'warning');
-                                       showPage('lancamento');
-                                       return false;
-                                   }
-                                   return true;
-                               }},
+        'relatorios':        { path: './src/controllers/reports.controller.js',           fn: 'setupRelatoriosPage' },
         'lideranca-producao':{ path: './src/controllers/leadership.controller.js',       fn: 'setupLiderancaProducaoPage' },
         'setup-maquinas':    { path: './src/controllers/setup.controller.js',            fn: 'setupSetupMaquinasPage' },
         'ferramentaria':     { path: './src/controllers/tooling.controller.js',          fn: 'setupFerramentariaPage' },

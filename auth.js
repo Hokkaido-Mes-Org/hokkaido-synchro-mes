@@ -145,8 +145,8 @@ class AuthSystem {
             return false;
         }
         
-        // ⚙️ Aba Relatórios: Usuários autorizados ou Gestores
-        if (tabName === 'relatorios' && !isAuthorizedAdmin && !isGestor) {
+        // ⚙️ Aba Relatórios: Usuários autorizados, Gestores ou com permissão 'relatorios'
+        if (tabName === 'relatorios' && !isAuthorizedAdmin && !isGestor && !this.hasPermission('relatorios')) {
             return false;
         }
         
