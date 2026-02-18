@@ -1131,13 +1131,14 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
 
     // Função para carregar visão geral
     async function loadOverviewData() {
-        const { startDate, endDate, machine, shift } = currentAnalysisFilters;
+        let { startDate, endDate, machine, shift } = currentAnalysisFilters;
         console.log('[TRACE][loadOverviewData] fetching data', { startDate, endDate, machine, shift });
         
         if (!startDate || !endDate) {
             console.warn('[TRACE][loadOverviewData] missing date filters, initializing defaults');
             setAnalysisDefaultDates();
-            return;
+            // Reler os filtros após inicialização (não retornar mais sem carregar)
+            ({ startDate, endDate, machine, shift } = currentAnalysisFilters);
         }
         
         // Buscar dados do Firebase (sempre sem filtro de turno para permitir comparação geral)
@@ -3869,10 +3870,10 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const noData = document.getElementById('analysis-no-data');
         
         if (show) {
-            loading.classList.remove('hidden');
-            noData.classList.add('hidden');
+            if (loading) loading.classList.remove('hidden');
+            if (noData) noData.classList.add('hidden');
         } else {
-            loading.classList.add('hidden');
+            if (loading) loading.classList.add('hidden');
         }
     }
 
@@ -3880,8 +3881,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const loading = document.getElementById('analysis-loading');
         const noData = document.getElementById('analysis-no-data');
         
-        loading.classList.add('hidden');
-        noData.classList.remove('hidden');
+        if (loading) loading.classList.add('hidden');
+        if (noData) noData.classList.remove('hidden');
     }
 
     function showAnalysisNoData(message = 'Nenhum dado disponível para os filtros selecionados.') {
@@ -9277,8 +9278,12 @@ let _analiseInitialized = false;
 export function setupAnalisePage() {
     if (_analiseInitialized) {
         console.debug('[Anal-mod] Já inicializado — apenas recarregando view ativa');
+        // Invalidar cache de dados para forçar refresh ao revisitar a aba
+        _invalidateFilteredDataCache();
         const activeView = document.querySelector('.analysis-tab-btn.active')?.getAttribute('data-view') || 'overview';
-        loadAnalysisData(activeView);
+        loadAnalysisData(activeView).catch(err => {
+            console.error('[Anal-mod] Erro ao recarregar dados:', err);
+        });
         return;
     }
     _analiseInitialized = true;

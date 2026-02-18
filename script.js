@@ -9110,8 +9110,11 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         }
     }
 
+    let _productionOrdersTabSetupDone = false;
     function setupProductionOrdersTab() {
         if (!productionOrderCodeInput) return;
+        if (_productionOrdersTabSetupDone) return;
+        _productionOrdersTabSetupDone = true;
 
         // Popular lista de códigos disponíveis
         if (productionOrderCodeDatalist) {
@@ -9386,7 +9389,10 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         renderProductionOrdersTable(filteredProductionOrders);
     }
 
+    let _ordersFiltersInitialized = false;
     function initOrdersFilters() {
+        if (_ordersFiltersInitialized) return;
+        _ordersFiltersInitialized = true;
         if (!ordersFilterMachine && !ordersFilterStatus && !ordersFilterSearch) return;
 
         if (ordersFilterMachine) {
