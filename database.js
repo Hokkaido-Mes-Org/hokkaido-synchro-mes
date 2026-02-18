@@ -713,27 +713,43 @@ var tareBoxesDatabase = [
     { "machine": "H-32", "weight": 2.910 }
 ];
 
-// Motivos de perdas (agrupados) — Atualizado 2026-02-18
-var groupedLossReasons = {
-    "PROCESSO": [
-        "FALHA DE INJEÇÃO", "CONTAMINAÇÃO", "PONTO ALTO DE INJEÇÃO / FIAPO", "REBARBA",
-        "FORA DE COR", "FORA DE DIMENSIONAL", "REINICIO/INICIO", "CHUPAGEM",
-        "BOLHA", "QUEIMA", "MANCHAS", "JUNÇÃO", "EMPENAMENTO",
-        "PEÇAS SCRAP", "PEÇAS DEFORMADAS"
-    ],
-    "FERRAMENTARIA": [
-        "GALHO PRESO", "MARCA D'AGUA", "MARCA DE EXTRATOR", "RISCO",
-        "SUJIDADE MOLDE", "LAMINA QUEBRADA", "TRY OUT", "LIMPEZA DE TIPS",
-        "ABERTURA DE CAVIDADES"
-    ],
-    "MAQUINA": [
-        "QUEDA DE ENERGIA", "PARADA EMERGENCIAL", "VAZAMENTO DE OLEO",
-        "AUSENCIA DE PERIFERICOS", "SUJIDADE (GRAXA, AGUA, ETC)"
-    ],
-    "MATERIA PRIMA": [
-        "MATERIAL NÃO CONFORME"
-    ]
-};
+// Base de dados detalhada de motivos de perda com códigos
+var lossReasonsDatabase = [
+    // PROCESSO (201-215)
+    { cod: 201, category: "PROCESSO", name: "201-FALHA DE INJEÇÃO" },
+    { cod: 202, category: "PROCESSO", name: "202-CONTAMINAÇÃO" },
+    { cod: 203, category: "PROCESSO", name: "203-PONTO ALTO DE INJEÇÃO / FIAPO" },
+    { cod: 204, category: "PROCESSO", name: "204-REBARBA" },
+    { cod: 205, category: "PROCESSO", name: "205-FORA DE COR" },
+    { cod: 206, category: "PROCESSO", name: "206-FORA DE DIMENSIONAL" },
+    { cod: 207, category: "PROCESSO", name: "207-REINICIO/INICIO" },
+    { cod: 208, category: "PROCESSO", name: "208-CHUPAGEM" },
+    { cod: 209, category: "PROCESSO", name: "209-BOLHA" },
+    { cod: 210, category: "PROCESSO", name: "210-QUEIMA" },
+    { cod: 211, category: "PROCESSO", name: "211-MANCHAS" },
+    { cod: 212, category: "PROCESSO", name: "212-JUNÇÃO" },
+    { cod: 213, category: "PROCESSO", name: "213-EMPENAMENTO" },
+    { cod: 214, category: "PROCESSO", name: "214-PEÇAS SCRAP" },
+    { cod: 215, category: "PROCESSO", name: "215-PEÇAS DEFORMADAS" },
+    // FERRAMENTARIA (101-109)
+    { cod: 101, category: "FERRAMENTARIA", name: "101-GALHO PRESO" },
+    { cod: 102, category: "FERRAMENTARIA", name: "102-MARCA D'AGUA" },
+    { cod: 103, category: "FERRAMENTARIA", name: "103-MARCA DE EXTRATOR" },
+    { cod: 104, category: "FERRAMENTARIA", name: "104-RISCO" },
+    { cod: 105, category: "FERRAMENTARIA", name: "105-SUJIDADE MOLDE" },
+    { cod: 106, category: "FERRAMENTARIA", name: "106-LAMINA QUEBRADA" },
+    { cod: 107, category: "FERRAMENTARIA", name: "107-TRY OUT" },
+    { cod: 108, category: "FERRAMENTARIA", name: "108-LIMPEZA DE TIPS" },
+    { cod: 109, category: "FERRAMENTARIA", name: "109-ABERTURA DE CAVIDADES" },
+    // MAQUINA (301-305)
+    { cod: 301, category: "MAQUINA", name: "301-QUEDA DE ENERGIA" },
+    { cod: 302, category: "MAQUINA", name: "302-PARADA EMERGENCIAL" },
+    { cod: 303, category: "MAQUINA", name: "303-VAZAMENTO DE OLEO" },
+    { cod: 304, category: "MAQUINA", name: "304-AUSENCIA DE PERIFERICOS" },
+    { cod: 305, category: "MAQUINA", name: "305-SUJIDADE (GRAXA, AGUA, ETC)" },
+    // MATERIA PRIMA (401)
+    { cod: 401, category: "MATERIA PRIMA", name: "401-MATERIAL NÃO CONFORME" }
+];
 
 // Base de dados detalhada de motivos de perda com códigos
 var lossReasonsDatabase = [
