@@ -713,23 +713,65 @@ var tareBoxesDatabase = [
     { "machine": "H-32", "weight": 2.910 }
 ];
 
-// Motivos de perdas (agrupados)
+// Motivos de perdas (agrupados) — Atualizado 2026-02-18
 var groupedLossReasons = {
     "PROCESSO": [
-        "BOLHA", "CHUPAGEM", "CONTAMINAÇÃO", "DEGRADAÇÃO", "EMPENAMENTO", "FALHA",
-        "FIAPO", "FORA DE COR", "INÍCIO/REÍNICIO", "JUNÇÃO", "MANCHAS",
-        "MEDIDA FORA DO ESPECIFICADO", "MOÍDO", "PEÇAS PERDIDAS", "QUEIMA", "REBARBA", "TROCA DE COR"
+        "FALHA DE INJEÇÃO", "CONTAMINAÇÃO", "PONTO ALTO DE INJEÇÃO / FIAPO", "REBARBA",
+        "FORA DE COR", "FORA DE DIMENSIONAL", "REINICIO/INICIO", "CHUPAGEM",
+        "BOLHA", "QUEIMA", "MANCHAS", "JUNÇÃO", "EMPENAMENTO",
+        "PEÇAS SCRAP", "PEÇAS DEFORMADAS"
     ],
     "FERRAMENTARIA": [
-        "DEFORMAÇÃO", "GALHO PRESO", "MARCA D'ÁGUA", "MARCA EXTRATOR", "RISCOS", "SUJIDADE"
+        "GALHO PRESO", "MARCA D'AGUA", "MARCA DE EXTRATOR", "RISCO",
+        "SUJIDADE MOLDE", "LAMINA QUEBRADA", "TRY OUT", "LIMPEZA DE TIPS",
+        "ABERTURA DE CAVIDADES"
     ],
-    "QUALIDADE": [
-        "INSPEÇÃO DE LINHA"
+    "MAQUINA": [
+        "QUEDA DE ENERGIA", "PARADA EMERGENCIAL", "VAZAMENTO DE OLEO",
+        "AUSENCIA DE PERIFERICOS", "SUJIDADE (GRAXA, AGUA, ETC)"
     ],
-    "ADMINISTRATIVO": [
-        "PERDAS/QUEDA DE ENERGIA"
+    "MATERIA PRIMA": [
+        "MATERIAL NÃO CONFORME"
     ]
 };
+
+// Base de dados detalhada de motivos de perda com códigos
+var lossReasonsDatabase = [
+    // PROCESSO (201-215)
+    { cod: 201, category: "PROCESSO", name: "FALHA DE INJEÇÃO" },
+    { cod: 202, category: "PROCESSO", name: "CONTAMINAÇÃO" },
+    { cod: 203, category: "PROCESSO", name: "PONTO ALTO DE INJEÇÃO / FIAPO" },
+    { cod: 204, category: "PROCESSO", name: "REBARBA" },
+    { cod: 205, category: "PROCESSO", name: "FORA DE COR" },
+    { cod: 206, category: "PROCESSO", name: "FORA DE DIMENSIONAL" },
+    { cod: 207, category: "PROCESSO", name: "REINICIO/INICIO" },
+    { cod: 208, category: "PROCESSO", name: "CHUPAGEM" },
+    { cod: 209, category: "PROCESSO", name: "BOLHA" },
+    { cod: 210, category: "PROCESSO", name: "QUEIMA" },
+    { cod: 211, category: "PROCESSO", name: "MANCHAS" },
+    { cod: 212, category: "PROCESSO", name: "JUNÇÃO" },
+    { cod: 213, category: "PROCESSO", name: "EMPENAMENTO" },
+    { cod: 214, category: "PROCESSO", name: "PEÇAS SCRAP" },
+    { cod: 215, category: "PROCESSO", name: "PEÇAS DEFORMADAS" },
+    // FERRAMENTARIA (101-109)
+    { cod: 101, category: "FERRAMENTARIA", name: "GALHO PRESO" },
+    { cod: 102, category: "FERRAMENTARIA", name: "MARCA D'AGUA" },
+    { cod: 103, category: "FERRAMENTARIA", name: "MARCA DE EXTRATOR" },
+    { cod: 104, category: "FERRAMENTARIA", name: "RISCO" },
+    { cod: 105, category: "FERRAMENTARIA", name: "SUJIDADE MOLDE" },
+    { cod: 106, category: "FERRAMENTARIA", name: "LAMINA QUEBRADA" },
+    { cod: 107, category: "FERRAMENTARIA", name: "TRY OUT" },
+    { cod: 108, category: "FERRAMENTARIA", name: "LIMPEZA DE TIPS" },
+    { cod: 109, category: "FERRAMENTARIA", name: "ABERTURA DE CAVIDADES" },
+    // MAQUINA (301-305)
+    { cod: 301, category: "MAQUINA", name: "QUEDA DE ENERGIA" },
+    { cod: 302, category: "MAQUINA", name: "PARADA EMERGENCIAL" },
+    { cod: 303, category: "MAQUINA", name: "VAZAMENTO DE OLEO" },
+    { cod: 304, category: "MAQUINA", name: "AUSENCIA DE PERIFERICOS" },
+    { cod: 305, category: "MAQUINA", name: "SUJIDADE (GRAXA, AGUA, ETC)" },
+    // MATERIA PRIMA (401)
+    { cod: 401, category: "MATERIA PRIMA", name: "MATERIAL NÃO CONFORME" }
+];
 
 // Motivos de parada (agrupados)
 var groupedDowntimeReasons = {
@@ -1744,6 +1786,7 @@ if (typeof window !== 'undefined') {
     window.productByClient = productByClient;
     window.machineById = machineById;
     window.groupedLossReasons = groupedLossReasons;
+    window.lossReasonsDatabase = lossReasonsDatabase;
     window.groupedDowntimeReasons = groupedDowntimeReasons;
     window.userDatabase = userDatabase;
     window.userByCode = userByCode;
@@ -1776,6 +1819,7 @@ if (typeof window !== 'undefined') {
         machineDatabase,
         tareBoxesDatabase,
         groupedLossReasons,
+        lossReasonsDatabase,
         groupedDowntimeReasons,
         // Expor os índices para busca rápida
         productByCode,

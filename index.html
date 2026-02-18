@@ -3131,12 +3131,13 @@
                                                     <th class="px-3 py-2 text-left font-semibold">Código</th>
                                                     <th class="px-3 py-2 text-left font-semibold">Produto</th>
                                                     <th class="px-3 py-2 text-right font-semibold">Qtd</th>
-                                                    <th class="px-3 py-2 text-right font-semibold">Refugo</th>
+                                                    <th class="px-3 py-2 text-right font-semibold">Refugo (kg)</th>
+                                                    <th class="px-3 py-2 text-center font-semibold">Cód Usuário</th>
                                                 </tr>
                                             </thead>
                                             <tbody id="rel-producao-tbody" class="divide-y divide-gray-100">
                                                 <tr>
-                                                    <td colspan="8" class="text-center py-8 text-gray-400">
+                                                    <td colspan="9" class="text-center py-8 text-gray-400">
                                                         <i data-lucide="bar-chart-2" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
                                                         <p>Selecione filtros e clique em "Buscar"</p>
                                                     </td>
@@ -3261,13 +3262,14 @@
                                                     <th class="px-3 py-2 text-left font-semibold">OP</th>
                                                     <th class="px-3 py-2 text-left font-semibold">Código</th>
                                                     <th class="px-3 py-2 text-left font-semibold">Produto</th>
-                                                    <th class="px-3 py-2 text-right font-semibold">Perdas</th>
+                                                    <th class="px-3 py-2 text-right font-semibold">Perdas (kg)</th>
                                                     <th class="px-3 py-2 text-left font-semibold">Motivo</th>
+                                                    <th class="px-3 py-2 text-center font-semibold">Cód Usuário</th>
                                                 </tr>
                                             </thead>
                                             <tbody id="rel-perdas-tbody" class="divide-y divide-gray-100">
                                                 <tr>
-                                                    <td colspan="8" class="text-center py-8 text-gray-400">
+                                                    <td colspan="9" class="text-center py-8 text-gray-400">
                                                         <i data-lucide="trash-2" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
                                                         <p>Selecione filtros e clique em "Buscar"</p>
                                                     </td>
@@ -6431,36 +6433,42 @@
                     <select id="quick-losses-reason" name="reason" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all" required>
                         <option value="">Selecione o motivo...</option>
                         <optgroup label="PROCESSO">
-                            <option value="BOLHA">BOLHA</option>
-                            <option value="CHUPAGEM">CHUPAGEM</option>
+                            <option value="FALHA DE INJEÇÃO">FALHA DE INJEÇÃO</option>
                             <option value="CONTAMINAÇÃO">CONTAMINAÇÃO</option>
-                            <option value="DEGRADAÇÃO">DEGRADAÇÃO</option>
-                            <option value="EMPENAMENTO">EMPENAMENTO</option>
-                            <option value="FALHA">FALHA</option>
-                            <option value="FIAPO">FIAPO</option>
-                            <option value="FORA DE COR">FORA DE COR</option>
-                            <option value="INÍCIO/REÍNICIO">INÍCIO/REINÍCIO</option>
-                            <option value="JUNÇÃO">JUNÇÃO</option>
-                            <option value="MANCHAS">MANCHAS</option>
-                            <option value="MEDIDA FORA DO ESPECIFICADO">MEDIDA FORA DO ESPECIFICADO</option>
-                            <option value="MOÍDO">MOÍDO</option>
-                            <option value="PEÇAS PERDIDAS">PEÇAS PERDIDAS</option>
-                            <option value="QUEIMA">QUEIMA</option>
+                            <option value="PONTO ALTO DE INJEÇÃO / FIAPO">PONTO ALTO DE INJEÇÃO / FIAPO</option>
                             <option value="REBARBA">REBARBA</option>
+                            <option value="FORA DE COR">FORA DE COR</option>
+                            <option value="FORA DE DIMENSIONAL">FORA DE DIMENSIONAL</option>
+                            <option value="REINICIO/INICIO">REINICIO/INICIO</option>
+                            <option value="CHUPAGEM">CHUPAGEM</option>
+                            <option value="BOLHA">BOLHA</option>
+                            <option value="QUEIMA">QUEIMA</option>
+                            <option value="MANCHAS">MANCHAS</option>
+                            <option value="JUNÇÃO">JUNÇÃO</option>
+                            <option value="EMPENAMENTO">EMPENAMENTO</option>
+                            <option value="PEÇAS SCRAP">PEÇAS SCRAP</option>
+                            <option value="PEÇAS DEFORMADAS">PEÇAS DEFORMADAS</option>
                         </optgroup>
                         <optgroup label="FERRAMENTARIA">
-                            <option value="DEFORMAÇÃO">DEFORMAÇÃO</option>
                             <option value="GALHO PRESO">GALHO PRESO</option>
-                            <option value="MARCA D'ÁGUA">MARCA D'ÁGUA</option>
-                            <option value="MARCA EXTRATOR">MARCA EXTRATOR</option>
-                            <option value="RISCOS">RISCOS</option>
-                            <option value="SUJIDADE">SUJIDADE</option>
+                            <option value="MARCA D'AGUA">MARCA D'AGUA</option>
+                            <option value="MARCA DE EXTRATOR">MARCA DE EXTRATOR</option>
+                            <option value="RISCO">RISCO</option>
+                            <option value="SUJIDADE MOLDE">SUJIDADE MOLDE</option>
+                            <option value="LAMINA QUEBRADA">LAMINA QUEBRADA</option>
+                            <option value="TRY OUT">TRY OUT</option>
+                            <option value="LIMPEZA DE TIPS">LIMPEZA DE TIPS</option>
+                            <option value="ABERTURA DE CAVIDADES">ABERTURA DE CAVIDADES</option>
                         </optgroup>
-                        <optgroup label="QUALIDADE">
-                            <option value="INSPEÇÃO DE LINHA">INSPEÇÃO DE LINHA</option>
+                        <optgroup label="MAQUINA">
+                            <option value="QUEDA DE ENERGIA">QUEDA DE ENERGIA</option>
+                            <option value="PARADA EMERGENCIAL">PARADA EMERGENCIAL</option>
+                            <option value="VAZAMENTO DE OLEO">VAZAMENTO DE OLEO</option>
+                            <option value="AUSENCIA DE PERIFERICOS">AUSENCIA DE PERIFERICOS</option>
+                            <option value="SUJIDADE (GRAXA, AGUA, ETC)">SUJIDADE (GRAXA, AGUA, ETC)</option>
                         </optgroup>
-                        <optgroup label="ADMINISTRATIVO">
-                            <option value="SUCATA/QUEDA DE ENERGIA">SUCATA/QUEDA DE ENERGIA</option>
+                        <optgroup label="MATERIA PRIMA">
+                            <option value="MATERIAL NÃO CONFORME">MATERIAL NÃO CONFORME</option>
                         </optgroup>
                     </select>
                 </div>
@@ -6736,36 +6744,42 @@
                         <select id="manual-losses-reason" name="reason" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all" required>
                             <option value="">Selecione o motivo...</option>
                             <optgroup label="PROCESSO">
-                                <option value="BOLHA">BOLHA</option>
-                                <option value="CHUPAGEM">CHUPAGEM</option>
+                                <option value="FALHA DE INJEÇÃO">FALHA DE INJEÇÃO</option>
                                 <option value="CONTAMINAÇÃO">CONTAMINAÇÃO</option>
-                                <option value="DEGRADAÇÃO">DEGRADAÇÃO</option>
-                                <option value="EMPENAMENTO">EMPENAMENTO</option>
-                                <option value="FALHA">FALHA</option>
-                                <option value="FIAPO">FIAPO</option>
-                                <option value="FORA DE COR">FORA DE COR</option>
-                                <option value="INÍCIO/REÍNICIO">INÍCIO/REINÍCIO</option>
-                                <option value="JUNÇÃO">JUNÇÃO</option>
-                                <option value="MANCHAS">MANCHAS</option>
-                                <option value="MEDIDA FORA DO ESPECIFICADO">MEDIDA FORA DO ESPECIFICADO</option>
-                                <option value="MOÍDO">MOÍDO</option>
-                                <option value="PEÇAS PERDIDAS">PEÇAS PERDIDAS</option>
-                                <option value="QUEIMA">QUEIMA</option>
+                                <option value="PONTO ALTO DE INJEÇÃO / FIAPO">PONTO ALTO DE INJEÇÃO / FIAPO</option>
                                 <option value="REBARBA">REBARBA</option>
+                                <option value="FORA DE COR">FORA DE COR</option>
+                                <option value="FORA DE DIMENSIONAL">FORA DE DIMENSIONAL</option>
+                                <option value="REINICIO/INICIO">REINICIO/INICIO</option>
+                                <option value="CHUPAGEM">CHUPAGEM</option>
+                                <option value="BOLHA">BOLHA</option>
+                                <option value="QUEIMA">QUEIMA</option>
+                                <option value="MANCHAS">MANCHAS</option>
+                                <option value="JUNÇÃO">JUNÇÃO</option>
+                                <option value="EMPENAMENTO">EMPENAMENTO</option>
+                                <option value="PEÇAS SCRAP">PEÇAS SCRAP</option>
+                                <option value="PEÇAS DEFORMADAS">PEÇAS DEFORMADAS</option>
                             </optgroup>
                             <optgroup label="FERRAMENTARIA">
-                                <option value="DEFORMAÇÃO">DEFORMAÇÃO</option>
                                 <option value="GALHO PRESO">GALHO PRESO</option>
-                                <option value="MARCA D'ÁGUA">MARCA D'ÁGUA</option>
-                                <option value="MARCA EXTRATOR">MARCA EXTRATOR</option>
-                                <option value="RISCOS">RISCOS</option>
-                                <option value="SUJIDADE">SUJIDADE</option>
+                                <option value="MARCA D'AGUA">MARCA D'AGUA</option>
+                                <option value="MARCA DE EXTRATOR">MARCA DE EXTRATOR</option>
+                                <option value="RISCO">RISCO</option>
+                                <option value="SUJIDADE MOLDE">SUJIDADE MOLDE</option>
+                                <option value="LAMINA QUEBRADA">LAMINA QUEBRADA</option>
+                                <option value="TRY OUT">TRY OUT</option>
+                                <option value="LIMPEZA DE TIPS">LIMPEZA DE TIPS</option>
+                                <option value="ABERTURA DE CAVIDADES">ABERTURA DE CAVIDADES</option>
                             </optgroup>
-                            <optgroup label="QUALIDADE">
-                                <option value="INSPEÇÃO DE LINHA">INSPEÇÃO DE LINHA</option>
+                            <optgroup label="MAQUINA">
+                                <option value="QUEDA DE ENERGIA">QUEDA DE ENERGIA</option>
+                                <option value="PARADA EMERGENCIAL">PARADA EMERGENCIAL</option>
+                                <option value="VAZAMENTO DE OLEO">VAZAMENTO DE OLEO</option>
+                                <option value="AUSENCIA DE PERIFERICOS">AUSENCIA DE PERIFERICOS</option>
+                                <option value="SUJIDADE (GRAXA, AGUA, ETC)">SUJIDADE (GRAXA, AGUA, ETC)</option>
                             </optgroup>
-                            <optgroup label="ADMINISTRATIVO">
-                                <option value="SUCATA/QUEDA DE ENERGIA">SUCATA/QUEDA DE ENERGIA</option>
+                            <optgroup label="MATERIA PRIMA">
+                                <option value="MATERIAL NÃO CONFORME">MATERIAL NÃO CONFORME</option>
                             </optgroup>
                         </select>
                     </div>
@@ -7749,33 +7763,42 @@
                     <select id="quick-rework-reason" name="reason" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all" required>
                         <option value="">Selecione o motivo...</option>
                         <optgroup label="PROCESSO">
-                            <option value="BOLHA">BOLHA</option>
-                            <option value="CHUPAGEM">CHUPAGEM</option>
-                            <option value="CONTAMINA¡ÇO">CONTAMINA¡ÇO</option>
-                            <option value="DEGRADA¡ÇO">DEGRADA¡ÇO</option>
-                            <option value="EMPENAMENTO">EMPENAMENTO</option>
-                            <option value="FALHA">FALHA</option>
-                            <option value="FIAPO">FIAPO</option>
-                            <option value="FORA DE COR">FORA DE COR</option>
-                            <option value="INCIO/RENICIO">INCIO/RENCIO</option>
-                            <option value="JUN¡ÇO">JUN¡ÇO</option>
-                            <option value="MANCHAS">MANCHAS</option>
-                            <option value="MEDIDA FORA DO ESPECIFICADO">MEDIDA FORA DO ESPECIFICADO</option>
-                            <option value="MODO">MODO</option>
-                            <option value="PE¡AS PERDIDAS">PE¡AS PERDIDAS</option>
-                            <option value="QUEIMA">QUEIMA</option>
+                            <option value="FALHA DE INJEÇÃO">FALHA DE INJEÇÃO</option>
+                            <option value="CONTAMINAÇÃO">CONTAMINAÇÃO</option>
+                            <option value="PONTO ALTO DE INJEÇÃO / FIAPO">PONTO ALTO DE INJEÇÃO / FIAPO</option>
                             <option value="REBARBA">REBARBA</option>
+                            <option value="FORA DE COR">FORA DE COR</option>
+                            <option value="FORA DE DIMENSIONAL">FORA DE DIMENSIONAL</option>
+                            <option value="REINICIO/INICIO">REINICIO/INICIO</option>
+                            <option value="CHUPAGEM">CHUPAGEM</option>
+                            <option value="BOLHA">BOLHA</option>
+                            <option value="QUEIMA">QUEIMA</option>
+                            <option value="MANCHAS">MANCHAS</option>
+                            <option value="JUNÇÃO">JUNÇÃO</option>
+                            <option value="EMPENAMENTO">EMPENAMENTO</option>
+                            <option value="PEÇAS SCRAP">PEÇAS SCRAP</option>
+                            <option value="PEÇAS DEFORMADAS">PEÇAS DEFORMADAS</option>
                         </optgroup>
                         <optgroup label="FERRAMENTARIA">
-                            <option value="DEFORMA¡ÇO">DEFORMA¡ÇO</option>
                             <option value="GALHO PRESO">GALHO PRESO</option>
-                            <option value="MARCA D'GUA">MARCA D'GUA</option>
-                            <option value="MARCA EXTRATOR">MARCA EXTRATOR</option>
-                            <option value="RISCOS">RISCOS</option>
-                            <option value="SUJIDADE">SUJIDADE</option>
+                            <option value="MARCA D'AGUA">MARCA D'AGUA</option>
+                            <option value="MARCA DE EXTRATOR">MARCA DE EXTRATOR</option>
+                            <option value="RISCO">RISCO</option>
+                            <option value="SUJIDADE MOLDE">SUJIDADE MOLDE</option>
+                            <option value="LAMINA QUEBRADA">LAMINA QUEBRADA</option>
+                            <option value="TRY OUT">TRY OUT</option>
+                            <option value="LIMPEZA DE TIPS">LIMPEZA DE TIPS</option>
+                            <option value="ABERTURA DE CAVIDADES">ABERTURA DE CAVIDADES</option>
                         </optgroup>
-                        <optgroup label="QUALIDADE">
-                            <option value="INSPE¡ÇO DE LINHA">INSPE¡ÇO DE LINHA</option>
+                        <optgroup label="MAQUINA">
+                            <option value="QUEDA DE ENERGIA">QUEDA DE ENERGIA</option>
+                            <option value="PARADA EMERGENCIAL">PARADA EMERGENCIAL</option>
+                            <option value="VAZAMENTO DE OLEO">VAZAMENTO DE OLEO</option>
+                            <option value="AUSENCIA DE PERIFERICOS">AUSENCIA DE PERIFERICOS</option>
+                            <option value="SUJIDADE (GRAXA, AGUA, ETC)">SUJIDADE (GRAXA, AGUA, ETC)</option>
+                        </optgroup>
+                        <optgroup label="MATERIA PRIMA">
+                            <option value="MATERIAL NÃO CONFORME">MATERIAL NÃO CONFORME</option>
                         </optgroup>
                     </select>
                 </div>
