@@ -9046,9 +9046,8 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         'relatorios':        { path: './src/controllers/reports.controller.js',           fn: 'setupRelatoriosPage',
                                gate: () => {
                                    const user = window.authSystem?.getCurrentUser?.();
-                                   const userNameLower = (user?.name || '').toLowerCase().trim();
-                                   const allowed = ['leandro camargo', 'roberto fernandes'];
-                                   if (!user || !allowed.includes(userNameLower)) {
+                                   const perms = user?.permissions || [];
+                                   if (!user || !perms.includes('relatorios')) {
                                        console.warn('🔒 Acesso negado à página Relatórios para:', user?.name || 'desconhecido');
                                        showNotification('Você não tem permissão para acessar esta página.', 'warning');
                                        showPage('lancamento');
