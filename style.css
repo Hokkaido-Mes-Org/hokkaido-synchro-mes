@@ -353,7 +353,7 @@ input:disabled {
     border-radius: 12px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
     transition: box-shadow 0.3s ease;
-    height: 300px;
+    min-height: 250px;
     width: 100%;
     max-width: 100%;
     overflow: hidden;
@@ -361,8 +361,8 @@ input:disabled {
 
 .chart-container canvas {
     display: block !important;
-    height: 300px !important;
     width: 100% !important;
+    min-height: 250px;
 }
 
 .chart-container:hover {
@@ -823,7 +823,6 @@ html {
         margin-left: 0 !important;
         width: 100% !important;
         min-height: 100vh;
-        padding: 0 !important;
     }
     
     /* Header compacto mas funcional */
@@ -832,7 +831,7 @@ html {
         min-height: 50px !important;
     }
     
-    /* Botão hamburger menor e fixo à esquerda */
+    /* Botão hamburger */
     .hamburger-btn {
         width: 2rem;
         height: 1.75rem;
@@ -844,56 +843,37 @@ html {
         height: 2px;
     }
     
-    /* Page content - sem padding desperdiçado */
+    /* Page content - padding razoável */
     .page-content {
-        padding: 0.375rem !important;
+        padding: 0.5rem !important;
     }
     
-    /* Cards de máquina - 2 colunas sempre */
+    /* Machine cards - 2 colunas */
     #machine-card-grid {
         grid-template-columns: repeat(2, 1fr) !important;
         gap: 0.375rem !important;
     }
     
-    /* Machine cards compactos */
     .machine-card {
         padding: 0.375rem !important;
     }
     
-    /* KPI cards - linha horizontal scrollável */
-    .kpi-card {
-        padding: 0.5rem !important;
-        min-width: 120px;
+    .machine-card .text-lg {
+        font-size: 0.75rem !important;
     }
     
-    .kpi-card .text-3xl,
-    .kpi-card .text-2xl {
-        font-size: 1.125rem !important;
-    }
-    
-    .kpi-card .text-sm {
+    .machine-card .text-sm {
         font-size: 0.65rem !important;
     }
     
-    /* Grids - manter 2 colunas mínimo */
-    .grid-cols-3,
-    .grid-cols-4,
-    .md\\:grid-cols-3,
-    .md\\:grid-cols-4,
-    .lg\\:grid-cols-3,
-    .lg\\:grid-cols-4 {
-        grid-template-columns: repeat(2, 1fr) !important;
-    }
-    
-    /* Apenas em telas MUITO pequenas usar 1 coluna */
+    /* Telas muito pequenas */
     @media (max-width: 374px) {
-        #machine-card-grid,
-        .grid-cols-2 {
+        #machine-card-grid {
             grid-template-columns: 1fr !important;
         }
     }
     
-    /* Inputs - tamanho para toque mas sem exagero */
+    /* Inputs - touch-friendly */
     input[type="text"],
     input[type="number"],
     input[type="date"],
@@ -903,17 +883,6 @@ html {
     textarea {
         min-height: 40px !important;
         font-size: 16px !important;
-        padding: 0.375rem 0.5rem !important;
-    }
-    
-    /* Botões compactos */
-    button,
-    .btn,
-    [type="button"],
-    [type="submit"] {
-        min-height: 36px !important;
-        padding: 0.375rem 0.625rem !important;
-        font-size: 0.8rem !important;
     }
     
     /* Modais - quase full screen */
@@ -927,62 +896,25 @@ html {
         overflow-y: auto !important;
     }
     
-    /* Charts - altura proporcional */
+    /* Charts - adaptar sem forçar altura fixa */
     .chart-container {
-        min-height: 180px !important;
-        height: 180px !important;
+        min-height: 200px !important;
+        height: auto !important;
+        max-height: 280px;
     }
     
     .chart-container canvas {
-        height: 180px !important;
+        height: auto !important;
+        min-height: 200px;
+        max-height: 280px;
     }
     
-    /* Texto compacto mas legível */
-    h1 { font-size: 1.125rem !important; }
-    h2 { font-size: 1rem !important; }
-    h3 { font-size: 0.875rem !important; }
-    
-    /* Padding mínimo */
-    .p-4, .p-6, .p-8 {
-        padding: 0.375rem !important;
-    }
-    
-    .px-4, .px-6, .px-8 {
-        padding-left: 0.375rem !important;
-        padding-right: 0.375rem !important;
-    }
-    
-    .py-4, .py-6, .py-8 {
-        padding-top: 0.375rem !important;
-        padding-bottom: 0.375rem !important;
-    }
-    
-    /* Gap compacto */
-    .gap-4, .gap-6, .gap-8 {
-        gap: 0.375rem !important;
-    }
-    
-    .gap-2, .gap-3 {
-        gap: 0.25rem !important;
-    }
-    
-    /* Scrollbar fina */
-    ::-webkit-scrollbar {
-        width: 3px;
-        height: 3px;
-    }
-    
-    ::-webkit-scrollbar-thumb {
-        background-color: #94a3b8;
-        border-radius: 3px;
-    }
-    
-    /* Tabs scrolláveis */
+    /* Tabs scrolláveis - análise */
     .analysis-tab-btn {
         white-space: nowrap;
         flex-shrink: 0;
-        padding: 0.375rem 0.5rem !important;
-        font-size: 0.7rem !important;
+        padding: 0.5rem 0.625rem !important;
+        font-size: 0.75rem !important;
     }
     
     .flex.border-b {
@@ -995,15 +927,10 @@ html {
         display: none;
     }
     
-    /* Esconder logo no header mobile */
-    header img[alt*="Logo"] {
-        display: none !important;
-    }
-    
-    /* User card mais compacto */
+    /* User card compacto */
     #header-user-card {
         padding: 0.25rem 0.375rem !important;
-        gap: 0.25rem !important;
+        gap: 0.375rem !important;
     }
     
     #header-user-avatar {
@@ -1012,80 +939,66 @@ html {
         font-size: 0.625rem !important;
     }
     
-    #header-user-name {
+    #logout-btn {
+        padding: 0.25rem 0.5rem !important;
         font-size: 0.7rem !important;
     }
     
-    #header-user-role-chip {
-        font-size: 0.55rem !important;
-        padding: 0.125rem 0.25rem !important;
-    }
-    
-    #logout-btn {
-        padding: 0.25rem 0.375rem !important;
-        font-size: 0.625rem !important;
-    }
-    
-    /* Título da página centralizado */
+    /* Título da página compacto */
     #page-title {
-        font-size: 0.875rem !important;
+        font-size: 0.9rem !important;
     }
     
     /* Subtítulo escondido em mobile */
-    header p.text-sm {
+    header p.text-xs {
         display: none !important;
     }
     
-    /* Ícone da página escondido em mobile */
-    header .md\\:flex.h-12.w-12 {
-        display: none !important;
+    /* Page headers gradient - compactar sem destruir */
+    .page-content > .bg-gradient-to-r {
+        padding: 0.625rem !important;
+    }
+    
+    .page-content > .bg-gradient-to-r h1 {
+        font-size: 0.875rem !important;
+    }
+    
+    /* Scrollbar fina */
+    ::-webkit-scrollbar {
+        width: 3px;
+        height: 3px;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background-color: #94a3b8;
+        border-radius: 3px;
     }
 }
 
 /* ==================== TABLET (768px - 1023px) ==================== */
 @media (min-width: 768px) and (max-width: 1023px) {
-    /* Sidebar retraída */
-    #sidebar {
+    /* Sidebar — usar padrão Tailwind md:relative + classe expandida/colapsada */
+    /* Não forçar position fixed — o Tailwind md:relative cuida disso */
+    
+    /* Se sidebar estiver colapsada via JS, compactar */
+    #sidebar.sidebar-collapsed {
         width: 3.5rem !important;
-        position: fixed !important;
     }
     
-    #sidebar .nav-text,
-    #sidebar-logo {
+    #sidebar.sidebar-collapsed .nav-text,
+    #sidebar.sidebar-collapsed #sidebar-logo {
         display: none !important;
     }
     
-    #sidebar .nav-btn {
+    #sidebar.sidebar-collapsed .nav-btn {
         justify-content: center;
         padding: 0.625rem !important;
     }
     
-    #sidebar .nav-btn i {
-        margin: 0 !important;
-    }
-    
-    /* Main com margem da sidebar */
-    main {
-        margin-left: 3.5rem !important;
-        width: calc(100% - 3.5rem) !important;
-        padding: 0 !important;
-    }
-    
-    /* Grid 2-3 colunas */
-    .lg\\:grid-cols-4 {
-        grid-template-columns: repeat(3, 1fr) !important;
-    }
-    
     /* Charts médios */
     .chart-container {
-        min-height: 220px !important;
-        height: 220px !important;
-    }
-    
-    /* Charts tamanho médio */
-    .chart-container {
-        min-height: 250px !important;
-        height: 250px !important;
+        min-height: 250px;
+        height: auto;
     }
     
     /* Modais com largura máxima */
@@ -1104,68 +1017,18 @@ html {
 
 /* ==================== DESKTOP PEQUENO (1024px - 1279px) ==================== */
 @media (min-width: 1024px) and (max-width: 1279px) {
-    /* Sidebar compacta */
-    #sidebar {
-        width: 12rem !important;
-    }
+    /* Sidebar usa tamanho padrão da classe sidebar-expanded/collapsed */
+    /* Não forçar largura - deixar JS/classes controlarem */
     
-    main {
-        margin-left: 12rem !important;
-        width: calc(100% - 12rem) !important;
-        padding: 0.5rem !important;
-    }
-    
-    /* Reduzir padding geral */
-    .p-6, .p-8 {
-        padding: 0.75rem !important;
-    }
-    
-    .space-y-6 > * + * {
-        margin-top: 0.75rem !important;
-    }
-    
-    .gap-6 {
-        gap: 0.75rem !important;
-    }
-    
-    /* Grid 3 colunas */
-    .lg\\:grid-cols-4 {
-        grid-template-columns: repeat(3, 1fr) !important;
+    .chart-container {
+        min-height: 280px;
+        height: auto;
     }
 }
 
 /* ==================== DESKTOP (>= 1280px) ==================== */
 @media (min-width: 1280px) {
-    #sidebar {
-        width: 14rem;
-    }
-    
-    main {
-        margin-left: 14rem;
-        width: calc(100% - 14rem);
-        padding: 0.5rem;
-    }
-    
-    /* Reduzir padding em desktop */
-    .p-6 {
-        padding: 1rem !important;
-    }
-    
-    .p-8 {
-        padding: 1.25rem !important;
-    }
-    
-    .space-y-6 > * + * {
-        margin-top: 1rem !important;
-    }
-    
-    .gap-6 {
-        gap: 1rem !important;
-    }
-    
-    .gap-4 {
-        gap: 0.75rem !important;
-    }
+    /* Sidebar usa tamanho definido pela classe sidebar-expanded (16rem) */
     
     .chart-container {
         min-height: 300px;
@@ -1175,34 +1038,15 @@ html {
 
 /* ==================== TELAS ULTRA-WIDE (>= 1920px) ==================== */
 @media (min-width: 1920px) {
-    /* Manter 100% da largura em telas grandes */
-    main {
-        margin-left: 16rem;
-        width: calc(100% - 16rem);
-    }
+    /* Nenhum override necessário — deixar Tailwind funcionar */
 }
 
 /* ==================== LANDSCAPE MOBILE ==================== */
 @media (max-width: 896px) and (orientation: landscape) {
-    /* Sidebar compacta */
-    #sidebar {
-        width: 50px !important;
-    }
-    
-    #sidebar .nav-text {
-        display: none !important;
-    }
-    
     /* Header compacto */
     header {
         min-height: 36px !important;
         padding: 0.125rem 0.25rem !important;
-    }
-    
-    /* Main ocupa tudo */
-    main {
-        margin-left: 50px !important;
-        width: calc(100% - 50px) !important;
     }
     
     /* Grid 3 colunas em landscape */
@@ -1212,8 +1056,8 @@ html {
     
     /* Charts menores */
     .chart-container {
-        min-height: 120px !important;
-        height: 120px !important;
+        min-height: 140px !important;
+        max-height: 200px;
     }
 }
 
@@ -1408,29 +1252,11 @@ select {
 }
 
 /* =========================================
-   OTIMIZAÇÃO DE ESPAÇAMENTO DESKTOP
-   Compactação leve sem quebrar layout sidebar
+   OTIMIZAÇÃO VISUAL DESKTOP (>= 1024px)
+   Compactação leve para machine cards
    ========================================= */
 @media (min-width: 1024px) {
-    /* Espaçamento vertical levemente reduzido */
-    .space-y-6 > * + * {
-        margin-top: 1rem;
-    }
-
-    .space-y-8 > * + * {
-        margin-top: 1.25rem;
-    }
-
-    /* Gap em grids levemente reduzido */
-    .gap-6 {
-        gap: 1rem;
-    }
-
-    .gap-8 {
-        gap: 1.25rem;
-    }
-
-    /* KPI cards compactos */
+    /* Machine cards levemente compactos */
     .machine-card {
         padding: 0.5rem;
     }

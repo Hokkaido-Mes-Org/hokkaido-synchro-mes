@@ -75,78 +75,27 @@
         box-sizing: border-box;
       }
       
-      /* MOBILE - Usar 100% da tela */
+      /* MOBILE — regras pontuais que NÃO conflitam com style.css */
       @media (max-width: 767px) {
-        .chart-container {
-          min-height: 180px;
-        }
-        
-        /* Padding mínimo */
-        .bg-white.p-6.md\\:p-8 {
-          padding: 0.375rem !important;
-        }
-        
-        /* Gap compacto */
-        .gap-4, .gap-6 {
-          gap: 0.25rem;
-        }
-        
-        /* Inputs iOS fix */
-        input, select, textarea {
-          font-size: 16px !important;
-        }
-        
-        /* Grid 13 colunas - scroll horizontal */
+        /* Grid 13 colunas - scroll horizontal (lançamento por hora) */
         .grid-cols-13 {
           display: block !important;
           overflow-x: auto !important;
           white-space: nowrap !important;
         }
-        
         .grid-cols-13 > div {
           display: inline-block !important;
           min-width: 60px !important;
           white-space: normal !important;
         }
-        
         #hourly-entries-container {
           max-height: 200px !important;
         }
-        
         /* Tabelas scrolláveis */
         table {
           display: block;
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;
-        }
-        
-        /* Machine cards - 2 colunas compactas */
-        #machine-card-grid {
-          grid-template-columns: repeat(2, 1fr) !important;
-          gap: 0.25rem !important;
-        }
-        
-        .machine-card {
-          padding: 0.25rem !important;
-        }
-        
-        .machine-card .text-lg {
-          font-size: 0.75rem !important;
-        }
-        
-        .machine-card .text-sm {
-          font-size: 0.625rem !important;
-        }
-      }
-      
-      /* Telas muito pequenas - manter 2 colunas */
-      @media (max-width: 374px) {
-        #machine-card-grid {
-          grid-template-columns: repeat(2, 1fr) !important;
-        }
-        
-        .machine-card .text-lg {
-          font-size: 0.65rem !important;
         }
       }
       
@@ -158,21 +107,10 @@
           max-width: 98vw !important;
           margin: 0 auto !important;
         }
-        
         .bg-white.rounded-lg.shadow-xl.p-6,
         .bg-white.rounded-xl.shadow-2xl.p-6 {
-          padding: 0.5rem !important;
+          padding: 0.75rem !important;
         }
-        
-        input[type="text"]:focus,
-        input[type="number"]:focus,
-        input[type="date"]:focus,
-        select:focus,
-        textarea:focus {
-          font-size: 16px !important;
-        }
-        
-        /* Botões com padding adequado */
         button.w-full {
           min-height: 48px;
         }
@@ -184,10 +122,6 @@
           padding-top: 0.125rem !important;
           padding-bottom: 0.125rem !important;
           min-height: 40px !important;
-        }
-        
-        .page-content {
-          padding: 0.25rem !important;
         }
       }
       
