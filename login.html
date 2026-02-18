@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hokkaido Mes - Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        .gradient-bg {
+            background-image: linear-gradient(135deg, rgba(102, 126, 234, 0.55) 0%, rgba(118, 75, 162, 0.55) 100%), url('https://i.postimg.cc/zfgWtdm8/Preservacao-do-planeta-3-1-1024x576-1.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-blend-mode: multiply;
+        }
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md">
+        <!-- Card de Login -->
+        <div class="glass-effect rounded-2xl shadow-2xl p-8">
+            <!-- Header com Logo Principal -->
+            <div class="text-center mb-8">
+                <div class="flex justify-center items-center mb-6">
+                    <!-- Logo Nova do Sistema -->
+                    <img src="https://i.postimg.cc/fRL04vKT/Gemini_Generated_Image_d13fecd13fecd13f_removebg_preview.png" alt="Hokkaido MES" class="h-44 md:h-52 w-auto object-contain" loading="lazy">
+                </div>
+            </div>
+
+            <!-- Formulário de Login -->
+            <form id="login-form" class="space-y-6">
+                <!-- Campo Usuário -->
+                <div>
+                    <label for="username" class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="w-4 h-4 inline mr-2" data-lucide="user"></i>
+                        Usuário
+                    </label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        name="username" 
+                        required
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                        placeholder="Digite seu usuário"
+                        autocomplete="username">
+                </div>
+
+                <!-- Campo Senha -->
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="w-4 h-4 inline mr-2" data-lucide="lock"></i>
+                        Senha
+                    </label>
+                    <div class="relative">
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            required
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 pr-12"
+                            placeholder="Digite sua senha"
+                            autocomplete="current-password">
+                        <button 
+                            type="button" 
+                            id="toggle-password"
+                            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors">
+                            <i class="w-5 h-5" data-lucide="eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Lembrar Login -->
+                <div class="flex items-center">
+                    <input 
+                        type="checkbox" 
+                        id="remember-me" 
+                        name="remember"
+                        class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+                    <label for="remember-me" class="ml-2 text-sm text-gray-700">
+                        Lembrar meu login
+                    </label>
+                </div>
+
+                <!-- Botão Login -->
+                <button 
+                    type="submit" 
+                    id="login-btn"
+                    class="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-3 px-4 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 flex items-center justify-center gap-2">
+                    <i class="w-5 h-5" data-lucide="log-in"></i>
+                    <span>Entrar no Sistema</span>
+                </button>
+
+                <!-- Loading State -->
+                <div id="login-loading" class="hidden w-full bg-gray-400 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2">
+                    <i class="w-5 h-5 animate-spin" data-lucide="loader-2"></i>
+                    <span>Verificando credenciais...</span>
+                </div>
+            </form>
+
+            <!-- Mensagem de Erro -->
+            <div id="login-error" class="hidden mt-4 p-3 bg-red-100 border border-red-300 text-red-700 rounded-lg text-sm">
+                <i class="w-4 h-4 inline mr-2" data-lucide="alert-circle"></i>
+                <span id="error-message">Usuário ou senha incorretos</span>
+            </div>
+
+            <!-- Footer -->
+            <div class="mt-8 text-center text-xs text-gray-500">
+                <p>© 2025 Hokkaido Mes</p>
+                <p class="mt-1">Sistema de Monitoramento Industrial</p>
+                <!-- Logo Hokkaido Pequena Centralizada -->
+                <div class="mt-4 flex justify-center">
+                    <img src="https://i.postimg.cc/5jdHwhF9/hokkaido-logo-110.png" alt="Hokkaido Plastics" class="h-6 w-auto object-contain opacity-60">
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Inicializar ícones Lucide (com verificação de segurança)
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
+
+        // Alternar visibilidade da senha
+        document.getElementById('toggle-password').addEventListener('click', function() {
+            const passwordInput = document.getElementById('password');
+            const eyeIcon = this.querySelector('[data-lucide]');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                eyeIcon.setAttribute('data-lucide', 'eye-off');
+            } else {
+                passwordInput.type = 'password';
+                eyeIcon.setAttribute('data-lucide', 'eye');
+            }
+            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                lucide.createIcons();
+            }
+        });
+
+        // Base de usuários (em produção, usar Firebase Auth ou API)
+        // Todos os usuários com perfil GESTOR e acesso total (AUTENTICAÇÃO PILOTO)
+        const users = {
+            // USUÁRIOS PADRÃO
+            'admin': {
+                password: 'admin123',
+                role: 'operador',
+                name: 'Administrador',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'gestor': {
+                password: 'gestor123',
+                role: 'gestor', 
+                name: 'Gestor de Produção',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+            'operador': {
+                password: 'op123',
+                role: 'operador',
+                name: 'Operador de Produção',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'supervisor': {
+                password: 'sup123',
+                role: 'gestor',
+                name: 'Supervisor',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+
+            // OPERADORES ADICIONADOS AUTOMATICAMENTE
+            'alexandre.de.paula': {
+                password: 'Alexandre2025!',
+                role: 'operador',
+                name: 'Alexandre de Paula',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'felipe.rafael': {
+                password: 'Felipe2025!',
+                role: 'operador',
+                name: 'Felipe Rafael',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'fernando.monteiro': {
+                password: 'Fernando2025!',
+                role: 'operador',
+                name: 'Fernando Monteiro',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'gabriel.santos': {
+                password: 'Gabriel2025!',
+                role: 'operador',
+                name: 'Gabriel Santos',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'guilherme.muniz': {
+                password: 'Guilherme2025!',
+                role: 'operador',
+                name: 'Guilherme Muniz',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'maiara.camargo': {
+                password: 'Maiara2025!',
+                role: 'operador',
+                name: 'Maiara Camargo',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'noely.lima': {
+                password: 'Noely2025!',
+                role: 'operador',
+                name: 'Noely Lima',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'polyne.fernandes': {
+                password: 'Polyne2025!',
+                role: 'operador',
+                name: 'Polyne Fernandes',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'raphael.moreira': {
+                password: 'Raphael2025!',
+                role: 'suporte',
+                name: 'Raphael Moreira',
+                permissions: ['planejamento', 'lancamento', 'analise', 'lançamento_manual_producao', 'lançamento_manual_perdas', 'qualidade', 'ajustes', 'relatorios', 'admin']
+            },
+            'regina.de.fatima': {
+                password: 'Regina2025!',
+                role: 'operador',
+                name: 'Regina de Fatima',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'rodrigo.valin': {
+                password: 'Rodrigo2025!',
+                role: 'operador',
+                name: 'Rodrigo Valin',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'sebastiao.marcio': {
+                password: 'Sebastião2025!',
+                role: 'operador',
+                name: 'Sebastião Márcio',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'viviane.souza': {
+                password: 'Viviane2025!',
+                role: 'operador',
+                name: 'Viviane souza',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'willian.andrade': {
+                password: 'Willian2025!',
+                role: 'operador',
+                name: 'Willian Andrade',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'angelina.magalhaes': {
+                password: 'Angelina2025!',
+                role: 'operador',
+                name: 'angelina magalhaes',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'jose.otavio': {
+                password: 'Jose2025!',
+                role: 'operador',
+                name: 'jose otavio',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'maria.barbosa': {
+                password: 'Maria2025!',
+                role: 'operador',
+                name: 'Maria Barbosa',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'isalem.evandro': {
+                password: 'Isalem2025!',
+                role: 'operador',
+                name: 'Isalem Evandro',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'ronaldo.santos': {
+                password: 'Ronaldo2025!',
+                role: 'operador',
+                name: 'Ronaldo Santos',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'aislan.everton': {
+                password: 'Aislan2025!',
+                role: 'operador',
+                name: 'Aislan Everton',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'ademir.de.almeida': {
+                password: 'Ademir2025!',
+                role: 'operador',
+                name: 'Ademir de almeida',
+                    permissions: ['planejamento', 'lancamento', 'analise', 'lançamento_manual_producao', 'lançamento_manual_perdas']
+            },
+            'daniel.lisboa': {
+                password: 'Daniel2025!',
+                role: 'operador',
+                name: 'Daniel Lisboa',
+                    permissions: ['planejamento', 'lancamento', 'analise', 'lançamento_manual_producao', 'lançamento_manual_perdas']
+            },
+            'matheus.algusto': {
+                password: 'Matheus2025!',
+                role: 'operador',
+                name: 'Matheus Algusto',
+                    permissions: ['planejamento', 'lancamento', 'analise', 'lançamento_manual_producao', 'lançamento_manual_perdas']
+            },
+            'stanley.eduardo': {
+                password: 'Stanley2025!',
+                role: 'operador',
+                name: 'Stanley eduardo',
+                    permissions: ['planejamento', 'lancamento', 'analise', 'lançamento_manual_producao', 'lançamento_manual_perdas']
+            },
+            'renata.rocha': {
+                password: 'Renata2025!',
+                role: 'operador',
+                name: 'Renata rocha',
+                    permissions: ['planejamento', 'lancamento', 'analise', 'lançamento_manual_producao', 'lançamento_manual_perdas']
+            },
+            'roberto.fernandes': {
+                password: 'Roberto2025!',
+                role: 'suporte',
+                name: 'Roberto fernandes',
+                permissions: ['planejamento', 'lancamento', 'analise', 'lançamento_manual_producao', 'lançamento_manual_perdas', 'qualidade', 'ajustes', 'relatorios', 'admin']
+            },
+            'erika.muta': {
+                password: 'Erika2025!',
+                role: 'gestor',
+                name: 'Erika Muta',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+
+            // USUÁRIOS DO PILOTO
+            'leandro.camargo': {
+                password: 'Leandro2025!',
+                role: 'gestor',
+                name: 'Leandro Camargo',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+            'tiago.oliveira': {
+                password: 'Tiago2025!',
+                role: 'gestor',
+                name: 'Tiago Oliveira',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv', 'setup-maquinas', 'pcp']
+            },
+            'lidiomar.landim': {
+                password: 'Lidiomar2026!',
+                role: 'gestor',
+                name: 'Lidiomar Landim',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+            'werigue': {
+                password: 'Werigue2025!',
+                role: 'gestor',
+                name: 'Werigue',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+            'daniella.braganca': {
+                password: 'Daniella2025!',
+                role: 'suporte',
+                name: 'Daniella Bragança',
+                permissions: ['planejamento', 'lancamento', 'analise', 'lançamento_manual_producao', 'lançamento_manual_perdas', 'qualidade', 'ajustes', 'relatorios', 'admin']
+            },
+
+            // FERRAMENTARIA E COMPRAS
+            'ferramentaria.geral': {
+                password: 'Ferramentaria2025!',
+                role: 'suporte',
+                name: 'Ferramentaria Geral',
+                permissions: ['planejamento', 'lancamento', 'analise', 'lançamento_manual_paradas', 'dashboard-tv']
+            },
+            'manutencao.geral': {
+                password: 'Manutencao2025!',
+                role: 'suporte',
+                name: 'Manutenção Geral',
+                permissions: ['planejamento', 'lancamento', 'analise', 'lançamento_manual_paradas', 'dashboard-tv']
+            },
+            'compras': {
+                password: 'Compras2025!',
+                role: 'suporte',
+                name: 'Compras',
+                permissions: ['planejamento', 'lancamento', 'analise', 'lançamento_manual_paradas', 'dashboard-tv']
+            },
+            'michelle.benjamin': {
+                password: 'Michelle2025!',
+                role: 'suporte',
+                name: 'Michelle Benjamin',
+                permissions: ['planejamento', 'lancamento', 'analise', 'lançamento_manual_producao', 'lançamento_manual_perdas', 'qualidade', 'ajustes', 'relatorios', 'admin']
+            },
+            'luciano': {
+                password: 'Luciano2025!',
+                role: 'lider',
+                name: 'Luciano',
+                permissions: ['planejamento', 'lancamento', 'analise', 'lançamento_manual_producao', 'lançamento_manual_perdas', 'qualidade', 'ajustes', 'relatorios', 'admin']
+            },
+            
+            // OPERADORES POR TURNO
+            'operador.turno1': {
+                password: 'Producao1T',
+                role: 'operador',
+                name: 'Operador Turno 1',
+                turno: 'T1',
+                permissions: ['planejamento', 'lancamento', 'analise', 'paradas-longas']
+            },
+            'operador.turno2': {
+                password: 'Producao2T',
+                role: 'operador',
+                name: 'Operador Turno 2',
+                turno: 'T2',
+                permissions: ['planejamento', 'lancamento', 'analise', 'paradas-longas']
+            },
+            'operador.turno3': {
+                password: 'Producao3T',
+                role: 'operador',
+                name: 'Operador Turno 3',
+                turno: 'T3',
+                permissions: ['planejamento', 'lancamento', 'analise', 'paradas-longas']
+            },
+            
+            // NOVOS USUÁRIOS SOLICITADOS
+            'marilise.katia': {
+                password: 'Marilise2026!',
+                role: 'suporte',
+                name: 'Marilise Katia',
+                permissions: ['planejamento', 'lancamento', 'analise', 'lançamento_manual_producao', 'lançamento_manual_perdas', 'qualidade', 'ajustes', 'relatorios', 'admin']
+            },
+            'daniel.rocha': {
+                password: 'Daniel2025!',
+                role: 'gestor',
+                name: 'Daniel Rocha',
+                permissions: ['planejamento', 'lancamento', 'analise', 'pmp', 'dashboard-tv']
+            },
+            'leonardo.doria': {
+                password: 'Leonardo2025!',
+                role: 'gestor',
+                name: 'Leonardo Dória',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+            'davi.batista': {
+                password: 'Davi2025!',
+                role: 'lider',
+                name: 'Davi Batista',
+                permissions: ['planejamento', 'lancamento', 'analise', 'lançamento_manual_producao', 'lançamento_manual_perdas', 'qualidade', 'ajustes', 'relatorios', 'admin']
+            },
+            'thiago.alberigi': {
+                password: 'Thiago2025!',
+                role: 'gestor',
+                name: 'Thiago Alberigi',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+            'vania': {
+                password: 'Vania2025!',
+                role: 'gestor',
+                name: 'Vânia',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+            'silvio.piazera': {
+                password: 'Silvio2025!',
+                role: 'gestor',
+                name: 'Sílvio Piazera',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+            'cleidiana': {
+                password: 'Cleidiana2025!',
+                role: 'suporte',
+                name: 'Cleidiana',
+                permissions: ['planejamento', 'lancamento', 'analise', 'lançamento_manual_producao', 'lançamento_manual_perdas', 'qualidade', 'ajustes', 'relatorios', 'admin']
+            },
+            'diego.goto': {
+                password: 'Diego2025!',
+                role: 'gestor',
+                name: 'Diego Goto',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+            'elaine': {
+                password: 'Elaine2026!',
+                role: 'gestor',
+                name: 'Elaine',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+            
+            // NOVOS OPERADORES ADICIONADOS
+            'aline.guedes': {
+                password: 'Aline2025!',
+                role: 'suporte',
+                name: 'Aline Guedes',
+                permissions: ['planejamento', 'lancamento', 'analise', 'lançamento_manual_producao', 'lançamento_manual_perdas', 'qualidade', 'ajustes', 'relatorios', 'admin']
+            },
+            'daniel.de.paula': {
+                password: 'Daniel2025!',
+                role: 'operador',
+                name: 'Daniel de Paula',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'eloi.siqueira': {
+                password: 'Eloi2025!',
+                role: 'operador',
+                name: 'Eloi Siqueira',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'glaucia.lisboa': {
+                password: 'Glaucia2025!',
+                role: 'operador',
+                name: 'Glaucia Lisboa',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'jeosmar.massoni': {
+                password: 'Jeosmar2025!',
+                role: 'operador',
+                name: 'Jeosmar Massoni',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'josue.carvalho': {
+                password: 'Josue2025!',
+                role: 'operador',
+                name: 'Josué Carvalho',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'matheus.ventura': {
+                password: 'Matheus2025!',
+                role: 'operador',
+                name: 'Matheus Ventura',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'silvia.aparecida': {
+                password: 'Silvia2025!',
+                role: 'operador',
+                name: 'Silvia Aparecida',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            'rafael.shimada': {
+                password: 'Rafael2025!',
+                role: 'operador',
+                name: 'Rafael Shimada',
+                permissions: ['planejamento', 'lancamento', 'analise']
+            },
+            
+            // NOVOS OPERADORES ADICIONADOS EM JANEIRO 2026
+            'cicero.silva': {
+                password: 'Cicero2025!',
+                role: 'gestor',
+                name: 'Cicero Silva',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+            'jefferson.muniz': {
+                password: 'Jefferson2025!',
+                role: 'gestor',
+                name: 'Jefferson Muniz',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+            'leandro.sebastiao': {
+                password: 'Leandro2025!',
+                role: 'gestor',
+                name: 'Leandro Sebastião',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+            'alessandro.santos': {
+                password: 'Alessandro2025!',
+                role: 'gestor',
+                name: 'Alessandro Santos',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+            'manaus.silva': {
+                password: 'Manaus2025!',
+                role: 'gestor',
+                name: 'Manaus Silva',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+            
+            // EXEMPLO: Novo usuário adicionado manualmente
+            'joao.silva': {
+                password: 'Joao2025!',
+                role: 'gestor',
+                name: 'João Silva',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+            'linaldo': {
+                password: 'Linaldo2025!',
+                role: 'lider',
+                name: 'Linaldo',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+            'victor.lima': {
+                password: 'Victor2025!',
+                role: 'gestor',
+                name: 'Victor Lima',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+            'rafael.pontes': {
+                password: 'Rafael2025!',
+                role: 'gestor',
+                name: 'Rafael Pontes',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+            'time.qualidade': {
+                password: 'Qualidade2025!',
+                role: 'gestor',
+                name: 'Time Qualidade',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+            'filipe.schulz': {
+                password: 'Filipe2025!',
+                role: 'gestor',
+                name: 'Filipe Schulz',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            },
+            'tania.consulo': {
+                password: 'Tania2026!',
+                role: 'gestor',
+                name: 'Tânia Consulo',
+                permissions: ['planejamento', 'lancamento', 'analise', 'dashboard-tv']
+            }
+        };
+
+        // Utilidades de normalização e busca tolerante de usuário
+        function normalizeStr(str) {
+            return String(str || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '') // remove acentos
+                .toLowerCase()
+                .trim()
+                .replace(/\s+/g, ' ');
+        }
+
+        function findUserKeyFlexible(input) {
+            const raw = String(input || '').trim();
+            const norm = normalizeStr(raw);
+
+            console.log('🔍 [FLEX] Input:', raw, '→ Normalizado:', norm);
+
+            // 1) Match direto por chave (case-insensitive)
+            if (users[norm]) {
+                console.log('✅ [FLEX] Match método 1 (chave direta):', norm);
+                return { key: norm, userData: users[norm] };
+            }
+
+            // 2) Tentar substituir espaço por ponto (ex.: "thiago alberigui" -> "thiago.alberigui")
+            const dotVariant = norm.replace(/\s+/g, '.');
+            if (users[dotVariant]) {
+                console.log('✅ [FLEX] Match método 2 (espaço→ponto):', dotVariant);
+                return { key: dotVariant, userData: users[dotVariant] };
+            }
+
+            // 3) Tentar remover pontos do input e comparar com chaves sem ponto
+            const noDotNorm = norm.replaceAll('.', '');
+            for (const key of Object.keys(users)) {
+                const keyNoDot = key.replaceAll('.', '');
+                if (keyNoDot === noDotNorm) {
+                    console.log('✅ [FLEX] Match método 3 (sem pontos):', key);
+                    return { key, userData: users[key] };
+                }
+            }
+
+            // 4) Match por NOME completo normalizado (exato)
+            for (const [key, userData] of Object.entries(users)) {
+                const nameNorm = normalizeStr(userData?.name || '');
+                if (nameNorm && nameNorm === norm) {
+                    console.log('✅ [FLEX] Match método 4 (nome completo):', key, nameNorm);
+                    return { key, userData };
+                }
+            }
+
+            // 5) Match por tokens do nome (todos os tokens presentes)
+            const tokens = norm.split(' ').filter(Boolean);
+            if (tokens.length) {
+                let best = null;
+                for (const [key, userData] of Object.entries(users)) {
+                    const nameNorm = normalizeStr(userData?.name || '');
+                    if (!nameNorm) continue;
+                    const hasAll = tokens.every(t => nameNorm.includes(t));
+                    if (hasAll) {
+                        console.log('✅ [FLEX] Match método 5 (tokens):', key, 'tokens:', tokens);
+                        best = best || { key, userData };
+                    }
+                }
+                if (best) return best;
+            }
+
+            console.log('❌ [FLEX] Nenhum usuário encontrado para:', raw);
+            return { key: null, userData: null };
+        }
+
+        // Função de login
+        document.getElementById('login-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const rememberMe = document.getElementById('remember-me').checked;
+            
+            console.log('🔍 [DEBUG] === TENTATIVA DE LOGIN ===');
+            console.log('🔍 [DEBUG] Username digitado:', username);
+            console.log('🔍 [DEBUG] Senha digitada:', password);
+            console.log('🔍 [DEBUG] Lembrar login:', rememberMe);
+            console.log('🔍 [DEBUG] Usuários disponíveis:', Object.keys(users));
+            
+            // Mostrar loading
+            showLoading(true);
+            hideError();
+            
+            // Simular delay de verificação
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Verificar credenciais com busca flexível (username, nome completo, variações)
+            console.log('🔍 [DEBUG] Iniciando busca flexível...');
+            const found = findUserKeyFlexible(username);
+            let user = found.userData;
+            let usernameUsed = found.key || username.toLowerCase();
+            
+            console.log('🔍 [DEBUG] Resultado da busca flexível:', { 
+                usuarioEncontrado: !!user, 
+                chaveUsada: usernameUsed,
+                dados: user ? { name: user.name, role: user.role } : null
+            });
+            
+            if (user) {
+                console.log('🔍 [DEBUG] Comparando senha...');
+                console.log('🔍 [DEBUG] Senha esperada:', user.password);
+                console.log('🔍 [DEBUG] Senha fornecida:', password);
+                console.log('🔍 [DEBUG] Senhas conferem?:', user.password === password);
+            }
+            
+            if (user && user.password === password) {
+                // Login bem-sucedido
+                const userSession = {
+                    username: usernameUsed,
+                    name: user.name,
+                    role: user.role,
+                    permissions: user.permissions,
+                    loginTime: new Date().toISOString()
+                };
+                
+                console.log('✅ [DEBUG] === LOGIN BEM-SUCEDIDO ===');
+                console.log('✅ [DEBUG] Sessão:', userSession);
+                
+                // Salvar sessão
+                if (rememberMe) {
+                    localStorage.setItem('synchro_user', JSON.stringify(userSession));
+                    console.log('✅ [DEBUG] Salvo em localStorage');
+                } else {
+                    sessionStorage.setItem('synchro_user', JSON.stringify(userSession));
+                    console.log('✅ [DEBUG] Salvo em sessionStorage');
+                }
+                
+                // Redirecionar para o sistema principal
+                console.log('✅ [DEBUG] Redirecionando para index.html...');
+                window.location.href = 'index.html';
+                
+            } else {
+                // Login falhou
+                console.error('❌ [DEBUG] === LOGIN FALHOU ===');
+                if (!user) {
+                    console.error('❌ [DEBUG] Motivo: Usuário não encontrado');
+                } else {
+                    console.error('❌ [DEBUG] Motivo: Senha incorreta');
+                }
+                showError('Usuário ou senha incorretos');
+                showLoading(false);
+            }
+        });
+
+        function showLoading(show) {
+            const loginBtn = document.getElementById('login-btn');
+            const loadingDiv = document.getElementById('login-loading');
+            
+            if (show) {
+                loginBtn.classList.add('hidden');
+                loadingDiv.classList.remove('hidden');
+            } else {
+                loginBtn.classList.remove('hidden');
+                loadingDiv.classList.add('hidden');
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('login-error');
+            const errorMessage = document.getElementById('error-message');
+            
+            errorMessage.textContent = message;
+            errorDiv.classList.remove('hidden');
+        }
+
+        function hideError() {
+            const errorDiv = document.getElementById('login-error');
+            errorDiv.classList.add('hidden');
+        }
+
+        // Verificar se já está logado
+        window.addEventListener('load', function() {
+            const savedUser = localStorage.getItem('synchro_user') || sessionStorage.getItem('synchro_user');
+            if (savedUser) {
+                // Usuário já logado, redirecionar com delay para garantir leitura correta
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 200);
+            }
+        });
+
+        // Auto-focus no campo usuário
+        document.getElementById('username').focus();
+    </script>
+</body>
+</html>
