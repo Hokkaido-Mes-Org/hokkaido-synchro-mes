@@ -454,7 +454,7 @@
             grid-template-columns: 1fr 1fr 320px;
             grid-template-rows: auto auto 1fr auto;
             gap: 12px;
-            padding: 12px 24px;
+            padding: 12px 24px 52px;
             height: calc(100vh - 64px);
             background: 
                 radial-gradient(ellipse at top left, rgba(0, 180, 216, 0.03) 0%, transparent 50%),
@@ -1498,6 +1498,87 @@
         @keyframes ticker-scroll {
             0% { transform: translateX(0); }
             100% { transform: translateX(-50%); }
+        }
+
+        /* ==================== MARQUEE PCP MESSAGES ==================== */
+        .pcp-marquee-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 200;
+            background: linear-gradient(90deg, #0d1117 0%, #161b22 50%, #0d1117 100%);
+            border-top: 2px solid var(--accent-primary, #00b4d8);
+            height: 40px;
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .pcp-marquee-bar.hidden { display: none; }
+
+        .pcp-marquee-label {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 0 14px;
+            height: 100%;
+            background: var(--accent-primary, #00b4d8);
+            color: #fff;
+            font-weight: 700;
+            font-size: 12px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .pcp-marquee-track {
+            display: flex;
+            align-items: center;
+            white-space: nowrap;
+            animation: marquee-scroll 30s linear infinite;
+            padding-left: 100%;
+        }
+
+        .pcp-marquee-track:hover {
+            animation-play-state: paused;
+        }
+
+        .pcp-marquee-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0 32px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #e6edf3;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .pcp-marquee-item .msg-bullet {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent-primary, #00b4d8);
+            flex-shrink: 0;
+        }
+
+        .pcp-marquee-item .msg-priority-alta {
+            background: #f44336;
+        }
+
+        .pcp-marquee-item .msg-priority-media {
+            background: #ff9800;
+        }
+
+        .pcp-marquee-item .msg-priority-normal {
+            background: var(--accent-primary, #00b4d8);
+        }
+
+        @keyframes marquee-scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-100%); }
         }
 
         .footer-timestamp {
@@ -2633,6 +2714,19 @@
                 <span>Atualização automática a cada 1 minuto</span>
             </div>
         </footer>
+
+        <!-- MARQUEE DE MENSAGENS PCP -->
+        <div class="pcp-marquee-bar hidden" id="pcpMarqueeBar">
+            <div class="pcp-marquee-label">
+                <i data-lucide="megaphone" class="w-4 h-4"></i>
+                PCP
+            </div>
+            <div style="flex:1;overflow:hidden;display:flex;align-items:center;">
+                <div class="pcp-marquee-track" id="pcpMarqueeTrack">
+                    <!-- Populated by JS via Firebase onSnapshot -->
+                </div>
+            </div>
+        </div>
     </main>
 
     <!-- ==================== SCRIPTS ==================== -->
@@ -2924,6 +3018,51 @@
                 console.warn('[Dashboard TV] Erro ao ouvir active_downtimes:', error.message);
                 // Falha silenciosa - o polling de 10 segundos ainda funcionará
             });
+
+            // ✅ Listener em tempo real para mensagens PCP (marquee)
+            db.collection('pcp_messages')
+              .where('ativo', '==', true)
+              .onSnapshot(snapshot => {
+                try {
+                    const marqueeBar = document.getElementById('pcpMarqueeBar');
+                    const marqueeTrack = document.getElementById('pcpMarqueeTrack');
+                    if (!marqueeBar || !marqueeTrack) return;
+
+                    const msgs = [];
+                    snapshot.forEach(doc => {
+                        const d = doc.data();
+                        if (d.texto) msgs.push(d);
+                    });
+
+                    // Sort: alta > media > normal
+                    const prioOrder = { alta: 0, media: 1, normal: 2 };
+                    msgs.sort((a, b) => (prioOrder[a.prioridade] ?? 2) - (prioOrder[b.prioridade] ?? 2));
+
+                    if (msgs.length === 0) {
+                        marqueeBar.classList.add('hidden');
+                        return;
+                    }
+
+                    marqueeBar.classList.remove('hidden');
+                    const priorityClass = { alta: 'msg-priority-alta', media: 'msg-priority-media', normal: 'msg-priority-normal' };
+                    // Duplicate items for seamless loop
+                    const items = [...msgs, ...msgs].map(m => {
+                        const pClass = priorityClass[m.prioridade] || 'msg-priority-normal';
+                        return `<span class="pcp-marquee-item"><span class="msg-bullet ${pClass}"></span>${m.texto}</span>`;
+                    }).join('');
+                    marqueeTrack.innerHTML = items;
+
+                    // Adjust animation speed based on content width
+                    const speed = Math.max(20, msgs.length * 8);
+                    marqueeTrack.style.animationDuration = speed + 's';
+
+                    console.log('[Dashboard TV] Marquee PCP atualizado:', msgs.length, 'mensagens');
+                } catch (error) {
+                    console.error('[Dashboard TV] Erro ao processar mensagens PCP:', error);
+                }
+              }, error => {
+                console.warn('[Dashboard TV] Erro ao ouvir pcp_messages:', error.message);
+              });
             
             console.log('[Dashboard TV] Inicialização completa!');
         });

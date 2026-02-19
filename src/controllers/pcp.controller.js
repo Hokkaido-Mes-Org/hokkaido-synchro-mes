@@ -119,6 +119,11 @@ function setupPCPSubTabs() {
                 }
             }
 
+            // Carregar dados sob demanda — Mensagens TV
+            if (targetId === 'pcp-mensagens') {
+                initPCPMessagesListener();
+            }
+
             if (typeof lucide !== 'undefined') lucide.createIcons();
             console.log('[PCP·mod] Sub-aba ativa:', targetId);
         });
@@ -1170,9 +1175,138 @@ export function setupPCPPage() {
         // Expor savePCPObservation globalmente (usado no onclick inline do input)
         window.savePCPObservation = savePCPObservation;
 
+        // Expor funções de mensagens PCP
+        window.enviarMensagemPCP = enviarMensagemPCP;
+        window.excluirMensagemPCP = excluirMensagemPCP;
+        window.toggleMensagemPCP = toggleMensagemPCP;
+
         EventBus.emit('pcp:initialized');
         console.log('[PCP·mod] Página inicializada com sucesso!');
     } catch (e) {
         console.error('[PCP·mod] Erro ao inicializar página:', e);
     }
+}
+
+// ═══════════════════════════════════════
+//  MENSAGENS PCP (MARQUEE DASHBOARD TV)
+// ═══════════════════════════════════════
+
+let pcpMsgListenerAttached = false;
+
+function getUserNameForMsg() {
+    if (window.authSystem && window.authSystem.getCurrentUser()) {
+        return window.authSystem.getCurrentUser().name || 'PCP';
+    }
+    return 'PCP';
+}
+
+async function enviarMensagemPCP() {
+    const textoInput = document.getElementById('pcp-msg-texto');
+    const prioridadeInput = document.getElementById('pcp-msg-prioridade');
+    if (!textoInput) return;
+    const texto = textoInput.value.trim();
+    if (!texto) {
+        if (typeof window.showNotification === 'function') window.showNotification('Digite uma mensagem', 'error');
+        return;
+    }
+
+    try {
+        await getDb().collection('pcp_messages').add({
+            texto,
+            prioridade: prioridadeInput?.value || 'normal',
+            ativo: true,
+            criadoPor: getUserNameForMsg(),
+            criadoEm: serverTimestamp()
+        });
+        textoInput.value = '';
+        if (prioridadeInput) prioridadeInput.value = 'normal';
+        if (typeof window.showNotification === 'function') window.showNotification('Mensagem enviada! Aparecerá no Dashboard TV em instantes.', 'success');
+        console.log('[PCP·mod] Mensagem PCP enviada');
+    } catch (err) {
+        console.error('[PCP·mod] Erro ao enviar mensagem PCP:', err);
+        if (typeof window.showNotification === 'function') window.showNotification('Erro ao enviar mensagem', 'error');
+    }
+}
+
+async function excluirMensagemPCP(docId) {
+    if (!confirm('Excluir esta mensagem?')) return;
+    try {
+        await getDb().collection('pcp_messages').doc(docId).delete();
+        if (typeof window.showNotification === 'function') window.showNotification('Mensagem excluída', 'success');
+    } catch (err) {
+        console.error('[PCP·mod] Erro ao excluir mensagem PCP:', err);
+        if (typeof window.showNotification === 'function') window.showNotification('Erro ao excluir', 'error');
+    }
+}
+
+async function toggleMensagemPCP(docId, novoAtivo) {
+    try {
+        await getDb().collection('pcp_messages').doc(docId).update({ ativo: novoAtivo });
+        if (typeof window.showNotification === 'function')
+            window.showNotification(novoAtivo ? 'Mensagem ativada' : 'Mensagem desativada', 'success');
+    } catch (err) {
+        console.error('[PCP·mod] Erro ao atualizar mensagem PCP:', err);
+    }
+}
+
+function initPCPMessagesListener() {
+    if (pcpMsgListenerAttached) return;
+    pcpMsgListenerAttached = true;
+
+    getDb().collection('pcp_messages')
+      .orderBy('criadoEm', 'desc')
+      .onSnapshot(snapshot => {
+        const listEl = document.getElementById('pcp-msg-list');
+        const countEl = document.getElementById('pcp-msg-count');
+        if (!listEl) return;
+
+        const msgs = [];
+        snapshot.forEach(doc => msgs.push({ id: doc.id, ...doc.data() }));
+
+        if (countEl) countEl.textContent = `(${msgs.filter(m => m.ativo).length} ativa${msgs.filter(m => m.ativo).length !== 1 ? 's' : ''})`;
+
+        if (msgs.length === 0) {
+            listEl.innerHTML = `<div class="text-center py-8 text-gray-400"><i data-lucide="inbox" class="w-10 h-10 mx-auto mb-2 opacity-40"></i><p class="text-sm">Nenhuma mensagem cadastrada</p></div>`;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            return;
+        }
+
+        const prioridadeColors = {
+            alta: { badge: 'bg-red-100 text-red-700', dot: 'bg-red-500' },
+            media: { badge: 'bg-amber-100 text-amber-700', dot: 'bg-amber-500' },
+            normal: { badge: 'bg-blue-100 text-blue-700', dot: 'bg-blue-500' }
+        };
+
+        listEl.innerHTML = msgs.map(m => {
+            const colors = prioridadeColors[m.prioridade] || prioridadeColors.normal;
+            const isActive = m.ativo !== false;
+            const criadoEm = m.criadoEm?.toDate ? m.criadoEm.toDate().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+            return `<div class="flex items-center gap-3 p-3 rounded-xl border ${isActive ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50 opacity-60'}">
+                <div class="w-2.5 h-2.5 rounded-full flex-shrink-0 ${colors.dot}"></div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-gray-800 ${isActive ? '' : 'line-through'}">${m.texto || ''}</p>
+                    <div class="flex items-center gap-2 mt-1">
+                        <span class="text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${colors.badge}">${(m.prioridade || 'normal').toUpperCase()}</span>
+                        <span class="text-[10px] text-gray-400">${m.criadoPor || ''} · ${criadoEm}</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1 flex-shrink-0">
+                    <button onclick="window.toggleMensagemPCP('${m.id}', ${!isActive})"
+                        class="p-1.5 rounded-lg transition-colors ${isActive ? 'text-amber-500 hover:bg-amber-50' : 'text-green-500 hover:bg-green-50'}"
+                        title="${isActive ? 'Desativar' : 'Ativar'}">
+                        <i data-lucide="${isActive ? 'eye-off' : 'eye'}" class="w-4 h-4"></i>
+                    </button>
+                    <button onclick="window.excluirMensagemPCP('${m.id}')"
+                        class="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Excluir">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>`;
+        }).join('');
+
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        console.log('[PCP·mod] Lista de mensagens PCP atualizada:', msgs.length);
+      }, err => {
+        console.warn('[PCP·mod] Erro ao ouvir pcp_messages:', err.message);
+      });
 }

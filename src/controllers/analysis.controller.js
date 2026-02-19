@@ -2267,13 +2267,27 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                     machineData[m].planned += Number(item.quantity) || 0;
                 });
                 
-                // Calcular OEE simplificado por máquina (Performance  x  Qualidade)
+                // Calcular OEE por máquina (Disponibilidade × Performance × Qualidade)
+                // Buscar dados de parada para calcular disponibilidade
+                let downtimeData = [];
+                try {
+                    downtimeData = await getFilteredData('downtimes', startDate, endDate, machine === 'all' ? null : machine, shift);
+                } catch(e) { /* sem dados de parada, disponibilidade = 100% */ }
+                const machineDowntime = {};
+                downtimeData.forEach(item => {
+                    const m = item.machine || 'N/A';
+                    machineDowntime[m] = (machineDowntime[m] || 0) + (Number(item.duration) || 0);
+                });
+                // Tempo total disponível por turno (minutos): T1=510, T2=500, T3=430 → ~480 avg
+                const TOTAL_AVAILABLE_MINUTES = shift ? (shift === 1 ? 510 : shift === 2 ? 500 : 430) : 1440;
                 const machineEntries = Object.entries(machineData)
                     .map(([mach, data]) => {
                         const totalOutput = data.production + data.losses;
+                        const downtime = machineDowntime[mach] || 0;
+                        const availability = TOTAL_AVAILABLE_MINUTES > 0 ? Math.min(((TOTAL_AVAILABLE_MINUTES - downtime) / TOTAL_AVAILABLE_MINUTES) * 100, 100) : 100;
                         const performance = data.planned > 0 ? Math.min((data.production / data.planned) * 100, 100) : 0;
                         const quality = totalOutput > 0 ? (data.production / totalOutput) * 100 : 100;
-                        const oee = (performance * quality) / 100; // OEE simplificado
+                        const oee = (availability * performance * quality) / 10000;
                         return { machine: mach, oee, production: data.production };
                     })
                     .filter(e => e.production > 0) // Só máquinas com produção
@@ -4267,9 +4281,19 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const executedByHour = Object.fromEntries(orderedHours.map(label => [label, 0]));
 
         productionData.forEach(item => {
-            if (!item?.datetime) return;
-            const eventDate = new Date(item.datetime);
-            if (Number.isNaN(eventDate.getTime())) return;
+            let eventDate = null;
+            if (item?.datetime) {
+                eventDate = new Date(item.datetime);
+            }
+            // FIX: Fallback — tentar construir datetime a partir de date+time quando datetime está ausente
+            if (!eventDate || Number.isNaN(eventDate.getTime())) {
+                const d = item?.raw?.data || item?.raw?.date || item?.date;
+                const t = item?.raw?.horaInformada || item?.raw?.hora || item?.raw?.time;
+                if (d && t) {
+                    eventDate = new Date(`${d}T${t}`);
+                }
+            }
+            if (!eventDate || Number.isNaN(eventDate.getTime())) return;
             const label = formatHourLabel(eventDate.getHours());
             executedByHour[label] = (executedByHour[label] || 0) + (Number(item.quantity) || 0);
         });
@@ -4731,8 +4755,19 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         const shiftLabels = ['1º Turno', '2º Turno', '3º Turno'];
 
         productionData.forEach(item => {
-            if (item.shift) {
-                shiftData[item.shift - 1] += item.quantity;
+            let s = item.shift;
+            // FIX: Se shift null/undefined, inferir do datetime usando horários de turno
+            if (!s && item.datetime) {
+                const dt = new Date(item.datetime);
+                if (!isNaN(dt.getTime())) {
+                    const hhmm = dt.getHours() * 100 + dt.getMinutes();
+                    if (hhmm >= 630 && hhmm < 1500) s = 1;
+                    else if (hhmm >= 1500 && hhmm < 2320) s = 2;
+                    else s = 3;
+                }
+            }
+            if (s >= 1 && s <= 3) {
+                shiftData[s - 1] += (Number(item.quantity) || 0);
             }
         });
 

@@ -1879,6 +1879,23 @@ const machineCardProductionCache = (() => {
         }
     };
 
+    // Sub-abas do Planejamento: Planejamento de Produção vs Ciclo/Cavidade
+    window.switchPlanningSubTab = function(tab) {
+        document.querySelectorAll('.planning-subtab-content').forEach(el => el.classList.add('hidden'));
+        document.querySelectorAll('.planning-subtab-btn').forEach(btn => {
+            btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-md');
+            btn.classList.add('bg-white', 'text-gray-600', 'border', 'border-gray-200');
+        });
+        const target = document.getElementById('planning-subtab-' + tab);
+        if (target) target.classList.remove('hidden');
+        const activeBtn = document.querySelector(`.planning-subtab-btn[data-planning-subtab="${tab}"]`);
+        if (activeBtn) {
+            activeBtn.classList.remove('bg-white', 'text-gray-600', 'border', 'border-gray-200');
+            activeBtn.classList.add('bg-indigo-600', 'text-white', 'shadow-md');
+        }
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    };
+
     // Função para imprimir relatório de planejamento
     window.printPlanningReport = function() {
         window.print();

@@ -392,17 +392,27 @@
                                     <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
                                     <span class="hidden sm:inline">Atualizar</span>
                                 </button>
-                                <button type="button" onclick="printPlanningReport()" 
-                                    class="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white px-3 py-1.5 rounded-lg flex items-center gap-1 transition-all text-xs font-medium">
-                                    <i data-lucide="printer" class="w-3.5 h-3.5"></i>
-                                    <span class="hidden sm:inline">Imprimir</span>
-                                </button>
                             </div>
                         </div>
                     </div>
 
+                    <!-- Sub-abas Planejamento -->
+                    <div class="flex gap-2 mb-2">
+                        <button type="button" class="planning-subtab-btn px-5 py-2.5 text-sm font-semibold rounded-xl transition-all bg-indigo-600 text-white shadow-md" data-planning-subtab="producao" onclick="switchPlanningSubTab('producao')">
+                            <i data-lucide="clipboard-list" class="w-4 h-4 inline mr-1"></i>
+                            Planejamento de Produção
+                        </button>
+                        <button type="button" class="planning-subtab-btn px-5 py-2.5 text-sm font-semibold rounded-xl transition-all bg-white text-gray-600 border border-gray-200 hover:bg-gray-50" data-planning-subtab="ciclo" onclick="switchPlanningSubTab('ciclo')">
+                            <i data-lucide="settings-2" class="w-4 h-4 inline mr-1"></i>
+                            Ciclo/Cavidade por Turno
+                        </button>
+                    </div>
+
+                    <!-- Sub-aba 1: Planejamento de Produção -->
+                    <div id="planning-subtab-producao" class="planning-subtab-content space-y-3">
+
                     <!-- KPIs do Planejamento -->
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div class="grid grid-cols-2 gap-3">
                         <div class="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-2xl shadow-sm border border-indigo-200 p-4 hover:shadow-md transition">
                             <div class="flex items-center justify-between mb-2">
                                 <p class="text-xs font-medium text-indigo-700">Itens Planejados</p>
@@ -413,16 +423,6 @@
                             <p class="text-2xl font-bold text-indigo-600" id="planning-kpi-items">0</p>
                             <p class="text-xs text-indigo-600 opacity-70 mt-1">itens</p>
                         </div>
-                        <div class="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-2xl shadow-sm border border-emerald-200 p-4 hover:shadow-md transition">
-                            <div class="flex items-center justify-between mb-2">
-                                <p class="text-xs font-medium text-emerald-700">Máquinas Ativas</p>
-                                <div class="p-1.5 bg-emerald-200 rounded-lg">
-                                    <i data-lucide="cog" class="w-3.5 h-3.5 text-emerald-600"></i>
-                                </div>
-                            </div>
-                            <p class="text-2xl font-bold text-emerald-600" id="planning-kpi-machines">0</p>
-                            <p class="text-xs text-emerald-600 opacity-70 mt-1">máquinas</p>
-                        </div>
                         <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl shadow-sm border border-blue-200 p-4 hover:shadow-md transition">
                             <div class="flex items-center justify-between mb-2">
                                 <p class="text-xs font-medium text-blue-700">Produção Total</p>
@@ -432,16 +432,6 @@
                             </div>
                             <p class="text-2xl font-bold text-blue-600" id="planning-kpi-produced">0</p>
                             <p class="text-xs text-blue-600 opacity-70 mt-1">peças</p>
-                        </div>
-                        <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl shadow-sm border border-purple-200 p-4 hover:shadow-md transition">
-                            <div class="flex items-center justify-between mb-2">
-                                <p class="text-xs font-medium text-purple-700">Produtos Únicos</p>
-                                <div class="p-1.5 bg-purple-200 rounded-lg">
-                                    <i data-lucide="boxes" class="w-3.5 h-3.5 text-purple-600"></i>
-                                </div>
-                            </div>
-                            <p class="text-2xl font-bold text-purple-600" id="planning-kpi-products">0</p>
-                            <p class="text-xs text-purple-600 opacity-70 mt-1">produtos</p>
                         </div>
                     </div>
 
@@ -658,7 +648,10 @@
                             </div>
                         </div>
                     </div>
+                    </div><!-- fim planning-subtab-producao -->
 
+                    <!-- Sub-aba 2: Ciclo/Cavidade por Turno -->
+                    <div id="planning-subtab-ciclo" class="planning-subtab-content hidden">
                     <!-- Tabela de Controle de Ciclo/Cavidade -->
                     <div class="bg-white rounded-xl shadow-lg overflow-hidden">
                         <div class="bg-gradient-to-r from-slate-600 to-slate-700 px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -720,55 +713,11 @@
                             <p class="text-gray-500">Nenhum dado para exibir na tabela</p>
                         </div>
                     </div>
+                    </div><!-- fim planning-subtab-ciclo -->
                 </div>
 
                 <!-- PÁGINA: Ordens de Produção -->
                 <div id="ordens-page" class="page-content hidden space-y-3 p-2">
-                    <!-- KPIs de Resumo das Ordens - Reestruturado -->
-                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                        <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl shadow-sm border border-blue-200 p-3 hover:shadow-md transition">
-                            <div class="flex items-center justify-between mb-1">
-                                <p class="text-xs font-medium text-blue-700">Total OPs</p>
-                                <i data-lucide="layers" class="w-4 h-4 text-blue-500"></i>
-                            </div>
-                            <p id="orders-kpi-total" class="text-xl font-bold text-blue-600">0</p>
-                        </div>
-                        <div class="bg-gradient-to-br from-amber-50 to-amber-100 rounded-2xl shadow-sm border border-amber-200 p-3 hover:shadow-md transition">
-                            <div class="flex items-center justify-between mb-1">
-                                <p class="text-xs font-medium text-amber-700">Ativas</p>
-                                <i data-lucide="play-circle" class="w-4 h-4 text-amber-500"></i>
-                            </div>
-                            <p id="orders-kpi-active" class="text-xl font-bold text-amber-600">0</p>
-                        </div>
-                        <div class="bg-gradient-to-br from-orange-50 to-orange-100 rounded-2xl shadow-sm border border-orange-200 p-3 hover:shadow-md transition">
-                            <div class="flex items-center justify-between mb-1">
-                                <p class="text-xs font-medium text-orange-700">Suspensas</p>
-                                <i data-lucide="pause-circle" class="w-4 h-4 text-orange-500"></i>
-                            </div>
-                            <p id="orders-kpi-suspended" class="text-xl font-bold text-orange-600">0</p>
-                        </div>
-                        <div class="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-2xl shadow-sm border border-emerald-200 p-3 hover:shadow-md transition">
-                            <div class="flex items-center justify-between mb-1">
-                                <p class="text-xs font-medium text-emerald-700">Concluídas</p>
-                                <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500"></i>
-                            </div>
-                            <p id="orders-kpi-completed" class="text-xl font-bold text-emerald-600">0</p>
-                        </div>
-                        <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-2xl shadow-sm border border-green-200 p-3 hover:shadow-md transition">
-                            <div class="flex items-center justify-between mb-1">
-                                <p class="text-xs font-medium text-green-700">Produção Total</p>
-                                <i data-lucide="package" class="w-4 h-4 text-green-500"></i>
-                            </div>
-                            <p id="orders-kpi-total-produced" class="text-xl font-bold text-green-600">0</p>
-                        </div>
-                        <div class="bg-gradient-to-br from-red-50 to-red-100 rounded-2xl shadow-sm border border-red-200 p-3 hover:shadow-md transition">
-                            <div class="flex items-center justify-between mb-1">
-                                <p class="text-xs font-medium text-red-700">Perdas Total</p>
-                                <i data-lucide="alert-triangle" class="w-4 h-4 text-red-500"></i>
-                            </div>
-                            <p id="orders-kpi-total-losses" class="text-xl font-bold text-red-600">0</p>
-                        </div>
-                    </div>
 
                     <!-- Painel Principal -->
                     <div class="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-gray-100">
@@ -787,14 +736,6 @@
                                 <button onclick="openImportOrdersModal()" class="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all text-sm">
                                     <i data-lucide="upload" class="w-4 h-4"></i>
                                     Importar Excel
-                                </button>
-                                <button id="btn-new-product" onclick="openNewProductModal()" class="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all text-sm">
-                                    <i data-lucide="package-plus" class="w-4 h-4"></i>
-                                    Novo Produto
-                                </button>
-                                <button onclick="recalculateAllOrdersTotals()" class="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-700 hover:to-cyan-800 text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all text-sm" title="Recalcular totais de todas as ordens">
-                                    <i data-lucide="calculator" class="w-4 h-4"></i>
-                                    Recalcular
                                 </button>
                             </div>
                         </div>
@@ -2480,6 +2421,10 @@
                                 <i data-lucide="calendar-range" class="w-4 h-4"></i>
                                 Agendamento Semanal
                             </button>
+                            <button class="pcp-subtab-btn flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all whitespace-nowrap border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100" data-subtab="pcp-mensagens">
+                                <i data-lucide="megaphone" class="w-4 h-4"></i>
+                                Mensagens TV
+                            </button>
                         </div>
                     </div>
 
@@ -2910,6 +2855,61 @@
                     <!-- ====== FIM AGENDAMENTO SEMANAL ====== -->
                     </div>
                     <!-- ====== FIM SUB-ABA 3 ====== -->
+
+                    <!-- ====== SUB-ABA 4: MENSAGENS TV (MARQUEE) ====== -->
+                    <div id="pcp-subtab-pcp-mensagens" class="pcp-subtab-content hidden space-y-4">
+                        <div class="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+                            <!-- Header -->
+                            <div class="bg-gradient-to-r from-indigo-600 to-purple-700 px-6 py-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="p-2 bg-white/10 rounded-xl">
+                                        <i data-lucide="megaphone" class="w-6 h-6 text-white"></i>
+                                    </div>
+                                    <div>
+                                        <h2 class="text-xl font-bold text-white">Mensagens para Dashboard TV</h2>
+                                        <p class="text-indigo-200 text-sm">As mensagens ativas aparecem na barra inferior do Dashboard TV em tempo real</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Formulário nova mensagem -->
+                            <div class="p-6 border-b border-gray-100">
+                                <h3 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                                    <i data-lucide="plus-circle" class="w-4 h-4 text-indigo-500"></i>
+                                    Nova Mensagem
+                                </h3>
+                                <div class="flex flex-col sm:flex-row gap-3">
+                                    <input type="text" id="pcp-msg-texto" placeholder="Digite a mensagem para exibir no Dashboard TV..."
+                                        class="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none" maxlength="200">
+                                    <select id="pcp-msg-prioridade" class="px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+                                        <option value="normal">Normal</option>
+                                        <option value="media">Média</option>
+                                        <option value="alta">Alta</option>
+                                    </select>
+                                    <button onclick="window.enviarMensagemPCP()" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-sm transition-colors flex items-center gap-2 whitespace-nowrap">
+                                        <i data-lucide="send" class="w-4 h-4"></i>
+                                        Enviar
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Lista de mensagens ativas -->
+                            <div class="p-6">
+                                <h3 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                                    <i data-lucide="list" class="w-4 h-4 text-indigo-500"></i>
+                                    Mensagens Ativas
+                                    <span id="pcp-msg-count" class="text-xs font-normal text-gray-400">(0)</span>
+                                </h3>
+                                <div id="pcp-msg-list" class="space-y-2 max-h-96 overflow-y-auto">
+                                    <div class="text-center py-8 text-gray-400">
+                                        <i data-lucide="inbox" class="w-10 h-10 mx-auto mb-2 opacity-40"></i>
+                                        <p class="text-sm">Nenhuma mensagem ativa</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- ====== FIM SUB-ABA 4 ====== -->
 
                     <!-- Modal Prioridade de Máquinas -->
                     <div id="modal-pcp-priority" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -4838,87 +4838,6 @@
                                         <canvas id="analysis-machine-production-timeline" class="w-full h-full"></canvas>
                                     </div>
                                 </div>
-
-                                <!-- Gráfico Ciclo/Cavidades -->
-                                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition mb-6">
-                                    <div class="flex items-center gap-3 mb-4">
-                                        <div class="p-2 bg-cyan-100 rounded-lg">
-                                            <i data-lucide="settings-2" class="w-4 h-4 text-cyan-600"></i>
-                                        </div>
-                                        <div>
-                                            <h3 class="font-semibold text-gray-800">Ciclo / Cavidades</h3>
-                                            <p class="text-xs text-gray-500">Comparativo planejado vs real por turno</p>
-                                        </div>
-                                    </div>
-                                    <div class="chart-container" style="height: 300px;">
-                                        <canvas id="cycle-cavity-chart" class="w-full h-full"></canvas>
-                                    </div>
-                                </div>
-
-                                <!-- Ranking e Insights - Grid Inferior -->
-                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                    <!-- Top 5 Máquinas -->
-                                    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition">
-                                        <div class="flex items-center gap-3 mb-4">
-                                            <div class="p-2 bg-amber-100 rounded-lg">
-                                                <i data-lucide="trophy" class="w-4 h-4 text-amber-600"></i>
-                                            </div>
-                                            <div>
-                                                <h3 class="font-semibold text-gray-800">Top 5 Máquinas</h3>
-                                                <p class="text-xs text-gray-500">Produção total hoje</p>
-                                            </div>
-                                        </div>
-                                        <div id="machine-ranking-production" class="space-y-2 max-h-[300px] overflow-y-auto pr-2">
-                                            <div class="text-center py-8 text-gray-400">
-                                                <i data-lucide="loader-2" class="w-6 h-6 mx-auto animate-spin mb-2"></i>
-                                                <p class="text-xs">Carregando...</p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Principais Mtricas -->
-                                    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition">
-                                        <div class="flex items-center gap-3 mb-4">
-                                            <div class="p-2 bg-violet-100 rounded-lg">
-                                                <i data-lucide="bar-chart-3" class="w-4 h-4 text-violet-600"></i>
-                                            </div>
-                                            <div>
-                                                <h3 class="font-semibold text-gray-800">Resumo do Dia</h3>
-                                                <p class="text-xs text-gray-500">Indicadores principais</p>
-                                            </div>
-                                        </div>
-                                        <div class="space-y-3 max-h-[300px] overflow-y-auto pr-2">
-                                            <div class="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
-                                                <div class="flex items-center gap-2">
-                                                    <i data-lucide="package" class="w-4 h-4 text-blue-600"></i>
-                                                    <span class="text-sm text-gray-700">Produção Boa</span>
-                                                </div>
-                                                <span id="summary-good-production" class="font-semibold text-blue-600">---</span>
-                                            </div>
-                                            <div class="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200">
-                                                <div class="flex items-center gap-2">
-                                                    <i data-lucide="alert-triangle" class="w-4 h-4 text-red-600"></i>
-                                                    <span class="text-sm text-gray-700">Refugos</span>
-                                                </div>
-                                                <span id="summary-losses" class="font-semibold text-red-600">---</span>
-                                            </div>
-                                            <div class="flex items-center justify-between p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                                                <div class="flex items-center gap-2">
-                                                    <i data-lucide="droplet" class="w-4 h-4 text-yellow-600"></i>
-                                                    <span class="text-sm text-gray-700">Borra (kg)</span>
-                                                </div>
-                                                <span id="summary-borra" class="font-semibold text-yellow-600">---</span>
-                                            </div>
-                                            <div class="flex items-center justify-between p-3 bg-orange-50 rounded-lg border border-orange-200">
-                                                <div class="flex items-center gap-2">
-                                                    <i data-lucide="pause-circle" class="w-4 h-4 text-orange-600"></i>
-                                                    <span class="text-sm text-gray-700">Parada (min)</span>
-                                                </div>
-                                                <span id="summary-downtime" class="font-semibold text-orange-600">---</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
 
                             <!-- ========== ANLISE DE EFICIÚ NCIA ========== -->
@@ -5023,40 +4942,6 @@
                                     </div>
                                 </div>
 
-                                <!-- Evolução OEE -->
-                                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-6 hover:shadow-md transition">
-                                    <div class="flex items-center gap-3 mb-4">
-                                        <div class="p-2 bg-purple-100 rounded-lg">
-                                            <i data-lucide="trending-up" class="w-4 h-4 text-purple-600"></i>
-                                        </div>
-                                        <div>
-                                            <h3 class="font-semibold text-gray-800">Evolução dos Componentes OEE</h3>
-                                            <p class="text-xs text-gray-500">Histórico ao longo do tempo</p>
-                                        </div>
-                                    </div>
-                                    <div class="relative" style="height: 320px;">
-                                        <canvas id="oee-components-timeline" class="w-full h-full"></canvas>
-                                    </div>
-                                </div>
-
-                                <!-- Mapa de Calor OEE -->
-                                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition">
-                                    <div class="flex items-center gap-3 mb-4">
-                                        <div class="p-2 bg-orange-100 rounded-lg">
-                                            <i data-lucide="grid-3x3" class="w-4 h-4 text-orange-600"></i>
-                                        </div>
-                                        <div>
-                                            <h3 class="font-semibold text-gray-800">Mapa de Calor - OEE</h3>
-                                            <p class="text-xs text-gray-500">Desempenho por máquina e turno</p>
-                                        </div>
-                                    </div>
-                                    <div id="oee-heatmap" class="overflow-x-auto">
-                                        <!-- Será gerado dinamicamente -->
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- ========== ANLISE DE PERDAS ========== -->
                             <div id="losses-view" class="analysis-view hidden">
                                 <!-- Header com Ação -->
                                 <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
@@ -5068,10 +4953,6 @@
                                         <button onclick="generateLossesReport()" class="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all">
                                             <i data-lucide="file-text" class="w-5 h-5"></i>
                                             Relatório Detalhado
-                                        </button>
-                                        <button onclick="openModal('quick-losses-modal')" class="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all">
-                                            <i data-lucide="plus" class="w-5 h-5"></i>
-                                            Registrar Perda
                                         </button>
                                     </div>
                                 </div>
@@ -8510,4 +8391,3 @@
     </script>
 </body>
 </html>
-

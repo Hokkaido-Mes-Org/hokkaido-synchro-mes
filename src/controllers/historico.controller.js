@@ -210,6 +210,7 @@ async function carregarHistorico(direction = 'first') {
 
         let query = db().collection('system_logs')
             .where('data', '==', dataSelecionada)
+            .orderBy('timestamp', 'desc')
             .limit(500);
 
         const snapshot = await query.get();
@@ -270,7 +271,7 @@ async function carregarHistorico(direction = 'first') {
                 <td class="px-4 py-3 text-sm text-gray-800">${log.descricao || log.acao || '-'}</td>
                 <td class="px-4 py-3 text-sm font-medium text-blue-600">${log.maquina || '-'}</td>
                 <td class="px-4 py-3 text-sm text-gray-600">${log.usuario || '-'}</td>
-                <td class="px-4 py-3 text-xs text-gray-500 max-w-xs truncate" title="${detalhesStr}">${detalhesStr || '-'}</td>
+                <td class="px-4 py-3 text-xs text-gray-500 max-w-xs truncate" title="${(detalhesStr || '').replace(/<[^>]*>/g, '')}">${detalhesStr || '-'}</td>
             `;
             tbody.appendChild(row);
         });
@@ -335,8 +336,14 @@ function formatarDetalhes(detalhes) {
     if (!detalhes || typeof detalhes !== 'object') return '';
 
     const partes = [];
-    if (detalhes.quantidade) partes.push(`Qtd: ${detalhes.quantidade}`);
-    if (detalhes.op) partes.push(`OP: ${detalhes.op}`);
+    
+    // FIX: Exibição obrigatória do Nº OP — verificar múltiplos nomes de campo
+    const opValue = detalhes.op || detalhes.orderNumber || detalhes.order_number || detalhes.opNumber || detalhes.op_number || detalhes.numeroOP || detalhes.ordem || null;
+    if (opValue) {
+        partes.push(`<strong>OP: ${opValue}</strong>`);
+    }
+    
+    if (detalhes.quantidade != null && detalhes.quantidade !== '') partes.push(`Qtd: ${detalhes.quantidade}`);
     if (detalhes.produto) partes.push(`Prod: ${detalhes.produto}`);
     if (detalhes.motivo) partes.push(`Motivo: ${detalhes.motivo}`);
     if (detalhes.duracao) partes.push(`Dur: ${detalhes.duracao}min`);
