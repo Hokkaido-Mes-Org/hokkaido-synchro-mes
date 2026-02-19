@@ -452,10 +452,10 @@
         .dashboard-container {
             display: grid;
             grid-template-columns: 1fr 1fr 320px;
-            grid-template-rows: auto auto 1fr auto;
+            grid-template-rows: auto auto 1fr;
             gap: 12px;
             padding: 12px 24px 52px;
-            height: calc(100vh - 64px);
+            height: calc(100vh - 80px);
             background: 
                 radial-gradient(ellipse at top left, rgba(0, 180, 216, 0.03) 0%, transparent 50%),
                 radial-gradient(ellipse at bottom right, rgba(124, 77, 255, 0.03) 0%, transparent 50%),
@@ -634,7 +634,7 @@
 
         .panel-body {
             flex: 1;
-            padding: 16px;
+            padding: 10px 12px;
             position: relative;
             min-height: 0;
         }
@@ -1025,7 +1025,7 @@
             border-radius: 4px;
             display: flex;
             flex-direction: column;
-            min-height: 200px;
+            min-height: 280px;
             flex: 1;
             overflow: hidden;
             box-shadow: 0 0 30px rgba(0, 180, 216, 0.25), inset 0 0 20px rgba(0, 180, 216, 0.05);
@@ -1104,8 +1104,8 @@
             display: grid;
             grid-template-columns: repeat(14, 1fr);
             grid-template-rows: repeat(2, 1fr);
-            gap: 8px;
-            padding: 12px 16px;
+            gap: 10px;
+            padding: 16px 20px;
             flex: 1;
             overflow: hidden;
             align-content: center;
@@ -1117,7 +1117,7 @@
             align-items: center;
             justify-content: center;
             min-width: 70px;
-            padding: 8px 6px;
+            padding: 12px 8px;
             border-radius: 8px;
             font-family: 'Roboto Mono', monospace;
             font-weight: 700;
@@ -1133,16 +1133,16 @@
         }
 
         .machine-status-card .machine-number {
-            font-size: 16px;
+            font-size: 20px;
             font-weight: 900;
             line-height: 1.1;
         }
 
         .machine-status-card .machine-label {
-            font-size: 9px;
+            font-size: 10px;
             font-weight: 600;
             letter-spacing: 0.3px;
-            margin-top: 3px;
+            margin-top: 4px;
             opacity: 0.95;
             white-space: nowrap;
             text-align: center;
@@ -1370,7 +1370,7 @@
         .shift-kpis-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 12px;
+            gap: 8px;
             height: 100%;
         }
 
@@ -1378,7 +1378,7 @@
             background: linear-gradient(135deg, rgba(30, 40, 55, 0.9), rgba(20, 30, 45, 0.95));
             border: 1px solid var(--industrial-border);
             border-radius: 8px;
-            padding: 12px;
+            padding: 8px 10px;
             display: flex;
             flex-direction: column;
         }
@@ -1393,15 +1393,15 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 14px;
-            padding-bottom: 10px;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
             border-bottom: 1px solid var(--industrial-border);
         }
 
         .shift-badge {
-            padding: 4px 12px;
+            padding: 3px 10px;
             border-radius: 4px;
-            font-size: 13px;
+            font-size: 11px;
             font-weight: 700;
             letter-spacing: 0.5px;
         }
@@ -1412,7 +1412,7 @@
         .shift-badge.total { background: rgba(0, 230, 118, 0.2); color: var(--status-success); }
 
         .shift-time {
-            font-size: 12px;
+            font-size: 10px;
             color: var(--text-secondary);
             font-family: 'Roboto Mono', monospace;
         }
@@ -1420,7 +1420,7 @@
         .shift-kpi-body {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 4px;
             flex: 1;
         }
 
@@ -1428,7 +1428,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 4px 0;
+            padding: 2px 0;
             border-bottom: 1px dashed rgba(255,255,255,0.05);
         }
 
@@ -1437,14 +1437,14 @@
         }
 
         .shift-metric .metric-value {
-            font-size: 18px;
+            font-size: 15px;
             font-weight: 700;
             color: var(--text-primary);
             font-family: 'Roboto Mono', monospace;
         }
 
         .shift-metric .metric-label {
-            font-size: 11px;
+            font-size: 9px;
             color: var(--text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -1453,7 +1453,7 @@
 
         .shift-kpi-card.total .metric-value {
             color: var(--industrial-cyan);
-            font-size: 20px;
+            font-size: 17px;
         }
 
         .shift-kpi-card.total .metric-label {
@@ -1610,22 +1610,49 @@
 
         @media (max-width: 1400px) {
             .dashboard-container {
-                grid-template-columns: 1fr 1fr 320px;
+                grid-template-columns: 1fr 1fr 280px;
+            }
+            .shift-kpis-grid {
+                gap: 6px;
+            }
+            .shift-kpi-card {
+                padding: 6px 8px;
+            }
+            .shift-metric .metric-value {
+                font-size: 13px;
+            }
+            .shift-metric .metric-label {
+                font-size: 8px;
+            }
+            .shift-badge {
+                font-size: 10px;
+                padding: 2px 8px;
+            }
+            .shift-time {
+                font-size: 9px;
             }
             .machine-status-grid {
                 grid-template-columns: repeat(9, 1fr);
                 grid-template-rows: repeat(3, 1fr);
-                gap: 6px;
+                gap: 8px;
+                padding: 12px 16px;
             }
             .machine-status-card {
                 min-width: 55px;
-                padding: 6px 4px;
+                padding: 10px 6px;
             }
             .machine-status-card .machine-number {
-                font-size: 14px;
+                font-size: 17px;
             }
             .machine-status-card .machine-label {
-                font-size: 8px;
+                font-size: 9px;
+            }
+            .gauge-wrapper {
+                width: 120px;
+                height: 120px;
+            }
+            .oee-factor-value {
+                font-size: 15px;
             }
         }
         
@@ -1697,42 +1724,61 @@
             }
             
             .data-panel {
-                grid-column: span 1;
+                grid-column: 1 / -1;
             }
             
             .shift-kpis-grid {
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns: repeat(4, 1fr);
+                gap: 6px;
+            }
+            
+            .shift-kpi-card {
+                padding: 6px 8px;
+            }
+            
+            .shift-kpi-header {
+                margin-bottom: 6px;
+                padding-bottom: 4px;
+            }
+            
+            .shift-metric .metric-value {
+                font-size: 13px;
+            }
+            
+            .shift-metric .metric-label {
+                font-size: 8px;
             }
             
             .oee-gauge-container {
-                flex-direction: column;
+                flex-direction: row;
                 gap: 16px;
             }
             
             .gauge-wrapper {
-                width: 140px;
-                height: 140px;
+                width: 110px;
+                height: 110px;
             }
             
             .machine-status-grid {
                 grid-template-columns: repeat(7, 1fr);
                 grid-template-rows: repeat(4, 1fr);
-                gap: 6px;
+                gap: 8px;
                 justify-content: center;
+                padding: 12px;
             }
             
             .machine-status-card {
                 min-width: 50px;
-                padding: 6px 4px;
+                padding: 10px 6px;
                 font-size: 12px;
             }
             
             .machine-status-card .machine-number {
-                font-size: 13px;
+                font-size: 16px;
             }
 
             .machine-status-card .machine-label {
-                font-size: 7px;
+                font-size: 8px;
             }
             
             .stopped-machines-list {
@@ -1895,28 +1941,28 @@
             
             .shift-kpis-grid {
                 grid-template-columns: repeat(2, 1fr);
-                gap: 8px;
+                gap: 6px;
             }
             
             .shift-kpi-card {
-                padding: 10px;
+                padding: 6px 8px;
             }
             
             .shift-badge {
                 font-size: 9px;
-                padding: 3px 8px;
+                padding: 2px 6px;
             }
             
             .shift-time {
-                font-size: 8px;
+                font-size: 7px;
             }
             
             .shift-metric .metric-value {
-                font-size: 14px;
+                font-size: 12px;
             }
             
             .shift-metric .metric-label {
-                font-size: 8px;
+                font-size: 7px;
             }
             
             .gauge-wrapper {
@@ -1949,20 +1995,20 @@
             .machine-status-grid {
                 grid-template-columns: repeat(5, 1fr);
                 grid-template-rows: auto;
-                gap: 5px;
-                padding: 8px;
+                gap: 6px;
+                padding: 10px;
             }
             
             .machine-status-card {
-                padding: 5px 3px;
+                padding: 8px 5px;
             }
             
             .machine-status-card .machine-number {
-                font-size: 11px;
+                font-size: 14px;
             }
             
             .machine-status-card .machine-label {
-                font-size: 6px;
+                font-size: 7px;
             }
             
             /* Stopped Machines List - 768px */
@@ -2160,16 +2206,16 @@
             
             .shift-kpis-grid {
                 grid-template-columns: 1fr 1fr;
-                gap: 6px;
+                gap: 4px;
             }
             
             .shift-kpi-card {
-                padding: 8px;
+                padding: 6px;
             }
             
             .shift-kpi-header {
-                margin-bottom: 8px;
-                padding-bottom: 6px;
+                margin-bottom: 4px;
+                padding-bottom: 4px;
             }
             
             .shift-badge {
@@ -2184,11 +2230,11 @@
             .shift-metric {
                 flex-direction: column;
                 align-items: flex-start;
-                gap: 2px;
+                gap: 1px;
             }
             
             .shift-metric .metric-value {
-                font-size: 13px;
+                font-size: 12px;
             }
             
             .shift-metric .metric-label {
@@ -2236,13 +2282,21 @@
             
             /* Machine Status Grid - 480px */
             .machine-status-grid {
-                grid-template-columns: repeat(3, 1fr);
-                gap: 4px;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 5px;
                 padding: 8px;
             }
             
             .machine-status-card {
-                padding: 6px;
+                padding: 7px 5px;
+            }
+            
+            .machine-status-card .machine-number {
+                font-size: 12px;
+            }
+            
+            .machine-status-card .machine-label {
+                font-size: 6px;
             }
             
             .machine-status-card .machine-name {
@@ -2334,12 +2388,21 @@
             }
             
             .shift-kpis-grid {
-                grid-template-columns: 1fr;
+                grid-template-columns: 1fr 1fr;
+                gap: 3px;
+            }
+            
+            .shift-kpi-card {
+                padding: 5px;
+            }
+            
+            .shift-metric .metric-value {
+                font-size: 11px;
             }
             
             /* Machine Status Grid - 360px */
             .machine-status-grid {
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns: repeat(3, 1fr);
                 gap: 3px;
                 padding: 6px;
             }
@@ -2348,8 +2411,16 @@
                 padding: 5px;
             }
             
+            .machine-status-card .machine-number {
+                font-size: 10px;
+            }
+            
             .machine-status-card .machine-name {
                 font-size: 8px;
+            }
+            
+            .machine-status-card .machine-label {
+                font-size: 5px;
             }
             
             .machine-status-card .machine-status-label {
