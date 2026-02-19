@@ -64,6 +64,29 @@ function isPageVisible() {
     return document.visibilityState === 'visible';
 }
 
+// ── Cache de consultas inline para relatórios (evita leituras duplicadas) ──
+const _inlineQueryCache = new Map();
+const _inlineQueryCacheTTL = 300000; // 5 min
+
+/**
+ * Executa query Firestore com cache por chave (para relatórios inline).
+ * @param {string} key - Chave única do cache
+ * @param {Function} queryFn - Função que retorna a Promise do .get()
+ * @returns {Promise<Array>} Array de docs { id, ...data }
+ */
+async function cachedInlineQuery(key, queryFn) {
+    const entry = _inlineQueryCache.get(key);
+    if (entry && Date.now() - entry.ts < _inlineQueryCacheTTL) {
+        console.debug(`📦 [Analysis·cache] hit: ${key}`);
+        return entry.data;
+    }
+    console.debug(`🔥 [Analysis·cache] miss: ${key}`);
+    const snapshot = await queryFn();
+    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    _inlineQueryCache.set(key, { data, ts: Date.now() });
+    return data;
+}
+
 // --- State variables (formerly closure-scoped) ---
 let analysisHourlyChartInstance = null;
 let hourlyChartInstance = null;
@@ -5850,23 +5873,22 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
         
         let allData = window._lossesAnalysisData || [];
         
-        // Se datas foram fornecidas, buscar dados diretamente do Firebase
+        // Se datas foram fornecidas, buscar dados diretamente do Firebase COM cache
         if (startDateParam || endDateParam) {
             try {
-                let query = getDb().collection('production_entries')
-                    .where('entryType', '==', 'losses');
-                
-                if (startDate === endDate) {
-                    query = query.where('data', '==', startDate);
-                } else {
-                    query = query.where('data', '>=', startDate).where('data', '<=', endDate);
-                }
-                
-                const snapshot = await query.get();
-                allData = snapshot.docs.map(doc => {
-                    const data = doc.data();
+                const rawDocs = await cachedInlineQuery(`losses_${startDate}_${endDate}`, () => {
+                    let query = getDb().collection('production_entries')
+                        .where('entryType', '==', 'losses');
+                    if (startDate === endDate) {
+                        query = query.where('data', '==', startDate);
+                    } else {
+                        query = query.where('data', '>=', startDate).where('data', '<=', endDate);
+                    }
+                    return query.get();
+                });
+                allData = rawDocs.map(data => {
                     return {
-                        id: doc.id,
+                        id: data.id,
                         date: data.data,
                         machine: data.machine,
                         shift: data.turno,
@@ -6378,13 +6400,13 @@ ${content.innerHTML}
         
         if (plans.length === 0) throw new Error('Nenhum plano ativo encontrado para os filtros aplicados');
         
-        // OTIMIZADO: executar queries em paralelo
-        const [productionSnapshot, downtimeSnapshot] = await Promise.all([
-            getDb().collection('production_entries').where('data', '>=', startDate).where('data', '<=', endDate).get(),
-            getDb().collection('downtime_entries').where('date', '>=', startDate).where('date', '<=', endDate).get()
+        // OTIMIZADO Fase 2: executar queries em paralelo COM cache
+        const [productions, downtimes] = await Promise.all([
+            cachedInlineQuery(`prod_${startDate}_${endDate}`, () =>
+                getDb().collection('production_entries').where('data', '>=', startDate).where('data', '<=', endDate).get()),
+            cachedInlineQuery(`down_${startDate}_${endDate}`, () =>
+                getDb().collection('downtime_entries').where('date', '>=', startDate).where('date', '<=', endDate).get())
         ]);
-        const productions = productionSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const downtimes = downtimeSnapshot.docs.map(doc => doc.data());
         
         // Processar dados
         let reportData = processResumoData(plans, productions, downtimes);
@@ -6506,13 +6528,13 @@ ${content.innerHTML}
         
         if (plans.length === 0) throw new Error('Nenhum plano ativo encontrado para os filtros aplicados');
         
-        // OTIMIZADO: executar queries em paralelo
-        const [productionSnapshot, downtimeSnapshot] = await Promise.all([
-            getDb().collection('production_entries').where('data', '>=', startDate).where('data', '<=', endDate).get(),
-            getDb().collection('downtime_entries').where('date', '>=', startDate).where('date', '<=', endDate).get()
+        // OTIMIZADO Fase 2: executar queries em paralelo COM cache
+        const [productions, downtimes] = await Promise.all([
+            cachedInlineQuery(`prod_${startDate}_${endDate}`, () =>
+                getDb().collection('production_entries').where('data', '>=', startDate).where('data', '<=', endDate).get()),
+            cachedInlineQuery(`down_${startDate}_${endDate}`, () =>
+                getDb().collection('downtime_entries').where('date', '>=', startDate).where('date', '<=', endDate).get())
         ]);
-        const productions = productionSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const downtimes = downtimeSnapshot.docs.map(doc => doc.data());
         
         let reportData = processResumoData(plans, productions, downtimes);
         
@@ -6640,17 +6662,18 @@ ${content.innerHTML}
             if (matchingPlanIds.length === 0) throw new Error('Nenhuma OP encontrada com o número digitado');
         }
         
-        // Buscar dados de paradas
-        let query = getDb().collection('downtime_entries');
-        if (startDate === endDate) {
-            query = query.where('date', '==', startDate);
-        } else {
-            query = query.where('date', '>=', startDate).where('date', '<=', endDate);
-        }
-        
-        const snapshot = await query.get();
-        let downtimeData = snapshot.docs.map(doc => {
-            const data = doc.data();
+        // OTIMIZADO Fase 2: Buscar dados de paradas COM cache
+        const cacheKey = startDate === endDate ? `down_${startDate}_${endDate}` : `down_${startDate}_${endDate}`;
+        const rawDocs = await cachedInlineQuery(cacheKey, () => {
+            let query = getDb().collection('downtime_entries');
+            if (startDate === endDate) {
+                query = query.where('date', '==', startDate);
+            } else {
+                query = query.where('date', '>=', startDate).where('date', '<=', endDate);
+            }
+            return query.get();
+        });
+        let downtimeData = rawDocs.map(data => {
             let duration = data.duration || 0;
             if (!duration && data.startTime && data.endTime && data.date) {
                 const start = new Date(`${data.date}T${data.startTime}`);
@@ -6789,18 +6812,19 @@ ${content.innerHTML}
             if (matchingPlanIds.length === 0) throw new Error('Nenhuma OP encontrada com o número digitado');
         }
         
-        let query = getDb().collection('production_entries').where('entryType', '==', 'losses');
-        if (startDate === endDate) {
-            query = query.where('data', '==', startDate);
-        } else {
-            query = query.where('data', '>=', startDate).where('data', '<=', endDate);
-        }
-        
-        const snapshot = await query.get();
-        let allData = snapshot.docs.map(doc => {
-            const data = doc.data();
+        // OTIMIZADO Fase 2: Buscar perdas COM cache
+        const rawDocs = await cachedInlineQuery(`losses_${startDate}_${endDate}`, () => {
+            let query = getDb().collection('production_entries').where('entryType', '==', 'losses');
+            if (startDate === endDate) {
+                query = query.where('data', '==', startDate);
+            } else {
+                query = query.where('data', '>=', startDate).where('data', '<=', endDate);
+            }
+            return query.get();
+        });
+        let allData = rawDocs.map(data => {
             return {
-                id: doc.id,
+                id: data.id,
                 date: data.data,
                 machine: data.machine,
                 shift: data.turno,
@@ -7202,11 +7226,14 @@ ${content.innerHTML}
                 return;
             }
             
-            const productionSnapshot = await getDb().collection('production_entries').where('data', '==', date).get();
-            const productions = productionSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // OTIMIZADO Fase 2: Usar cache
+            const productions = await cachedInlineQuery(`prod_${date}_${date}`, () =>
+                getDb().collection('production_entries').where('data', '==', date).get()
+            );
             
-            const downtimeSnapshot = await getDb().collection('downtime_entries').where('date', '==', date).get();
-            const downtimes = downtimeSnapshot.docs.map(doc => doc.data());
+            const downtimes = await cachedInlineQuery(`down_${date}_${date}`, () =>
+                getDb().collection('downtime_entries').where('date', '==', date).get()
+            );
             
             // Processar dados usando função existente
             const reportData = processResumoData(plans, productions, downtimes);

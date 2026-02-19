@@ -133,7 +133,7 @@ class DowntimeEntriesService extends BaseService {
 // ── Service para active_downtimes ──
 class ActiveDowntimesService extends BaseService {
     constructor() {
-        super('active_downtimes', { cacheTTL: 30000 }); // 30s — dados real-time
+        super('active_downtimes', { cacheTTL: 120000 }); // 120s — otimizado Fase 2 (era 30s)
     }
 
     /**

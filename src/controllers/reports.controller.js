@@ -26,6 +26,22 @@ let relOPsCacheLoaded = false;
 // ─── Helpers ─────────────────────────────────────────
 function db() { return getDb(); }
 
+// ── Cache de consultas para relatórios (evita leituras repetidas) ──
+const _relQueryCache = new Map();
+const _relQueryCacheTTL = 300000; // 5 min
+
+async function cachedRelQuery(key, queryFn) {
+    const entry = _relQueryCache.get(key);
+    if (entry && Date.now() - entry.ts < _relQueryCacheTTL) {
+        console.debug(`📦 [Rel·cache] hit: ${key}`);
+        return entry.snapshot;
+    }
+    console.debug(`🔥 [Rel·cache] miss: ${key}`);
+    const snapshot = await queryFn();
+    _relQueryCache.set(key, { snapshot, ts: Date.now() });
+    return snapshot;
+}
+
 function notify(msg, type) {
     if (typeof window.showNotification === 'function') window.showNotification(msg, type);
 }
@@ -210,11 +226,12 @@ async function relBuscarProducao() {
 
     try {
         await relLoadOPsCache();
+        // OTIMIZADO Fase 2: usar cache para queries de relatórios
         let query = db().collection('production_entries').where('data', '>=', range.dataInicio).where('data', '<=', range.dataFim).orderBy('data', 'desc');
-        const snapshot = await query.get();
+        const snapshot = await cachedRelQuery(`prod_${range.dataInicio}_${range.dataFim}`, () => query.get());
         let dados = [];
         snapshot.forEach(doc => {
-            const d = doc.data();
+            const d = typeof doc.data === 'function' ? doc.data() : doc;
             if (maquina && relNormalizeMachineId(d.machine || d.machineRef || d.machine_id) !== relNormalizeMachineId(maquina)) return;
             const shiftVal = String(d.turno ?? d.shift ?? '');
             if (turno && shiftVal !== turno) return;
@@ -285,11 +302,12 @@ async function relBuscarPerdas() {
 
     try {
         await relLoadOPsCache();
+        // OTIMIZADO Fase 2: usar cache para queries de relatórios
         let query = db().collection('production_entries').where('data', '>=', range.dataInicio).where('data', '<=', range.dataFim).orderBy('data', 'desc');
-        const snapshot = await query.get();
+        const snapshot = await cachedRelQuery(`prod_${range.dataInicio}_${range.dataFim}`, () => query.get());
         let dados = [];
         snapshot.forEach(doc => {
-            const d = doc.data();
+            const d = typeof doc.data === 'function' ? doc.data() : doc;
             const scrapPcs = Number(d.refugo_qty ?? d.refugo_qtd ?? d.scrap_qty ?? d.scrap_qtd ?? 0) || 0;
             const scrapKg = Number(d.refugo_kg ?? d.refugoKg ?? d.scrap_kg ?? d.scrapKg ?? 0) || 0;
             if (scrapPcs <= 0 && scrapKg <= 0) return;
@@ -356,11 +374,12 @@ async function relBuscarParadas() {
     if (empty) empty.classList.add('hidden');
 
     try {
+        // OTIMIZADO Fase 2: usar cache para queries de relatórios
         let query = db().collection('downtime_entries').where('date', '>=', range.dataInicio).where('date', '<=', range.dataFim).orderBy('date', 'desc');
-        const snapshot = await query.get();
+        const snapshot = await cachedRelQuery(`down_${range.dataInicio}_${range.dataFim}`, () => query.get());
         let dados = [];
         snapshot.forEach(doc => {
-            const d = doc.data();
+            const d = typeof doc.data === 'function' ? doc.data() : doc;
             const machineId = relNormalizeMachineId(d.machine || d.machineRef || d.machine_id);
             if (maquina && machineId !== relNormalizeMachineId(maquina)) return;
             const duration = Number(d.duration ?? d.duration_min ?? d.duracao_min ?? 0) || 0;

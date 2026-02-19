@@ -708,7 +708,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // AÇÃO 5: CacheManager para relatórios - evita consultas repetidas
     const CacheManager = {
         _cache: new Map(),
-        _ttl: 180000, // OTIMIZAÇÃO: 180s de TTL padrão (era 60s)
+        _ttl: 300000, // OTIMIZAÇÃO Fase 2: 300s de TTL padrão (era 180s)
         
         // Gera chave única para o cache
         _generateKey(collection, filters) {
@@ -846,8 +846,8 @@ document.addEventListener('DOMContentLoaded', function() {
         },
         
         // Verificar se dados estão "frescos" (recentes)
-        // OTIMIZAÇÃO: TTL aumentado para 300s (5min) para reduzir leituras Firebase entre abas
-        isFresh(collection, maxAgeMs = 300000) {
+        // OTIMIZAÇÃO Fase 2: TTL aumentado para 600s (10min) para reduzir leituras Firebase entre abas
+        isFresh(collection, maxAgeMs = 600000) {
             const ts = this._timestamps[collection];
             if (!ts) return false;
             return Date.now() - ts < maxAgeMs;
@@ -894,8 +894,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Buscar do Firebase com cache inteligente
         async fetchIfNeeded(collection, queryBuilder = null, forceRefresh = false) {
             // Se dados existem e são frescos, usar do cache
-            // OTIMIZAÇÃO: TTL aumentado para 180s (era 60s)
-            if (!forceRefresh && this.isFresh(collection, 180000) && this._data[collection]) {
+            // OTIMIZAÇÃO Fase 2: TTL aumentado para 300s (era 180s)
+            if (!forceRefresh && this.isFresh(collection, 300000) && this._data[collection]) {
                 console.debug(`📦 DataStore: usando cache de ${collection}`);
                 return this._data[collection];
             }
@@ -1375,8 +1375,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Verificar DataStore primeiro
         if (!forceRefresh && window.DataStore) {
             const cached = window.DataStore.get('activeDowntimes');
-            // OTIMIZAÇÃO: TTL de active_downtimes aumentado para 120s (era 60s)
-            if (cached && window.DataStore.isFresh('activeDowntimes', 120000)) {
+            // OTIMIZAÇÃO Fase 2: TTL de active_downtimes aumentado para 300s (era 120s)
+            if (cached && window.DataStore.isFresh('activeDowntimes', 300000)) {
                 console.debug('📦 Usando DataStore.activeDowntimes');
                 if (window.FirebaseMonitor) window.FirebaseMonitor.trackRead('active_downtimes', true);
                 return cached;
@@ -1410,7 +1410,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (!forceRefresh && window.DataStore) {
             const cached = window.DataStore.get(cacheKey);
-            if (cached && window.DataStore.isFresh(cacheKey, 120000)) { // 2 min TTL (otimizado - era 1 min)
+            if (cached && window.DataStore.isFresh(cacheKey, 300000)) { // 5 min TTL (otimizado Fase 2 — era 2 min)
                 console.debug('📦 Usando cache downtime_entries');
                 return cached;
             }
@@ -4404,11 +4404,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 productionModalForm.prepend(planIdInput);
             }
             
-            // Iniciar atualização automática de OEE em tempo real (a cada 30 minutos - otimizado para economizar quota)
-            setInterval(updateRealTimeOeeData, 30 * 60 * 1000);
+            // Iniciar atualização automática de OEE em tempo real (a cada 60 minutos — otimizado Fase 2, era 30min)
+            setInterval(updateRealTimeOeeData, 60 * 60 * 1000);
             
-            // Iniciar atualização automática da timeline (a cada 10 minutos - otimizado para economizar quota)
-            setInterval(updateTimelineIfVisible, 10 * 60 * 1000);
+            // Iniciar atualização automática da timeline (a cada 30 minutos — otimizado Fase 2, era 10min)
+            setInterval(updateTimelineIfVisible, 30 * 60 * 1000);
             
             // Atualizar imediatamente se estivermos na aba de dashboard ou análise
             setTimeout(updateRealTimeOeeData, 2000);
@@ -11277,12 +11277,12 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         // Executar imediatamente na primeira vez
         pollActiveDowntimes();
         
-        // Configurar polling a cada 120 segundos (otimizado para reduzir custos Firebase - era 60s)
+        // Configurar polling a cada 300 segundos (otimizado Fase 2 — era 120s, reduz 60% leituras active_downtimes)
         window._startActiveDowntimesPolling = () => {
             if (window._activeDowntimesPolling) {
                 clearInterval(window._activeDowntimesPolling);
             }
-            window._activeDowntimesPolling = setInterval(pollActiveDowntimes, 120000);
+            window._activeDowntimesPolling = setInterval(pollActiveDowntimes, 300000);
         };
         window._startActiveDowntimesPolling();
         
@@ -11652,11 +11652,9 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         listenerManager.unsubscribe('launchPlanning');
         listenerManager.unsubscribe('launchProductions');
 
-        // OTIMIZADO: Filtrar planejamentos dos últimos 30 dias (redução de custo Firebase)
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
-        const planningQuery = db.collection('planning').where('date', '>=', thirtyDaysAgoStr);
+        // OTIMIZADO FASE 2: Filtrar apenas data de hoje (era 30 dias — ~10.000 leituras/turno a menos)
+        // Planejamentos ativos de datas antigas devem ser reproporcionados para hoje
+        const planningQuery = db.collection('planning').where('date', '==', date);
         listenerManager.subscribe('launchPlanning', planningQuery,
             (snapshot) => {
                 // Filtrar apenas planejamentos ativos (não concluídos/finalizados/cancelados)
@@ -11674,23 +11672,27 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
             }
         );
         
-        const entriesQuery = db.collection('production_entries').where('data', '==', date);
-        listenerManager.subscribe('launchProductions', entriesQuery,
-            (snapshot) => {
+        // OTIMIZADO FASE 2: Reutilizar dados do listener 'productionEntries' via DataStore
+        // (eliminado listener duplicado 'launchProductions' — mesma query do 'productionEntries')
+        const updateLaunchFromDataStore = () => {
+            const cached = window.DataStore ? window.DataStore.get('productionEntries') : null;
+            if (cached) {
                 launchedEntries = new Set();
-                productionEntries = snapshot.docs.map(doc => doc.data());
-                snapshot.forEach(doc => {
-                    const entry = doc.data();
-                    if(entry.produzido > 0 || entry.refugo_kg > 0) {
+                productionEntries = cached.map(e => ({ ...e }));
+                cached.forEach(entry => {
+                    if (entry.produzido > 0 || entry.refugo_kg > 0) {
                         launchedEntries.add(`${entry.planId}-${entry.turno}`);
                     }
                 });
                 render();
-            },
-            (error) => {
-                console.error("Erro ao carregar lançamentos de produção: ", error);
             }
-        );
+        };
+        // Ouvir atualizações do DataStore (alimentado pelo listener 'productionEntries')
+        if (window.DataStore) {
+            window.DataStore.subscribe('productionEntries', updateLaunchFromDataStore);
+        }
+        // Carregar dados iniciais se já existirem
+        updateLaunchFromDataStore();
     }
 
     function renderLaunchPanel(planItems, launchedEntries, productionEntries) {

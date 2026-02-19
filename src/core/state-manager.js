@@ -23,8 +23,8 @@ class StateManager {
     /** @type {Object<string, number>} */
     #timestamps = {};
     
-    /** @type {number} TTL padrão: 2 minutos */
-    #defaultTTL = 120000;
+    /** @type {number} TTL padrão: 5 minutos (otimizado Fase 2 — era 2 min) */
+    #defaultTTL = 300000;
     
     /** @type {Object<string, number>} Contadores de acesso para monitoramento */
     #accessCounts = { hits: 0, misses: 0, sets: 0, invalidations: 0 };

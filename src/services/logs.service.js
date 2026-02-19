@@ -11,7 +11,7 @@ import { getDb, serverTimestamp } from './firebase-client.js';
 
 class LogsService extends BaseService {
     constructor() {
-        super('system_logs', { cacheTTL: 30000 }); // 30s
+        super('system_logs', { cacheTTL: 300000 }); // 300s (5min) — otimizado Fase 2 (era 30s)
     }
 
     /**

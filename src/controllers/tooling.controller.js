@@ -20,6 +20,11 @@ const ferramentariaState = {
 // ─── Helpers ─────────────────────────────────────────
 function db() { return getDb(); }
 
+// ── Cache simples para ferramentaria (evita leituras repetidas) ──
+let _moldesCache = null;
+let _moldesCacheTs = 0;
+const _moldesCacheTTL = 300000; // 5 min
+
 function notify(msg, type) {
     if (typeof window.showNotification === 'function') window.showNotification(msg, type);
 }
@@ -88,11 +93,21 @@ async function carregarMoldesFerramentaria() {
             batidas_preventiva: m.batidas_preventiva, batidas_atuais: 0, ultima_manutencao: null
         }));
 
-        const moldesSnapshot = await db().collection('ferramentaria_moldes').get();
-        moldesSnapshot.forEach(doc => {
-            const data = doc.data();
+        // OTIMIZADO Fase 2: usar cache para ferramentaria_moldes (full collection, TTL 5min)
+        let moldesDocs;
+        if (_moldesCache && Date.now() - _moldesCacheTs < _moldesCacheTTL) {
+            console.debug('📦 [Ferram·cache] hit: ferramentaria_moldes');
+            moldesDocs = _moldesCache;
+        } else {
+            console.debug('🔥 [Ferram·cache] miss: ferramentaria_moldes');
+            const moldesSnapshot = await db().collection('ferramentaria_moldes').get();
+            moldesDocs = moldesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            _moldesCache = moldesDocs;
+            _moldesCacheTs = Date.now();
+        }
+        moldesDocs.forEach(data => {
             const local = ferramentariaState.moldes.find(m => m.molde.toLowerCase() === data.molde?.toLowerCase());
-            if (local) { local.id = doc.id; local.batidas_atuais = data.batidas_atuais || 0; local.ultima_manutencao = data.ultima_manutencao || null; }
+            if (local) { local.id = data.id; local.batidas_atuais = data.batidas_atuais || 0; local.ultima_manutencao = data.ultima_manutencao || null; }
         });
 
         const manutencoesSnapshot = await db().collection('ferramentaria_manutencoes').orderBy('data', 'desc').limit(20).get();

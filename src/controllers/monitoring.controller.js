@@ -33,6 +33,29 @@ let acompanhamentoParadasDataAtual = {};
 /** Atalho para Firestore */
 function db() { return getDb(); }
 
+// ── Cache de consultas por data (evita leituras repetidas ao navegar entre sub-abas) ──
+const _queryCache = new Map();
+const _queryCacheTTL = 300000; // 5 min
+
+/**
+ * Executa query Firestore com cache por chave.
+ * @param {string} key - Chave única do cache
+ * @param {Function} queryFn - Função que retorna a Promise do .get()
+ * @returns {Promise<Array>} Array de docs { id, ...data }
+ */
+async function cachedQuery(key, queryFn) {
+    const entry = _queryCache.get(key);
+    if (entry && Date.now() - entry.ts < _queryCacheTTL) {
+        console.debug(`📦 [Monit·cache] hit: ${key}`);
+        return entry.data;
+    }
+    console.debug(`🔥 [Monit·cache] miss: ${key}`);
+    const snapshot = await queryFn();
+    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    _queryCache.set(key, { data, ts: Date.now() });
+    return data;
+}
+
 // ═══════════════════════════════════════════════
 // ENTRY POINT — chamado pelo feature flag gate
 // ═══════════════════════════════════════════════
@@ -147,16 +170,15 @@ async function carregarDadosAcompanhamento() {
         const producaoPorMaquina = new Map();
         const docsProcessados = new Set();
 
-        // OTIMIZADO: executar as duas queries em paralelo (campo 'data' vs 'date')
-        const [snapshotData, snapshotDate] = await Promise.all([
-            db().collection('production_entries').where('data', '==', data).get(),
-            db().collection('production_entries').where('date', '==', data).get()
+        // OTIMIZADO Fase 2: executar as duas queries em paralelo COM cache
+        const [docsData, docsDate] = await Promise.all([
+            cachedQuery(`prod_data_${data}`, () => db().collection('production_entries').where('data', '==', data).get()),
+            cachedQuery(`prod_date_${data}`, () => db().collection('production_entries').where('date', '==', data).get())
         ]);
 
-        const processarDoc = (doc) => {
-            if (docsProcessados.has(doc.id)) return;
-            docsProcessados.add(doc.id);
-            const d = doc.data();
+        const processarDoc = (d, docId) => {
+            if (docsProcessados.has(docId)) return;
+            docsProcessados.add(docId);
             const machine = normalizeMachineId(d.machine || d.machine_id || d.maquina || '');
             if (!machine || machine === 'N/A') return;
             const quantidade = parseInt(d.produzido || d.quantity || 0, 10);
@@ -169,8 +191,8 @@ async function carregarDadosAcompanhamento() {
             producaoPorMaquina.get(machine)[`t${turno}`] += quantidade;
         };
 
-        snapshotData.docs.forEach(processarDoc);
-        snapshotDate.docs.forEach(processarDoc);
+        docsData.forEach(d => processarDoc(d, d.id));
+        docsDate.forEach(d => processarDoc(d, d.id));
 
         tbody.innerHTML = '';
 
@@ -385,25 +407,26 @@ async function carregarDadosAcompanhamentoPerdas() {
         const perdasPorMaquina = new Map();
         const docsProcessados = new Set();
 
-        // OTIMIZAÇÃO Fase 2: executar todas as 6 queries em paralelo (3 turnos x 2 campos)
+        // OTIMIZAÇÃO Fase 2: executar todas as 6 queries em paralelo COM cache (3 turnos x 2 campos)
         const queryPromises = [];
         for (const t of [1, 2, 3]) {
             queryPromises.push(
-                db().collection('production_entries').where('data', '==', data).where('turno', '==', t).get()
-                    .then(snap => ({ turno: t, docs: snap.docs }))
+                cachedQuery(`prod_data_${data}_turno_${t}`, () =>
+                    db().collection('production_entries').where('data', '==', data).where('turno', '==', t).get()
+                ).then(docs => ({ turno: t, docs }))
             );
             queryPromises.push(
-                db().collection('production_entries').where('data', '==', data).where('shift', '==', t).get()
-                    .then(snap => ({ turno: t, docs: snap.docs }))
+                cachedQuery(`prod_data_${data}_shift_${t}`, () =>
+                    db().collection('production_entries').where('data', '==', data).where('shift', '==', t).get()
+                ).then(docs => ({ turno: t, docs }))
             );
         }
         const results = await Promise.all(queryPromises);
 
         results.forEach(({ turno: t, docs }) => {
-            docs.forEach(doc => {
-                if (docsProcessados.has(doc.id)) return;
-                docsProcessados.add(doc.id);
-                const d = doc.data();
+            docs.forEach(d => {
+                if (docsProcessados.has(d.id)) return;
+                docsProcessados.add(d.id);
                 const machine = d.machine || d.machine_id || d.maquina || 'N/A';
                 const refugo = parseFloat(d.refugo_kg || d.refugo || 0);
                 if (refugo <= 0) return;
@@ -671,16 +694,19 @@ async function carregarTimelineParadas() {
         escalaEl.innerHTML = escalaMarcas.map(h => `<span>${h}</span>`).join('');
 
         const maquinasPlanejamento = new Set();
-        const planejamentoSnapshot = await db().collection('planning').where('date', '==', data).get();
-        planejamentoSnapshot.forEach(doc => {
-            const d = doc.data();
+        // OTIMIZADO Fase 2: usar cache para planning
+        const planejamentoDocs = await cachedQuery(`planning_${data}`, () =>
+            db().collection('planning').where('date', '==', data).get()
+        );
+        planejamentoDocs.forEach(d => {
             if (d.machine || d.maquina) maquinasPlanejamento.add(normalizeMachineId(d.machine || d.maquina));
         });
 
         if (maquinasPlanejamento.size === 0) {
-            const producaoSnapshot = await db().collection('production_entries').where('data', '==', data).get();
-            producaoSnapshot.forEach(doc => {
-                const d = doc.data();
+            const producaoDocs = await cachedQuery(`prod_data_${data}`, () =>
+                db().collection('production_entries').where('data', '==', data).get()
+            );
+            producaoDocs.forEach(d => {
                 if (d.machine) maquinasPlanejamento.add(d.machine);
             });
         }
@@ -696,11 +722,12 @@ async function carregarTimelineParadas() {
         });
 
         const paradasPorMaquina = new Map();
-        // OTIMIZAÇÃO Fase 2: campo correto é 'date' (não 'data') para downtime_entries
-        const paradasSnapshot = await db().collection('downtime_entries').where('date', '==', data).get();
+        // OTIMIZADO Fase 2: usar cache para downtime_entries
+        const paradasDocs = await cachedQuery(`downtime_${data}`, () =>
+            db().collection('downtime_entries').where('date', '==', data).get()
+        );
 
-        paradasSnapshot.forEach(doc => {
-            const d = doc.data();
+        paradasDocs.forEach(d => {
             const machine = normalizeMachineId(d.machine || d.maquina || '');
             if (!machine || !maquinasPlanejamento.has(machine)) return;
             if (turnoFiltro !== 'all') {

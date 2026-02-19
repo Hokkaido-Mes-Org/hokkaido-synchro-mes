@@ -2479,12 +2479,12 @@ const machineCardProductionCache = (() => {
         // Executar imediatamente na primeira vez
         pollActiveDowntimes();
         
-        // Configurar polling a cada 60 segundos (otimizado para reduzir custos Firebase - era 15s)
+        // Configurar polling a cada 300 segundos (otimizado Fase 2 — era 60s, reduz 80% leituras active_downtimes)
         window._startActiveDowntimesPolling = () => {
             if (window._activeDowntimesPolling) {
                 clearInterval(window._activeDowntimesPolling);
             }
-            window._activeDowntimesPolling = setInterval(pollActiveDowntimes, 60000);
+            window._activeDowntimesPolling = setInterval(pollActiveDowntimes, 300000);
         };
         window._startActiveDowntimesPolling();
         

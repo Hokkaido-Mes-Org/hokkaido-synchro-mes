@@ -35,11 +35,11 @@ export class BaseService {
     /**
      * @param {string} collectionName - Nome da coleção Firestore
      * @param {Object} [options]
-     * @param {number} [options.cacheTTL=60000] - TTL do cache em ms (padrão: 1 min)
+     * @param {number} [options.cacheTTL=120000] - TTL do cache em ms (padrão: 2 min — otimizado Fase 2)
      */
     constructor(collectionName, options = {}) {
         this.collection = collectionName;
-        this.cacheTTL = options.cacheTTL || 60000;
+        this.cacheTTL = options.cacheTTL || 120000;
         this._cache = new Map();
         this._listeners = new Map();
     }
