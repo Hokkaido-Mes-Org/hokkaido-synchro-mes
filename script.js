@@ -11239,12 +11239,12 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
             try {
                 // OTIMIZAÇÃO: Usar função com cache (TTL 30s para dados em tempo real)
                 const downtimes = await getActiveDowntimesCached(false);
-                // FIX: Filtrar por isActive === true (consistente com getAllMachinesDowntimeStatus)
-                const staleIds = [];
+                // FIX: Aceitar paradas onde isActive NÃO seja explicitamente false
+                // (undefined, null, true = parada válida; apenas false = inativa)
                 const validDowntimeIds = downtimes
                     .filter(d => {
-                        if (d.isActive !== true) {
-                            staleIds.push(d.id);
+                        if (d.isActive === false) {
+                            console.debug(`[pollActiveDowntimes] Parada ${d.id} com isActive=false, ignorando`);
                             return false;
                         }
                         return true;
@@ -11253,21 +11253,13 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
                     .filter(id => {
                         const normalizedId = normalizeMachineId(id);
                         if (!validMachineIdsSet.has(normalizedId)) {
-                            staleIds.push(id);
+                            console.warn(`[pollActiveDowntimes] Máquina "${id}" não existe no machineDatabase — ignorando (SEM deletar)`);
                             return false;
                         }
                         return true;
                     });
                 activeDowntimeSet = new Set(validDowntimeIds);
-                // Auto-limpeza de docs órfãos (background)
-                if (staleIds.length > 0) {
-                    console.debug(`[pollActiveDowntimes] Removendo ${staleIds.length} paradas órfãs:`, staleIds);
-                    Promise.all(staleIds.map(id =>
-                        db.collection('active_downtimes').doc(id).delete().catch(() => {})
-                    )).then(() => {
-                        if (window.DataStore) window.DataStore.invalidate('activeDowntimes');
-                    }).catch(() => {});
-                }
+                // NOTA: NÃO deletar docs automaticamente — era causa de sumiço de paradas
                 scheduleRender();
             } catch (error) {
                 console.error('Erro ao buscar paradas ativas:', error);
@@ -15535,6 +15527,9 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
                 }
                 const shiftValue = currentDowntimeStart.startShift || currentDowntimeStart.shift || currentDowntimeStart.turno || null;
                 for (const seg of segments) {
+                    // FIX: Usar turno do SEGMENTO (seg.shift) em vez do turno de início
+                    // para que paradas cross-turno apareçam corretamente em cada turno
+                    const segShift = seg.shift || shiftValue;
                     const downtimeData = {
                         machine: currentDowntimeStart.machine,
                         date: seg.date,
@@ -15543,8 +15538,8 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
                         duration: seg.duration,
                         reason: currentDowntimeStart.reason,
                         observations: currentDowntimeStart.observations || '',
-                        shift: shiftValue,
-                        turno: shiftValue,
+                        shift: segShift,
+                        turno: segShift,
                         batchDowntime: currentDowntimeStart.batchDowntime || false,
                         userCod: currentDowntimeStart.userCod ?? null,
                         nomeUsuario: currentDowntimeStart.nomeUsuario || null,
@@ -17887,15 +17882,14 @@ function sendDowntimeNotification() {
             // IMPORTANTE: Filtrar apenas máquinas válidas do machineDatabase
             const validMachineIdsSet = new Set(machineDatabase.map(m => normalizeMachineId(m.id)));
             let activeDowntimeSet = new Set();
-            const staleDowntimeIds = [];
             try {
-                // OTIMIZADO: usa cache global (TTL 30s) ao invés de leitura direta
+                // OTIMIZADO: usa cache global ao invés de leitura direta
                 const activeData = await getActiveDowntimesCached();
                 const validDowntimeIds = activeData
-                    // FIX: usar isActive === true (consistente com getAllMachinesDowntimeStatus)
+                    // FIX: Aceitar paradas onde isActive NÃO seja explicitamente false
                     .filter(d => {
-                        if (d.isActive !== true) {
-                            staleDowntimeIds.push(d.id);
+                        if (d.isActive === false) {
+                            console.debug(`[loadMachineCards] Parada ${d.id} com isActive=false, ignorando`);
                             return false;
                         }
                         return true;
@@ -17904,8 +17898,7 @@ function sendDowntimeNotification() {
                     .filter(id => {
                         const normalizedId = normalizeMachineId(id);
                         if (!validMachineIdsSet.has(normalizedId)) {
-                            console.warn(`[loadMachineCards] Máquina "${id}" em active_downtimes não existe no machineDatabase`);
-                            staleDowntimeIds.push(id);
+                            console.warn(`[loadMachineCards] Máquina "${id}" não existe no machineDatabase — ignorando (SEM deletar)`);
                             return false;
                         }
                         return true;
@@ -17914,18 +17907,7 @@ function sendDowntimeNotification() {
             } catch (e) {
                 console.warn('Erro ao buscar paradas ativas:', e);
             }
-
-            // Auto-limpeza de docs órfãos em background
-            if (staleDowntimeIds.length > 0) {
-                console.debug(`[loadMachineCards] Removendo ${staleDowntimeIds.length} paradas órfãs:`, staleDowntimeIds);
-                Promise.all(staleDowntimeIds.map(id =>
-                    db.collection('active_downtimes').doc(id).delete().catch(e =>
-                        console.warn(`[cleanup] Falha ao remover active_downtimes/${id}:`, e)
-                    )
-                )).then(() => {
-                    if (window.DataStore) window.DataStore.invalidate('activeDowntimes');
-                }).catch(() => {});
-            }
+            // NOTA: NÃO deletar docs automaticamente — era causa de sumiço de paradas
 
             // NOVO: Carregar paradas longas para mostrar no painel de máquinas
             const machinesDowntime = await getAllMachinesDowntimeStatus();
@@ -18537,15 +18519,15 @@ function sendDowntimeNotification() {
             activeDowntimesList.forEach(data => {
                 const mid = normalizeMachineId(data.id);
                 
-                // FIX: Exigir isActive === true (não apenas truthy)
-                if (!data || data.isActive !== true) {
-                    staleDocIds.push({ collection: 'active_downtimes', id: data.id });
+                // FIX: Aceitar paradas onde isActive NÃO seja explicitamente false
+                if (!data || data.isActive === false) {
+                    console.debug(`[MACHINE-STATUS] Parada ${data?.id} com isActive=false, ignorando`);
                     return;
                 }
                 
-                // FIX: Ignorar se máquina não existe no database
+                // Ignorar se máquina não existe no database (sem deletar)
                 if (!validMachineIdsSet.has(mid)) {
-                    staleDocIds.push({ collection: 'active_downtimes', id: data.id });
+                    console.warn(`[MACHINE-STATUS] Máquina "${data.id}" não existe no machineDatabase — ignorando`);
                     return;
                 }
                 
@@ -18591,23 +18573,10 @@ function sendDowntimeNotification() {
                 console.warn('[MACHINE-STATUS] Erro ao buscar extended_downtime_logs:', extendedError);
             }
             
-            // Auto-limpeza de docs órfãos em background
+            // NOTA: Auto-limpeza REMOVIDA — era causa de sumiço de paradas ativas
+            // Apenas logar docs potencialmente órfãos para monitoramento
             if (staleDocIds.length > 0) {
-                console.debug(`[MACHINE-STATUS] Limpando ${staleDocIds.length} paradas órfãs:`, staleDocIds.map(d => `${d.collection}/${d.id}`));
-                Promise.all(staleDocIds.map(d => {
-                    if (d.collection === 'extended_downtime_logs') {
-                        // Não deletar logs — marcar como resolvido para preservar histórico
-                        return window.db.collection(d.collection).doc(d.id).update({
-                            status: 'resolved',
-                            resolvedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                            resolvedReason: 'auto_cleanup_machine_producing'
-                        }).catch(e => console.debug(`[cleanup] Falha ao resolver ${d.collection}/${d.id}:`, e));
-                    }
-                    // active_downtimes — deletar definitivamente
-                    return window.db.collection(d.collection).doc(d.id).delete().catch(e =>
-                        console.debug(`[cleanup] Falha ao remover ${d.collection}/${d.id}:`, e)
-                    );
-                })).catch(() => {});
+                console.debug(`[MACHINE-STATUS] Docs potencialmente órfãos (NÃO deletados):`, staleDocIds.map(d => `${d.collection}/${d.id}`));
             }
             
             // Atualizar cache
@@ -18748,28 +18717,53 @@ function sendDowntimeNotification() {
             if (isActiveDowttimeRecord) {
                 // Para paradas em active_downtimes: registrar histórico e depois deletar
                 
-                // Obter turno da parada (para filtros de OEE)
-                const shiftValue = downtimeData.startShift || downtimeData.shift || downtimeData.turno || null;
+                // Obter turno fallback da parada
+                const shiftFallback = downtimeData.startShift || downtimeData.shift || downtimeData.turno || null;
                 
-                // Primeiro, registrar em downtime_entries para histórico
-                const downtimeEntryData = {
-                    machine: normalizedMachineId,
-                    date: startDateStr,
-                    startTime: startTimeStr,
-                    endTime: endTime,
-                    duration: durationMinutes,
-                    reason: reasonText,
-                    shift: shiftValue,
-                    turno: shiftValue,
-                    observations: downtimeData.observations || '',
-                    batchDowntime: downtimeData.batchDowntime || false,
-                    registradoPor: getActiveUser()?.username || null,
-                    registradoPorNome: getActiveUser()?.name || 'Sistema',
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                };
+                // FIX: Dividir parada em segmentos por turno para correta exibição cross-turno
+                const segments = window.splitDowntimeIntoShiftSegments(startDateStr, startTimeStr, endDate, endTime);
                 
-                await db.collection('downtime_entries').add(downtimeEntryData);
-                console.log('[FINALIZAR-PARADA] Registrado em downtime_entries para histórico:', downtimeEntryData);
+                if (segments && segments.length > 0) {
+                    for (const seg of segments) {
+                        const segShift = seg.shift || shiftFallback;
+                        const downtimeEntryData = {
+                            machine: normalizedMachineId,
+                            date: seg.date,
+                            startTime: seg.startTime,
+                            endTime: seg.endTime,
+                            duration: seg.duration,
+                            reason: reasonText,
+                            shift: segShift,
+                            turno: segShift,
+                            observations: downtimeData.observations || '',
+                            batchDowntime: downtimeData.batchDowntime || false,
+                            registradoPor: getActiveUser()?.username || null,
+                            registradoPorNome: getActiveUser()?.name || 'Sistema',
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                        };
+                        await db.collection('downtime_entries').add(downtimeEntryData);
+                        console.log('[FINALIZAR-PARADA] Segmento registrado em downtime_entries:', downtimeEntryData);
+                    }
+                } else {
+                    // Fallback: se splitDowntimeIntoShiftSegments não retornar segmentos, salvar registro único
+                    const downtimeEntryData = {
+                        machine: normalizedMachineId,
+                        date: startDateStr,
+                        startTime: startTimeStr,
+                        endTime: endTime,
+                        duration: durationMinutes,
+                        reason: reasonText,
+                        shift: shiftFallback,
+                        turno: shiftFallback,
+                        observations: downtimeData.observations || '',
+                        batchDowntime: downtimeData.batchDowntime || false,
+                        registradoPor: getActiveUser()?.username || null,
+                        registradoPorNome: getActiveUser()?.name || 'Sistema',
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    };
+                    await db.collection('downtime_entries').add(downtimeEntryData);
+                    console.log('[FINALIZAR-PARADA] Registrado (fallback) em downtime_entries:', downtimeEntryData);
+                }
                 
                 // Depois, deletar o documento de active_downtimes (o padrão do sistema é deletar, não atualizar)
                 await db.collection('active_downtimes').doc(recordId).delete();

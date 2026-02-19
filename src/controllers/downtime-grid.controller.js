@@ -447,8 +447,10 @@ async function finalizeStandaloneDowntime(machineId, skipConfirm = false) {
 
         // Salvar cada segmento na coleção downtime_entries
         const currentUser = getActiveUser();
-        const shiftValue = activeData.startShift || activeData.shift || activeData.turno || null;
+        const shiftFallback = activeData.startShift || activeData.shift || activeData.turno || null;
         for (const seg of segments) {
+            // FIX: Usar turno do SEGMENTO para correta exibição cross-turno
+            const segShift = seg.shift || shiftFallback;
             const downtimeData = {
                 machine: machineId,
                 date: seg.date,
@@ -457,8 +459,8 @@ async function finalizeStandaloneDowntime(machineId, skipConfirm = false) {
                 duration: seg.duration,
                 reason: activeData.reason || '',
                 observations: activeData.observations || '',
-                shift: shiftValue,
-                turno: shiftValue,
+                shift: segShift,
+                turno: segShift,
                 semOP: true,
                 batchDowntime: activeData.batchDowntime || false,
                 userCod: activeData.userCod || null,

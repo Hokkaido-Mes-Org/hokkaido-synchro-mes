@@ -634,8 +634,10 @@ let activeMachineCard = null;
 
             // Salvar cada segmento na coleção downtime_entries
             const currentUser = getActiveUser();
-            const shiftValue = activeData.startShift || activeData.shift || activeData.turno || null;
+            const shiftFallback = activeData.startShift || activeData.shift || activeData.turno || null;
             for (const seg of segments) {
+                // FIX: Usar turno do SEGMENTO para correta exibição cross-turno
+                const segShift = seg.shift || shiftFallback;
                 const downtimeData = {
                     machine: machineId,
                     date: seg.date,
@@ -644,8 +646,8 @@ let activeMachineCard = null;
                     duration: seg.duration,
                     reason: activeData.reason || '',
                     observations: activeData.observations || '',
-                    shift: shiftValue,
-                    turno: shiftValue,
+                    shift: segShift,
+                    turno: segShift,
                     semOP: true,
                     batchDowntime: activeData.batchDowntime || false,
                     userCod: activeData.userCod || null,
@@ -1343,8 +1345,10 @@ let activeMachineCard = null;
                     alert('⚠️ Erro: Motivo da parada não foi informado.\n\nEsta parada não pode ser finalizada sem um motivo válido.');
                     return;
                 }
-                const shiftValue = currentDowntimeStart.startShift || currentDowntimeStart.shift || currentDowntimeStart.turno || null;
+                const shiftFallback = currentDowntimeStart.startShift || currentDowntimeStart.shift || currentDowntimeStart.turno || null;
                 for (const seg of segments) {
+                    // FIX: Usar turno do SEGMENTO para correta exibição cross-turno
+                    const segShift = seg.shift || shiftFallback;
                     const downtimeData = {
                         machine: currentDowntimeStart.machine,
                         date: seg.date,
@@ -1353,8 +1357,8 @@ let activeMachineCard = null;
                         duration: seg.duration,
                         reason: currentDowntimeStart.reason,
                         observations: currentDowntimeStart.observations || '',
-                        shift: shiftValue,
-                        turno: shiftValue,
+                        shift: segShift,
+                        turno: segShift,
                         batchDowntime: currentDowntimeStart.batchDowntime || false,
                         userCod: currentDowntimeStart.userCod ?? null,
                         nomeUsuario: currentDowntimeStart.nomeUsuario || null,
@@ -3643,22 +3647,18 @@ function sendDowntimeNotification() {
             // Buscar paradas ativas para colorir cards de vermelho
             // IMPORTANTE: Filtrar apenas máquinas válidas do window.machineDatabase
             const validMachineIdsSet = new Set(window.machineDatabase.map(m => normalizeMachineId(m.id)));
-            // Set de máquinas com plano ativo (produzindo normalmente)
-            const machinesWithActivePlan = new Set(activePlans.map(p => normalizeMachineId(p.machine)));
             let activeDowntimeSet = new Set();
-            const staleDowntimeIds = []; // docs órfãos para auto-limpeza
             try {
-                // OTIMIZADO: usa cache global (TTL 30s) ao invés de leitura direta
+                // OTIMIZADO: usa cache global ao invés de leitura direta
                 const activeData = typeof window.getActiveDowntimesCached === 'function'
                     ? await window.getActiveDowntimesCached()
                     : (await getDb().collection('active_downtimes').get()).docs.map(d => ({id: d.id, ...d.data()}));
                 const validDowntimeIds = activeData
-                    // FIX: usar isActive === true (consistente com getAllMachinesDowntimeStatus)
-                    // Antes usava isActive !== false que aceitava undefined/null como "ativo"
+                    // FIX: Aceitar paradas onde isActive NÃO seja explicitamente false
+                    // (undefined, null, true = parada válida; apenas false = inativa)
                     .filter(d => {
-                        if (d.isActive !== true) {
-                            // Doc sem isActive ou com isActive falsy → stale
-                            staleDowntimeIds.push(d.id);
+                        if (d.isActive === false) {
+                            console.debug(`[loadMachineCards] Parada ${d.id} com isActive=false, ignorando`);
                             return false;
                         }
                         return true;
@@ -3666,38 +3666,19 @@ function sendDowntimeNotification() {
                     .map(d => d.id)
                     .filter(id => {
                         const normalizedId = normalizeMachineId(id);
-                        const isValid = validMachineIdsSet.has(normalizedId);
-                        if (!isValid) {
-                            console.warn(`[loadMachineCards] Máquina "${id}" em active_downtimes não existe no window.machineDatabase`);
-                            staleDowntimeIds.push(id);
+                        if (!validMachineIdsSet.has(normalizedId)) {
+                            console.warn(`[loadMachineCards] Máquina "${id}" não existe no machineDatabase — ignorando (SEM deletar)`);
                             return false;
                         }
-                        // FIX: Se a máquina tem plano ativo (está produzindo), ignorar parada ativa órfã
-                        if (machinesWithActivePlan.has(normalizedId)) {
-                            console.debug(`[loadMachineCards] Máquina "${id}" tem plano ativo mas doc em active_downtimes — marcando para limpeza`);
-                            staleDowntimeIds.push(id);
-                            return false;
-                        }
+                        // REMOVIDO: Lógica que deletava parada se máquina tinha plano ativo
+                        // Uma máquina PODE ter plano ativo E estar parada (parada mid-production)
                         return true;
                     });
                 activeDowntimeSet = new Set(validDowntimeIds);
             } catch (e) {
                 console.warn('Erro ao buscar paradas ativas:', e);
             }
-
-            // Auto-limpeza: remover docs órfãos de active_downtimes (em background)
-            if (staleDowntimeIds.length > 0) {
-                console.debug(`[loadMachineCards] Removendo ${staleDowntimeIds.length} paradas órfãs:`, staleDowntimeIds);
-                Promise.all(staleDowntimeIds.map(id =>
-                    getDb().collection('active_downtimes').doc(id).delete().catch(e =>
-                        console.warn(`[cleanup] Falha ao remover active_downtimes/${id}:`, e)
-                    )
-                )).then(() => {
-                    // Invalidar cache após limpeza
-                    if (window.DataStore) window.DataStore.invalidate('activeDowntimes');
-                    if (typeof invalidateDowntimeCache === 'function') invalidateDowntimeCache();
-                }).catch(() => {});
-            }
+            // NOTA: Auto-limpeza REMOVIDA — era causa de sumiço de paradas ativas
 
             // NOVO: Carregar paradas longas para mostrar no painel de máquinas
             const machinesDowntime = await getAllMachinesDowntimeStatus();
