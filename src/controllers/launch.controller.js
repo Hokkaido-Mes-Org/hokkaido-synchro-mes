@@ -3516,8 +3516,11 @@ function sendDowntimeNotification() {
     async function populateMachineSelector(filterDate = null) {
         try {
             const today = filterDate || window.lancamentoFilterDate || getProductionDateString();
-            const planSnapshot = await getDb().collection('planning').where('date', '==', today).get();
-            let plans = planSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // OTIMIZAÇÃO: usar cache ao invés de leitura direta do planning
+            const plansCached = typeof window.getPlanningCached === 'function'
+                ? await window.getPlanningCached(today)
+                : (await getDb().collection('planning').where('date', '==', today).get()).docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            let plans = plansCached.map(p => ({ ...p })); // shallow clone para não mutar cache
 
             // OTIMIZAÇÃO FIREBASE: Carregar todas as OPs do cache em vez de N+1 queries individuais
             const allCachedOrders = typeof window.getProductionOrdersCached === 'function'
@@ -3626,22 +3629,16 @@ function sendDowntimeNotification() {
             let productionEntries = [];
             let downtimeEntries = [];
             if (activePlans.length > 0) {
-                const productionSnapshot = await getDb().collection('production_entries').where('data', '==', today).get();
+                // OTIMIZAÇÃO: reutilizar todayProdEntries já carregados acima (evita leitura duplicada)
                 const planIdSet = new Set(activePlans.map(plan => plan.id));
-                productionEntries = productionSnapshot.docs
-                    .map(doc => ({ id: doc.id, ...doc.data() }))
-                    .filter(entry => planIdSet.has(entry.planId));
+                productionEntries = todayProdEntries.filter(entry => planIdSet.has(entry.planId));
 
-                // Paradas do dia (inclui dia anterior para cobrir T3 após 00:00)
-                const base = new Date(`${today}T12:00:00`);
-                const prev = new Date(base); prev.setDate(prev.getDate() - 1);
-                const prevStr = new Date(prev.getTime() - prev.getTimezoneOffset()*60000).toISOString().split('T')[0];
-                const dtSnapshot = await getDb().collection('downtime_entries')
-                    .where('date', 'in', [prevStr, today])
-                    .get();
+                // OTIMIZAÇÃO: usar cache de downtime_entries ao invés de leitura direta
+                const allDowntime = typeof window.getDowntimeEntriesCached === 'function'
+                    ? await window.getDowntimeEntriesCached(today)
+                    : (await getDb().collection('downtime_entries').where('date', '==', today).get()).docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 const machineSet = new Set(activePlans.map(p => p.machine));
-                downtimeEntries = dtSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-                    .filter(dt => machineSet.has(dt.machine));
+                downtimeEntries = allDowntime.filter(dt => machineSet.has(dt.machine));
             }
 
             // Buscar paradas ativas para colorir cards de vermelho

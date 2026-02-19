@@ -407,32 +407,21 @@ async function carregarDadosAcompanhamentoPerdas() {
         const perdasPorMaquina = new Map();
         const docsProcessados = new Set();
 
-        // OTIMIZAÇÃO Fase 2: executar todas as 6 queries em paralelo COM cache (3 turnos x 2 campos)
-        const queryPromises = [];
-        for (const t of [1, 2, 3]) {
-            queryPromises.push(
-                cachedQuery(`prod_data_${data}_turno_${t}`, () =>
-                    db().collection('production_entries').where('data', '==', data).where('turno', '==', t).get()
-                ).then(docs => ({ turno: t, docs }))
-            );
-            queryPromises.push(
-                cachedQuery(`prod_data_${data}_shift_${t}`, () =>
-                    db().collection('production_entries').where('data', '==', data).where('shift', '==', t).get()
-                ).then(docs => ({ turno: t, docs }))
-            );
-        }
-        const results = await Promise.all(queryPromises);
+        // OTIMIZAÇÃO: 1 query única ao invés de 6 (era 3 turnos × 2 campos)
+        const allDocs = await cachedQuery(`prod_data_${data}`, () =>
+            db().collection('production_entries').where('data', '==', data).get()
+        );
 
-        results.forEach(({ turno: t, docs }) => {
-            docs.forEach(d => {
-                if (docsProcessados.has(d.id)) return;
-                docsProcessados.add(d.id);
-                const machine = d.machine || d.machine_id || d.maquina || 'N/A';
-                const refugo = parseFloat(d.refugo_kg || d.refugo || 0);
-                if (refugo <= 0) return;
-                if (!perdasPorMaquina.has(machine)) perdasPorMaquina.set(machine, { t1: 0, t2: 0, t3: 0 });
-                perdasPorMaquina.get(machine)[`t${t}`] += refugo;
-            });
+        allDocs.forEach(d => {
+            if (docsProcessados.has(d.id)) return;
+            docsProcessados.add(d.id);
+            const machine = d.machine || d.machine_id || d.maquina || 'N/A';
+            const t = parseInt(d.turno || d.shift || 0, 10);
+            if (t < 1 || t > 3) return;
+            const refugo = parseFloat(d.refugo_kg || d.refugo || 0);
+            if (refugo <= 0) return;
+            if (!perdasPorMaquina.has(machine)) perdasPorMaquina.set(machine, { t1: 0, t2: 0, t3: 0 });
+            perdasPorMaquina.get(machine)[`t${t}`] += refugo;
         });
 
         tbody.innerHTML = '';

@@ -429,24 +429,23 @@ async function loadPCPData(date, shiftFilter = 'current') {
         });
         console.log('[PCP·mod] Paradas ativas (active_downtimes):', activeDowntimes.size, [...activeDowntimes.keys()]);
 
-        // 3. Paradas normais em andamento
-        const downtimeEntriesSnapshot = await db().collection('downtime_entries')
-            .where('date', '==', date)
-            .get();
+        // 3. Paradas normais em andamento (OTIMIZADO: usar cache global)
+        const downtimeEntriesData = typeof window.getDowntimeEntriesCached === 'function'
+            ? await window.getDowntimeEntriesCached(date)
+            : (await db().collection('downtime_entries').where('date', '==', date).get()).docs.map(doc => ({id: doc.id, ...doc.data()}));
 
         const now = new Date();
         const currentTime = now.toTimeString().slice(0, 5);
         const normalDowntimes = new Map();
-        downtimeEntriesSnapshot.forEach(doc => {
-            const data = doc.data();
-            const machineId = (data.machine || '').toUpperCase().trim();
+        downtimeEntriesData.forEach(d => {
+            const machineId = (d.machine || '').toUpperCase().trim();
             if (!machineId) return;
             if (DISABLED.includes(machineId)) return;
 
-            const hasNoEndTime = !data.endTime || data.endTime === '';
-            const endTimeNotPassed = data.endTime && currentTime < data.endTime;
+            const hasNoEndTime = !d.endTime || d.endTime === '';
+            const endTimeNotPassed = d.endTime && currentTime < d.endTime;
             if (hasNoEndTime || endTimeNotPassed) {
-                normalDowntimes.set(machineId, { ...data, source: 'downtime_entries' });
+                normalDowntimes.set(machineId, { ...d, source: 'downtime_entries' });
             }
         });
         console.log('[PCP·mod] Paradas normais em andamento (downtime_entries):', normalDowntimes.size, [...normalDowntimes.keys()]);
