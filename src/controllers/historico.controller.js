@@ -210,7 +210,6 @@ async function carregarHistorico(direction = 'first') {
 
         let query = db().collection('system_logs')
             .where('data', '==', dataSelecionada)
-            .orderBy('timestamp', 'desc')
             .limit(500);
 
         const snapshot = await query.get();
