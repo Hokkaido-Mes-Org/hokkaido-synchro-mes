@@ -1734,64 +1734,8 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         // TAXA DE PRODUÇÃO
         updateProductionRateDisplay();
 
-        // ========== PREENCHER TOP 5 MÁQUINAS (aba Produção) ==========
-        const machineRankingProduction = document.getElementById('machine-ranking-production');
-        if (machineRankingProduction) {
-            const sortedMachines = Object.entries(machineProduction)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 5);
-            
-            if (sortedMachines.length === 0) {
-                machineRankingProduction.innerHTML = '<div class="text-center py-4 text-gray-400"><p class="text-xs">Sem dados de produção</p></div>';
-            } else {
-                const maxProduction = sortedMachines[0][1];
-                machineRankingProduction.innerHTML = sortedMachines.map(([mach, qty], index) => {
-                    const percentage = maxProduction > 0 ? (qty / maxProduction * 100) : 0;
-                    const medalColors = ['bg-amber-500', 'bg-gray-400', 'bg-orange-400', 'bg-blue-400', 'bg-green-400'];
-                    const medalColor = medalColors[index] || 'bg-gray-300';
-                    return `
-                        <div class="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
-                            <div class="w-6 h-6 ${medalColor} text-white rounded-full flex items-center justify-center text-xs font-bold">${index + 1}</div>
-                            <div class="flex-1">
-                                <div class="flex justify-between items-center mb-1">
-                                    <span class="text-sm font-medium text-gray-700">${mach}</span>
-                                    <span class="text-sm font-bold text-blue-600">${qty.toLocaleString('pt-BR')}</span>
-                                </div>
-                                <div class="w-full bg-gray-200 rounded-full h-1.5">
-                                    <div class="bg-blue-500 h-1.5 rounded-full" style="width: ${percentage.toFixed(1)}%"></div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-            }
-        }
-
-        // ========== PREENCHER RESUMO DO DIA ==========
-        const totalLosses = lossesData.reduce((sum, item) => sum + (Number(item.scrapPcs ?? item.quantity ?? 0) || 0), 0);
-        // Filtrar borra de forma consistente com loadLossesAnalysis
-        const borraData = lossesData.filter(item => {
-            const reasonStr = (item.reason || item.raw?.perdas || '').toString().toLowerCase();
-            const isTagged = (item.raw && item.raw.tipo_lancamento === 'borra');
-            return isTagged || reasonStr.includes('borra');
-        });
-        const totalBorra = borraData.reduce((sum, item) => sum + (Number(item.raw?.refugo_kg ?? item.scrapKg ?? item.weight ?? 0) || 0), 0);
-        const totalDowntime = downtimeData.reduce((sum, item) => sum + (Number(item.duration) || 0), 0);
-        const goodProduction = totalProduction; // Produção boa é o total de produção (já exclui refugos)
-
-        const summaryGood = document.getElementById('summary-good-production');
-        const summaryLosses = document.getElementById('summary-losses');
-        const summaryBorra = document.getElementById('summary-borra');
-        const summaryDowntime = document.getElementById('summary-downtime');
-
-        if (summaryGood) summaryGood.textContent = goodProduction.toLocaleString('pt-BR');
-        if (summaryLosses) summaryLosses.textContent = totalLosses.toLocaleString('pt-BR');
-        if (summaryBorra) summaryBorra.textContent = totalBorra.toFixed(2);
-        if (summaryDowntime) summaryDowntime.textContent = totalDowntime.toLocaleString('pt-BR');
-
         // Gerar gráficos
         await generateHourlyProductionChart(productionData, {
-            canvas: analysisHourlyProductionChart,
             targetCanvasId: 'analysis-hourly-production-chart',
             chartContext: 'analysis',
             dailyTargetOverride: totalPlan,
@@ -1799,23 +1743,14 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         });
         await generateShiftProductionChart(productionData);
         await generateMachineProductionTimeline(productionData, {
-            canvas: analysisMachineProductionTimelineChart,
             targetCanvasId: 'analysis-machine-production-timeline'
         });
-        
-        // Gerar gráfico de Ciclo/Cavidades
-        await generateCycleCavityChart(planData);
     }
     
-    /**
-     * Gera gráfico de Ciclo/Cavidades comparando planejado vs real por turno
-     */
-    async function generateCycleCavityChart(planData) {
-        const canvas = document.getElementById('cycle-cavity-chart');
-        if (!canvas) {
-            console.warn('[CYCLE-CAVITY] Canvas não encontrado');
-            return;
-        }
+    // generateCycleCavityChart removida — Kaizen 02/2026
+    async function generateCycleCavityChart(_planData) {
+        // Função desativada — canvas removido do HTML
+        return;
         
         // Destruir gráfico existente
         const existingChart = Chart.getChart(canvas);
@@ -2271,8 +2206,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                 // Buscar dados de parada para calcular disponibilidade
                 let downtimeData = [];
                 try {
-                    downtimeData = await getFilteredData('downtimes', startDate, endDate, machine === 'all' ? null : machine, shift);
-                } catch(e) { /* sem dados de parada, disponibilidade = 100% */ }
+                    downtimeData = await getFilteredData('downtime', startDate, endDate, machine === 'all' ? null : machine, shift);
+                } catch(e) { console.warn('[loadEfficiencyAnalysis] Erro ao buscar downtime:', e.message); }
                 const machineDowntime = {};
                 downtimeData.forEach(item => {
                     const m = item.machine || 'N/A';
@@ -2318,9 +2253,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             }
         }
 
-        // Gerar gráficos
-        await generateOEEComponentsTimeline(startDate, endDate, machine);
-        await generateOEEHeatmap(startDate, endDate, machine);
+        // OEE Components Timeline e OEE Heatmap removidos — Kaizen 02/2026
     }
 
     // Função para carregar análise de perdas
@@ -3497,7 +3430,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             { name: 'Analysis Hourly Production', canvasId: 'analysis-hourly-production-chart', view: 'analysis-production' },
             { name: 'Shift Production', canvasId: 'shift-production-chart', view: 'production' },
             { name: 'Machine Production Timeline', canvasId: 'analysis-machine-production-timeline', view: 'analysis-production' },
-            { name: 'OEE Components Timeline', canvasId: 'oee-components-timeline', view: 'efficiency' },
+
             { name: 'Losses Pareto', canvasId: 'losses-pareto-chart', view: 'losses' },
             { name: 'Losses by Machine', canvasId: 'losses-by-machine-chart', view: 'losses' },
             { name: 'Losses by Product', canvasId: 'losses-by-product-chart', view: 'losses' },
