@@ -29,6 +29,9 @@ import './utils/logger.js';
 // ── Fase 4B: Write Invalidation (auto-register window.*) ──
 import './utils/write-invalidation.js';
 
+// ── Fase 4B Nível 3.2: onSnapshot compartilhado para active_downtimes ──
+import { activeDowntimesLive } from './services/active-downtimes-live.service.js';
+
 // Expor flags IMEDIATAMENTE — antes de qualquer await.
 // Permite que script.js consulte window.__FLAGS para decidir
 // se usa módulo moderno ou código legado.
@@ -82,6 +85,10 @@ async function bootstrap() {
     
     try {
         initBridge();
+        
+        // ── Fase 4B Nível 3.2: Iniciar listener onSnapshot compartilhado ──
+        activeDowntimesLive.start();
+        console.log('✅ [Modules] ActiveDowntimesLive: onSnapshot compartilhado ativo');
         
         // ── Fase 2: Log dos controllers ativos ──
         const activeFlags = Object.entries(FLAGS)

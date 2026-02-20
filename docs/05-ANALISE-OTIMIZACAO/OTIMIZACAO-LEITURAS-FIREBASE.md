@@ -228,3 +228,53 @@
 ### Documentação criada:
 - `docs/05-ANALISE-OTIMIZACAO/ESTIMATIVA-USO-POR-USUARIO.md` — Estimativa de consumo Firebase por perfil de usuário (5 perfis × 3 turnos)
 
+---
+
+## Fase 4B-N3 — Otimizações Nível 3: onSnapshot + Batch Reads (Fev/2026) ✅
+
+### 4J. ActiveDowntimesLiveService — onSnapshot compartilhado (Ação 3.2)
+- **Arquivo criado:** `src/services/active-downtimes-live.service.js` (~260 linhas)
+- **Classe:** `ActiveDowntimesLiveService` — singleton `onSnapshot` listener para `active_downtimes`
+- **API:** `start()`, `stop()`, `getData()`, `getForMachine(machineId)`, `hasData()`, `subscribe(fn)`, `stats()`
+- **Funcionalidades:**
+  - `includeMetadataChanges: true` — filtra `fromCache` para evitar leituras duplicadas (ação 3.4 integrada)
+  - Auto-sync para DataStore, CacheManager e EventBus (`active_downtimes:updated`)
+  - `visibilitychange`: pausa listener ao ocultar tab, retoma ao exibir
+  - Error recovery: auto-restart após 30s em caso de erro
+  - Tracking via `window.FirebaseMonitor`
+- **Bootstrap:** `src/index.js` — `activeDowntimesLive.start()` após `initBridge()`
+- **Integrações (7 arquivos, 12 locais):**
+  - `script.js` — `getActiveDowntimesCached()`, `checkActiveDowntimes()`, `getActiveMachineDowntime()`, polling em `setupNewPlanningListeners()`
+  - `src/controllers/planning.controller.js` — polling + `checkActiveDowntimes()`
+  - `src/controllers/launch.controller.js` — `loadStandaloneActiveDowntimes()`, `showCardFinishDowntimeModal()`, `confirmCardFinishDowntime()`
+  - `src/controllers/downtime-grid.controller.js` — `loadStandaloneActiveDowntimes()`, `showCardFinishDowntimeModal()`, `confirmCardFinishDowntime()`
+- **Economia estimada:** ~16.750 leituras/dia (~97% redução em `active_downtimes`)
+  - Antes: 2 pollings × 26 docs × 288 polls/dia = ~14.976 reads + ~2.300 reads on-demand
+  - Depois: 26 reads iniciais + ~500 reads/dia (apenas docs alterados) + 0 reads on-demand
+
+### 4K. includeMetadataChanges para evitar leituras em reconexão (Ação 3.4)
+- **Integrado diretamente no ActiveDowntimesLiveService** (não é um componente separado)
+- **Mecanismo:** `snapshot.metadata.fromCache` filtra re-emissões de cache local em reconexões
+- **Economia estimada:** ~2.000-5.000 leituras/dia (dependendo da estabilidade da rede)
+
+### 4L. Batch reads com `in` queries para `production_orders` (Ação 3.5)
+- **Arquivos modificados:**
+  - `script.js` — render dentro de `setupNewPlanningListeners()`: loop de N `.doc(orderId).get()` → batch `where(documentId(), 'in', chunk).get()` com chunks de 10
+  - `src/controllers/planning.controller.js` — mesma refatoração: `Promise.all(N individuais)` → `Promise.all(ceil(N/10) chunks)`
+- **Padrão:** Coleta IDs únicos → divide em chunks de 10 → `Promise.all` de queries `in` → mapeia resultados
+- **Economia estimada:** Se N=26 máquinas, reduz de 26 leituras para 3 queries (ceil(26/10) = 3), economia de ~88% por render
+- **Nota:** `BatchQueryManager` em `script.js` L955 já existia mas não era utilizado nestas funções
+
+### Resumo de economia Nível 3:
+| Ação | Economia/dia | % Redução |
+|------|-------------|-----------|
+| 3.2 onSnapshot compartilhado | ~16.750 reads | ~97% em `active_downtimes` |
+| 3.4 includeMetadataChanges | ~2.000-5.000 reads | evita duplicatas em reconexão |
+| 3.5 Batch reads `in` queries | ~5.000-10.000 reads | ~88% nos loops de `production_orders` |
+| **Total Nível 3** | **~23.750-31.750 reads/dia** | — |
+
+### Novos arquivos criados nesta fase:
+| Arquivo | Linhas | Função |
+|---------|--------|--------|
+| `src/services/active-downtimes-live.service.js` | ~260 | onSnapshot compartilhado para `active_downtimes` |
+

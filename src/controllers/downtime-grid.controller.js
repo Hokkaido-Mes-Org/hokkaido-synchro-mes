@@ -71,17 +71,32 @@ async function openStandaloneDowntimeModal() {
  */
 async function loadStandaloneActiveDowntimes() {
     try {
-        const snapshot = await db.collection('active_downtimes').where('semOP', '==', true).get();
+        // Fase 4B Nível 3.2: Usar onSnapshot compartilhado se disponível
+        let allData;
+        if (window.activeDowntimesLive && window.activeDowntimesLive.hasData()) {
+            allData = window.activeDowntimesLive.getData();
+        } else {
+            const snapshot = await db.collection('active_downtimes').where('semOP', '==', true).get();
+            _standaloneActiveDowntimes = {};
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                const machineId = data.machine || doc.id;
+                _standaloneActiveDowntimes[machineId] = { ...data, docId: doc.id };
+            });
+            console.log('[STANDALONE] Paradas ativas carregadas:', Object.keys(_standaloneActiveDowntimes));
+            return;
+        }
+        // Filtrar semOP=true dos dados live
         _standaloneActiveDowntimes = {};
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            const machineId = data.machine || doc.id;
-            _standaloneActiveDowntimes[machineId] = { ...data, docId: doc.id };
+        allData.forEach(d => {
+            if (d.semOP === true) {
+                const machineId = d.machine || d.id;
+                _standaloneActiveDowntimes[machineId] = { ...d, docId: d.id };
+            }
         });
-        console.log('[STANDALONE] Paradas ativas carregadas:', Object.keys(_standaloneActiveDowntimes));
+        console.log('[STANDALONE] Paradas ativas (live):', Object.keys(_standaloneActiveDowntimes));
     } catch (error) {
         console.error('[STANDALONE] Erro ao carregar paradas ativas:', error);
-        // Tentar carregar todas via cache e filtrar (OTIMIZADO)
         try {
             const allData = typeof window.getActiveDowntimesCached === 'function'
                 ? await window.getActiveDowntimesCached()
@@ -555,12 +570,17 @@ async function openCardFinishDowntimeModal(machineId, reason, startTime) {
         return;
     }
     
-    // Buscar dados atualizados da parada no Firebase
+    // Buscar dados atualizados da parada
     let downtimeData = null;
     try {
-        const doc = await db.collection('active_downtimes').doc(_cardFinishDowntimeMachine).get();
-        if (doc.exists) {
-            downtimeData = doc.data();
+        // Fase 4B Nível 3.2: Usar onSnapshot compartilhado
+        if (window.activeDowntimesLive && window.activeDowntimesLive.hasData()) {
+            downtimeData = window.activeDowntimesLive.getForMachine(_cardFinishDowntimeMachine);
+        } else {
+            const doc = await db.collection('active_downtimes').doc(_cardFinishDowntimeMachine).get();
+            if (doc.exists) {
+                downtimeData = doc.data();
+            }
         }
     } catch (e) {
         console.warn('[CARD-FINISH-DOWNTIME] Erro ao buscar parada:', e);
@@ -640,18 +660,26 @@ async function confirmCardFinishDowntime() {
     // Verificar se existe no cache standalone
     let activeData = _standaloneActiveDowntimes[machineId] || _standaloneActiveDowntimes[normalizedId];
     
-    // Se não estiver no cache, buscar do Firebase
+    // Se não estiver no cache, buscar dos dados live ou Firebase
     if (!activeData) {
-        console.log('[CARD-FINISH-DOWNTIME] Buscando dados do Firebase...');
+        console.log('[CARD-FINISH-DOWNTIME] Buscando dados...');
         try {
-            const doc = await db.collection('active_downtimes').doc(normalizedId).get();
-            if (doc.exists) {
-                activeData = { ...doc.data(), docId: doc.id };
-                // Adicionar ao cache para a função finalizeStandaloneDowntime funcionar
-                _standaloneActiveDowntimes[normalizedId] = activeData;
+            // Fase 4B Nível 3.2: Usar onSnapshot compartilhado
+            if (window.activeDowntimesLive && window.activeDowntimesLive.hasData()) {
+                const liveDoc = window.activeDowntimesLive.getForMachine(normalizedId);
+                if (liveDoc) {
+                    activeData = { ...liveDoc, docId: liveDoc.id };
+                    _standaloneActiveDowntimes[normalizedId] = activeData;
+                }
+            } else {
+                const doc = await db.collection('active_downtimes').doc(normalizedId).get();
+                if (doc.exists) {
+                    activeData = { ...doc.data(), docId: doc.id };
+                    _standaloneActiveDowntimes[normalizedId] = activeData;
+                }
             }
         } catch (e) {
-            console.warn('[CARD-FINISH-DOWNTIME] Erro ao buscar Firebase:', e);
+            console.warn('[CARD-FINISH-DOWNTIME] Erro ao buscar:', e);
         }
     }
     

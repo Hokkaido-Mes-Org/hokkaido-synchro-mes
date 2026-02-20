@@ -1194,10 +1194,18 @@ const machineCardProductionCache = (() => {
         }
         
         try {
-            const activeDowntimeDoc = await getDb().collection('active_downtimes').doc(window.selectedMachineData.machine).get();
+            // Fase 4B Nível 3.2: Usar onSnapshot compartilhado se disponível
+            let activeDowntime = null;
+            if (window.activeDowntimesLive && window.activeDowntimesLive.hasData()) {
+                activeDowntime = window.activeDowntimesLive.getForMachine(window.selectedMachineData.machine);
+            } else {
+                const activeDowntimeDoc = await getDb().collection('active_downtimes').doc(window.selectedMachineData.machine).get();
+                if (activeDowntimeDoc.exists) {
+                    activeDowntime = activeDowntimeDoc.data();
+                }
+            }
             
-            if (activeDowntimeDoc.exists) {
-                const activeDowntime = activeDowntimeDoc.data();
+            if (activeDowntime) {
                 console.log('[DOWNTIME][CHECK] Parada ativa encontrada:', activeDowntime);
                 
                 // Validar dados mínimos
@@ -2234,7 +2242,7 @@ const machineCardProductionCache = (() => {
         const orderTotalCache = new Map();
 
         const render = async () => {
-            // OTIMIZAÇÃO: Buscar todas as OPs em paralelo (era sequencial — N reads)
+            // Fase 4B Nível 3.5: Batch reads com 'in' queries (em vez de N .doc().get() individuais)
             // CORREÇÃO CONSISTÊNCIA: Enriquecer plannings com total_produzido da OP vinculada
             const plansWithOrders = planningItems.filter(plan => 
                 plan.production_order_id || plan.production_order || plan.order_id
@@ -2243,26 +2251,46 @@ const machineCardProductionCache = (() => {
                 plan.production_order_id || plan.production_order || plan.order_id
             ))];
 
-            // Buscar todas as OPs em paralelo via Promise.all
-            const orderResults = await Promise.all(
-                uniqueOrderIds.map(async (orderId) => {
-                    try {
-                        // Tentar cache global primeiro (evita Firestore se já temos)
-                        if (typeof window.findProductionOrderCached === 'function') {
-                            const cached = await window.findProductionOrderCached(orderId);
-                            if (cached) return { orderId, data: cached, exists: true };
+            // Batch fetch em chunks de 10 (limite Firestore para 'in')
+            const orderDataMap = new Map();
+            if (uniqueOrderIds.length > 0) {
+                const chunks = [];
+                for (let i = 0; i < uniqueOrderIds.length; i += 10) {
+                    chunks.push(uniqueOrderIds.slice(i, i + 10));
+                }
+                
+                try {
+                    const results = await Promise.all(
+                        chunks.map(chunk => 
+                            getDb().collection('production_orders')
+                                .where(firebase.firestore.FieldPath.documentId(), 'in', chunk)
+                                .get()
+                        )
+                    );
+                    
+                    results.forEach(snapshot => {
+                        snapshot.docs.forEach(doc => {
+                            orderDataMap.set(doc.id, { orderId: doc.id, data: doc.data(), exists: true });
+                        });
+                    });
+                    
+                    // Marcar IDs não encontrados
+                    uniqueOrderIds.forEach(id => {
+                        if (!orderDataMap.has(id)) {
+                            orderDataMap.set(id, { orderId: id, data: null, exists: false });
                         }
-                        const orderDoc = await getDb().collection('production_orders').doc(orderId).get();
-                        return { orderId, data: orderDoc.exists ? orderDoc.data() : null, exists: orderDoc.exists };
-                    } catch (e) {
-                        console.warn('[SYNC-CONSISTENCIA] Erro ao buscar OP:', orderId, e);
-                        return { orderId, data: null, exists: false };
-                    }
-                })
-            );
+                    });
+                    
+                    console.debug(`📦 [BATCH] production_orders: ${uniqueOrderIds.length} IDs em ${chunks.length} chunk(s)`);
+                } catch (e) {
+                    console.warn('[BATCH] Erro ao buscar production_orders em batch:', e);
+                    uniqueOrderIds.forEach(id => {
+                        orderDataMap.set(id, { orderId: id, data: null, exists: false });
+                    });
+                }
+            }
 
             // Aplicar resultados a cada planning
-            const orderDataMap = new Map(orderResults.map(r => [r.orderId, r]));
             for (const plan of planningItems) {
                 const orderId = plan.production_order_id || plan.production_order || plan.order_id;
                 if (!orderId) continue;
@@ -2461,54 +2489,66 @@ const machineCardProductionCache = (() => {
             (error) => console.error('Erro ao carregar paradas:', error)
         );
 
-        // AÇÃO 4: Polling para paradas ativas (cards vermelhos) - substituído listener por polling 5s
-        // Função de polling para active_downtimes
-        // IMPORTANTE: Filtrar apenas máquinas válidas do window.machineDatabase para evitar contagem incorreta
+        // AÇÃO 4: Paradas ativas — Fase 4B Nível 3.2: onSnapshot compartilhado
+        // O serviço activeDowntimesLive fornece dados em tempo real via onSnapshot.
+        // O polling de fallback abaixo lê apenas do cache (0 leituras Firebase extras).
         const validMachineIdsSet = new Set(window.machineDatabase.map(m => normalizeMachineId(m.id)));
+        const processActiveDowntimes = (downtimes) => {
+            const _planMachines = new Set(
+                (planningItems || []).filter(isPlanActive).map(p => normalizeMachineId(p.machine))
+            );
+            const validDowntimeIds = downtimes
+                .filter(d => {
+                    if (d.isActive === false) return false;
+                    const reason = (d.reason || '').toLowerCase();
+                    const isSemProg = reason.includes('sem programa') || reason.includes('sem programacao');
+                    if (isSemProg && _planMachines.has(normalizeMachineId(d.id))) {
+                        console.log(`[pollActiveDowntimes] Removida parada fantasma "SEM PROGRAMAÇÃO" de ${d.id} (máquina com plano ativo)`);
+                        return false;
+                    }
+                    return true;
+                })
+                .map(d => d.id)
+                .filter(id => {
+                    const normalizedId = normalizeMachineId(id);
+                    const isValid = validMachineIdsSet.has(normalizedId);
+                    if (!isValid) {
+                        console.warn(`[pollActiveDowntimes] Máquina "${id}" em active_downtimes não existe no machineDatabase`);
+                    }
+                    return isValid;
+                });
+            activeDowntimeSet = new Set(validDowntimeIds);
+            scheduleRender();
+        };
+
+        // Registrar subscriber no onSnapshot compartilhado (tempo real)
+        if (window.activeDowntimesLive) {
+            window.activeDowntimesLive.subscribe((data) => {
+                try {
+                    processActiveDowntimes(data);
+                } catch (error) {
+                    console.error('[Planning·ActiveDowntimes·subscriber] Erro:', error);
+                }
+            });
+            console.log('[Planning] activeDowntimesLive subscriber registrado (tempo real)');
+        }
+
+        // Fallback: polling leve que lê do cache/live (0 leituras Firebase)
         const pollActiveDowntimes = async () => {
             try {
-                // OTIMIZAÇÃO: Usar função com cache (TTL 30s para dados em tempo real)
                 const downtimes = await getActiveDowntimesCached(false);
-                // CORREÇÃO CRÍTICA: Filtrar apenas máquinas que existem no window.machineDatabase
-                // E que têm isActive !== false (paradas realmente ativas)
-                // FIX: Set de máquinas com plano ativo (para filtrar parada fantasma "SEM PROGRAMAÇÃO")
-                const _planMachines = new Set(
-                    (planningItems || []).filter(isPlanActive).map(p => normalizeMachineId(p.machine))
-                );
-                const validDowntimeIds = downtimes
-                    .filter(d => {
-                        // CORREÇÃO: Ignorar documentos com isActive explicitamente false
-                        if (d.isActive === false) return false;
-                        // FIX: Filtrar paradas "SEM PROGRAMAÇÃO" para máquinas com plano ativo
-                        const reason = (d.reason || '').toLowerCase();
-                        const isSemProg = reason.includes('sem programa') || reason.includes('sem programacao');
-                        if (isSemProg && _planMachines.has(normalizeMachineId(d.id))) {
-                            console.log(`[pollActiveDowntimes] Removida parada fantasma "SEM PROGRAMAÇÃO" de ${d.id} (máquina com plano ativo)`);
-                            return false;
-                        }
-                        return true;
-                    })
-                    .map(d => d.id)
-                    .filter(id => {
-                        const normalizedId = normalizeMachineId(id);
-                        const isValid = validMachineIdsSet.has(normalizedId);
-                        if (!isValid) {
-                            console.warn(`[pollActiveDowntimes] Máquina "${id}" em active_downtimes não existe no window.machineDatabase`);
-                        }
-                        return isValid;
-                    });
-                activeDowntimeSet = new Set(validDowntimeIds);
-                scheduleRender();
+                processActiveDowntimes(downtimes);
             } catch (error) {
                 console.error('Erro ao buscar paradas ativas:', error);
             }
         };
         
-        // Executar imediatamente na primeira vez
-        pollActiveDowntimes();
+        // Executar imediatamente apenas se onSnapshot não tem dados ainda
+        if (!window.activeDowntimesLive || !window.activeDowntimesLive.hasData()) {
+            pollActiveDowntimes();
+        }
         
-        // OTIMIZADO: Usar intervalo próprio (não sobrescreve window._startActiveDowntimesPolling do script.js)
-        // Lê do cache (forceRefresh=false) — script.js mantém o cache atualizado
+        // Polling de fallback a cada 300s (lê do cache, não do Firebase)
         if (!window._planningDowntimesPolling) {
             window._planningDowntimesPolling = setInterval(pollActiveDowntimes, 300000);
         }

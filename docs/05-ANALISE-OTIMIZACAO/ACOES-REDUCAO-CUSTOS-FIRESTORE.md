@@ -729,16 +729,15 @@ const snapshot = await planningQuery.get({ source: 'cache' }); // 0 reads!
 - [x] Normalizar períodos de cache em relatórios (2.3) — `src/utils/shared-query-cache.js`, integrado em `analysis.controller.js` e `reports.controller.js`
 - [x] Paginação em production_orders (2.4) — `.limit(500)` já aplicado em Fase 4A; filtro `where('status')` pendente (risco médio)
 - [x] Dashboard de monitoramento de consumo (2.5) — Aba "Monitor Firebase" no Admin (`index.html` + `admin.controller.js`)
-- [ ] Converter polling de active_downtimes para onSnapshot compartilhado (3.2)
+- [x] Converter polling de active_downtimes para onSnapshot compartilhado (3.2) — `src/services/active-downtimes-live.service.js`, integrado em 7 arquivos (script.js, planning.controller, launch.controller, downtime-grid.controller, index.js)
 - [ ] Avaliar viabilidade de Cloud Functions (3.3)
 
-### Fase 4C — Incrementais (P3) — 🔧 ~3 dias
-- [ ] Batch reads com `in` queries (3.5)
+### Fase 4B-N3 — Avançadas onSnapshot (P2) — 🔧 ✅ CONCLUÍDO (Fev/2026)
+- [x] `onSnapshot` com `includeMetadataChanges` (3.4) — integrado no ActiveDowntimesLiveService, filtra `fromCache` para evitar leituras duplicadas em reconexão
+- [x] Batch reads com `in` queries (3.5) — render de plannings usa chunks de 10 IDs em `production_orders` (script.js + planning.controller.js), reduz N leituras individuais para ceil(N/10)
 
 ### Fase 4D — Avançadas (P4-P5) — 🏢 1+ semana
-- [ ] Dashboard de monitoramento de consumo (2.5)
 - [ ] `enablePersistence()` para cache offline (4.1)
-- [ ] `onSnapshot` com `includeMetadataChanges` (3.4)
 - [ ] TTL Policy para system_logs e hourly_production_entries (4.4)
 - [ ] Avaliar Firestore Bundles para init (4.3)
 - [ ] Avaliar Firestore Lite para abas read-only (4.2)
