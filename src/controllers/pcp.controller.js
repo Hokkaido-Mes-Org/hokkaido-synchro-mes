@@ -339,6 +339,17 @@ async function loadPCPData(date, shiftFilter = 'current') {
     const DISABLED = getDisabledMachines();
     const productByCode = getProductByCode();
 
+    // Helper: normalizar IDs de máquina (consistência com Lançamento)
+    const normalizeMachineId = typeof window.normalizeMachineId === 'function'
+        ? window.normalizeMachineId
+        : (id) => id ? String(id).toUpperCase().trim() : '';
+
+    // Validação contra machineDatabase (consistência com Lançamento)
+    const validMachineIdsSet = new Set(
+        (window.machineDatabase || window.databaseModule?.machineDatabase || [])
+            .map(m => normalizeMachineId(m.id))
+    );
+
     try {
         const effectiveShift = shiftFilter === 'current' ? getCurrentShift() : shiftFilter;
         console.log('[PCP·mod] Turno efetivo para filtro:', effectiveShift);
@@ -356,7 +367,7 @@ async function loadPCPData(date, shiftFilter = 'current') {
 
         planningSnapshot.forEach(doc => {
             const data = { id: doc.id, ...doc.data() };
-            const machineId = (data.machine || '').toUpperCase().trim();
+            const machineId = normalizeMachineId(data.machine);
             if (!machineId) return;
             if (DISABLED.includes(machineId)) {
                 console.log(`[PCP·mod] Ignorando máquina desativada: ${machineId}`);
@@ -420,14 +431,37 @@ async function loadPCPData(date, shiftFilter = 'current') {
             ? await window.getActiveDowntimesCached()
             : (await db().collection('active_downtimes').get()).docs.map(doc => ({id: doc.id, ...doc.data()}));
         const activeDowntimes = new Map();
+        const todayStr = typeof window.getProductionDateString === 'function' ? window.getProductionDateString() : date;
         activeDowntimesData.forEach(d => {
             // FIX: Aceitar paradas onde isActive NÃO seja explicitamente false
-            // (undefined, null, true = parada válida; apenas false = inativa)
-            // Antes: d.isActive === true — perdia paradas sem campo isActive
             if (!d || d.isActive === false) return;
-            const machineId = d.id.toUpperCase().trim();
+            const machineId = normalizeMachineId(d.id);
+            if (!machineId) return;
             if (DISABLED.includes(machineId)) return;
-            activeDowntimes.set(machineId, { ...d, source: 'active_live' });
+            // FIX: Validar contra machineDatabase (consistência com Lançamento)
+            if (validMachineIdsSet.size > 0 && !validMachineIdsSet.has(machineId)) {
+                console.warn(`[PCP·mod] Máquina "${d.id}" não existe no machineDatabase — ignorando`);
+                return;
+            }
+            // FIX: Auto-limpar paradas "SEM PROGRAMAÇÃO" com mais de 3 dias (fantasma)
+            const reason = (d.reason || d.motivo || '').toLowerCase();
+            const isSemProg = reason.includes('sem programa') || reason.includes('sem programacao');
+            if (isSemProg && d.startDate) {
+                try {
+                    const startDateObj = new Date(d.startDate + 'T00:00:00');
+                    const todayObj = new Date(todayStr + 'T00:00:00');
+                    const diffDays = Math.floor((todayObj - startDateObj) / (1000 * 60 * 60 * 24));
+                    if (diffDays > 3) {
+                        console.warn(`[PCP·mod] Parada "SEM PROGRAMAÇÃO" para ${machineId} tem ${diffDays} dias — fantasma, ignorando`);
+                        // Auto-deletar em background (como faz o Lançamento)
+                        db().collection('active_downtimes').doc(d.id).delete()
+                            .then(() => console.log(`[PCP·mod] ✅ Parada fantasma active_downtimes/${d.id} deletada`))
+                            .catch(err => console.warn(`[PCP·mod] Erro ao deletar parada fantasma:`, err));
+                        return;
+                    }
+                } catch (e) { /* ignore date parse errors */ }
+            }
+            activeDowntimes.set(machineId, { ...d, id: machineId, source: 'active_live' });
         });
         console.log('[PCP·mod] Paradas ativas (active_downtimes):', activeDowntimes.size, [...activeDowntimes.keys()]);
 
@@ -437,9 +471,11 @@ async function loadPCPData(date, shiftFilter = 'current') {
                 ? await window.getExtendedDowntimesCached(false, true)
                 : [];
             extendedList.forEach(ext => {
-                const mid = (ext.machine_id || ext.machine || '').toUpperCase().trim();
+                const mid = normalizeMachineId(ext.machine_id || ext.machine);
                 if (!mid || DISABLED.includes(mid)) return;
                 if (activeDowntimes.has(mid)) return; // active_downtimes tem prioridade
+                // Validar contra machineDatabase
+                if (validMachineIdsSet.size > 0 && !validMachineIdsSet.has(mid)) return;
                 // Ignorar registros com end_date/end_datetime (já finalizados)
                 if (ext.end_date || ext.end_datetime) return;
                 if (ext.status === 'resolved' || ext.status === 'closed') return;
@@ -462,11 +498,15 @@ async function loadPCPData(date, shiftFilter = 'current') {
 
         const now = new Date();
         const currentTime = now.toTimeString().slice(0, 5);
+        // NOTA: downtime_entries são registros de paradas FINALIZADAS ou em preenchimento.
+        // NÃO devem ser usados para determinar status ativo da máquina (consistência com Lançamento).
+        // Usados APENAS para exibir máquinas SEM planejamento que tenham algum registro de parada.
         const normalDowntimes = new Map();
         downtimeEntriesData.forEach(d => {
-            const machineId = (d.machine || '').toUpperCase().trim();
+            const machineId = normalizeMachineId(d.machine);
             if (!machineId) return;
             if (DISABLED.includes(machineId)) return;
+            if (validMachineIdsSet.size > 0 && !validMachineIdsSet.has(machineId)) return;
 
             const hasNoEndTime = !d.endTime || d.endTime === '';
             const endTimeNotPassed = d.endTime && currentTime < d.endTime;
@@ -566,7 +606,7 @@ async function loadPCPData(date, shiftFilter = 'current') {
 
         // Processar dados para tabela — máquinas COM planejamento
         const tableData = planningItems.map(plan => {
-            const machineId = (plan.machine || '').toUpperCase().trim();
+            const machineId = normalizeMachineId(plan.machine);
             const productCode = plan.product_code || plan.productCode || plan.product || '';
             const productInfo = productByCode?.get(productCode) || {};
 
@@ -585,15 +625,9 @@ async function loadPCPData(date, shiftFilter = 'current') {
                     downtimeReason = activeDowntime.motivo || activeDowntime.reason || 'Não informado';
                 }
             }
-            const normalDowntime = normalDowntimes.get(machineId);
-            if (normalDowntime && status === 'Produzindo') {
-                const _ndReason = (normalDowntime.reason || normalDowntime.motivo || '').toLowerCase();
-                const _isNdSemProg = _ndReason.includes('sem programa') || _ndReason.includes('sem programacao');
-                if (!_isNdSemProg) {
-                    status = 'Parada';
-                    downtimeReason = normalDowntime.reason || normalDowntime.motivo || 'Não informado';
-                }
-            }
+            // NOTA: normalDowntimes (downtime_entries) NÃO afeta status de máquinas COM
+            // planejamento — são dados de registro de parada, não de status ativo.
+            // Consistente com Lançamento que só usa active_downtimes + extended_downtime_logs.
 
             // Turno atual para buscar ciclo/cavidades reais
             const nowD = new Date();
