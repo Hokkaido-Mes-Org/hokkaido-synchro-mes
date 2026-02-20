@@ -42,7 +42,7 @@ async function getProductionOrdersCached(forceRefresh = false) {
         return window.getProductionOrdersCached(forceRefresh);
     }
     // Fallback direto ao Firebase se a função global não estiver disponível
-    const snapshot = await db().collection('production_orders').orderBy('createdAt', 'desc').get();
+    const snapshot = await db().collection('production_orders').orderBy('createdAt', 'desc').limit(500).get();
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 

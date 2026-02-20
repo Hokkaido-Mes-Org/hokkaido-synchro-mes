@@ -29,7 +29,7 @@ export async function getProductionOrdersCached(forceRefresh = false) {
     }
     const db = getDb();
     if (!db) return [];
-    const snap = await db.collection('production_orders').get();
+    const snap = await db.collection('production_orders').limit(500).get();
     return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 

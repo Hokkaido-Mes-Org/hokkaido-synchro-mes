@@ -89,7 +89,7 @@ async function relLoadOPsCache() {
         // OTIMIZADO: usa cache global ao invés de leitura direta
         const ordersData = typeof window.getProductionOrdersCached === 'function'
             ? await window.getProductionOrdersCached()
-            : (await db().collection('production_orders').limit(2000).get()).docs.map(doc => ({id: doc.id, ...doc.data()}));
+            : (await db().collection('production_orders').limit(500).get()).docs.map(doc => ({id: doc.id, ...doc.data()}));
         ordersData.forEach(d => {
             relOPsCache.set(d.id, {
                 orderNumber: d.order_number || d.order_number_original || d.id,

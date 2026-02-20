@@ -134,6 +134,39 @@
 
 ---
 
+## Fase 4 — Quick Wins (Fev/2026) ✅
+
+### 4A. Dashboard TV: reutilizar dados do onSnapshot
+- **Arquivo:** `dashboard-tv.html`
+- **Antes:** `loadRealTimeData` e `updateRealTimeActiveDowntimes` faziam `.get()` ou cache read de `active_downtimes` separadamente
+- **Depois:** `onSnapshot` armazena dados em `_activeDowntimesSnapshotData`, reutilizado por ambas funções (0 leituras extras)
+- **Economia:** ~2.880 leituras/dia por TV
+
+### 4B. Dashboard TV: intervalo de polling 60s → 300s (5 min)
+- **Arquivo:** `dashboard-tv.html`
+- **Antes:** `setInterval(loadRealTimeData, 60000)` — refresh a cada 1 minuto
+- **Depois:** `setInterval(loadRealTimeData, 300000)` — refresh a cada 5 minutos
+- **Economia:** ~80% redução nas leituras de polling do Dashboard TV
+
+### 4C. Dashboard TV: visibilitychange para pausar polling
+- **Arquivo:** `dashboard-tv.html`
+- **Adicionado:** `document.addEventListener('visibilitychange', ...)` — pausa/retoma `_dashboardTVPollInterval`
+- **Economia:** evita leituras quando TV está com tela desligada ou navegador em background
+
+### 4D. Unificar polling duplicado de active_downtimes
+- **Arquivo:** `src/controllers/planning.controller.js`
+- **Antes:** Sobrescrevia `window._startActiveDowntimesPolling` e registrava `visibilitychange` duplicado
+- **Depois:** Usa variável separada `window._planningDowntimesPolling`, sem duplicar handler de visibilidade
+- **Economia:** ~8.640 leituras/dia
+
+### 4E. Limitar full collection reads de production_orders
+- **Arquivos:** `script.js`, `planning.controller.js`, `orders.controller.js`, `reports.controller.js`, `firebase-cache.service.js`
+- **Antes:** `db.collection('production_orders').orderBy('createdAt','desc').get()` — sem limit
+- **Depois:** Adicionado `.limit(500)` em todos os pontos (listeners e fallbacks)
+- **Economia:** Proporcional ao crescimento da coleção; evita leitura de OPs antigas desnecessárias
+
+---
+
 ## Riscos e Mitigações
 
 | Risco | Mitigação |
@@ -142,6 +175,8 @@
 | `launchPlanning` não mostrar planos antigos | Planos ativos de datas anteriores devem ser replanejados — comportamento correto |
 | Polling 300s pode atrasar cards vermelhos de paradas | A detecção manual (botão registrar parada) é instantânea; apenas o card visual demora até 5min |
 | Cache do reports.controller pode servir snapshot stale | TTL de 5min é aceitável para relatórios que são sob demanda |
+| Dashboard TV 5min pode atrasar dados visuais | `onSnapshot` em `active_downtimes` atualiza paradas em tempo real; demais dados atualizam a cada 5min |
+| `.limit(500)` em production_orders | Cobre amplamente o volume operacional; OPs muito antigas são irrelevantes para operação diária |
 
 ---
 
@@ -152,3 +187,5 @@
 3. **Implementar `onSnapshot` com `includeMetadataChanges`** para evitar reads duplicados durante reconexão
 4. **Indexar consultas compostas** no Firestore para reduzir scan de documentos
 5. **Avaliar migração parcial para Realtime Database** para dados com alta frequência (active_downtimes)
+6. **Implementar invalidação de cache em writes** (Fase 4B do plano de ações)
+7. **Converter pollings de active_downtimes para onSnapshot compartilhado** (ação 3.2)

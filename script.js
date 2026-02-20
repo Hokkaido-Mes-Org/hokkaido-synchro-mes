@@ -10433,7 +10433,7 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         if (!db || !productionOrderTableBody) return;
 
         try {
-            const query = db.collection('production_orders').orderBy('createdAt', 'desc');
+            const query = db.collection('production_orders').orderBy('createdAt', 'desc').limit(500);
             listenerManager.subscribe('productionOrders', query,
                 (snapshot) => {
                     productionOrdersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));

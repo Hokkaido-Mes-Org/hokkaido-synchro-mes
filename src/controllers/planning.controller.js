@@ -1311,7 +1311,7 @@ const machineCardProductionCache = (() => {
         if (!getDb() || !productionOrderTableBody) return;
 
         try {
-            const query = getDb().collection('production_orders').orderBy('createdAt', 'desc');
+            const query = getDb().collection('production_orders').orderBy('createdAt', 'desc').limit(500);
             listenerManager.subscribe('productionOrders', query,
                 (snapshot) => {
                     productionOrdersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -2507,29 +2507,12 @@ const machineCardProductionCache = (() => {
         // Executar imediatamente na primeira vez
         pollActiveDowntimes();
         
-        // Configurar polling a cada 300 segundos (otimizado Fase 2 — era 60s, reduz 80% leituras active_downtimes)
-        window._startActiveDowntimesPolling = () => {
-            if (window._activeDowntimesPolling) {
-                clearInterval(window._activeDowntimesPolling);
-            }
-            window._activeDowntimesPolling = setInterval(pollActiveDowntimes, 300000);
-        };
-        window._startActiveDowntimesPolling();
-        
-        // Pausar polling quando aba não está visível (economia de leituras Firebase)
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                console.log('[POLLING] Pausando polling - aba oculta');
-                if (window._activeDowntimesPolling) {
-                    clearInterval(window._activeDowntimesPolling);
-                    window._activeDowntimesPolling = null;
-                }
-            } else {
-                console.log('[POLLING] Retomando polling - aba visível');
-                pollActiveDowntimes(); // Atualiza imediatamente ao voltar
-                window._startActiveDowntimesPolling();
-            }
-        });
+        // OTIMIZADO: Usar intervalo próprio (não sobrescreve window._startActiveDowntimesPolling do script.js)
+        // Lê do cache (forceRefresh=false) — script.js mantém o cache atualizado
+        if (!window._planningDowntimesPolling) {
+            window._planningDowntimesPolling = setInterval(pollActiveDowntimes, 300000);
+        }
+        // Visibilidade gerenciada pelo handler global em script.js — não duplicar
     }
 
     function renderPlanningTable(items) {
