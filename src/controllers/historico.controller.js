@@ -18,6 +18,8 @@ let historicoLastDoc = null;
 let historicoFirstDoc = null;
 let historicoDataSelecionada = null;
 let historicoSetupDone = false;
+let historicoCache = [];          // cache dos registros carregados do Firestore
+let historicoCacheDate = null;     // data usada na última query
 
 /** Atalho para Firestore */
 function db() { return getDb(); }
@@ -38,7 +40,7 @@ export function setupHistoricoPage() {
 
 function setupHistoricoSistema() {
     if (historicoSetupDone) {
-        carregarHistorico();
+        // Já inicializado — mantém estado atual (search-first)
         return;
     }
     historicoSetupDone = true;
@@ -71,12 +73,17 @@ function setupHistoricoSistema() {
     historicoDataSelecionada = new Date().toISOString().split('T')[0];
     atualizarBotaoAtivo('hoje');
 
+    // Botão Buscar (principal — dispara query server-side)
+    const btnBuscar = document.getElementById('historico-buscar');
+    if (btnBuscar) btnBuscar.addEventListener('click', () => carregarHistorico());
+
     if (btnHoje) btnHoje.addEventListener('click', () => {
         historicoDataSelecionada = new Date().toISOString().split('T')[0];
         if (dataEspecifica) dataEspecifica.value = '';
         atualizarBotaoAtivo('hoje');
         historicoCurrentPage = 0;
         historicoLastDoc = null;
+        // Data mudou → nova query server-side
         carregarHistorico();
     });
 
@@ -88,6 +95,7 @@ function setupHistoricoSistema() {
         atualizarBotaoAtivo('ontem');
         historicoCurrentPage = 0;
         historicoLastDoc = null;
+        // Data mudou → nova query server-side
         carregarHistorico();
     });
 
@@ -97,14 +105,9 @@ function setupHistoricoSistema() {
             atualizarBotaoAtivo('especifica');
             historicoCurrentPage = 0;
             historicoLastDoc = null;
+            // Data mudou → nova query server-side
             carregarHistorico();
         }
-    });
-
-    if (btnRefresh) btnRefresh.addEventListener('click', () => {
-        historicoCurrentPage = 0;
-        historicoLastDoc = null;
-        carregarHistorico();
     });
 
     if (btnPrev) btnPrev.addEventListener('click', () => {
@@ -123,26 +126,23 @@ function setupHistoricoSistema() {
     const usuarioInput = document.getElementById('historico-usuario');
     const maquinaInput = document.getElementById('historico-maquina');
 
+    // Tipo, Usuário, Máquina → filtram client-side (sem re-query)
     if (tipoAcaoSelect) {
         tipoAcaoSelect.addEventListener('change', () => {
-            historicoCurrentPage = 0;
-            historicoLastDoc = null;
-            carregarHistorico();
+            if (historicoCache.length > 0) aplicarFiltrosClientSide();
         });
     }
 
     let debounceTimer = null;
-    const debounceCarregar = () => {
+    const debounceClientFilter = () => {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
-            historicoCurrentPage = 0;
-            historicoLastDoc = null;
-            carregarHistorico();
-        }, 500);
+            if (historicoCache.length > 0) aplicarFiltrosClientSide();
+        }, 300);
     };
 
-    if (usuarioInput) usuarioInput.addEventListener('input', debounceCarregar);
-    if (maquinaInput) maquinaInput.addEventListener('input', debounceCarregar);
+    if (usuarioInput) usuarioInput.addEventListener('input', debounceClientFilter);
+    if (maquinaInput) maquinaInput.addEventListener('input', debounceClientFilter);
 
     // Botão de dados de teste
     const btnTeste = document.getElementById('historico-teste');
@@ -186,35 +186,48 @@ function setupHistoricoSistema() {
         }
     });
 
-    carregarHistorico();
+    // Não carrega dados ao abrir a aba — mostra empty state (search-first)
+    atualizarEstatisticasHistorico([]);
 }
 
 // ═══════════════════════════════════════════════
 // DATA LOADING
 // ═══════════════════════════════════════════════
 
+/**
+ * Carrega registros do Firestore (query server-side por data).
+ * Resultados são cacheados em historicoCache para filtros client-side.
+ */
 async function carregarHistorico(direction = 'first') {
     const tbody = document.getElementById('historico-tbody');
     if (!tbody) return;
+
+    const btnBuscar = document.getElementById('historico-buscar');
 
     tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-10 text-center text-gray-400">
         <i data-lucide="loader-2" class="w-10 h-10 mx-auto mb-3 animate-spin opacity-50"></i>
         <p>Carregando histórico...</p></td></tr>`;
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
+    // UI loading no botão
+    if (btnBuscar) {
+        btnBuscar.disabled = true;
+        btnBuscar.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Buscando...';
+    }
+
     try {
         const dataSelecionada = historicoDataSelecionada || new Date().toISOString().split('T')[0];
-        const tipoAcao = document.getElementById('historico-tipo-acao')?.value;
-        const usuarioFiltro = document.getElementById('historico-usuario')?.value?.toLowerCase();
-        const maquinaFiltro = document.getElementById('historico-maquina')?.value?.toLowerCase();
 
         let query = db().collection('system_logs')
             .where('data', '==', dataSelecionada)
             .limit(500);
 
         const snapshot = await query.get();
+        console.log(`[Historico·mod] ${snapshot.size} registros carregados para ${dataSelecionada}`);
 
         if (snapshot.empty) {
+            historicoCache = [];
+            historicoCacheDate = dataSelecionada;
             tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-10 text-center text-gray-400">
                 <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
                 <p>Nenhum registro encontrado para a data selecionada</p></td></tr>`;
@@ -223,67 +236,17 @@ async function carregarHistorico(direction = 'first') {
             return;
         }
 
-        let registros = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        registros.sort((a, b) => {
+        // Armazena em cache e ordena por timestamp (mais recente primeiro)
+        historicoCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        historicoCacheDate = dataSelecionada;
+        historicoCache.sort((a, b) => {
             const tsA = a.timestamp?.toDate?.() || new Date(a.timestampLocal || 0);
             const tsB = b.timestamp?.toDate?.() || new Date(b.timestampLocal || 0);
             return tsB - tsA;
         });
 
-        if (tipoAcao) {
-            registros = registros.filter(r => r.tipo === tipoAcao);
-        }
-        if (usuarioFiltro) {
-            registros = registros.filter(r => (r.usuario || '').toLowerCase().includes(usuarioFiltro));
-        }
-        if (maquinaFiltro) {
-            registros = registros.filter(r => (r.maquina || '').toLowerCase().includes(maquinaFiltro));
-        }
-
-        atualizarEstatisticasHistorico(registros);
-
-        tbody.innerHTML = '';
-
-        if (registros.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-10 text-center text-gray-400">
-                <i data-lucide="filter-x" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
-                <p>Nenhum registro corresponde aos filtros aplicados</p></td></tr>`;
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-            return;
-        }
-
-        registros.forEach(log => {
-            const row = document.createElement('tr');
-            row.className = 'hover:bg-gray-50 transition-colors';
-
-            const tipoInfo = getTipoInfo(log.tipo);
-            const dataHora = formatarDataHoraLog(log);
-            const detalhesStr = formatarDetalhes(log.detalhes);
-
-            row.innerHTML = `
-                <td class="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">${dataHora}</td>
-                <td class="px-4 py-3">
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${tipoInfo.class}">
-                        ${tipoInfo.icon} ${tipoInfo.label}
-                    </span>
-                </td>
-                <td class="px-4 py-3 text-sm text-gray-800">${log.descricao || log.acao || '-'}</td>
-                <td class="px-4 py-3 text-sm font-medium text-blue-600">${log.maquina || '-'}</td>
-                <td class="px-4 py-3 text-sm text-gray-600">${log.usuario || '-'}</td>
-                <td class="px-4 py-3 text-xs text-gray-500 max-w-xs truncate" title="${(detalhesStr || '').replace(/<[^>]*>/g, '')}">${detalhesStr || '-'}</td>
-            `;
-            tbody.appendChild(row);
-        });
-
-        const info = document.getElementById('historico-info');
-        if (info) info.textContent = `Mostrando ${registros.length} registros`;
-
-        const btnPrev = document.getElementById('historico-prev');
-        const btnNext = document.getElementById('historico-next');
-        if (btnPrev) btnPrev.style.display = 'none';
-        if (btnNext) btnNext.style.display = 'none';
-
-        if (typeof lucide !== 'undefined') lucide.createIcons();
+        // Aplicar filtros client-side nos dados carregados
+        aplicarFiltrosClientSide();
 
     } catch (error) {
         console.error('[HISTORICO] Erro ao carregar:', error);
@@ -291,7 +254,83 @@ async function carregarHistorico(direction = 'first') {
             <i data-lucide="alert-circle" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
             <p>Erro ao carregar: ${error.message}</p></td></tr>`;
         if (typeof lucide !== 'undefined') lucide.createIcons();
+    } finally {
+        if (btnBuscar) {
+            btnBuscar.disabled = false;
+            btnBuscar.innerHTML = '<i data-lucide="search" class="w-4 h-4"></i> Buscar';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
     }
+}
+
+/**
+ * Aplica filtros (tipo, usuário, máquina) nos dados já carregados (client-side).
+ * NÃO faz nova query ao Firestore.
+ */
+function aplicarFiltrosClientSide() {
+    const tbody = document.getElementById('historico-tbody');
+    if (!tbody || historicoCache.length === 0) return;
+
+    const tipoAcao = document.getElementById('historico-tipo-acao')?.value;
+    const usuarioFiltro = document.getElementById('historico-usuario')?.value?.toLowerCase();
+    const maquinaFiltro = document.getElementById('historico-maquina')?.value?.toLowerCase();
+
+    let registros = [...historicoCache];
+
+    if (tipoAcao) {
+        registros = registros.filter(r => r.tipo === tipoAcao);
+    }
+    if (usuarioFiltro) {
+        registros = registros.filter(r => (r.usuario || '').toLowerCase().includes(usuarioFiltro));
+    }
+    if (maquinaFiltro) {
+        registros = registros.filter(r => (r.maquina || '').toLowerCase().includes(maquinaFiltro));
+    }
+
+    atualizarEstatisticasHistorico(registros);
+
+    tbody.innerHTML = '';
+
+    if (registros.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-10 text-center text-gray-400">
+            <i data-lucide="filter-x" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
+            <p>Nenhum registro corresponde aos filtros aplicados</p></td></tr>`;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        return;
+    }
+
+    registros.forEach(log => {
+        const row = document.createElement('tr');
+        row.className = 'hover:bg-gray-50 transition-colors';
+
+        const tipoInfo = getTipoInfo(log.tipo);
+        const dataHora = formatarDataHoraLog(log);
+        const detalhesStr = formatarDetalhes(log.detalhes);
+
+        row.innerHTML = `
+            <td class="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">${dataHora}</td>
+            <td class="px-4 py-3">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${tipoInfo.class}">
+                    ${tipoInfo.icon} ${tipoInfo.label}
+                </span>
+            </td>
+            <td class="px-4 py-3 text-sm text-gray-800">${log.descricao || log.acao || '-'}</td>
+            <td class="px-4 py-3 text-sm font-medium text-blue-600">${log.maquina || '-'}</td>
+            <td class="px-4 py-3 text-sm text-gray-600">${log.usuario || '-'}</td>
+            <td class="px-4 py-3 text-xs text-gray-500 max-w-xs truncate" title="${(detalhesStr || '').replace(/<[^>]*>/g, '')}">${detalhesStr || '-'}</td>
+        `;
+        tbody.appendChild(row);
+    });
+
+    const info = document.getElementById('historico-info');
+    if (info) info.textContent = `Mostrando ${registros.length} registros`;
+
+    const btnPrev = document.getElementById('historico-prev');
+    const btnNext = document.getElementById('historico-next');
+    if (btnPrev) btnPrev.style.display = 'none';
+    if (btnNext) btnNext.style.display = 'none';
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 // ═══════════════════════════════════════════════
