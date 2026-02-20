@@ -3056,9 +3056,13 @@
                 db = firebase.firestore();
                 
                 // Fase 4D Nível 4.1: Cache offline (multi-tab)
-                db.enablePersistence({ synchronizeTabs: true })
-                    .then(() => console.log('[Dashboard TV] Persistence habilitada'))
-                    .catch(err => console.warn('[Dashboard TV] Persistence:', err.code));
+                // DEVE ser awaited antes de qualquer query
+                try {
+                    await db.enablePersistence({ synchronizeTabs: true });
+                    console.log('[Dashboard TV] Persistence habilitada');
+                } catch (err) {
+                    console.warn('[Dashboard TV] Persistence falhou:', err.code, '— continuando sem cache offline');
+                }
                 
                 console.log('[Dashboard TV] Firestore conectado');
                 

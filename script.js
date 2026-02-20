@@ -1510,6 +1510,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Fase 4D Nível 4.1: Cache offline com multi-tab
         // Reduz leituras em page reloads e reconexões (~30-50%)
+        // Nota: NÃO usar await aqui — o DOMContentLoaded handler não é async.
+        // Firestore enfileira queries até persistence resolver — OK porque
+        // as queries só acontecem quando o usuário navega para alguma aba.
         db.enablePersistence({ synchronizeTabs: true })
             .then(() => console.log('✅ Firestore: Persistence habilitada (multi-tab)'))
             .catch(err => {

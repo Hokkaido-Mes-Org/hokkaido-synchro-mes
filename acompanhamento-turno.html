@@ -471,15 +471,18 @@
         const STORAGE_KEY = 'acompanhamento_turno_cedoc';
 
         // Inicializar Firebase
-        function initFirebase() {
+        async function initFirebase() {
             try {
                 if (!firebase.apps.length) {
                     firebase.initializeApp(firebaseConfig);
                 }
                 db = firebase.firestore();
                 // Fase 4D Nível 4.1: Cache offline
-                db.enablePersistence({ synchronizeTabs: true })
-                    .catch(err => console.warn('Persistence:', err.code));
+                try {
+                    await db.enablePersistence({ synchronizeTabs: true });
+                } catch (err) {
+                    console.warn('Persistence:', err.code);
+                }
                 updateStatus('connected', '✓ Conectado');
             } catch (error) {
                 console.error('Erro ao conectar Firebase:', error);
