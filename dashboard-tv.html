@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="refresh" content="300"> <!-- Auto-refresh a cada 5 min -->
+    <!-- meta http-equiv="refresh" removido: o JS já faz polling a cada 5 min via setInterval.
+         Hard refresh destruía onSnapshot listeners e causava falhas de enablePersistence. -->
     <title>Hokkaido Plastics | Painel Industrial</title>
     <link rel="icon" href="https://i.postimg.cc/5jdHwhF9/hokkaido-logo-110.png" type="image/png">
     
@@ -3054,6 +3055,17 @@
                     console.log('[Dashboard TV] Firebase app inicializado');
                 }
                 db = firebase.firestore();
+                
+                // Forçar long polling — evita ERR_QUIC_PROTOCOL_ERROR em redes de fábrica
+                // DEVE ser chamado ANTES de enablePersistence e qualquer query
+                if (db.settings) {
+                    try {
+                        db.settings({ experimentalForceLongPolling: true });
+                        console.log('[Dashboard TV] Firestore: Long polling forçado (QUIC desabilitado)');
+                    } catch (e) {
+                        console.warn('[Dashboard TV] Não foi possível configurar long polling:', e.message);
+                    }
+                }
                 
                 // Fase 4D Nível 4.1: Cache offline (multi-tab)
                 // DEVE ser awaited antes de qualquer query

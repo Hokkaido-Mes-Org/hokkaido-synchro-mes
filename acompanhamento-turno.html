@@ -477,6 +477,15 @@
                     firebase.initializeApp(firebaseConfig);
                 }
                 db = firebase.firestore();
+                // Forçar long polling — evita ERR_QUIC_PROTOCOL_ERROR em redes de fábrica
+                if (db.settings) {
+                    try {
+                        db.settings({ experimentalForceLongPolling: true });
+                        console.log('✅ Firestore: Long polling forçado (QUIC desabilitado)');
+                    } catch (e) {
+                        console.warn('⚠️ Não foi possível configurar long polling:', e.message);
+                    }
+                }
                 // Fase 4D Nível 4.1: Cache offline
                 try {
                     await db.enablePersistence({ synchronizeTabs: true });
