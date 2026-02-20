@@ -1508,6 +1508,20 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
+        // Fase 4D Nível 4.1: Cache offline com multi-tab
+        // Reduz leituras em page reloads e reconexões (~30-50%)
+        db.enablePersistence({ synchronizeTabs: true })
+            .then(() => console.log('✅ Firestore: Persistence habilitada (multi-tab)'))
+            .catch(err => {
+                if (err.code === 'failed-precondition') {
+                    console.warn('⚠️ Persistence: múltiplas abas abertas sem suporte sync');
+                } else if (err.code === 'unimplemented') {
+                    console.warn('⚠️ Persistence: não suportada neste browser');
+                } else {
+                    console.warn('⚠️ Persistence falhou:', err.message);
+                }
+            });
+        
         if (typeof firebase.storage === 'function') {
             // Nota: Fotos foram removidas do sistema; Storage não é utilizado.
             console.log('Firebase Storage detectado (não utilizado: fotos removidas)');

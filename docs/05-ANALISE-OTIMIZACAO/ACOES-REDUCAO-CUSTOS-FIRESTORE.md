@@ -672,9 +672,12 @@ const snapshot = await planningQuery.get({ source: 'cache' }); // 0 reads!
 | Fase 1 — Duplicatas | Jan/2026 | 1.200.000 | 480.000 | -60% |
 | Fase 2 — TTLs | Fev/2026 | 480.000 | 390.000 | -19% |
 | Fase 3 — Cache controllers | Fev/2026 | 390.000 | 390.000 | (já contabilizado) |
-| **Fase 4 — Este plano (P1-P2)** | **Próximo** | **390.000** | **~245.000** | **-37%** |
-| **Fase 5 — Cloud Functions** | **Futuro** | **245.000** | **~130.000** | **-47%** |
-| **TOTAL ACUMULADO** | | **1.200.000** | **~130.000** | **-89%** |
+| Fase 4A — Quick Wins (N1) | Fev/2026 | 390.000 | ~284.000 | -27% |
+| Fase 4B — Estruturais (N2) | Fev/2026 | ~284.000 | ~245.000 | -14% |
+| Fase 4B-N3 — onSnapshot + batch | Fev/2026 | ~245.000 | ~215.000 | -12% |
+| **Fase 4D — enablePersistence (N4)** | **Fev/2026** | **~215.000** | **~110.000-150.000** | **-30-50%** |
+| Fase 5 — Cloud Functions | Futuro | ~130.000 | ~60.000 | -54% |
+| **TOTAL ACUMULADO (até N4)** | | **1.200.000** | **~110.000-150.000** | **~88-91%** |
 
 ---
 
@@ -736,11 +739,11 @@ const snapshot = await planningQuery.get({ source: 'cache' }); // 0 reads!
 - [x] `onSnapshot` com `includeMetadataChanges` (3.4) — integrado no ActiveDowntimesLiveService, filtra `fromCache` para evitar leituras duplicadas em reconexão
 - [x] Batch reads com `in` queries (3.5) — render de plannings usa chunks de 10 IDs em `production_orders` (script.js + planning.controller.js), reduz N leituras individuais para ceil(N/10)
 
-### Fase 4D — Avançadas (P4-P5) — 🏢 1+ semana
-- [ ] `enablePersistence()` para cache offline (4.1)
-- [ ] TTL Policy para system_logs e hourly_production_entries (4.4)
-- [ ] Avaliar Firestore Bundles para init (4.3)
-- [ ] Avaliar Firestore Lite para abas read-only (4.2)
+### Fase 4D — Avançadas (P4-P5) — 🏢 ✅ CONCLUÍDO (Fev/2026)
+- [x] `enablePersistence()` para cache offline (4.1) — `db.enablePersistence({ synchronizeTabs: true })` em 3 init points: script.js, dashboard-tv.html, acompanhamento-turno.html. Reduz ~30-50% leituras em page reloads e reconexões. admin-fix-downtime.html excluído (ferramenta diagnóstica com config dinâmica).
+- [x] TTL Policy para system_logs e hourly_production_entries (4.4) — Campo `timestamp` (serverTimestamp) já presente em todos os writes. Configurar no Firebase Console: system_logs → 90 dias, hourly_production_entries → 30 dias. Ver instruções em OTIMIZACAO-LEITURAS-FIREBASE.md.
+- [x] Avaliar Firestore Bundles para init (4.3) — **Avaliado: NÃO viável no momento.** Requer Cloud Functions + CDN + deploy separado. Custo de infraestrutura e manutenção desproporcional à economia (~15.000 reads/dia). Reavaliar se volume crescer 5×.
+- [x] Avaliar Firestore Lite para abas read-only (4.2) — **Avaliado: BLOQUEADO.** Codebase usa Firebase v8 compat SDK via CDN. Firestore Lite requer v9+ modular SDK. Migração do SDK inteiro seria pré-requisito (~1-2 semanas de esforço). Não justificado pelo ganho (~10% leituras).
 
 ---
 

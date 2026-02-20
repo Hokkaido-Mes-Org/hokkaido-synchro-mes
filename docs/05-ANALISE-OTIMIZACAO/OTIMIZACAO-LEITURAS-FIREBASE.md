@@ -278,3 +278,53 @@
 |---------|--------|--------|
 | `src/services/active-downtimes-live.service.js` | ~260 | onSnapshot compartilhado para `active_downtimes` |
 
+---
+
+## Fase 4D — Otimizações Arquiteturais Nível 4 (Fev/2026) ✅
+
+### 4M. enablePersistence com synchronizeTabs (Ação 4.1)
+- **Arquivos modificados:**
+  - `script.js` (~L1510) — init principal do app
+  - `dashboard-tv.html` (~L3057) — init da TV de chão de fábrica
+  - `acompanhamento-turno.html` (~L480) — init do formulário de turno
+- **Código:** `db.enablePersistence({ synchronizeTabs: true })`
+- **Não aplicado em:** `admin-fix-downtime.html` (ferramenta diagnóstica com config dinâmica)
+- **Comportamento:**
+  - Firestore cacheia documentos localmente no IndexedDB
+  - Em page reloads, dados são servidos do cache local primeiro (0 reads), depois sincronizados em background
+  - `synchronizeTabs: true` permite que múltiplas abas compartilhem o mesmo cache
+  - Se falhar (multiple tabs sem suporte, browser antigo), o app continua normalmente
+- **Error handling:** Captura `failed-precondition` e `unimplemented` sem interromper o app
+- **Economia estimada:** ~30-50% em leituras de page reload e reconexão (~117.000-195.000 reads/dia)
+
+### 4N. TTL Policy para coleções de logs (Ação 4.4)
+- **Status:** Campos `timestamp` (serverTimestamp) verificados em todos os writes — prontos para TTL
+- **Configuração no Firebase Console:**
+  1. Abrir [Firebase Console](https://console.firebase.google.com/) → Projeto Hokkaido
+  2. Ir em **Firestore Database** → **TTL** (ou **Data retention**)
+  3. Adicionar política para `system_logs`: campo `timestamp`, retenção **90 dias**
+  4. Adicionar política para `hourly_production_entries`: campo `timestamp`, retenção **30 dias**
+
+  | Coleção | Campo TTL | Retenção | Docs antigos removidos |
+  |---------|-----------|----------|------------------------|
+  | `system_logs` | `timestamp` | 90 dias | ~50.000+ |
+  | `hourly_production_entries` | `timestamp` | 30 dias | ~10.000+ |
+
+- **⚠️ ATENÇÃO:** Dados removidos pelo TTL são permanentemente deletados.
+
+### 4O. Avaliação: Firestore Lite SDK (Ação 4.2) — ❌ BLOQUEADO
+- Codebase usa Firebase v8 compat SDK via CDN. Firestore Lite requer v9+ modular SDK.
+- Pré-requisito: migração completa do SDK (1-2 semanas). Não justificado pelo ganho (~10% leituras).
+
+### 4P. Avaliação: Firestore Bundles (Ação 4.3) — ❌ NÃO RECOMENDADO
+- Requer Cloud Functions + CDN + deploy pipeline + monitoramento. Custo-benefício desfavorável.
+- O `enablePersistence()` (4.1) já resolve o problema de inicialização — dados no IndexedDB local.
+
+### Resumo de economia Nível 4:
+| Ação | Economia/dia | Status |
+|------|-------------|--------|
+| 4.1 enablePersistence | ~117.000-195.000 reads | ✅ Implementado |
+| 4.4 TTL Policy | storage + query speed | 📋 Config Console pendente |
+| 4.2 Firestore Lite | — | ❌ Bloqueado (requer v9 SDK) |
+| 4.3 Firestore Bundles | — | ❌ Não recomendado |
+

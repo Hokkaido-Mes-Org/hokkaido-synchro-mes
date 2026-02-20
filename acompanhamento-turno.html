@@ -477,6 +477,9 @@
                     firebase.initializeApp(firebaseConfig);
                 }
                 db = firebase.firestore();
+                // Fase 4D Nível 4.1: Cache offline
+                db.enablePersistence({ synchronizeTabs: true })
+                    .catch(err => console.warn('Persistence:', err.code));
                 updateStatus('connected', '✓ Conectado');
             } catch (error) {
                 console.error('Erro ao conectar Firebase:', error);
