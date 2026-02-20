@@ -26,11 +26,20 @@ let relOPsCacheLoaded = false;
 // ─── Helpers ─────────────────────────────────────────
 function db() { return getDb(); }
 
-// ── Cache de consultas para relatórios (evita leituras repetidas) ──
-const _relQueryCache = new Map();
+// ── Fase 4B: Cache compartilhado entre controllers (sharedQueryCache) ──
+// Substitui _relQueryCache local. Permite que Reports e Analysis
+// reutilizem dados do mesmo período sem queries duplicadas.
+const _relQueryCache = window.sharedQueryCache || new Map();
 const _relQueryCacheTTL = 300000; // 5 min
 
 async function cachedRelQuery(key, queryFn) {
+    // Usar sharedQueryCache se disponível (compartilha com analysis.controller)
+    if (window.sharedQueryCache) {
+        return window.sharedQueryCache.get(`rel_${key}`, async () => {
+            return await queryFn();
+        });
+    }
+    // Fallback: cache local
     const entry = _relQueryCache.get(key);
     if (entry && Date.now() - entry.ts < _relQueryCacheTTL) {
         console.debug(`📦 [Rel·cache] hit: ${key}`);

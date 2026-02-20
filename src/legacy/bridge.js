@@ -125,6 +125,24 @@ function setupModernToLegacySync() {
             if (window.CacheManager) window.CacheManager.invalidate('production_entries');
         } catch (e) { /* ok */ }
     });
+
+    // ── Fase 4B: Reagir a eventos genéricos de write-invalidation ──
+    // O módulo write-invalidation.js emite '*:changed' após writes.
+    // Aqui garantimos que caches legados sejam sincronizados.
+    const collectionEventMap = {
+        'production_orders:changed':      { ds: 'productionOrders',    cm: 'production_orders' },
+        'planning:changed':               { ds: 'planning',            cm: 'planning' },
+        'active_downtimes:changed':       { ds: 'activeDowntimes',     cm: 'active_downtimes' },
+        'extended_downtime_logs:changed':  { ds: 'extendedDowntimeLogs', cm: 'extended_downtime_logs' },
+    };
+    Object.entries(collectionEventMap).forEach(([event, keys]) => {
+        EventBus.on(event, () => {
+            try {
+                if (window.DataStore) window.DataStore.invalidate(keys.ds);
+                if (window.CacheManager) window.CacheManager.invalidate(keys.cm);
+            } catch (e) { /* ok */ }
+        });
+    });
 }
 
 /**

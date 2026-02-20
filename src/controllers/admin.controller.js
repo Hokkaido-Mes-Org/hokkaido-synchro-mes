@@ -155,6 +155,9 @@ function db() { return getDb(); }
         const btnSyncTotais = document.getElementById('admin-btn-sync-totais');
         if (btnSyncTotais) btnSyncTotais.addEventListener('click', adminSincronizarTotais);
         
+        // Aba Monitor Firebase (Fase 4B — Nível 2.5)
+        setupFirebaseMonitor();
+        
         if (typeof lucide !== 'undefined') (typeof lucide !== 'undefined' && lucide.createIcons());
     }
     
@@ -3860,6 +3863,123 @@ function db() { return getDb(); }
             
         } catch (error) {
             alert('Erro ao carregar detalhes: ' + error.message);
+        }
+    }
+
+    // ==================== MONITOR FIREBASE (Fase 4B — Nível 2.5) ====================
+
+    function setupFirebaseMonitor() {
+        const btnRefresh = document.getElementById('firebase-monitor-refresh');
+        if (btnRefresh && !btnRefresh._fbMonitorBound) {
+            btnRefresh._fbMonitorBound = true;
+            btnRefresh.addEventListener('click', renderFirebaseMonitor);
+        }
+    }
+
+    function renderFirebaseMonitor() {
+        try {
+            // 1. FirebaseMonitor (se presente no legado)
+            const fbStats = window.FirebaseMonitor?.getStats?.() || {};
+            const totalReads = fbStats.totalReads || fbStats.reads || 0;
+
+            // 2. DataStore stats (legacy)
+            const dsStats = window.DataStore?.getStats?.() || {};
+
+            // 3. StateManager stats (modular)
+            const smStats = window.stateManager?.stats?.() || {};
+
+            // 4. SharedQueryCache stats
+            const sqcStats = window.sharedQueryCache?.stats?.() || {};
+
+            // 5. Write-invalidation stats
+            const wiStats = window.getWriteInvalidationStats?.() || {};
+
+            // 6. ListenerManager stats
+            const lmStats = window.ListenerManager?.getStats?.() || {};
+            const activeListeners = lmStats.activeCount || lmStats.active || Object.keys(lmStats).length || 0;
+
+            // --- KPI Cards ---
+            const elTotalReads = document.getElementById('fb-monitor-total-reads');
+            const elCacheRatio = document.getElementById('fb-monitor-cache-ratio');
+            const elListeners = document.getElementById('fb-monitor-listeners');
+            const elInvalidations = document.getElementById('fb-monitor-invalidations');
+
+            if (elTotalReads) elTotalReads.textContent = totalReads.toLocaleString('pt-BR');
+
+            // Cache ratio: soma hits de DataStore + StateManager + SharedQueryCache
+            const totalHits = (dsStats.hits || 0) + (smStats.hits || 0) + (sqcStats.hits || 0);
+            const totalMisses = (dsStats.misses || 0) + (smStats.misses || 0) + (sqcStats.misses || 0);
+            const totalRequests = totalHits + totalMisses;
+            const hitRatio = totalRequests > 0 ? ((totalHits / totalRequests) * 100).toFixed(1) : '—';
+            if (elCacheRatio) elCacheRatio.textContent = hitRatio !== '—' ? `${hitRatio}%` : '—';
+
+            if (elListeners) elListeners.textContent = activeListeners;
+            if (elInvalidations) elInvalidations.textContent = (wiStats.totalInvalidations || 0).toLocaleString('pt-BR');
+
+            // --- Top Coleções ---
+            const tbody = document.getElementById('fb-monitor-collections-tbody');
+            if (tbody) {
+                const collections = fbStats.byCollection || fbStats.collections || {};
+                const sorted = Object.entries(collections)
+                    .map(([name, stats]) => ({
+                        name,
+                        reads: typeof stats === 'number' ? stats : (stats.reads || 0),
+                        hits: typeof stats === 'number' ? 0 : (stats.hits || 0)
+                    }))
+                    .sort((a, b) => b.reads - a.reads)
+                    .slice(0, 10);
+
+                if (sorted.length > 0) {
+                    tbody.innerHTML = sorted.map(c => {
+                        const total = c.reads + c.hits;
+                        const pct = total > 0 ? ((c.hits / total) * 100).toFixed(1) : '0.0';
+                        const barColor = Number(pct) >= 70 ? 'bg-green-500' : Number(pct) >= 40 ? 'bg-yellow-500' : 'bg-red-400';
+                        return `
+                            <tr class="hover:bg-gray-50 border-b border-gray-100">
+                                <td class="px-4 py-2 font-mono text-xs">${c.name}</td>
+                                <td class="px-4 py-2 text-right font-semibold">${c.reads.toLocaleString('pt-BR')}</td>
+                                <td class="px-4 py-2 text-right">${c.hits.toLocaleString('pt-BR')}</td>
+                                <td class="px-4 py-2 text-right">
+                                    <div class="flex items-center justify-end gap-2">
+                                        <div class="w-16 bg-gray-200 rounded-full h-2">
+                                            <div class="${barColor} h-2 rounded-full" style="width:${Math.min(Number(pct), 100)}%"></div>
+                                        </div>
+                                        <span class="text-xs font-medium">${pct}%</span>
+                                    </div>
+                                </td>
+                            </tr>`;
+                    }).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-gray-400">Nenhuma estatística de coleção disponível. <br><span class="text-xs">FirebaseMonitor pode não estar ativo.</span></td></tr>';
+                }
+            }
+
+            // --- Cache Status ---
+            const elSM = document.getElementById('fb-monitor-statemanager');
+            if (elSM) {
+                elSM.textContent = `${smStats.size || 0} entradas | fresh: ${smStats.freshCount || 0} | TTL: ${(smStats.defaultTTL || 300000) / 1000}s`;
+            }
+
+            const elQC = document.getElementById('fb-monitor-querycache');
+            if (elQC) {
+                elQC.textContent = `${sqcStats.size || 0} entradas | hits: ${sqcStats.hits || 0} | misses: ${sqcStats.misses || 0}`;
+            }
+
+            const elDS = document.getElementById('fb-monitor-datastore');
+            if (elDS) {
+                const dsSize = dsStats.size || dsStats.collections || 0;
+                elDS.textContent = `${dsSize} coleções | hits: ${dsStats.hits || 0} | misses: ${dsStats.misses || 0}`;
+            }
+
+            console.log('[ADMIN-FIREBASE-MONITOR] Dashboard atualizado', {
+                totalReads, hitRatio: hitRatio + '%', activeListeners,
+                invalidations: wiStats.totalInvalidations || 0
+            });
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+        } catch (error) {
+            console.error('[ADMIN-FIREBASE-MONITOR] Erro ao renderizar:', error);
         }
     }
 

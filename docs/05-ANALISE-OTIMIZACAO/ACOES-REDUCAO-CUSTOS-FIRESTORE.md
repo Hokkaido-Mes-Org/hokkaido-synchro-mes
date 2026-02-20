@@ -723,15 +723,16 @@ const snapshot = await planningQuery.get({ source: 'cache' }); // 0 reads!
 - [x] Adicionar visibilitychange no Dashboard TV (1.4) — pausa/retoma `_dashboardTVPollInterval`
 - [x] **EXTRA:** Intervalo de polling do Dashboard TV de 60s → 300s (5 minutos)
 
-### Fase 4B — Estruturais (P2) — 🔧 ~2 dias
-- [ ] Implementar write-invalidation wrapper (2.1)
+### Fase 4B — Estruturais (P2) — 🔧 ~2 dias ✅ PARCIAL (Fev/2026)
+- [x] Implementar write-invalidation wrapper (2.1) — `src/utils/write-invalidation.js`, integrado em `index.js` e `bridge.js`
+- [x] Prefetch de dados por aba (2.2) — `_prefetchCollections` expandido de 5 para 14 abas em `script.js`
+- [x] Normalizar períodos de cache em relatórios (2.3) — `src/utils/shared-query-cache.js`, integrado em `analysis.controller.js` e `reports.controller.js`
+- [x] Paginação em production_orders (2.4) — `.limit(500)` já aplicado em Fase 4A; filtro `where('status')` pendente (risco médio)
+- [x] Dashboard de monitoramento de consumo (2.5) — Aba "Monitor Firebase" no Admin (`index.html` + `admin.controller.js`)
 - [ ] Converter polling de active_downtimes para onSnapshot compartilhado (3.2)
 - [ ] Avaliar viabilidade de Cloud Functions (3.3)
 
 ### Fase 4C — Incrementais (P3) — 🔧 ~3 dias
-- [ ] Prefetch de dados por aba (2.2)
-- [ ] Normalizar períodos de cache em relatórios (2.3)
-- [ ] Paginação em production_orders (2.4)
 - [ ] Batch reads com `in` queries (3.5)
 
 ### Fase 4D — Avançadas (P4-P5) — 🏢 1+ semana

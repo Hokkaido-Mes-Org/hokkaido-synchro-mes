@@ -187,5 +187,44 @@
 3. **Implementar `onSnapshot` com `includeMetadataChanges`** para evitar reads duplicados durante reconexão
 4. **Indexar consultas compostas** no Firestore para reduzir scan de documentos
 5. **Avaliar migração parcial para Realtime Database** para dados com alta frequência (active_downtimes)
-6. **Implementar invalidação de cache em writes** (Fase 4B do plano de ações)
+6. ~~**Implementar invalidação de cache em writes** (Fase 4B do plano de ações)~~ ✅ Implementado (write-invalidation.js)
 7. **Converter pollings de active_downtimes para onSnapshot compartilhado** (ação 3.2)
+
+---
+
+## Fase 4B — Otimizações Nível 2 (Fev/2026) ✅
+
+### 4F. Write-Invalidation Wrapper (Ação 2.1)
+- **Arquivo criado:** `src/utils/write-invalidation.js` (~175 linhas)
+- **Função:** Mapa centralizado de 8 coleções → chaves de cache (DataStore, CacheManager, StateManager, EventBus)
+- **API:** `invalidateCacheForCollection(collection, machineId)`, `invalidateAfterWrite(collection, writeFn, machineId)`, `getWriteInvalidationStats()`
+- **Bootstrap:** Importado em `src/index.js`, bridge atualizado em `src/legacy/bridge.js` (collectionEventMap para eventos `*:changed`)
+- **Economia:** Evita reloads desnecessários após writes — impacto proporcional ao volume de escritas
+
+### 4G. Tab-Aware Prefetch (Ação 2.2)
+- **Arquivo modificado:** `script.js` — `_prefetchCollections`
+- **Antes:** Prefetch configurado para 5 de 14 abas
+- **Depois:** Todas 14 abas mapeadas com coleções para prefetch (incluindo `downtime_entries` e `extended_downtime_logs` adicionados ao switch)
+- **Economia:** Evita re-fetch de dados ao navegar entre abas; dados pré-carregados ficam no cache por 5min
+
+### 4H. Shared Query Cache (Ação 2.3)
+- **Arquivo criado:** `src/utils/shared-query-cache.js` (~100 linhas)
+- **Integrações:** `analysis.controller.js` (`cachedInlineQuery` → sharedQueryCache), `reports.controller.js` (`cachedRelQuery` → sharedQueryCache)
+- **Antes:** Cada controller tinha cache privado (Map) — mesmos dados do mesmo período eram duplicados
+- **Depois:** Cache compartilhado singleton, TTL 300s, suporta invalidação por prefixo
+- **Economia:** ~50% redução em queries duplicadas quando Analysis e Reports consultam mesmo período
+
+### 4I. Monitor Firebase no Admin (Ação 2.5)
+- **Arquivos modificados:** `index.html` (nova aba "Monitor Firebase" no admin), `admin.controller.js` (funções `setupFirebaseMonitor` + `renderFirebaseMonitor`)
+- **Funcionalidade:** Painel com KPIs (total leituras, cache hit ratio, listeners ativos, write invalidations), tabela top coleções, status dos 3 caches (StateManager, SharedQueryCache, DataStore)
+- **Impacto:** Visibilidade zero-code do consumo Firebase em tempo real
+
+### Novos arquivos criados nesta fase:
+| Arquivo | Linhas | Função |
+|---------|--------|--------|
+| `src/utils/write-invalidation.js` | ~175 | Invalidação de cache pós-escrita |
+| `src/utils/shared-query-cache.js` | ~100 | Cache compartilhado cross-controller |
+
+### Documentação criada:
+- `docs/05-ANALISE-OTIMIZACAO/ESTIMATIVA-USO-POR-USUARIO.md` — Estimativa de consumo Firebase por perfil de usuário (5 perfis × 3 turnos)
+

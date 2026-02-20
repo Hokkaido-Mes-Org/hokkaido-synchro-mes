@@ -26,6 +26,9 @@ import './utils/logger.js';
 // REMOVIDO: listener-manager.js duplicava o listenerManager do script.js
 // e sobrescrevia window.listenerManager com instância vazia, causando conflito.
 
+// ── Fase 4B: Write Invalidation (auto-register window.*) ──
+import './utils/write-invalidation.js';
+
 // Expor flags IMEDIATAMENTE — antes de qualquer await.
 // Permite que script.js consulte window.__FLAGS para decidir
 // se usa módulo moderno ou código legado.

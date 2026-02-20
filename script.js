@@ -9056,19 +9056,30 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
                                post: () => { if (typeof lucide !== 'undefined') lucide.createIcons(); } }
     };
 
-    // OTIMIZAÇÃO: Prefetch de coleções quentes em background ao entrar em abas que compartilham dados
+    // OTIMIZAÇÃO Fase 4B: Prefetch de coleções quentes em background ao entrar em abas que compartilham dados
+    // Cobre TODAS as 14 abas — Nível 2 Ação 2.2
     const _prefetchCollections = {
-        'lancamento':   ['planning', 'production_entries', 'active_downtimes'],
-        'planejamento': ['planning', 'production_entries', 'active_downtimes'],
-        'analise':      ['production_entries', 'planning'],
-        'pcp':          ['planning', 'active_downtimes', 'production_entries'],
-        'ordens':       ['production_orders']
+        'lancamento':        ['planning', 'production_entries', 'active_downtimes'],
+        'planejamento':      ['planning', 'production_entries', 'active_downtimes', 'production_orders'],
+        'analise':           ['production_entries', 'planning', 'downtime_entries'],
+        'pcp':               ['planning', 'active_downtimes', 'production_entries'],
+        'ordens':            ['production_orders'],
+        'relatorios':        ['production_entries', 'production_orders'],
+        'paradas-longas':    ['active_downtimes', 'extended_downtime_logs'],
+        'acompanhamento':    ['production_entries', 'planning', 'active_downtimes'],
+        'lideranca-producao':['planning', 'production_entries', 'active_downtimes'],
+        'admin-dados':       ['production_entries', 'production_orders', 'planning'],
+        'ferramentaria':     [],
+        'setup-maquinas':    [],
+        'pmp':               [],
+        'historico-sistema': []
     };
 
     function _prefetchForPage(page) {
         const collections = _prefetchCollections[page];
-        if (!collections) return;
+        if (!collections || !collections.length) return;
         const today = getProductionDateString();
+        console.debug(`[Prefetch] Pré-carregando ${collections.length} coleções para "${page}"`);
         collections.forEach(col => {
             switch (col) {
                 case 'planning':
@@ -9082,6 +9093,12 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
                     break;
                 case 'production_orders':
                     if (window.getProductionOrdersCached) window.getProductionOrdersCached().catch(() => {});
+                    break;
+                case 'downtime_entries':
+                    if (window.getDowntimeEntriesCached) window.getDowntimeEntriesCached(today).catch(() => {});
+                    break;
+                case 'extended_downtime_logs':
+                    if (window.getExtendedDowntimesCached) window.getExtendedDowntimesCached().catch(() => {});
                     break;
             }
         });

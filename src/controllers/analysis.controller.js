@@ -65,16 +65,27 @@ function isPageVisible() {
 }
 
 // ── Cache de consultas inline para relatórios (evita leituras duplicadas) ──
-const _inlineQueryCache = new Map();
-const _inlineQueryCacheTTL = 300000; // 5 min
+// ── Fase 4B: Cache compartilhado entre controllers (sharedQueryCache) ──
+// Substitui _inlineQueryCache local. Permite que Reports e Analysis
+// reutilizem dados do mesmo período sem queries duplicadas.
+const _inlineQueryCache = window.sharedQueryCache || new Map();
+const _inlineQueryCacheTTL = 300000; // 5 min (backup, sharedQueryCache tem TTL interno)
 
 /**
- * Executa query Firestore com cache por chave (para relatórios inline).
- * @param {string} key - Chave única do cache
+ * Executa query Firestore com cache compartilhado por chave (para relatórios inline).
+ * @param {string} key - Chave única do cache (ex: 'prod_2026-02-20_2026-02-20')
  * @param {Function} queryFn - Função que retorna a Promise do .get()
  * @returns {Promise<Array>} Array de docs { id, ...data }
  */
 async function cachedInlineQuery(key, queryFn) {
+    // Usar sharedQueryCache se disponível (compartilha com reports.controller)
+    if (window.sharedQueryCache) {
+        return window.sharedQueryCache.get(key, async () => {
+            const snapshot = await queryFn();
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        });
+    }
+    // Fallback: cache local
     const entry = _inlineQueryCache.get(key);
     if (entry && Date.now() - entry.ts < _inlineQueryCacheTTL) {
         console.debug(`📦 [Analysis·cache] hit: ${key}`);
