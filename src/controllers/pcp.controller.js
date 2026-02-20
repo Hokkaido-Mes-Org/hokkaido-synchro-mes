@@ -421,13 +421,39 @@ async function loadPCPData(date, shiftFilter = 'current') {
             : (await db().collection('active_downtimes').get()).docs.map(doc => ({id: doc.id, ...doc.data()}));
         const activeDowntimes = new Map();
         activeDowntimesData.forEach(d => {
-            if (d && d.isActive === true) {
-                const machineId = d.id.toUpperCase().trim();
-                if (DISABLED.includes(machineId)) return;
-                activeDowntimes.set(machineId, { ...d, source: 'active_live' });
-            }
+            // FIX: Aceitar paradas onde isActive NÃO seja explicitamente false
+            // (undefined, null, true = parada válida; apenas false = inativa)
+            // Antes: d.isActive === true — perdia paradas sem campo isActive
+            if (!d || d.isActive === false) return;
+            const machineId = d.id.toUpperCase().trim();
+            if (DISABLED.includes(machineId)) return;
+            activeDowntimes.set(machineId, { ...d, source: 'active_live' });
         });
         console.log('[PCP·mod] Paradas ativas (active_downtimes):', activeDowntimes.size, [...activeDowntimes.keys()]);
+
+        // 2b. Paradas prolongadas (extended_downtime_logs) — consistência com Lançamento
+        try {
+            const extendedList = typeof window.getExtendedDowntimesCached === 'function'
+                ? await window.getExtendedDowntimesCached(false, true)
+                : [];
+            extendedList.forEach(ext => {
+                const mid = (ext.machine_id || ext.machine || '').toUpperCase().trim();
+                if (!mid || DISABLED.includes(mid)) return;
+                if (activeDowntimes.has(mid)) return; // active_downtimes tem prioridade
+                // Ignorar registros com end_date/end_datetime (já finalizados)
+                if (ext.end_date || ext.end_datetime) return;
+                if (ext.status === 'resolved' || ext.status === 'closed') return;
+                activeDowntimes.set(mid, {
+                    ...ext,
+                    id: mid,
+                    reason: ext.reason || ext.type || 'Parada prolongada',
+                    source: 'extended_downtime'
+                });
+            });
+            console.log('[PCP·mod] Total paradas após extended_downtime_logs:', activeDowntimes.size);
+        } catch (extErr) {
+            console.warn('[PCP·mod] Erro ao buscar extended_downtime_logs:', extErr);
+        }
 
         // 3. Paradas normais em andamento (OTIMIZADO: usar cache global)
         const downtimeEntriesData = typeof window.getDowntimeEntriesCached === 'function'
@@ -549,13 +575,24 @@ async function loadPCPData(date, shiftFilter = 'current') {
 
             const activeDowntime = activeDowntimes.get(machineId);
             if (activeDowntime) {
-                status = 'Parada';
-                downtimeReason = activeDowntime.motivo || activeDowntime.reason || 'Não informado';
+                const _adReason = (activeDowntime.motivo || activeDowntime.reason || '').toLowerCase();
+                const _isSemProg = _adReason.includes('sem programa') || _adReason.includes('sem programacao');
+                // FIX: Parada "SEM PROGRAMAÇÃO" em máquina COM planejamento = fantasma → ignorar
+                if (_isSemProg) {
+                    console.log(`[PCP·mod] Ignorando parada fantasma "SEM PROGRAMAÇÃO" para ${machineId} (tem planejamento)`);
+                } else {
+                    status = 'Parada';
+                    downtimeReason = activeDowntime.motivo || activeDowntime.reason || 'Não informado';
+                }
             }
             const normalDowntime = normalDowntimes.get(machineId);
-            if (normalDowntime && !activeDowntime) {
-                status = 'Parada';
-                downtimeReason = normalDowntime.reason || normalDowntime.motivo || 'Não informado';
+            if (normalDowntime && status === 'Produzindo') {
+                const _ndReason = (normalDowntime.reason || normalDowntime.motivo || '').toLowerCase();
+                const _isNdSemProg = _ndReason.includes('sem programa') || _ndReason.includes('sem programacao');
+                if (!_isNdSemProg) {
+                    status = 'Parada';
+                    downtimeReason = normalDowntime.reason || normalDowntime.motivo || 'Não informado';
+                }
             }
 
             // Turno atual para buscar ciclo/cavidades reais
