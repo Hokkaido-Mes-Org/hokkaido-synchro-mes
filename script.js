@@ -11241,10 +11241,21 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
                 const downtimes = await getActiveDowntimesCached(false);
                 // FIX: Aceitar paradas onde isActive NÃO seja explicitamente false
                 // (undefined, null, true = parada válida; apenas false = inativa)
+                // FIX: Set de máquinas com plano ativo (para filtrar parada fantasma "SEM PROGRAMAÇÃO")
+                const _planMachines = new Set(
+                    (planningItems || []).filter(isPlanActive).map(p => normalizeMachineId(p.machine))
+                );
                 const validDowntimeIds = downtimes
                     .filter(d => {
                         if (d.isActive === false) {
                             console.debug(`[pollActiveDowntimes] Parada ${d.id} com isActive=false, ignorando`);
+                            return false;
+                        }
+                        // FIX: Filtrar paradas "SEM PROGRAMAÇÃO" para máquinas com plano ativo
+                        const reason = (d.reason || '').toLowerCase();
+                        const isSemProg = reason.includes('sem programa') || reason.includes('sem programacao');
+                        if (isSemProg && _planMachines.has(normalizeMachineId(d.id))) {
+                            console.log(`[pollActiveDowntimes] Removida parada fantasma "SEM PROGRAMAÇÃO" de ${d.id} (máquina com plano ativo)`);
                             return false;
                         }
                         return true;
@@ -17005,7 +17016,11 @@ function sendDowntimeNotification() {
             let statusClass = '';
             let statusTitle = '';
             
-            if (hasActiveDowntime) {
+            // FIX: Ignorar paradas "SEM PROGRAMAÇÃO" quando a máquina tem plano ativo
+            const _statusDtInfo = machinesDowntime ? machinesDowntime[mid] : null;
+            const _statusReason = (_statusDtInfo?.reason || '').toLowerCase();
+            const _isStatusPhantom = (_statusReason.includes('sem programa') || _statusReason.includes('sem programacao')) && hasPlan;
+            if (hasActiveDowntime && !_isStatusPhantom) {
                 // Máquina parada
                 statusClass = 'bg-red-500 text-white border-red-600';
                 statusTitle = `${mid} - PARADA`;
@@ -17095,6 +17110,33 @@ function sendDowntimeNotification() {
         downtimeStatusCache = machinesDowntime;
 
         const activePlans = Array.isArray(plans) ? plans.filter(isPlanActive) : [];
+
+        // FIX: Criar set de máquinas com plano ativo para filtrar paradas fantasma "SEM PROGRAMAÇÃO"
+        const _machinesWithActivePlan = new Set();
+        activePlans.forEach(p => {
+            if (p && p.machine) _machinesWithActivePlan.add(normalizeMachineId(p.machine));
+        });
+
+        // Remover paradas "SEM PROGRAMAÇÃO" do activeDowntimeSet
+        // quando a máquina TEM plano ativo — são paradas fantasma/obsoletas
+        const _isSemProgramacao = (mid) => {
+            const dtInfo = machinesDowntime ? machinesDowntime[mid] : null;
+            if (!dtInfo) return false;
+            const reason = (dtInfo.reason || '').toLowerCase();
+            return reason.includes('sem programa') || reason.includes('sem programacao');
+        };
+        const phantomMachines = new Set();
+        activeDowntimeSet.forEach(mid => {
+            if (_machinesWithActivePlan.has(mid) && _isSemProgramacao(mid)) {
+                phantomMachines.add(mid);
+            }
+        });
+        if (phantomMachines.size > 0) {
+            phantomMachines.forEach(mid => {
+                activeDowntimeSet.delete(mid);
+                console.log(`[renderMachineCards] Removida parada fantasma "SEM PROGRAMAÇÃO" de ${mid} (máquina com plano ativo)`);
+            });
+        }
         
         // NOVO: Renderizar barra de status das máquinas (estilo Excel)
         renderMachineStatusBar(activePlans, activeDowntimeSet, machinesDowntime);
@@ -17336,6 +17378,14 @@ function sendDowntimeNotification() {
         if (plans.length === 0 && hasActiveDowntime) {
             const dtInfo = machinesDowntime ? machinesDowntime[machine] : null;
             const reasonText = dtInfo?.reason || 'Parada ativa';
+            
+            // FIX: Se a parada é "SEM PROGRAMAÇÃO" mas veio de extended_downtime_logs
+            // com end_date, é uma parada fantasma — pular
+            if (dtInfo?.type === 'extended_downtime' && (dtInfo?.endDate || dtInfo?.end_date)) {
+                console.log(`[renderMachineCards] Ignorando parada fantasma extended_downtime para ${machine}: ${reasonText}`);
+                machineProgressInfo[machine] = { normalizedProgress: 0, progressPercent: 0, palette: {} };
+                return '';
+            }
             const startTime = dtInfo?.startDate || dtInfo?.startTime || '';
             machineProgressInfo[machine] = { normalizedProgress: 0, progressPercent: 0, palette: {} };
             return `
@@ -17501,8 +17551,12 @@ function sendDowntimeNotification() {
         }
 
         // Lógica de cor do card: vermelho se houver parada ativa
+        // FIX: Ignorar paradas "SEM PROGRAMAÇÃO" para máquinas com plano ativo (parada fantasma)
         let cardColorClass = '';
-        if (hasActiveDowntime) {
+        const _dtReasonForColor = machinesDowntime ? machinesDowntime[machine] : null;
+        const _dtReasonTextForColor = (_dtReasonForColor?.reason || '').toLowerCase();
+        const _isPhantomSemProg = (_dtReasonTextForColor.includes('sem programa') || _dtReasonTextForColor.includes('sem programacao')) && plans.length > 0;
+        if (hasActiveDowntime && !_isPhantomSemProg) {
             cardColorClass = 'machine-stopped'; // vermelho para parada ativa
         }
         
@@ -17621,6 +17675,15 @@ function sendDowntimeNotification() {
                     
                     // Se não tem parada ativa confirmada, não mostrar o card
                     if (!hasActiveDowntimeFromSet && !isDowntimeInfoActive) return '';
+                    
+                    // FIX: Se a parada é "SEM PROGRAMAÇÃO" e a máquina tem planos ativos,
+                    // não exibir — é uma parada fantasma/obsoleta
+                    const _miniCardReason = (downtimeInfo?.reason || '').toLowerCase();
+                    const _isMiniCardPhantom = (_miniCardReason.includes('sem programa') || _miniCardReason.includes('sem programacao')) && plans.length > 0;
+                    if (_isMiniCardPhantom) {
+                        console.log(`[renderMachineCards] Mini-card: ignorando parada fantasma "SEM PROGRAMAÇÃO" para ${machine}`);
+                        return '';
+                    }
                     
                     // Obter motivo da parada
                     let reasonText = downtimeInfo?.reason || '';
@@ -17874,6 +17937,7 @@ function sendDowntimeNotification() {
             // Buscar paradas ativas para colorir cards de vermelho
             // IMPORTANTE: Filtrar apenas máquinas válidas do machineDatabase
             const validMachineIdsSet = new Set(machineDatabase.map(m => normalizeMachineId(m.id)));
+            const activePlanMachineSet = new Set(activePlans.map(p => normalizeMachineId(p.machine)));
             let activeDowntimeSet = new Set();
             try {
                 // OTIMIZADO: usa cache global ao invés de leitura direta
@@ -17887,20 +17951,35 @@ function sendDowntimeNotification() {
                         }
                         return true;
                     })
-                    .map(d => d.id)
-                    .filter(id => {
+                    .map(d => ({ id: d.id, reason: d.reason || '' }))
+                    .filter(({ id, reason }) => {
                         const normalizedId = normalizeMachineId(id);
                         if (!validMachineIdsSet.has(normalizedId)) {
                             console.warn(`[loadMachineCards] Máquina "${id}" não existe no machineDatabase — ignorando (SEM deletar)`);
                             return false;
                         }
+                        // FIX: Auto-limpar paradas "SEM PROGRAMAÇÃO" quando a máquina TEM plano ativo
+                        const reasonLower = reason.toLowerCase();
+                        const isSemProgramacao = reasonLower.includes('sem programa') || reasonLower.includes('sem programacao');
+                        if (isSemProgramacao && activePlanMachineSet.has(normalizedId)) {
+                            console.log(`[loadMachineCards] Parada fantasma "${reason}" para ${normalizedId} — máquina tem plano ativo, auto-limpando`);
+                            // Deletar o documento orphan do Firestore em background
+                            try {
+                                db.collection('active_downtimes').doc(id).delete().then(() => {
+                                    console.log(`[loadMachineCards] ✅ Documento active_downtimes/${id} (SEM PROGRAMAÇÃO) deletado`);
+                                    if (typeof invalidateDowntimeCache === 'function') invalidateDowntimeCache(normalizedId);
+                                }).catch(err => console.warn(`[loadMachineCards] Erro ao deletar parada fantasma ${id}:`, err));
+                            } catch (e) { /* ignore */ }
+                            return false;
+                        }
                         return true;
-                    });
+                    })
+                    .map(({ id }) => id);
                 activeDowntimeSet = new Set(validDowntimeIds);
             } catch (e) {
                 console.warn('Erro ao buscar paradas ativas:', e);
             }
-            // NOTA: NÃO deletar docs automaticamente — era causa de sumiço de paradas
+            // NOTA: Auto-limpeza seletiva apenas para paradas "SEM PROGRAMAÇÃO" quando máquina tem plano ativo
 
             // NOVO: Carregar paradas longas para mostrar no painel de máquinas
             const machinesDowntime = await getAllMachinesDowntimeStatus();
@@ -18509,6 +18588,7 @@ function sendDowntimeNotification() {
             
             // 1. Buscar paradas ativas via cache (compartilha cache com pollActiveDowntimes)
             const activeDowntimesList = await getActiveDowntimesCached(forceRefresh);
+            const todayStr = getProductionDateString();
             activeDowntimesList.forEach(data => {
                 const mid = normalizeMachineId(data.id);
                 
@@ -18524,10 +18604,32 @@ function sendDowntimeNotification() {
                     return;
                 }
                 
+                // FIX: Detectar paradas "SEM PROGRAMAÇÃO" obsoletas (startDate muito antigo)
+                // Se a parada tem mais de 3 dias e é tipo "SEM PROGRAMAÇÃO", é provável fantasma
+                const reason = data.reason || '';
+                const reasonLower = reason.toLowerCase();
+                const isSemProgramacao = reasonLower.includes('sem programa') || reasonLower.includes('sem programacao');
+                if (isSemProgramacao && data.startDate) {
+                    try {
+                        const startDateObj = new Date(data.startDate + 'T00:00:00');
+                        const todayObj = new Date(todayStr + 'T00:00:00');
+                        const diffDays = Math.floor((todayObj - startDateObj) / (1000 * 60 * 60 * 24));
+                        if (diffDays > 3) {
+                            console.warn(`[MACHINE-STATUS] Parada "SEM PROGRAMAÇÃO" para ${mid} tem ${diffDays} dias — provável fantasma, ignorando`);
+                            // Auto-limpar em background
+                            db.collection('active_downtimes').doc(data.id).delete().then(() => {
+                                console.log(`[MACHINE-STATUS] ✅ Parada fantasma active_downtimes/${data.id} deletada (${diffDays} dias)`);
+                                if (typeof invalidateDowntimeCache === 'function') invalidateDowntimeCache(mid);
+                            }).catch(err => console.warn(`[MACHINE-STATUS] Erro ao deletar parada fantasma:`, err));
+                            return;
+                        }
+                    } catch (e) { /* ignore date parse errors */ }
+                }
+                
                 statusMap[mid] = {
                     recordId: mid,
                     type: 'active_downtime_live',
-                    reason: data.reason || 'Parada ativa',
+                    reason: reason || 'Parada ativa',
                     startDate: data.startDate,
                     endDate: null,
                     status: 'active',
@@ -18547,6 +18649,13 @@ function sendDowntimeNotification() {
                         if (!statusMap[mid]) {
                             // Ignorar se máquina não existe no database
                             if (!validMachineIdsSet.has(mid)) return;
+                            
+                            // FIX: Ignorar registros que possuem end_date ou end_datetime
+                            // (parada já finalizada mas status não atualizado = inconsistência de dados)
+                            if (data.end_date || data.end_datetime) {
+                                console.debug(`[MACHINE-STATUS] Extended downtime ${data.id} para ${mid} tem end_date/end_datetime — ignorando (status inconsistente)`);
+                                return;
+                            }
                             
                             statusMap[mid] = {
                                 recordId: data.id,

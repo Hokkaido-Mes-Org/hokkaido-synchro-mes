@@ -2471,10 +2471,21 @@ const machineCardProductionCache = (() => {
                 const downtimes = await getActiveDowntimesCached(false);
                 // CORREÇÃO CRÍTICA: Filtrar apenas máquinas que existem no window.machineDatabase
                 // E que têm isActive !== false (paradas realmente ativas)
+                // FIX: Set de máquinas com plano ativo (para filtrar parada fantasma "SEM PROGRAMAÇÃO")
+                const _planMachines = new Set(
+                    (planningItems || []).filter(isPlanActive).map(p => normalizeMachineId(p.machine))
+                );
                 const validDowntimeIds = downtimes
                     .filter(d => {
                         // CORREÇÃO: Ignorar documentos com isActive explicitamente false
                         if (d.isActive === false) return false;
+                        // FIX: Filtrar paradas "SEM PROGRAMAÇÃO" para máquinas com plano ativo
+                        const reason = (d.reason || '').toLowerCase();
+                        const isSemProg = reason.includes('sem programa') || reason.includes('sem programacao');
+                        if (isSemProg && _planMachines.has(normalizeMachineId(d.id))) {
+                            console.log(`[pollActiveDowntimes] Removida parada fantasma "SEM PROGRAMAÇÃO" de ${d.id} (máquina com plano ativo)`);
+                            return false;
+                        }
                         return true;
                     })
                     .map(d => d.id)
