@@ -48,27 +48,171 @@ async function getProductionOrdersCached(forceRefresh = false) {
 
 // ─── Funções Principais ──────────────────────────────────────────────
 
-async function loadProductionOrders() {
-    console.log('[Ordens·mod] Carregando ordens de produção...');
-
+/**
+ * Busca ordens com filtros server-side (status, máquina) + client-side (texto).
+ * Otimização: Não carrega todas as ordens ao abrir a aba — só quando o
+ * utilizador clica "Buscar" (padrão search-first como aba Relatórios).
+ */
+async function searchProductionOrders() {
+    console.log('[Ordens·mod] Buscando ordens com filtros...');
+    
     const countEl = document.getElementById('orders-count');
+    const searchInput = document.getElementById('orders-search');
+    const statusFilter = document.getElementById('orders-status-filter');
+    const machineFilter = document.getElementById('orders-machine-filter');
+    const sortFilter = document.getElementById('orders-sort-filter');
+    const emptyState = document.getElementById('orders-empty-state');
+    const grid = document.getElementById('orders-grid');
+    const tableContainer = document.getElementById('orders-table-container');
+    const buscarBtn = document.getElementById('orders-btn-buscar');
+    
+    // UI loading
+    if (buscarBtn) {
+        buscarBtn.disabled = true;
+        buscarBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Buscando...';
+    }
+    if (countEl) countEl.textContent = 'Buscando...';
+    
+    const statusValue = (statusFilter?.value || '').toLowerCase();
+    const machineValue = machineFilter?.value || '';
+    const textQuery = (searchInput?.value || '').toLowerCase().trim();
+    const sortValue = sortFilter?.value || 'recent';
+    
+    try {
+        let query = db().collection('production_orders');
+        
+        // Filtro server-side: status (reduz docs lidos significativamente)
+        if (statusValue) {
+            if (statusValue === 'concluida') {
+                // 'concluida' e 'finalizada' são tratados como sinônimos
+                query = query.where('status', 'in', ['concluida', 'finalizada', 'Concluída', 'Finalizada']);
+            } else {
+                query = query.where('status', '==', statusValue);
+            }
+        }
+        
+        // Filtro server-side: máquina
+        if (machineValue) {
+            query = query.where('machine_id', '==', machineValue);
+        }
+        
+        // Ordenação + limite
+        // Nota: quando usamos 'in' ou '==' no status, podemos combinar com orderBy
+        // apenas se houver índice composto. Usar orderBy simples como fallback seguro.
+        if (!statusValue || statusValue !== 'concluida') {
+            query = query.orderBy('createdAt', 'desc');
+        }
+        query = query.limit(200);
+        
+        const snapshot = await query.get();
+        ordersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        console.log(`[Ordens·mod] ${ordersCache.length} ordens carregadas (filtro: status=${statusValue || 'todos'}, maq=${machineValue || 'todas'})`);
+        
+        // Filtro client-side: texto (busca em campos textuais)
+        let filtered = [...ordersCache];
+        if (textQuery) {
+            filtered = filtered.filter(o =>
+                (o.order_number || '').toLowerCase().includes(textQuery) ||
+                (o.product || '').toLowerCase().includes(textQuery) ||
+                (o.part_code || '').toLowerCase().includes(textQuery) ||
+                (o.customer || '').toLowerCase().includes(textQuery) ||
+                (o.client || '').toLowerCase().includes(textQuery)
+            );
+        }
+        
+        // Ordenação client-side
+        filtered.sort((a, b) => {
+            const lotA = Number(a.lot_size) || 0;
+            const lotB = Number(b.lot_size) || 0;
+            const prodA = Number(a.total_produzido ?? a.totalProduced ?? a.total_produced) || 0;
+            const prodB = Number(b.total_produzido ?? b.totalProduced ?? b.total_produced) || 0;
+            const progressA = lotA > 0 ? (prodA / lotA) : 0;
+            const progressB = lotB > 0 ? (prodB / lotB) : 0;
+            switch (sortValue) {
+                case 'recent':
+                    return (b.createdAt?.toDate?.() || new Date(0)) - (a.createdAt?.toDate?.() || new Date(0));
+                case 'progress-desc': return progressB - progressA;
+                case 'progress-asc': return progressA - progressB;
+                case 'lot-desc': return lotB - lotA;
+                case 'alpha': return (a.order_number || '').localeCompare(b.order_number || '');
+                default: return 0;
+            }
+        });
+        
+        // Esconder empty state, mostrar resultados
+        if (emptyState) emptyState.classList.add('hidden');
+        
+        updateOrdersKPIs(filtered);
+        renderOrders(filtered);
+        
+    } catch (error) {
+        console.error('[Ordens·mod] Erro ao buscar:', error);
+        if (countEl) countEl.textContent = 'Erro ao buscar ordens';
+        
+        // Se erro for de índice composto, tentar fallback sem orderBy
+        if (error.code === 'failed-precondition' || (error.message && error.message.includes('index'))) {
+            console.warn('[Ordens·mod] Tentando fallback sem orderBy...');
+            try {
+                let fallbackQuery = db().collection('production_orders');
+                if (statusValue && statusValue !== 'concluida') {
+                    fallbackQuery = fallbackQuery.where('status', '==', statusValue);
+                }
+                if (machineValue) {
+                    fallbackQuery = fallbackQuery.where('machine_id', '==', machineValue);
+                }
+                fallbackQuery = fallbackQuery.limit(200);
+                const snapshot = await fallbackQuery.get();
+                ordersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                // Ordenar client-side
+                ordersCache.sort((a, b) => (b.createdAt?.toDate?.() || new Date(0)) - (a.createdAt?.toDate?.() || new Date(0)));
+                
+                let filtered = [...ordersCache];
+                if (textQuery) {
+                    filtered = filtered.filter(o =>
+                        (o.order_number || '').toLowerCase().includes(textQuery) ||
+                        (o.product || '').toLowerCase().includes(textQuery) ||
+                        (o.part_code || '').toLowerCase().includes(textQuery) ||
+                        (o.customer || '').toLowerCase().includes(textQuery)
+                    );
+                }
+                
+                if (emptyState) emptyState.classList.add('hidden');
+                updateOrdersKPIs(filtered);
+                renderOrders(filtered);
+                if (countEl) countEl.textContent = `${filtered.length} ordens encontradas`;
+            } catch (e2) {
+                console.error('[Ordens·mod] Fallback também falhou:', e2);
+            }
+        }
+    } finally {
+        if (buscarBtn) {
+            buscarBtn.disabled = false;
+            buscarBtn.innerHTML = '<i data-lucide="search" class="w-4 h-4"></i> Buscar';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+    }
+}
 
+/**
+ * Carregamento legado (mantido para compatibilidade com chamadas pós-CRUD).
+ * Agora delega para searchProductionOrders quando já inicializado,
+ * ou faz carga mínima para popular caches internos.
+ */
+async function loadProductionOrders() {
+    if (_ordensInitialized) {
+        // Se já inicializado, usar search com filtros atuais
+        return searchProductionOrders();
+    }
+    // Fallback legado: carga direta (usado por funções que chamam loadProductionOrders após CRUD)
+    console.log('[Ordens·mod] Carregando ordens (fallback)...');
     try {
         ordersCache = await getProductionOrdersCached();
-        console.log('[Ordens·mod] ' + ordersCache.length + ' ordens carregadas (cache/Firebase)');
-
         updateOrdersKPIs(ordersCache);
         renderOrders(ordersCache);
-        populateOrdersMachineFilter();
-
-        if (!window.ordersFiltersConfigured) {
-            setupOrdersFilters();
-            setupOrdersViewToggle();
-            window.ordersFiltersConfigured = true;
-        }
     } catch (error) {
         console.error('[Ordens·mod] Erro ao carregar:', error);
-        if (countEl) countEl.textContent = 'Erro ao carregar ordens';
     }
 }
 
@@ -287,10 +431,23 @@ function setupOrdersFilters() {
     const machineFilter = document.getElementById('orders-machine-filter');
     const sortFilter = document.getElementById('orders-sort-filter');
     const clearBtn = document.getElementById('orders-clear-filters');
+    const buscarBtn = document.getElementById('orders-btn-buscar');
 
-    function applyFilters() {
+    // Buscar: clique no botão ou Enter no campo de texto
+    if (buscarBtn) buscarBtn.addEventListener('click', searchProductionOrders);
+    if (searchInput) searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            searchProductionOrders();
+        }
+    });
+    
+    // Filtros de ordenação aplicam client-side nos dados já carregados
+    function applyClientFilters() {
+        if (ordersCache.length === 0) return; // sem dados carregados
+        
         let filtered = [...ordersCache];
-
+        
         const query = (searchInput?.value || '').toLowerCase().trim();
         if (query) {
             filtered = filtered.filter(o =>
@@ -299,20 +456,6 @@ function setupOrdersFilters() {
                 (o.part_code || '').toLowerCase().includes(query) ||
                 (o.customer || '').toLowerCase().includes(query)
             );
-        }
-
-        const status = statusFilter?.value || '';
-        if (status) {
-            filtered = filtered.filter(o => {
-                const s = (o.status || '').toLowerCase();
-                if (status === 'concluida') return ['concluida', 'finalizada'].includes(s);
-                return s === status;
-            });
-        }
-
-        const machine = machineFilter?.value || '';
-        if (machine) {
-            filtered = filtered.filter(o => o.machine_id === machine);
         }
 
         const sort = sortFilter?.value || 'recent';
@@ -344,10 +487,22 @@ function setupOrdersFilters() {
         renderOrders(filtered);
     }
 
-    if (searchInput) searchInput.addEventListener('input', debounce(applyFilters, 300));
-    if (statusFilter) statusFilter.addEventListener('change', applyFilters);
-    if (machineFilter) machineFilter.addEventListener('change', applyFilters);
-    if (sortFilter) sortFilter.addEventListener('change', applyFilters);
+    // Text search e sort aplicam client-side (filtram dados já carregados)
+    if (searchInput) searchInput.addEventListener('input', debounce(applyClientFilters, 300));
+    if (sortFilter) sortFilter.addEventListener('change', applyClientFilters);
+    
+    // Status e máquina mudam a query server-side → requer nova busca
+    if (statusFilter) statusFilter.addEventListener('change', () => {
+        // Se já tem dados, refaz a busca com novo filtro server-side
+        if (ordersCache.length > 0 || statusFilter.value || machineFilter?.value) {
+            searchProductionOrders();
+        }
+    });
+    if (machineFilter) machineFilter.addEventListener('change', () => {
+        if (ordersCache.length > 0 || statusFilter?.value || machineFilter.value) {
+            searchProductionOrders();
+        }
+    });
 
     if (clearBtn) {
         clearBtn.addEventListener('click', function () {
@@ -355,7 +510,20 @@ function setupOrdersFilters() {
             if (statusFilter) statusFilter.value = '';
             if (machineFilter) machineFilter.value = '';
             if (sortFilter) sortFilter.value = 'recent';
-            applyFilters();
+            // Limpar dados e mostrar empty state
+            ordersCache = [];
+            const grid = document.getElementById('orders-grid');
+            const tableBody = document.getElementById('orders-table-body');
+            const emptyState = document.getElementById('orders-empty-state');
+            const countEl = document.getElementById('orders-count');
+            if (grid) grid.innerHTML = '';
+            if (tableBody) tableBody.innerHTML = '';
+            if (emptyState) {
+                emptyState.classList.remove('hidden');
+                emptyState.classList.add('flex');
+            }
+            if (countEl) countEl.textContent = '0 ordens encontradas';
+            updateOrdersKPIs([]);
         });
     }
 }
@@ -812,7 +980,7 @@ window.recalculateAllOrdersTotals = async function () {
 };
 
 window.refreshOrdersList = function () {
-    loadProductionOrders();
+    searchProductionOrders();
     showNotification('Lista de ordens atualizada!', 'success');
 };
 
@@ -1175,12 +1343,15 @@ function setupOrderFormListeners() {
 let _ordensInitialized = false;
 export function setupOrdensPage() {
     if (_ordensInitialized) {
-        console.debug('[Ordens·mod] Já inicializado — apenas recarregando dados');
-        loadProductionOrders();
+        console.debug('[Ordens·mod] Já inicializado — mantendo estado atual');
         return;
     }
     _ordensInitialized = true;
-    console.log('[Ordens·mod] Controller modular carregado');
-    loadProductionOrders();
+    console.log('[Ordens·mod] Controller modular carregado (search-first)');
+    // Não carrega dados ao abrir a aba — mostra empty state e aguarda clique em "Buscar"
+    populateOrdersMachineFilter();
+    setupOrdersFilters();
+    setupOrdersViewToggle();
     setupOrderFormListeners();
+    updateOrdersKPIs([]);
 }
