@@ -4203,7 +4203,7 @@
                     </div>
                     <div class="machine-oee">
                         <span class="machine-oee-value">${m.oee.toFixed(1)}%</span>
-                        <span class="machine-oee-label">OEE</span>
+                        <span class="machine-oee-label">Meta</span>
                     </div>
                     <div class="machine-status">
                         <span class="status-badge">${statusLabels[m.status]}</span>
@@ -4645,9 +4645,10 @@
                     if (planCandidates.length > 0) {
                         const plan = planCandidates.find(p => Number(p.shift || 0) === group.shift) || planCandidates[0];
                         if (plan?.raw) {
-                            const shiftKey = `t${group.shift}`;
-                            cicloReal = plan.raw[`real_cycle_${shiftKey}`] || plan.raw.budgeted_cycle || 30;
-                            cavAtivas = plan.raw[`active_cavities_${shiftKey}`] || plan.raw.mold_cavities || 2;
+                            // Fase 1: usar getPlanParamsForShiftTV para selecionar ciclo/cav do turno correto
+                            const params = getPlanParamsForShiftTV(plan.raw, group.shift);
+                            cicloReal = params.ciclo || 30;
+                            cavAtivas = params.cavidades || 2;
                             pieceWeight = plan.raw.piece_weight || 0.1;
                         }
                     }
@@ -4677,6 +4678,7 @@
                         machine: group.machine,
                         shift: group.shift,
                         workDay: group.workDay,
+                        shiftMinutes: getShiftMinutesTV(group.shift),
                         disponibilidade: clamp01(metrics.disponibilidade),
                         performance: clamp01(metrics.performance),
                         qualidade: clamp01(metrics.qualidade),
@@ -4684,18 +4686,22 @@
                     });
                 });
                 
-                // Calcular média dos grupos (igual aggregateOeeMetrics)
-                const averageMetric = (items, selector) => {
+                // Média ponderada por tempo programado (minutos do turno)
+                const weightedAvg = (items, selector) => {
                     if (!items.length) return 0;
-                    return items.reduce((sum, item) => sum + selector(item), 0) / items.length;
+                    const totalWeight = items.reduce((s, g) => s + (g.shiftMinutes || 480), 0);
+                    if (totalWeight === 0) {
+                        return items.reduce((s, g) => s + selector(g), 0) / items.length;
+                    }
+                    return items.reduce((s, g) => s + selector(g) * (g.shiftMinutes || 480), 0) / totalWeight;
                 };
                 
                 let availability = 0, performanceVal = 0, quality = 0;
                 
                 if (groupsWithMetrics.length > 0) {
-                    availability = averageMetric(groupsWithMetrics, item => item.disponibilidade) * 100;
-                    performanceVal = averageMetric(groupsWithMetrics, item => item.performance) * 100;
-                    quality = averageMetric(groupsWithMetrics, item => item.qualidade) * 100;
+                    availability = weightedAvg(groupsWithMetrics, item => item.disponibilidade) * 100;
+                    performanceVal = weightedAvg(groupsWithMetrics, item => item.performance) * 100;
+                    quality = weightedAvg(groupsWithMetrics, item => item.qualidade) * 100;
                 } else {
                     availability = 100;
                     performanceVal = 0;
@@ -4715,28 +4721,49 @@
             }
         }
         
-        // Função calculateShiftOEE - CÓPIA EXATA do script.js linha 22173
-        function calculateShiftOEE(produzido, tempoParadaMin, refugoPcs, cicloReal, cavAtivas) {
-            const tempoTurnoMin = 480; // 8 horas por turno
-            
-            const tempoProgramado = tempoTurnoMin;
+        // Função calculateShiftOEE — CÓPIA INLINE de src/utils/oee.utils.js
+        // (dashboard-tv.html é standalone, não usa ES6 modules)
+        // Última sincronização: 2026-02-23 (Fase 1)
+        const SHIFT_CONFIG_TV = { T1: 510, T2: 500, T3: 430, DEFAULT: 480 };
+
+        function getShiftMinutesTV(turno) {
+            if (!turno) return SHIFT_CONFIG_TV.DEFAULT;
+            const key = typeof turno === 'string' ? turno.toUpperCase() : `T${turno}`;
+            return SHIFT_CONFIG_TV[key] ?? SHIFT_CONFIG_TV.DEFAULT;
+        }
+
+        function getPlanParamsForShiftTV(planRaw, turno) {
+            const raw = planRaw || {};
+            let shiftNum = null;
+            if (turno != null) {
+                shiftNum = typeof turno === 'string' ? Number(turno.replace(/\\D/g, '')) : Number(turno);
+                if (!shiftNum || shiftNum < 1 || shiftNum > 3) shiftNum = null;
+            }
+            let ciclo, cavidades;
+            if (shiftNum) {
+                ciclo = Number(raw[`real_cycle_t${shiftNum}`]) || Number(raw.budgeted_cycle) || 0;
+                cavidades = Number(raw[`active_cavities_t${shiftNum}`]) || Number(raw[`active_cavities_T${shiftNum}`]) || Number(raw.mold_cavities) || Number(raw.cavities) || 0;
+            } else {
+                ciclo = Number(raw.budgeted_cycle) || 0;
+                cavidades = Number(raw.mold_cavities) || Number(raw.cavities) || 0;
+            }
+            return { ciclo, cavidades };
+        }
+
+        function calculateShiftOEE(produzido, tempoParadaMin, refugoPcs, cicloReal, cavAtivas, turno) {
+            const tempoProgramado = getShiftMinutesTV(turno);
             const tempoProduzindo = Math.max(0, tempoProgramado - Math.max(0, tempoParadaMin));
             const disponibilidade = tempoProgramado > 0 ? (tempoProduzindo / tempoProgramado) : 0;
 
             const producaoTeorica = cicloReal > 0 && cavAtivas > 0 ? (tempoProduzindo * 60 / cicloReal) * cavAtivas : 0;
             const performance = producaoTeorica > 0 ? Math.min(1, produzido / producaoTeorica) : (produzido > 0 ? 1 : 0);
-            
+
             const totalProduzido = Math.max(0, produzido) + Math.max(0, refugoPcs);
             const qualidade = totalProduzido > 0 ? (Math.max(0, produzido) / totalProduzido) : (produzido > 0 ? 1 : 0);
-            
-            const oee = disponibilidade * performance * qualidade;
 
-            return {
-                disponibilidade: isNaN(disponibilidade) || !isFinite(disponibilidade) ? 0 : Math.max(0, Math.min(1, disponibilidade)),
-                performance: isNaN(performance) || !isFinite(performance) ? 0 : Math.max(0, Math.min(1, performance)),
-                qualidade: isNaN(qualidade) || !isFinite(qualidade) ? 0 : Math.max(0, Math.min(1, qualidade)),
-                oee: isNaN(oee) || !isFinite(oee) ? 0 : Math.max(0, Math.min(1, oee))
-            };
+            const oee = disponibilidade * performance * qualidade;
+            const s = v => (isNaN(v) || !isFinite(v)) ? 0 : Math.max(0, Math.min(1, v));
+            return { disponibilidade: s(disponibilidade), performance: s(performance), qualidade: s(qualidade), oee: s(oee) };
         }
 
         function formatNumber(num) {
