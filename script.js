@@ -199,12 +199,10 @@ document.addEventListener('DOMContentLoaded', async function() {
                 console.warn('⚠️ Botão da aba Dashboard TV não encontrado no DOM');
             }
             
-            // Mostrar/ocultar subaba Relatórios (dentro de Análise) — baseado na permissão 'relatorios' ou role gestor/suporte/lider
+            // Mostrar/ocultar subaba Relatórios (dentro de Análise) — apenas para usuários específicos
             const reportsTabBtn = document.querySelector('.analysis-tab-btn[data-view="reports"]');
-            const userPermissions = user && user.permissions ? user.permissions : [];
-            const userRole = user && user.role ? user.role : '';
-            const hasRelatoriosAccess = userPermissions.includes('relatorios') || 
-                                        userRole === 'gestor' || userRole === 'suporte' || userRole === 'lider';
+            const allowedRelatoriosUsers = ['Leandro Camargo', 'Rafael Pontes', 'Werigue', 'Tiago Oliveira', 'Victor Lima', 'Michelle Benjamin'];
+            const hasRelatoriosAccess = allowedRelatoriosUsers.includes(user?.name || '');
             
             if (reportsTabBtn) {
                 if (hasRelatoriosAccess) {
@@ -216,15 +214,13 @@ document.addEventListener('DOMContentLoaded', async function() {
                 }
             }
             
-            // Mostrar/ocultar aba Relatórios (página principal) — baseado na permissão 'relatorios' ou role gestor/suporte/lider
+            // Mostrar/ocultar aba Relatórios (página principal) — apenas para usuários específicos
             const relatoriosNavBtn = document.querySelector('[data-page="relatorios"]');
             
             console.log('[RELATORIOS-DEBUG] Verificando acesso Relatórios:', {
                 userName: user?.name,
-                userNameLower: userNameLower,
-                role: userRole,
-                permissions: userPermissions,
-                hasRelatoriosAccess: hasRelatoriosAccess
+                isAuthorized: hasRelatoriosAccess,
+                allowedUsers: allowedRelatoriosUsers
             });
             
             if (relatoriosNavBtn) {

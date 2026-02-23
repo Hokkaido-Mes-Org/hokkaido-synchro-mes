@@ -145,9 +145,12 @@ class AuthSystem {
             return false;
         }
         
-        // ⚙️ Aba Relatórios: Usuários autorizados, Gestores ou com permissão 'relatorios'
-        if (tabName === 'relatorios' && !isAuthorizedAdmin && !isGestor && !this.hasPermission('relatorios')) {
-            return false;
+        // ⚙️ ACESSO EXCLUSIVO: Aba Relatórios apenas para usuários específicos
+        if (tabName === 'relatorios') {
+            const allowedRelatorios = ['Leandro Camargo', 'Rafael Pontes', 'Werigue', 'Tiago Oliveira', 'Victor Lima', 'Michelle Benjamin'];
+            if (!allowedRelatorios.includes(this.currentUser.name)) {
+                return false;
+            }
         }
         
         // ⚙️ ACESSO EXCLUSIVO: Aba Acompanhamento apenas para usuários específicos
