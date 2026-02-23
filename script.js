@@ -201,7 +201,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             
             // Mostrar/ocultar subaba Relatórios (dentro de Análise) — apenas para usuários específicos
             const reportsTabBtn = document.querySelector('.analysis-tab-btn[data-view="reports"]');
-            const allowedRelatoriosUsers = ['Leandro Camargo', 'Rafael Pontes', 'Werigue', 'Tiago Oliveira', 'Victor Lima', 'Michelle Benjamin'];
+            const allowedRelatoriosUsers = ['Leandro Camargo', 'Rafael Pontes', 'Werigue', 'Tiago Oliveira', 'Victor Lima', 'Michelle Benjamin', 'Roberto fernandes', 'Elaine'];
             const hasRelatoriosAccess = allowedRelatoriosUsers.includes(user?.name || '');
             
             if (reportsTabBtn) {

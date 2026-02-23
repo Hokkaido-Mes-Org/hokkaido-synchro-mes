@@ -147,7 +147,7 @@ class AuthSystem {
         
         // ⚙️ ACESSO EXCLUSIVO: Aba Relatórios apenas para usuários específicos
         if (tabName === 'relatorios') {
-            const allowedRelatorios = ['Leandro Camargo', 'Rafael Pontes', 'Werigue', 'Tiago Oliveira', 'Victor Lima', 'Michelle Benjamin'];
+            const allowedRelatorios = ['Leandro Camargo', 'Rafael Pontes', 'Werigue', 'Tiago Oliveira', 'Victor Lima', 'Michelle Benjamin', 'Roberto fernandes', 'Elaine'];
             if (!allowedRelatorios.includes(this.currentUser.name)) {
                 return false;
             }
