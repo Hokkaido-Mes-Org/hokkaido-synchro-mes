@@ -769,7 +769,7 @@ var lossReasonsDatabase = [
     { cod: 303, category: "MAQUINA", name: "303-VAZAMENTO DE OLEO" },
     { cod: 304, category: "MAQUINA", name: "304-AUSENCIA DE PERIFERICOS" },
     { cod: 305, category: "MAQUINA", name: "305-SUJIDADE (GRAXA, AGUA, ETC)" },
-    // MATERIA PRIMA (401)
+    // MATERIA PRIMA (401-402)
     { cod: 401, category: "MATERIA PRIMA", name: "401-MATERIAL NÃO CONFORME" },
     { cod: 402, category: "MATERIA PRIMA", name: "402-MATERIAL PARA LIMPEZA" }
 ];
