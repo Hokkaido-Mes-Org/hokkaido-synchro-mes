@@ -731,7 +731,8 @@ var groupedLossReasons = {
         "304-AUSENCIA DE PERIFERICOS", "305-SUJIDADE (GRAXA, AGUA, ETC)"
     ],
     "MATERIA PRIMA": [
-        "401-MATERIAL NÃO CONFORME"
+        "401-MATERIAL NÃO CONFORME",
+        "402-MATERIAL PARA LIMPEZA"
     ]
 };
 
