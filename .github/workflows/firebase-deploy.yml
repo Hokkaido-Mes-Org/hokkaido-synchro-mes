@@ -1,0 +1,105 @@
+# ============================================================================
+# HokkaidoMES — Deploy Automático para Firebase Hosting
+# ============================================================================
+# Dispara em:
+#   - Push para 'main'     → Deploy de PRODUÇÃO (hokkaido-synchro.web.app)
+#   - Push para 'staging'  → Deploy de PREVIEW  (canal "staging")
+#   - Pull Request p/ main → Deploy de PREVIEW  (canal "pr-{number}")
+#
+# Pré-requisitos:
+#   1.Secret FIREBASE_SERVICE_ACCOUNT_HOKKAIDO_SYNCHRO configurado no repo
+#      (Console Firebase → Settings → Service Accounts → Generate new private key)
+#   2. firebase.json e .firebaserc commitados no repositório
+# ============================================================================
+
+name: Deploy to Firebase Hosting
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  # ─────────────────────────────────────────────────────
+  # JOB 1: Deploy de PRODUÇÃO (somente push em main)
+  # ─────────────────────────────────────────────────────
+  deploy-production:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://hokkaido-synchro.web.app
+    
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Deploy para Firebase Hosting (Produção)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_HOKKAIDO_SYNCHRO }}'
+          channelId: live
+          projectId: hokkaido-synchro
+
+      - name: Resumo do deploy
+        run: |
+          echo "## ✅ Deploy de Produção" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL**: https://hokkaido-synchro.web.app" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: main" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Data**: $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+
+  # ─────────────────────────────────────────────────────
+  # JOB 2: Deploy de STAGING (push em staging)
+  # ─────────────────────────────────────────────────────
+  deploy-staging:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+    
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Deploy para Firebase Hosting (Staging)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_HOKKAIDO_SYNCHRO }}'
+          channelId: staging
+          projectId: hokkaido-synchro
+          expires: 7d
+
+      - name: Resumo do deploy
+        run: |
+          echo "## 🧪 Deploy de Staging" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Canal**: staging (expira em 7 dias)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: staging" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+
+  # ─────────────────────────────────────────────────────
+  # JOB 3: Preview em Pull Requests
+  # ─────────────────────────────────────────────────────
+  deploy-preview:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Deploy Preview (PR)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_HOKKAIDO_SYNCHRO }}'
+          projectId: hokkaido-synchro
+          expires: 3d
