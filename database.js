@@ -655,6 +655,7 @@ var productDatabase = [
 ];
 
 
+
 // Catálogo de máquinas (fonte única para app)
 var machineDatabase = [
     { id: "H01", model: "SANDRETTO OTTO" },
@@ -1840,4 +1841,3 @@ if (typeof window !== 'undefined') {
         moldePorProduto
     };
 }));
-
