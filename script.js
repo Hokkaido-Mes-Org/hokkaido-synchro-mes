@@ -199,12 +199,10 @@ document.addEventListener('DOMContentLoaded', async function() {
                 console.warn('⚠️ Botão da aba Dashboard TV não encontrado no DOM');
             }
             
-            // Mostrar/ocultar subaba Relatórios (dentro de Análise) — baseado na permissão 'relatorios' ou role gestor/suporte/lider
+            // Mostrar/ocultar subaba Relatórios (dentro de Análise) — apenas para usuários específicos
             const reportsTabBtn = document.querySelector('.analysis-tab-btn[data-view="reports"]');
-            const userPermissions = user && user.permissions ? user.permissions : [];
-            const userRole = user && user.role ? user.role : '';
-            const hasRelatoriosAccess = userPermissions.includes('relatorios') || 
-                                        userRole === 'gestor' || userRole === 'suporte' || userRole === 'lider';
+            const allowedRelatoriosUsers = ['Leandro Camargo', 'Rafael Pontes', 'Werigue', 'Tiago Oliveira', 'Victor Lima', 'Michelle Benjamin', 'Roberto fernandes', 'Elaine'];
+            const hasRelatoriosAccess = allowedRelatoriosUsers.includes(user?.name || '');
             
             if (reportsTabBtn) {
                 if (hasRelatoriosAccess) {
@@ -216,15 +214,13 @@ document.addEventListener('DOMContentLoaded', async function() {
                 }
             }
             
-            // Mostrar/ocultar aba Relatórios (página principal) — baseado na permissão 'relatorios' ou role gestor/suporte/lider
+            // Mostrar/ocultar aba Relatórios (página principal) — apenas para usuários específicos
             const relatoriosNavBtn = document.querySelector('[data-page="relatorios"]');
             
             console.log('[RELATORIOS-DEBUG] Verificando acesso Relatórios:', {
                 userName: user?.name,
-                userNameLower: userNameLower,
-                role: userRole,
-                permissions: userPermissions,
-                hasRelatoriosAccess: hasRelatoriosAccess
+                isAuthorized: hasRelatoriosAccess,
+                allowedUsers: allowedRelatoriosUsers
             });
             
             if (relatoriosNavBtn) {
@@ -560,11 +556,16 @@ document.addEventListener('DOMContentLoaded', function() {
         return m ? `T${m[1]}` : null;
     });
 
-    // resumo.controller.js
-    _fb('calculateShiftOEE', function(produzido, tempoParadaMin, refugoPcs, cicloReal, cavAtivas) {
-        const tempoTurnoMin = 480, tempoProgramado = tempoTurnoMin;
-        const tempoProduzindo = Math.max(0, tempoProgramado - Math.max(0, tempoParadaMin));
-        const disp = tempoProgramado > 0 ? tempoProduzindo / tempoProgramado : 0;
+    // resumo.controller.js → Fase 1: fallback bridge; oee.utils.js sobrescreve via window.calculateShiftOEE
+    _fb('calculateShiftOEE', function(produzido, tempoParadaMin, refugoPcs, cicloReal, cavAtivas, turno) {
+        // Se oee.utils.js já carregou, usar versão unificada
+        if (window.oeeUtils?.calculateShiftOEE) {
+            return window.oeeUtils.calculateShiftOEE(produzido, tempoParadaMin, refugoPcs, cicloReal, cavAtivas, turno);
+        }
+        // Fallback mínimo (antes do módulo carregar)
+        const tempoTurnoMin = 480;
+        const tempoProduzindo = Math.max(0, tempoTurnoMin - Math.max(0, tempoParadaMin));
+        const disp = tempoTurnoMin > 0 ? tempoProduzindo / tempoTurnoMin : 0;
         const prodTeorica = cicloReal > 0 && cavAtivas > 0 ? (tempoProduzindo * 60 / cicloReal) * cavAtivas : 0;
         const perf = prodTeorica > 0 ? Math.min(1, produzido / prodTeorica) : (produzido > 0 ? 1 : 0);
         const totalProd = Math.max(0, produzido) + Math.max(0, refugoPcs);
@@ -5307,322 +5308,9 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
 };
     }
 
-    function aggregateOeeMetrics(productionData, lossesData, downtimeData, planData, shiftFilter = 'all') {
-        console.log('[TRACE][aggregateOeeMetrics] iniciando com', {
-            production: productionData.length,
-            losses: lossesData.length,
-            downtime: downtimeData.length,
-            plan: planData.length,
-            shiftFilter
-        });
-
-        const toShiftNumber = (value) => {
-            if (value === null || value === undefined) return null;
-            const num = Number(value);
-            return Number.isFinite(num) && num > 0 ? num : null;
-        };
-
-        const determineShiftFromTime = (timeStr) => {
-            if (!timeStr || typeof timeStr !== 'string') return null;
-            const [hoursStr, minutesStr] = timeStr.split(':');
-            const hours = Number(hoursStr);
-            const minutes = Number(minutesStr) || 0;
-            if (!Number.isFinite(hours)) return null;
-            // T1: 06:30 - 14:59
-            if ((hours === 6 && minutes >= 30) || (hours >= 7 && hours < 15)) return 1;
-            // T2: 15:00 - 23:19
-            if (hours >= 15 && (hours < 23 || (hours === 23 && minutes < 20))) return 2;
-            // T3: 23:20 - 06:29
-            return 3;
-        };
-
-        const determineShiftFromDate = (dateObj) => {
-            if (!(dateObj instanceof Date) || Number.isNaN(dateObj.getTime())) return null;
-            const hours = dateObj.getHours();
-            return determineShiftFromTime(`${String(hours).padStart(2, '0')}:00`);
-        };
-
-        const inferShift = (item) => {
-            const candidates = [
-                item.shift,
-                item?.raw?.shift,
-                item?.raw?.turno,
-                item?.raw?.Shift,
-                item?.raw?.Turno
-            ];
-            for (const value of candidates) {
-                const shiftNum = toShiftNumber(value);
-                if (shiftNum) return shiftNum;
-            }
-
-            const timeCandidates = [
-                item.startTime,
-                item.endTime,
-                item?.raw?.startTime,
-                item?.raw?.endTime,
-                item?.raw?.hora,
-                item?.raw?.hour,
-                item?.raw?.time,
-                item?.raw?.horaInformada
-            ];
-            for (const time of timeCandidates) {
-                const shiftNum = determineShiftFromTime(time);
-                if (shiftNum) return shiftNum;
-            }
-
-            const dateCandidates = [];
-            if (item.datetime) {
-                const parsed = new Date(item.datetime);
-                if (!Number.isNaN(parsed.getTime())) dateCandidates.push(parsed);
-            }
-            if (item?.raw?.timestamp?.toDate) {
-                dateCandidates.push(item.raw.timestamp.toDate());
-            }
-            if (item?.raw?.createdAt?.toDate) {
-                dateCandidates.push(item.raw.createdAt.toDate());
-            }
-            if (item?.raw?.updatedAt?.toDate) {
-                dateCandidates.push(item.raw.updatedAt.toDate());
-            }
-            const resolvedDate = resolveProductionDateTime(item.raw);
-            if (resolvedDate) {
-                dateCandidates.push(resolvedDate);
-            }
-            for (const date of dateCandidates) {
-                const shiftNum = determineShiftFromDate(date);
-                if (shiftNum) return shiftNum;
-            }
-
-            // CORREÇÃO: Se não conseguir inferir o turno, assume turno 1 (padrão) para evitar descarte
-            console.log('[TRACE][aggregateOeeMetrics] turno não identificado para item', item.id || 'sem-id', 'assumindo turno 1');
-            return 1;
-        };
-
-        const inferMachine = (item) => item.machine || item?.raw?.machine || item?.raw?.machineRef || item?.raw?.machine_id || null;
-
-        // CORREÇÃO: Incluir workDay/date no agrupamento para múltiplas datas
-        const groupKey = (machine, shift, workDay) => `${machine || 'unknown'}_${shift ?? 'none'}_${workDay || 'nodate'}`;
-        const grouped = {};
-
-        const getOrCreateGroup = (item) => {
-            const machine = inferMachine(item);
-            const shiftNum = inferShift(item);
-            const workDay = item.workDay || item.date || 'nodate';
-            
-            if (!machine) {
-                console.log('[TRACE][aggregateOeeMetrics] máquina não identificada para item', item.id || 'sem-id');
-                return null;
-            }
-            
-            const key = groupKey(machine, shiftNum, workDay);
-            if (!grouped[key]) {
-                grouped[key] = {
-                    machine,
-                    shift: shiftNum,
-                    workDay,
-                    production: 0,
-                    scrapPcs: 0,
-                    scrapKg: 0,
-                    downtimeMin: 0
-                };
-            }
-            return grouped[key];
-        };
-
-        productionData.forEach(item => {
-            const group = getOrCreateGroup(item);
-            if (!group) return;
-            group.production += item.quantity || 0;
-        });
-
-        lossesData.forEach(item => {
-            const group = getOrCreateGroup(item);
-            if (!group) return;
-            const scrapPcs = Number(item.scrapPcs ?? item.quantity ?? 0) || 0;
-            const scrapKg = Number(item.scrapKg ?? 0) || 0;
-            group.scrapPcs += scrapPcs;
-            group.scrapKg += scrapKg;
-        });
-
-        // Obter categorias excluídas do OEE
-        const oeeExcludedCategories = window.databaseModule?.oeeExcludedCategories || [];
-        
-        // NOVO: Criar set de máquinas com plano ativo para validação
-        const machinesWithPlan = new Set();
-        planData.forEach(p => {
-            if (p && p.machine) {
-                machinesWithPlan.add(normalizeMachineId(p.machine));
-            }
-        });
-
-        downtimeData.forEach(item => {
-            // CORREÇÃO: Verificar se é parada semOP (sem OP planejada)
-            // Paradas semOP só devem ser contabilizadas se a máquina tem planejamento
-            const isSemOP = item.raw?.semOP === true;
-            const machineId = normalizeMachineId(item.machine || '');
-            
-            if (isSemOP && !machinesWithPlan.has(machineId)) {
-                // Máquina SEM OP e SEM planejamento - NÃO contabilizar no OEE
-                console.log('[TRACE][aggregateOeeMetrics] Parada semOP ignorada (máquina sem planejamento):', machineId, item.reason);
-                return;
-            }
-            
-            const group = getOrCreateGroup(item);
-            if (!group) return;
-            
-            // Verificar se a categoria deve ser excluída do cálculo de OEE
-            const reason = item.reason || '';
-            const category = window.getDowntimeCategory(reason);
-            if (oeeExcludedCategories.includes(category)) {
-                // Parada de categoria excluída - NÃO contabilizar no OEE
-                console.log('[TRACE][aggregateOeeMetrics] Parada excluída do OEE:', category, reason);
-                return;
-            }
-            
-            group.downtimeMin += item.duration || 0;
-        });
-
-        const clamp01 = (value) => Math.max(0, Math.min(1, value));
-        const groupsWithMetrics = [];
-
-        console.log('[TRACE][aggregateOeeMetrics] grupos criados:', Object.keys(grouped).length);
-
-        Object.values(grouped).forEach(group => {
-            // CORREÇÃO: Buscar planos por máquina e data também
-            const planCandidates = planData.filter(p => p && p.raw && p.machine === group.machine);
-            
-            if (!planCandidates.length) {
-                // CORREÇÃO: Se não há plano E não há produção, ignorar do OEE
-                // Isso evita contabilizar máquinas que estão apenas "paradas" sem planejamento
-                if (group.production === 0) {
-                    console.log('[TRACE][aggregateOeeMetrics] ignorando máquina sem plano e sem produção:', group.machine);
-                    return;
-                }
-                
-                console.log('[TRACE][aggregateOeeMetrics] sem plano para máquina', group.machine, 'usando valores padrão');
-                // CORREÇÃO: Usar valores padrão quando não há plano disponível
-                const metrics = window.calculateShiftOEE(
-                    group.production,
-                    group.downtimeMin,
-                    0, // refugoPcs
-                    30, // ciclo padrão de 30 segundos
-                    2   // 2 cavidades padrão
-                );
-
-                groupsWithMetrics.push({
-                    machine: group.machine,
-                    shift: group.shift,
-                    workDay: group.workDay,
-                    disponibilidade: clamp01(metrics.disponibilidade),
-                    performance: clamp01(metrics.performance),
-                    qualidade: clamp01(metrics.qualidade),
-                    oee: clamp01(metrics.oee)
-                });
-                return;
-            }
-
-            // Tentar encontrar plano específico para o turno
-            let plan = planCandidates.find(p => {
-                const planShift = Number(p.shift || 0);
-                return planShift && planShift === group.shift;
-            });
-
-            // Se não encontrou plano específico, usar o primeiro disponível
-            if (!plan) {
-                plan = planCandidates[0];
-                console.log('[TRACE][aggregateOeeMetrics] usando plano genérico para máquina', group.machine, 'turno', group.shift);
-            }
-
-            if (!plan || !plan.raw) {
-                console.log('[TRACE][aggregateOeeMetrics] plano inválido para máquina', group.machine);
-                return;
-            }
-
-            const shiftKey = `t${group.shift}`;
-            const cicloReal = plan.raw[`real_cycle_${shiftKey}`] || plan.raw.budgeted_cycle || 30;
-            const cavAtivas = plan.raw[`active_cavities_${shiftKey}`] || plan.raw.mold_cavities || 2;
-            const pieceWeight = plan.raw.piece_weight || 0.1; // peso padrão de 100g
-
-            let refugoPcs = Math.round(Math.max(0, group.scrapPcs || 0));
-            if (!refugoPcs && group.scrapKg > 0 && pieceWeight > 0) {
-                refugoPcs = Math.round((group.scrapKg * 1000) / pieceWeight);
-            }
-
-            const metrics = window.calculateShiftOEE(
-                group.production,
-                group.downtimeMin,
-                refugoPcs,
-                cicloReal,
-                cavAtivas
-            );
-
-            console.log('[TRACE][aggregateOeeMetrics] grupo processado:', {
-                machine: group.machine,
-                shift: group.shift,
-                workDay: group.workDay,
-                production: group.production,
-                downtimeMin: group.downtimeMin,
-                refugoPcs,
-                scrapPcs: group.scrapPcs,
-                scrapKg: group.scrapKg,
-                cicloReal,
-                cavAtivas,
-                metrics
-            });
-
-            groupsWithMetrics.push({
-                machine: group.machine,
-                shift: group.shift,
-                workDay: group.workDay,
-                disponibilidade: clamp01(metrics.disponibilidade),
-                performance: clamp01(metrics.performance),
-                qualidade: clamp01(metrics.qualidade),
-                oee: clamp01(metrics.oee)
-            });
-        });
-
-        const averageMetric = (items, selector) => {
-            if (!items.length) return 0;
-            const total = items.reduce((sum, item) => sum + selector(item), 0);
-            return total / items.length;
-        };
-
-        const normalizedShift = shiftFilter === 'all' ? 'all' : toShiftNumber(shiftFilter);
-        const filteredGroups = normalizedShift === 'all'
-            ? groupsWithMetrics
-            : groupsWithMetrics.filter(item => item.shift === normalizedShift);
-
-        console.log('[TRACE][aggregateOeeMetrics] grupos com métricas:', groupsWithMetrics.length);
-        console.log('[TRACE][aggregateOeeMetrics] grupos filtrados:', filteredGroups.length);
-
-        const overall = {
-            disponibilidade: averageMetric(groupsWithMetrics, item => item.disponibilidade),
-            performance: averageMetric(groupsWithMetrics, item => item.performance),
-            qualidade: averageMetric(groupsWithMetrics, item => item.qualidade),
-            oee: averageMetric(groupsWithMetrics, item => item.oee)
-        };
-
-        const filtered = {
-            disponibilidade: averageMetric(filteredGroups, item => item.disponibilidade),
-            performance: averageMetric(filteredGroups, item => item.performance),
-            qualidade: averageMetric(filteredGroups, item => item.qualidade),
-            oee: averageMetric(filteredGroups, item => item.oee)
-        };
-
-        console.log('[TRACE][aggregateOeeMetrics] resultado final:', {
-            overall,
-            filtered,
-            shiftFilter,
-            normalizedShift
-        });
-
-        return {
-            overall,
-            filtered,
-            groups: groupsWithMetrics
-        };
-    }
-
+    // [Fase 2] aggregateOeeMetrics + calculateDetailedOEE REMOVIDAS daqui.
+    // Eram dead code (nunca chamadas, não exportadas via window.*).
+    // Versão canônica de aggregateOeeMetrics está em analysis.controller.js.
 
     // Função para carregar análise de perdas
     async function loadLossesAnalysis() {
@@ -8345,77 +8033,7 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         showNotification('Exportação concluída!', 'success');
     }
 
-    // Função para calcular OEE detalhado
-    async function calculateDetailedOEE(startDate, endDate, machine, shift) {
-        try {
-            // Normalizar shift: se não está definido ou é null, usar 'all'
-            const normalizedShift = shift === undefined || shift === null || shift === '' ? 'all' : shift;
-            
-            console.log('[TRACE][calculateDetailedOEE] Buscando dados para:', { startDate, endDate, machine, shift: normalizedShift });
-            
-            const [productionData, lossesData, downtimeData, planData] = await Promise.all([
-                getFilteredData('production', startDate, endDate, machine, 'all'),
-                getFilteredData('losses', startDate, endDate, machine, 'all'),
-                getFilteredData('downtime', startDate, endDate, machine, 'all'),
-                getFilteredData('plan', startDate, endDate, machine, 'all')
-            ]);
-
-            console.log('[TRACE][calculateDetailedOEE] Dados recebidos:', {
-                production: productionData.length,
-                losses: lossesData.length,
-                downtime: downtimeData.length,
-                plan: planData.length
-            });
-
-            if (productionData.length === 0 && lossesData.length === 0 && downtimeData.length === 0) {
-                console.warn('[TRACE][calculateDetailedOEE] PROBLEMA: Nenhum dado encontrado para o período!');
-                return { availability: 0, performance: 0, quality: 0, oee: 0 };
-            }
-
-            const { filtered, groups } = aggregateOeeMetrics(
-                productionData,
-                lossesData,
-                downtimeData,
-                planData,
-                normalizedShift  // <-- usar normalizedShift em vez de shift
-            );
-
-            console.log('[TRACE][calculateDetailedOEE] Resultado da agregação:', {
-                gruposProcessados: groups.length,
-                disponibilidade: (filtered.disponibilidade * 100).toFixed(1),
-                performance: (filtered.performance * 100).toFixed(1),
-                qualidade: (filtered.qualidade * 100).toFixed(1),
-                oee: (filtered.oee * 100).toFixed(1)
-            });
-
-            // CORREÇÃO: Se todos os valores estão zero mas há dados, algo está errado
-            if (filtered.disponibilidade === 0 && filtered.performance === 0 && filtered.qualidade === 0 && productionData.length > 0) {
-                console.error('[TRACE][calculateDetailedOEE] PROBLEMA CRÍTICO: Valores zerados com dados disponíveis!');
-                console.log('[TRACE][calculateDetailedOEE] Amostra production:', productionData.slice(0, 3));
-                console.log('[TRACE][calculateDetailedOEE] Amostra plan:', planData.slice(0, 3));
-            }
-
-            // CORREÇÃO: Calcular OEE como produto dos componentes (D × P × Q)
-            // em vez de usar a média dos OEEs individuais
-            const availability = filtered.disponibilidade * 100;
-            const performance = filtered.performance * 100;
-            const quality = filtered.qualidade * 100;
-            const oeeCalculated = (availability * performance * quality) / 10000;
-
-            return {
-                availability: availability,
-                performance: performance,
-                quality: quality,
-                oee: oeeCalculated  // OEE = D × P × Q (correto!)
-            };
-        } catch (error) {
-            console.error('Erro ao calcular OEE detalhado:', error);
-            return { availability: 0, performance: 0, quality: 0, oee: 0 };
-        }
-    }
-
-    // Implementações faltantes para análise completa
-
+    // [Fase 2] calculateDetailedOEE REMOVIDA — dead code (não era chamada em nenhum lugar).
 
     // Expor o serviço de dados analíticos para módulos externos (ex.: predictive-analytics)
     if (!window.analyticsDataService) {

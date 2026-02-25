@@ -228,7 +228,7 @@ var productDatabase = [
     { "cod": 921, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-RED---SPRAY--ES38 29025968", "cavities": 30, "cycle": 20, "weight": 1.06, "pieces_per_hour_goal": 5400, "mp": "" },
     { "cod": 936, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-RED-SHNY--SPRAY-A3 - 10605704", "cavities": 30, "cycle": 20, "weight": 1.06, "pieces_per_hour_goal": 5400, "mp": "" },
     { "cod": 948, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-BLUE---SPRAY--29025909", "cavities": 30, "cycle": 20, "weight": 1.06, "pieces_per_hour_goal": 5400, "mp": "" },
-    { "cod": 949, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-BLUE---SPRAY--", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
+    { "cod": 949, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-BLUE---SPRAY--", "cavities": 30, "cycle": 20, "weight": 1.06, "pieces_per_hour_goal": 5400, "mp": "" },
     { "cod": 1005, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-YELL---SPRAY--DS22 - 29025934", "cavities": 30, "cycle": 20, "weight": 1.06, "pieces_per_hour_goal": 5400, "mp": "" },
     { "cod": 1177, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-BLUE---SPRAY--293C - 31160473", "cavities": 30, "cycle": 20, "weight": 1.06, "pieces_per_hour_goal": 5400, "mp": "" },
     { "cod": 1179, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-BLUE---SPRAY-LMPP - 31161295", "cavities": 30, "cycle": 20, "weight": 1.06, "pieces_per_hour_goal": 5400, "mp": "" },
@@ -241,10 +241,10 @@ var productDatabase = [
     { "cod": 2232, "client": "APTAR", "name": "CLIPE-K-GS-PP-RED---17,45--- 31178644", "cavities": 15, "cycle": 16, "weight": 0.45, "pieces_per_hour_goal": 3375, "mp": "" },
     { "cod": 2290, "client": "APTAR", "name": "TAMPA-EM-28,20-PP-RED--SHNY-----EM STD - 31178555", "cavities": 29, "cycle": 12, "weight": 0.95, "pieces_per_hour_goal": 8700, "mp": "" },
     { "cod": 2291, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-RED---SPRAY---- 31178556", "cavities": 30, "cycle": 20, "weight": 1.06, "pieces_per_hour_goal": 5400, "mp": "" },
-    { "cod": 2329, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-RED - 31178148", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
-    { "cod": 2448, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-ORA - 31186155", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
-    { "cod": 2478, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-LIL - 31187111", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
-    { "cod": 2505, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-ORA - 31188963", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
+    { "cod": 2329, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-RED - 31178148", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
+    { "cod": 2448, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-ORA - 31186155", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
+    { "cod": 2478, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-LIL - 31187111", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
+    { "cod": 2505, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-ORA - 31188963", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
     { "cod": 2561, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-GOLD---SPRAY - 31194945", "cavities": 30, "cycle": 20, "weight": 1.06, "pieces_per_hour_goal": 5400, "mp": "" },
     { "cod": 2574, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-BLUE---SPRAY-- 31193634", "cavities": 30, "cycle": 20, "weight": 1.06, "pieces_per_hour_goal": 5400, "mp": "" },
     { "cod": 2666, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-PINK---SPRAY2405 - 31199260", "cavities": 30, "cycle": 20, "weight": 1.85, "pieces_per_hour_goal": 5400, "mp": "" },
@@ -252,9 +252,9 @@ var productDatabase = [
     { "cod": 2707, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-WHIT---SPRAY--CS03 - 29025974", "cavities": 30, "cycle": 20, "weight": 1.85, "pieces_per_hour_goal": 5400, "mp": "" },
     { "cod": 2710, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-GOLD---SPRAY--PPG1 - 31201727", "cavities": 30, "cycle": 20, "weight": 1.85, "pieces_per_hour_goal": 5400, "mp": "" },
     { "cod": 2957, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-ORAN---SPRAY----PR - 31213312", "cavities": 30, "cycle": 20, "weight": 1.85, "pieces_per_hour_goal": 5400, "mp": "" },
-    { "cod": 3153, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-RED - 31212750", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
-    { "cod": 3159, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-LIL - 31205434", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
-    { "cod": 3292, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-GRE - 31227541", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
+    { "cod": 3153, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-RED - 31212750", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
+    { "cod": 3159, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-LIL - 31205434", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
+    { "cod": 3292, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-GRE - 31227541", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
     { "cod": 3510, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-BLUE---SPRAY----MO - 31235033", "cavities": 30, "cycle": 20, "weight": 1.85, "pieces_per_hour_goal": 5400, "mp": "" },
     { "cod": 3570, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-GOLD---SPRAY - 31221881", "cavities": 30, "cycle": 20, "weight": 1.85, "pieces_per_hour_goal": 5400, "mp": "" },
     { "cod": 3586, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-ORAN---SPRAY----MO - 31238801", "cavities": 30, "cycle": 20, "weight": 1.85, "pieces_per_hour_goal": 5400, "mp": "" },
@@ -278,12 +278,12 @@ var productDatabase = [
     { "cod": 4253, "client": "APTAR", "name": "ATUADOR-POEMA-PP--5,75-WINE---LOT-ES44-- 31227564", "cavities": 22, "cycle": 25.5, "weight": 2.15, "pieces_per_hour_goal": 3106, "mp": "" },
     { "cod": 4267, "client": "APTAR", "name": "FIXAÇÃO-GS-28/410CUST---THREAD-HDPE-LILA - 31285150", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
     { "cod": 4268, "client": "APTAR", "name": "FIXAÇÃO-GS-28/410CUST-28--THREAD-HDPE-NATURAL-", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
-    { "cod": 4269, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-LIL - 31285116", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
+    { "cod": 4269, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-LIL - 31285116", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
     { "cod": 4271, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-RED - 31285212", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
     { "cod": 4272, "client": "APTAR", "name": "FIXAÇÃO-GS-28/410CUST---THREAD-HDPE-PINK - 31285219", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
-    { "cod": 4273, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-GRE - 31285242", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
-    { "cod": 4274, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-ORA - 31285244", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
-    { "cod": 4275, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-RED - 31285119", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
+    { "cod": 4273, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-GRE - 31285242", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
+    { "cod": 4274, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-ORA - 31285244", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
+    { "cod": 4275, "client": "APTAR", "name": "FIXACAO-GSA-28/410CUST---THREAD-HDPE-RED - 31285119", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
     { "cod": 4321, "client": "APTAR", "name": "FIXAÇÃO-GS-24/410--2N-THREAD-PP-BLUE--31-31284786 (LISO COM DEGRAU)", "cavities": 16, "cycle": 18, "weight": 2.30, "pieces_per_hour_goal": 4800, "mp": "" },
     { "cod": 4322, "client": "APTAR", "name": "FIXAÇÃO-GS-24/410--2N-THREAD-PP-GREE--22-31284788 (LISO COM DEGRAU)", "cavities": 16, "cycle": 18, "weight": 2.30, "pieces_per_hour_goal": 4800, "mp": "" },
     { "cod": 4323, "client": "APTAR", "name": "FIXAÇÃO-GS-24/410--2N-THREAD-PP-LARANJA--15-31284542 (LISO COM DEGRAU)", "cavities": 16, "cycle": 18, "weight": 2.30, "pieces_per_hour_goal": 0, "mp": "" },
@@ -294,7 +294,7 @@ var productDatabase = [
     { "cod": 4409, "client": "APTAR", "name": "TAMPA-EM-28,20-PP-BLAC-BLACK 5C-SHNY---- 31262040", "cavities": 29, "cycle": 12, "weight": 0.95, "pieces_per_hour_goal": 8700, "mp": "" },
     { "cod": 4425, "client": "APTAR", "name": "FIXAÇÃO-GS-28/410CUST---THREAD-HDPE-WINE - 31291815", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
     { "cod": 4442, "client": "APTAR", "name": "TAMPA-EM-28,02-PP-BLUE--SHNY-----MOCHILÃ - 31235004", "cavities": 29, "cycle": 12, "weight": 0.95, "pieces_per_hour_goal": 8700, "mp": "" },
-    { "cod": 4460, "client": "APTAR", "name": "ATUADOR-EMII-PP---4,34-PINK---SPRAY----GL - 31295342", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
+    { "cod": 4460, "client": "APTAR", "name": "ATUADOR-EMII-PP---4,34-PINK---SPRAY----GL - 31295342", "cavities": 30, "cycle": 20, "weight": 1.85, "pieces_per_hour_goal": 5400, "mp": "" },
     { "cod": 4497, "client": "APTAR", "name": "TAMPA-EM-28,02-PP-GOLD--SHNY- 31221895", "cavities": 29, "cycle": 12, "weight": 0.95, "pieces_per_hour_goal": 8700, "mp": "" },
     { "cod": 4498, "client": "APTAR", "name": "ATUADOR-SENTIDOS-PP--5,85-ORAN---LOT---- 31188965", "cavities": 22, "cycle": 25.5, "weight": 7.30, "pieces_per_hour_goal": 3106, "mp": "" },
     { "cod": 4508, "client": "APTAR", "name": "FIXAÇÃO-GS-28/410CUST---THREAD-HDPE-GREE - 31295307", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
@@ -350,7 +350,7 @@ var productDatabase = [
     { "cod": 6001, "client": "APTAR", "name": "TAMPA-EM-28,20-PP-PURP--SHNY----- - 31354752", "cavities": 29, "cycle": 12, "weight": 0.95, "pieces_per_hour_goal": 8700, "mp": "" },
     { "cod": 6005, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-ORAN---SPRAY--2459 - 31355148", "cavities": 30, "cycle": 20, "weight": 1.85, "pieces_per_hour_goal": 5400, "mp": "" },
     { "cod": 6006, "client": "APTAR", "name": "TAMPA-EM-28,20-PP-ORAN--SHNY-----PARIPUE - 31355147", "cavities": 29, "cycle": 12, "weight": 0.95, "pieces_per_hour_goal": 8700, "mp": "" },
-    { "cod": 6083, "client": "APTAR", "name": "ATUADOR-SENTIDOS-PP--5,75-LILA---LOT---- - 31205436", "cavities": 0, "cycle": 0, "weight": 7.30, "pieces_per_hour_goal": 0, "mp": "" },
+    { "cod": 6083, "client": "APTAR", "name": "ATUADOR-SENTIDOS-PP--5,75-LILA---LOT---- - 31205436", "cavities": 22, "cycle": 25.5, "weight": 7.30, "pieces_per_hour_goal": 3106, "mp": "" },
     { "cod": 6095, "client": "APTAR", "name": "ATUADOR-POEMA-PP--5,85-RED---LOT--- 31359945", "cavities": 22, "cycle": 25.5, "weight": 2.15, "pieces_per_hour_goal": 3106, "mp": "" },
     { "cod": 6097, "client": "APTAR", "name": "ATUADOR-SENTIDOS-PP--5,75-RED---LOT---- 31359944", "cavities": 22, "cycle": 25.5, "weight": 7.30, "pieces_per_hour_goal": 3106, "mp": "" },
     { "cod": 6100, "client": "APTAR", "name": "FIXAÇÃO-GS-28/410CUST---THREAD-HDPE-RED - 31359942", "cavities": 22, "cycle": 36, "weight": 15.25, "pieces_per_hour_goal": 2200, "mp": "" },
@@ -432,8 +432,8 @@ var productDatabase = [
     { "cod": 212, "client": "DIVERSOS", "name": "\"SUPORTE REDONDO 3/4\"\" PRETO - 753 100-000\"", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 219, "client": "DIVERSOS", "name": "SUPORTE CURVO DA MANGUEIRA COM PINO BR", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 220, "client": "DIVERSOS", "name": "SUPORTE CURVO DA MANGUEIRA COM PINO CINZA", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
-    { "cod": 223, "client": "DIVERSOS", "name": "\"SUPORTE REDONDO 1\"\" BRANCO\"", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
-    { "cod": 225, "client": "DIVERSOS", "name": "\"SUPORTE REDONDO 1\"\" PRETO\"", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
+    { "cod": 223, "client": "DIVERSOS", "name": "\"SUPORTE REDONDO 1\"\" BRANCO\"", "cavities": 4, "cycle": 30, "weight": 5.15, "pieces_per_hour_goal": 480, "mp": "" },
+    { "cod": 225, "client": "DIVERSOS", "name": "\"SUPORTE REDONDO 1\"\" PRETO\"", "cavities": 4, "cycle": 30, "weight": 5.15, "pieces_per_hour_goal": 480, "mp": "" },
     { "cod": 228, "client": "DIVERSOS", "name": "TAMPA SERINGA PRETO", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 241, "client": "DIVERSOS", "name": "CONECTOR PRETO 300 MS", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
     { "cod": 245, "client": "DIVERSOS", "name": "CLIP AZUL 2945C (EXPORTAÇÃO) - 30002026", "cavities": 0, "cycle": 0, "weight": 0, "pieces_per_hour_goal": 0, "mp": "" },
@@ -651,7 +651,9 @@ var productDatabase = [
     { "cod": 6289, "client": "APTAR", "name": "ATUADOR-POEMA-PP--5,85-PINK---LOT----GS -31328163", "cavities": 22, "cycle": 25.5, "weight": 2.15, "pieces_per_hour_goal": 3106, "mp": "" },
     { "cod": 6311, "client": "APTAR", "name": "TAMPA-EM-28,20-PP-RED--SHNY-----ÁGATA II 31363869", "cavities": 29, "cycle": 12, "weight": 0.95, "pieces_per_hour_goal": 8700, "mp": "" },
     { "cod": 4808, "client": "PARKER", "name": "SUPORTE DO COPO 4 CAVIDADES - 283600249", "cavities": 4, "cycle": 50, "weight": 54.85, "pieces_per_hour_goal": 432, "mp": "" },
+    { "cod": 6309, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-RED---SPRAY--SD 26 - 31363870", "cavities": 30, "cycle": 20, "weight": 1.06, "pieces_per_hour_goal": 5400, "mp": "" },
 ];
+
 
 
 // Catálogo de máquinas (fonte única para app)
@@ -731,7 +733,8 @@ var groupedLossReasons = {
         "304-AUSENCIA DE PERIFERICOS", "305-SUJIDADE (GRAXA, AGUA, ETC)"
     ],
     "MATERIA PRIMA": [
-        "401-MATERIAL NÃO CONFORME"
+        "401-MATERIAL NÃO CONFORME",
+        "402-MATERIAL PARA LIMPEZA"
     ]
 };
 
@@ -769,8 +772,9 @@ var lossReasonsDatabase = [
     { cod: 303, category: "MAQUINA", name: "303-VAZAMENTO DE OLEO" },
     { cod: 304, category: "MAQUINA", name: "304-AUSENCIA DE PERIFERICOS" },
     { cod: 305, category: "MAQUINA", name: "305-SUJIDADE (GRAXA, AGUA, ETC)" },
-    // MATERIA PRIMA (401)
-    { cod: 401, category: "MATERIA PRIMA", name: "401-MATERIAL NÃO CONFORME" }
+    // MATERIA PRIMA (401-402)
+    { cod: 401, category: "MATERIA PRIMA", name: "401-MATERIAL NÃO CONFORME" },
+    { cod: 402, category: "MATERIA PRIMA", name: "402-MATERIAL PARA LIMPEZA" }
 ];
 
 // Motivos de parada (agrupados)
@@ -1075,7 +1079,8 @@ var userDatabase = [
     { cod: 280, nomeUsuario: "ANALYTICS", nomeCompleto: "Não Informado" },
     { cod: 281, nomeUsuario: "ANALYTICS1", nomeCompleto: "Não Informado" },
     { cod: 282, nomeUsuario: "GABRIEL F.", nomeCompleto: "GABRIEL FIRMINO DE LIMA SOUZA" },
-    { cod: 283, nomeUsuario: "FRANCISCA", nomeCompleto: "FRANCISCA ZACARIAS" }
+    { cod: 283, nomeUsuario: "FRANCISCA", nomeCompleto: "FRANCISCA ZACARIAS" },
+    { cod: 285, nomeUsuario: "AURINEIDE", nomeCompleto: "AURINEIDE MARIA" }
 ];
 
 // Índice para busca rápida de usuários por código
