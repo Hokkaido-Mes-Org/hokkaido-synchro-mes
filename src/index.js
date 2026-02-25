@@ -18,6 +18,7 @@ import { initBridge } from './legacy/bridge.js';
 import { FLAGS } from './config/feature-flags.js';
 
 // ── Fase 3A: Shared Utilities (self-register on window) ──
+import './utils/oee.utils.js';   // Fase 1: OEE unificado — DEVE carregar ANTES dos controllers
 import './utils/number.utils.js';
 import './utils/plan.utils.js';
 import './utils/product.utils.js';

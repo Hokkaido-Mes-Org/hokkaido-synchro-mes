@@ -39,17 +39,17 @@ const getPlanQuantity = (...args) => window.getPlanQuantity?.(...args) ?? 0;
 const parseTimeToMinutes = (...args) => window.parseTimeToMinutes?.(...args);
 const resolveProductionDateTime = (...args) => window.resolveProductionDateTime?.(...args);
 
-// --- calculateShiftOEE: usa window.* do resumo.controller, com fallback inline
-// para evitar race-condition no carregamento assíncrono dos módulos ---
-function calculateShiftOEE(produzido, tempoParadaMin, refugoPcs, cicloReal, cavAtivas) {
+// --- calculateShiftOEE: Fase 1 — delega para oee.utils.js via window.oeeUtils
+// A função é carregada por src/utils/oee.utils.js e exposta em window.calculateShiftOEE.
+// Fallback mínimo caso oee.utils ainda não tenha carregado (race condition de módulos).
+function calculateShiftOEE(produzido, tempoParadaMin, refugoPcs, cicloReal, cavAtivas, turno) {
     if (typeof window.calculateShiftOEE === 'function') {
-        return window.calculateShiftOEE(produzido, tempoParadaMin, refugoPcs, cicloReal, cavAtivas);
+        return window.calculateShiftOEE(produzido, tempoParadaMin, refugoPcs, cicloReal, cavAtivas, turno);
     }
-    // Fallback inline (mesma lógica do resumo.controller.js)
+    // Fallback mínimo (mesma lógica do oee.utils.js)
     const tempoTurnoMin = 480;
-    const tempoProgramado = tempoTurnoMin;
-    const tempoProduzindo = Math.max(0, tempoProgramado - Math.max(0, tempoParadaMin));
-    const disponibilidade = tempoProgramado > 0 ? (tempoProduzindo / tempoProgramado) : 0;
+    const tempoProduzindo = Math.max(0, tempoTurnoMin - Math.max(0, tempoParadaMin));
+    const disponibilidade = tempoTurnoMin > 0 ? (tempoProduzindo / tempoTurnoMin) : 0;
     const producaoTeorica = cicloReal > 0 && cavAtivas > 0 ? (tempoProduzindo * 60 / cicloReal) * cavAtivas : 0;
     const performance = producaoTeorica > 0 ? Math.min(1, produzido / producaoTeorica) : (produzido > 0 ? 1 : 0);
     const totalProduzido = Math.max(0, produzido) + Math.max(0, refugoPcs);
@@ -346,7 +346,7 @@ function _invalidateFilteredDataCache() {
         if (!endDate) endDate = workToday;
 
         // Atualizar dados com filtros
-        currentAnalysisFilters = { startDate, endDate, machine, shift };
+        currentAnalysisFilters = { startDate, endDate, machine, shift, period };
         
         // OTIMIZAÇÃO: invalidar cache ao mudar filtros de período
         _invalidateFilteredDataCache();
@@ -1285,14 +1285,16 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         // Calcular tempo de paradas usando dados consolidados (igual à aba Paradas)
         const totalDowntime = downtimeConsolidated.reduce((sum, item) => sum + (item.duration || 0), 0);
         
-        // Calcular OEE real usando disponibilidade  x  performance  x  qualidade
-        const { overallOee, filteredOee } = calculateOverviewOEE(
+        // Fase 2: Calcular OEE direto via aggregateOeeMetrics (calculateOverviewOEE removida)
+        const { overall: overallAgg, filtered: filteredAgg } = aggregateOeeMetrics(
             productionAll,
             lossesAll,
             downtimeAll,
             planData,
             appliedShift
         );
+        const overallOee = overallAgg.oee;
+        const filteredOee = filteredAgg.oee;
         const displayedOee = appliedShift === 'all' ? overallOee : filteredOee;
         
         // Atualizar KPIs na interface
@@ -1321,7 +1323,7 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         });
 
         // Gerar gráficos
-        await generateOEEDistributionChart(productionData, lossesData, downtimeConsolidated);
+        await generateOEEDistributionChart(productionData, lossesData, downtimeConsolidated, planFiltered);
     await generateMachineRanking(productionData, planFiltered);
     }
 
@@ -1517,24 +1519,25 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
                     return;
                 }
                 
-                console.log('[TRACE][aggregateOeeMetrics] sem plano para máquina', group.machine, 'usando valores padrão');
-                // CORREÇÃO: Usar valores padrão quando não há plano disponível
-                const metrics = calculateShiftOEE(
-                    group.production,
-                    group.downtimeMin,
-                    0, // refugoPcs
-                    30, // ciclo padrão de 30 segundos
-                    2   // 2 cavidades padrão
-                );
+                console.log('[TRACE][aggregateOeeMetrics] sem plano para máquina', group.machine, '— OEE parcial (sem performance)');
+                // Fase 2: Sem plano → calcular apenas disponibilidade e qualidade.
+                // Performance fica null para não poluir médias com valores inventados.
+                const tempoTurnoMin = (window.oeeUtils?.getShiftMinutes || (() => 480))(group.shift);
+                const tempoProduzindo = Math.max(0, tempoTurnoMin - Math.max(0, group.downtimeMin));
+                const disp = tempoTurnoMin > 0 ? tempoProduzindo / tempoTurnoMin : 0;
+                const qual = group.production > 0 ? group.production / (group.production + Math.max(0, group.scrapPcs || 0)) : 1;
 
                 groupsWithMetrics.push({
                     machine: group.machine,
                     shift: group.shift,
                     workDay: group.workDay,
-                    disponibilidade: clamp01(metrics.disponibilidade),
-                    performance: clamp01(metrics.performance),
-                    qualidade: clamp01(metrics.qualidade),
-                    oee: clamp01(metrics.oee)
+                    production: group.production,
+                    shiftMinutes: tempoTurnoMin,
+                    disponibilidade: clamp01(disp),
+                    performance: null,  // sem plano = sem capacidade teórica
+                    qualidade: clamp01(qual),
+                    oee: null,          // OEE incompleto
+                    semPlano: true
                 });
                 return;
             }
@@ -1556,9 +1559,13 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
                 return;
             }
 
-            const shiftKey = `t${group.shift}`;
-            const cicloReal = plan.raw[`real_cycle_${shiftKey}`] || plan.raw.budgeted_cycle || 30;
-            const cavAtivas = plan.raw[`active_cavities_${shiftKey}`] || plan.raw.mold_cavities || 2;
+            // Fase 1: usar getPlanParamsForShift para selecionar ciclo/cav do turno correto
+            const planParams = (window.oeeUtils?.getPlanParamsForShift || function(raw, t) {
+                const sk = `t${typeof t === 'string' ? t.replace(/\D/g,'') : t}`;
+                return { ciclo: Number(raw[`real_cycle_${sk}`]) || Number(raw.budgeted_cycle) || 30, cavidades: Number(raw[`active_cavities_${sk}`]) || Number(raw.mold_cavities) || 2 };
+            })(plan.raw, group.shift);
+            const cicloReal = planParams.ciclo || 30;
+            const cavAtivas = planParams.cavidades || 2;
             const pieceWeight = plan.raw.piece_weight || 0.1; // peso padrão de 100g
 
             let refugoPcs = Math.round(Math.max(0, group.scrapPcs || 0));
@@ -1592,17 +1599,28 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
                 machine: group.machine,
                 shift: group.shift,
                 workDay: group.workDay,
+                production: group.production,
+                shiftMinutes: (window.oeeUtils?.getShiftMinutes || (() => 480))(group.shift),
                 disponibilidade: clamp01(metrics.disponibilidade),
                 performance: clamp01(metrics.performance),
                 qualidade: clamp01(metrics.qualidade),
-                oee: clamp01(metrics.oee)
+                oee: clamp01(metrics.oee),
+                semPlano: false
             });
         });
 
-        const averageMetric = (items, selector) => {
-            if (!items.length) return 0;
-            const total = items.reduce((sum, item) => sum + selector(item), 0);
-            return total / items.length;
+        // ── Média ponderada por TEMPO PROGRAMADO (minutos do turno) ──
+        // Turnos mais longos pesam proporcionalmente mais.
+        // Grupos semPlano (performance=null) são excluídos de Performance e OEE,
+        // mas incluídos em Disponibilidade e Qualidade.
+        const weightedAvg = (items, selector) => {
+            const validItems = items.filter(g => selector(g) !== null && selector(g) !== undefined);
+            if (!validItems.length) return 0;
+            const totalWeight = validItems.reduce((s, g) => s + (g.shiftMinutes || 480), 0);
+            if (totalWeight === 0) {
+                return validItems.reduce((s, g) => s + selector(g), 0) / validItems.length;
+            }
+            return validItems.reduce((s, g) => s + selector(g) * (g.shiftMinutes || 480), 0) / totalWeight;
         };
 
         const normalizedShift = shiftFilter === 'all' ? 'all' : toShiftNumber(shiftFilter);
@@ -1610,22 +1628,27 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
             ? groupsWithMetrics
             : groupsWithMetrics.filter(item => item.shift === normalizedShift);
 
-        console.log('[TRACE][aggregateOeeMetrics] grupos com métricas:', groupsWithMetrics.length);
+        console.log('[TRACE][aggregateOeeMetrics] grupos com métricas:', groupsWithMetrics.length,
+            '(semPlano:', groupsWithMetrics.filter(g => g.semPlano).length, ')');
         console.log('[TRACE][aggregateOeeMetrics] grupos filtrados:', filteredGroups.length);
 
-        const overall = {
-            disponibilidade: averageMetric(groupsWithMetrics, item => item.disponibilidade),
-            performance: averageMetric(groupsWithMetrics, item => item.performance),
-            qualidade: averageMetric(groupsWithMetrics, item => item.qualidade),
-            oee: averageMetric(groupsWithMetrics, item => item.oee)
+        const computeAggregated = (items) => {
+            const D = weightedAvg(items, g => g.disponibilidade);
+            const P = weightedAvg(items, g => g.performance);  // exclui semPlano (null)
+            const Q = weightedAvg(items, g => g.qualidade);
+            // OEE principal: média ponderada dos OEEs individuais (para cards/KPIs)
+            const oeeAvg = weightedAvg(items, g => g.oee);     // exclui semPlano (null)
+            return {
+                disponibilidade: D,
+                performance: P,
+                qualidade: Q,
+                oee: oeeAvg,           // Para card principal / KPI único
+                oeeDecomposed: D * P * Q  // Para gráficos de decomposição D×P×Q
+            };
         };
 
-        const filtered = {
-            disponibilidade: averageMetric(filteredGroups, item => item.disponibilidade),
-            performance: averageMetric(filteredGroups, item => item.performance),
-            qualidade: averageMetric(filteredGroups, item => item.qualidade),
-            oee: averageMetric(filteredGroups, item => item.oee)
-        };
+        const overall = computeAggregated(groupsWithMetrics);
+        const filtered = computeAggregated(filteredGroups);
 
         console.log('[TRACE][aggregateOeeMetrics] resultado final:', {
             overall,
@@ -1641,23 +1664,9 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         };
     }
 
-    // Função para calcular OEE real do overview agregando todos os turnos/máquinas
-    function calculateOverviewOEE(productionData, lossesData, downtimeData, planData, shiftFilter = 'all') {
-        const { overall, filtered } = aggregateOeeMetrics(
-            productionData,
-            lossesData,
-            downtimeData,
-            planData,
-            shiftFilter
-        );
-
-        // CORREÇÃO: Calcular OEE como produto dos componentes médios (D × P × Q)
-        // Este é o método padrão da indústria para OEE agregado
-        const overallOee = (overall?.disponibilidade || 0) * (overall?.performance || 0) * (overall?.qualidade || 0);
-        const filteredOee = (filtered?.disponibilidade || 0) * (filtered?.performance || 0) * (filtered?.qualidade || 0);
-
-        return { overallOee, filteredOee };
-    }
+    // Fase 2: calculateOverviewOEE REMOVIDA — era redundante.
+    // aggregateOeeMetrics agora retorna OEE = D×P×Q diretamente em overall.oee e filtered.oee.
+    // Callers antigos devem usar aggregateOeeMetrics diretamente.
 
     // Função para carregar análise de produção
     async function loadProductionAnalysis() {
@@ -1679,7 +1688,53 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         // Calcular métricas
         const totalProduction = productionData.reduce((sum, item) => sum + item.quantity, 0);
         const totalPlan = planData.reduce((sum, item) => sum + item.quantity, 0);
-        const targetVsActual = totalPlan > 0 ? (totalProduction / totalPlan * 100) : 0;
+
+        // META calculada pelo calendário do período:
+        //   Dias úteis (seg-sex): 1.400.000 peças/dia
+        //   Sábados: 450.000 peças/dia
+        //   Domingos: não contam (fábrica não opera)
+        //   Para filtros 'month'/'lastmonth', a meta cobre o mês inteiro
+        const META_WEEKDAY = 1400000;
+        const META_SATURDAY = 450000;
+        let totalMeta = 0;
+        let metaWeekdays = 0;
+        let metaSaturdays = 0;
+        {
+            const dStart = new Date(startDate + 'T12:00:00');
+            // Para filtro 'month' ou 'lastmonth', estender até o último dia do mês
+            const filterPeriod = currentAnalysisFilters.period || '';
+            let metaEndDate;
+            if (filterPeriod === 'month' || filterPeriod === 'lastmonth') {
+                const refDate = new Date(startDate + 'T12:00:00');
+                metaEndDate = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 0, 12, 0, 0);
+            } else {
+                metaEndDate = new Date(endDate + 'T12:00:00');
+            }
+            const dayMs = 86400000;
+
+            for (let d = new Date(dStart); d <= metaEndDate; d = new Date(d.getTime() + dayMs)) {
+                const dayOfWeek = d.getDay(); // 0=dom, 6=sáb
+
+                if (dayOfWeek === 0) continue; // Domingo — fábrica não opera
+
+                if (dayOfWeek === 6) {
+                    totalMeta += META_SATURDAY;
+                    metaSaturdays++;
+                } else {
+                    totalMeta += META_WEEKDAY;
+                    metaWeekdays++;
+                }
+            }
+        }
+        console.log('[META] Meta calculada pelo calendário:', {
+            totalMeta,
+            metaWeekdays,
+            metaSaturdays,
+            totalDias: metaWeekdays + metaSaturdays,
+            periodo: currentAnalysisFilters.period || 'custom'
+        });
+
+        const targetVsActual = totalMeta > 0 ? (totalProduction / totalMeta * 100) : 0;
         
         // Encontrar máquina top
         const machineProduction = {};
@@ -1700,22 +1755,22 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         };
 
         // Atualizar interface - KPIs
-        // PLANEJADO
+        // META (baseada no agendamento semanal)
         const plannedProductionKpi = document.getElementById('planned-production-kpi');
         const plannedProductionSubtext = document.getElementById('planned-production-subtext');
         if (plannedProductionKpi) {
-            let formattedPlan;
-            if (totalPlan >= 1000000) {
-                formattedPlan = (totalPlan / 1000000).toFixed(1) + 'M';
-            } else if (totalPlan >= 1000) {
-                formattedPlan = (totalPlan / 1000).toFixed(1) + 'K';
+            let formattedMeta;
+            if (totalMeta >= 1000000) {
+                formattedMeta = (totalMeta / 1000000).toFixed(1) + 'M';
+            } else if (totalMeta >= 1000) {
+                formattedMeta = (totalMeta / 1000).toFixed(1) + 'K';
             } else {
-                formattedPlan = totalPlan.toLocaleString('pt-BR');
+                formattedMeta = totalMeta.toLocaleString('pt-BR');
             }
-            plannedProductionKpi.textContent = formattedPlan;
+            plannedProductionKpi.textContent = formattedMeta;
         }
         if (plannedProductionSubtext) {
-            plannedProductionSubtext.textContent = `${totalPlan.toLocaleString('pt-BR')} peças planejadas`;
+            plannedProductionSubtext.textContent = `${totalMeta.toLocaleString('pt-BR')} peças`;
         }
 
         // REALIZADO
@@ -1749,7 +1804,7 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         await generateHourlyProductionChart(productionData, {
             targetCanvasId: 'analysis-hourly-production-chart',
             chartContext: 'analysis',
-            dailyTargetOverride: totalPlan,
+            dailyTargetOverride: totalMeta,
             updateTimeline: false
         });
         await generateShiftProductionChart(productionData);
@@ -2231,7 +2286,17 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
                         const totalOutput = data.production + data.losses;
                         const downtime = machineDowntime[mach] || 0;
                         const availability = TOTAL_AVAILABLE_MINUTES > 0 ? Math.min(((TOTAL_AVAILABLE_MINUTES - downtime) / TOTAL_AVAILABLE_MINUTES) * 100, 100) : 100;
-                        const performance = data.planned > 0 ? Math.min((data.production / data.planned) * 100, 100) : 0;
+
+                        // Performance: capacidade teórica baseada em ciclo/cavidades (FIX: era prod/planned)
+                        const machPlan = planData.find(p => (p.machine || '') === mach);
+                        const rawPlan = machPlan?.raw || machPlan || {};
+                        const shiftKey = shift ? `t${shift}` : null;
+                        const ciclo = Number(shiftKey ? (rawPlan[`real_cycle_${shiftKey}`] || rawPlan.budgeted_cycle) : rawPlan.budgeted_cycle) || 30;
+                        const cav = Number(shiftKey ? (rawPlan[`active_cavities_${shiftKey}`] || rawPlan.mold_cavities) : rawPlan.mold_cavities) || 2;
+                        const tempoDisp = Math.max(0, TOTAL_AVAILABLE_MINUTES - downtime);
+                        const capTeorica = (ciclo > 0 && cav > 0) ? (tempoDisp * 60 / ciclo) * cav : 0;
+                        const performance = capTeorica > 0 ? Math.min((data.production / capTeorica) * 100, 100) : (data.production > 0 ? 100 : 0);
+
                         const quality = totalOutput > 0 ? (data.production / totalOutput) * 100 : 100;
                         const oee = (availability * performance * quality) / 10000;
                         return { machine: mach, oee, production: data.production };
@@ -4048,7 +4113,8 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             startDate: workdayDate,
             endDate: workdayDate,
             machine: 'all',
-            shift: 'all'
+            shift: 'all',
+            period: 'today'
         };
         
         console.log('[ANALYSIS] Default dates set:', {
@@ -4074,7 +4140,7 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
     // Funções para geração de gráficos específicos da análise
 
     // Gráfico de distribuição OEE por máquina
-    async function generateOEEDistributionChart(productionData, lossesData, downtimeData) {
+    async function generateOEEDistributionChart(productionData, lossesData, downtimeData, planData) {
         const ctx = document.getElementById('oee-distribution-chart');
         if (!ctx) return;
 
@@ -4105,7 +4171,15 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             // Componentes em fração [0..1]
             const availability = Math.max(0, 1 - (totalDowntime / periodMinutes));
             const quality = totalProduced > 0 ? Math.max(0, (totalProduced - totalLosses) / totalProduced) : 1;
-            const performance = 0.85; // aproximação conservadora até termos cálculo por máquina
+
+            // Performance: capacidade teórica baseada em ciclo/cavidades do plano (FIX: era 0.85 hardcoded)
+            const machinePlan = (planData || []).find(p => (p.machine || '') === machine);
+            const raw = machinePlan?.raw || machinePlan || {};
+            const ciclo = Number(raw.budgeted_cycle) || 30;
+            const cav = Number(raw.mold_cavities) || 2;
+            const tempoDisponivel = Math.max(0, periodMinutes - totalDowntime);
+            const capacidadeTeorica = (ciclo > 0 && cav > 0) ? (tempoDisponivel * 60 / ciclo) * cav : 0;
+            const performance = capacidadeTeorica > 0 ? Math.min(1, totalProduced / capacidadeTeorica) : (totalProduced > 0 ? 1 : 0);
 
             const oeeFraction = Math.max(0, Math.min(1, availability * performance * quality));
             oeeByMachine[machine] = oeeFraction * 100; // guardar já em %
@@ -8859,18 +8933,15 @@ ${content.innerHTML}
                 console.log('[TRACE][calculateDetailedOEE] Amostra plan:', planData.slice(0, 3));
             }
 
-            // CORREÇÃO: Calcular OEE como produto dos componentes (D × P × Q)
-            // em vez de usar a média dos OEEs individuais
             const availability = filtered.disponibilidade * 100;
             const performance = filtered.performance * 100;
             const quality = filtered.qualidade * 100;
-            const oeeCalculated = (availability * performance * quality) / 10000;
 
             return {
                 availability: availability,
                 performance: performance,
                 quality: quality,
-                oee: oeeCalculated  // OEE = D × P × Q (correto!)
+                oee: filtered.oee * 100  // Média ponderada dos OEEs individuais
             };
         } catch (error) {
             console.error('Erro ao calcular OEE detalhado:', error);
@@ -9025,6 +9096,7 @@ ${content.innerHTML}
         // Buscar dados para calcular componentes OEE ao longo do tempo
         const productionData = await getFilteredData('production', startDate, endDate, machine);
         const downtimeData = await getFilteredData('downtime', startDate, endDate, machine);
+        const planDataTimeline = await getFilteredData('plan', startDate, endDate, machine);
 
         if (productionData.length === 0) {
             showNoDataMessage('oee-components-timeline');
@@ -9083,14 +9155,21 @@ ${content.innerHTML}
             const data = dataByDate[date];
             
             // Disponibilidade: tempo disponível / tempo planejado
-            const plannedMinutes = 480; // 8 horas
+            const plannedMinutes = 480; // 8 horas por turno
             const availability = Math.max(0, Math.min(100, ((plannedMinutes - data.downtime) / plannedMinutes) * 100));
             
-            // Performance: produzido / planejado
-            const performance = data.planned > 0 ? Math.min(100, (data.produced / data.planned) * 100) : 100;
+            // Performance: capacidade teórica baseada em ciclo/cavidades (FIX: era prod/planned)
+            const datePlan = (planDataTimeline || []).find(p => p.date === date || p.workDay === date);
+            const rawPlan = datePlan?.raw || datePlan || {};
+            const ciclo = Number(rawPlan.budgeted_cycle) || 30;
+            const cav = Number(rawPlan.mold_cavities) || 2;
+            const tempoDisp = Math.max(0, plannedMinutes - data.downtime);
+            const capTeorica = (ciclo > 0 && cav > 0) ? (tempoDisp * 60 / ciclo) * cav : 0;
+            const performance = capTeorica > 0 ? Math.min(100, (data.produced / capTeorica) * 100) : (data.produced > 0 ? 100 : 0);
             
-            // Qualidade: (produzido - refugo) / produzido
-            const quality = data.produced > 0 ? ((data.produced - data.scrap) / data.produced) * 100 : 100;
+            // Qualidade: produzido / (produzido + refugo) — consistente com calculateShiftOEE
+            const totalProduzido = data.produced + Math.max(0, data.scrap || 0);
+            const quality = totalProduzido > 0 ? (data.produced / totalProduzido) * 100 : 100;
             
             availabilityData.push(availability.toFixed(1));
             performanceData.push(performance.toFixed(1));
