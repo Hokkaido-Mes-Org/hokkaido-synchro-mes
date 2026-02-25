@@ -6,6 +6,7 @@
 // Extraído de script.js – Phase 15
 // =============================================
 import { getDowntimeCategory } from '../utils/color.utils.js';
+import { calculateShiftOEE, calculateRealTimeShiftOEE, getPlanParamsForShift } from '../utils/oee.utils.js';
 
 // ─── Window-forwarded dependencies (closure functions from script.js) ───
 const db = (() => { try { return firebase.firestore(); } catch { return null; } })();
@@ -27,30 +28,9 @@ function getReportEfficBtn() { return document.getElementById('report-effic-btn'
 
 // =============================================
 // OEE CALCULATION HELPERS
+// Fase 1: Delegam para src/utils/oee.utils.js (fonte única de verdade)
+// calculateShiftOEE importado de oee.utils.js
 // =============================================
-
-function calculateShiftOEE(produzido, tempoParadaMin, refugoPcs, cicloReal, cavAtivas) {
-    const tempoTurnoMin = 480;
-
-    const tempoProgramado = tempoTurnoMin;
-    const tempoProduzindo = Math.max(0, tempoProgramado - Math.max(0, tempoParadaMin));
-    const disponibilidade = tempoProgramado > 0 ? (tempoProduzindo / tempoProgramado) : 0;
-
-    const producaoTeorica = cicloReal > 0 && cavAtivas > 0 ? (tempoProduzindo * 60 / cicloReal) * cavAtivas : 0;
-    const performance = producaoTeorica > 0 ? Math.min(1, produzido / producaoTeorica) : (produzido > 0 ? 1 : 0);
-
-    const totalProduzido = Math.max(0, produzido) + Math.max(0, refugoPcs);
-    const qualidade = totalProduzido > 0 ? (Math.max(0, produzido) / totalProduzido) : (produzido > 0 ? 1 : 0);
-
-    const oee = disponibilidade * performance * qualidade;
-
-    return {
-        disponibilidade: isNaN(disponibilidade) || !isFinite(disponibilidade) ? 0 : Math.max(0, Math.min(1, disponibilidade)),
-        performance: isNaN(performance) || !isFinite(performance) ? 0 : Math.max(0, Math.min(1, performance)),
-        qualidade: isNaN(qualidade) || !isFinite(qualidade) ? 0 : Math.max(0, Math.min(1, qualidade)),
-        oee: isNaN(oee) || !isFinite(oee) ? 0 : Math.max(0, Math.min(1, oee))
-    };
-}
 
 function calculateRealTimeOEE(data) {
     const now = new Date();
@@ -91,14 +71,16 @@ function calculateRealTimeOEE(data) {
     data.forEach(item => {
         const key = `${item.machine}_${item.turno}`;
         if (!groupedData[key]) {
+            // FIX: Selecionar ciclo/cavidades do turno correto (era || que sempre pegava T1)
+            const { ciclo, cavidades } = getPlanParamsForShift(item, item.turno);
             groupedData[key] = {
                 machine: item.machine,
                 turno: item.turno,
                 produzido: 0,
                 paradas: 0,
                 refugo_pcs: 0,
-                ciclo_real: item.real_cycle_t1 || item.real_cycle_t2 || item.real_cycle_t3 || item.budgeted_cycle,
-                cav_ativas: item.active_cavities_t1 || item.active_cavities_t2 || item.active_cavities_t3 || item.mold_cavities
+                ciclo_real: ciclo || item.budgeted_cycle || 30,
+                cav_ativas: cavidades || item.mold_cavities || 2
             };
         }
 
@@ -121,23 +103,19 @@ function calculateRealTimeOEE(data) {
         );
 
         if (group.turno === currentShift) {
-            const tempoProgramadoReal = tempoDecorridoMin;
-            const tempoProduzindoReal = Math.max(0, tempoProgramadoReal - tempoParadaMin);
-            const disponibilidadeReal = tempoProgramadoReal > 0 ? (tempoProduzindoReal / tempoProgramadoReal) : 0;
-
-            const producaoTeoricaReal = group.ciclo_real > 0 && group.cav_ativas > 0 ?
-                (tempoProduzindoReal * 60 / group.ciclo_real) * group.cav_ativas : 0;
-            const performanceReal = producaoTeoricaReal > 0 ? (group.produzido / producaoTeoricaReal) : 0;
-
-            const totalProduzidoReal = group.produzido + group.refugo_pcs;
-            const qualidadeReal = totalProduzidoReal > 0 ? (group.produzido / totalProduzidoReal) : 0;
-
-            const oeeReal = disponibilidadeReal * performanceReal * qualidadeReal;
-
-            oeeCalc.disponibilidade = isNaN(disponibilidadeReal) || !isFinite(disponibilidadeReal) ? 0 : disponibilidadeReal;
-            oeeCalc.performance = isNaN(performanceReal) || !isFinite(performanceReal) ? 0 : performanceReal;
-            oeeCalc.qualidade = isNaN(qualidadeReal) || !isFinite(qualidadeReal) ? 0 : qualidadeReal;
-            oeeCalc.oee = isNaN(oeeReal) || !isFinite(oeeReal) ? 0 : oeeReal;
+            // Fase 1: Usar calculateRealTimeShiftOEE unificado
+            const rtOee = calculateRealTimeShiftOEE({
+                produzido: group.produzido,
+                tempoDecorridoMin,
+                tempoParadaMin,
+                refugoPcs: group.refugo_pcs,
+                cicloSeg: group.ciclo_real,
+                cavidades: group.cav_ativas
+            });
+            oeeCalc.disponibilidade = rtOee.disponibilidade;
+            oeeCalc.performance = rtOee.performance;
+            oeeCalc.qualidade = rtOee.qualidade;
+            oeeCalc.oee = rtOee.oee;
             oeeCalc.isRealTime = true;
             oeeCalc.tempoDecorrido = tempoDecorridoMin;
         }
