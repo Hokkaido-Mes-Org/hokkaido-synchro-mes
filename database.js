@@ -651,6 +651,7 @@ var productDatabase = [
     { "cod": 6289, "client": "APTAR", "name": "ATUADOR-POEMA-PP--5,85-PINK---LOT----GS -31328163", "cavities": 22, "cycle": 25.5, "weight": 2.15, "pieces_per_hour_goal": 3106, "mp": "" },
     { "cod": 6311, "client": "APTAR", "name": "TAMPA-EM-28,20-PP-RED--SHNY-----ÁGATA II 31363869", "cavities": 29, "cycle": 12, "weight": 0.95, "pieces_per_hour_goal": 8700, "mp": "" },
     { "cod": 4808, "client": "PARKER", "name": "SUPORTE DO COPO 4 CAVIDADES - 283600249", "cavities": 4, "cycle": 50, "weight": 54.85, "pieces_per_hour_goal": 432, "mp": "" },
+    { "cod": 6309, "client": "APTAR", "name": "ATUADOR-EMII-PP--4,34-RED---SPRAY--SD 26 - 31363870", "cavities": 30, "cycle": 20, "weight": 1.06, "pieces_per_hour_goal": 5400, "mp": "" },
 ];
 
 
@@ -1839,3 +1840,4 @@ if (typeof window !== 'undefined') {
         moldePorProduto
     };
 }));
+
