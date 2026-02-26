@@ -5476,6 +5476,39 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         document.getElementById('total-borra').textContent = `${totalBorraKg.toFixed(3)}`;
         document.getElementById('main-loss-reason').textContent = mainReason;
         document.getElementById('main-loss-material').textContent = mainMaterial;
+
+        // Calcular %Triagem/Produção (respeitando filtros de período, máquina e turno)
+        try {
+            const { triageService } = await import('./src/services/triage.service.js');
+            let triageEntries = await triageService.getAll();
+
+            // Filtro por período (quarantineDate é YYYY-MM-DD)
+            if (startDate) triageEntries = triageEntries.filter(e => (e.quarantineDate || '') >= startDate);
+            if (endDate)   triageEntries = triageEntries.filter(e => (e.quarantineDate || '') <= endDate);
+
+            // Filtro por máquina
+            if (machine && machine !== 'all') {
+                const target = normalizeMachineId(machine);
+                triageEntries = triageEntries.filter(e => normalizeMachineId(e.machineId || '') === target);
+            }
+
+            // Filtro por turno (triage armazena '1T','2T','3T'; filtro usa '1','2','3')
+            if (shift && shift !== 'all') {
+                triageEntries = triageEntries.filter(e => {
+                    const t = (e.turno || '').replace('T', '');
+                    return t === String(shift);
+                });
+            }
+
+            const totalTriagePieces = triageEntries.reduce((s, e) => s + (e.quantity || 0), 0);
+            const triagePct = totalProduction > 0 ? (totalTriagePieces / totalProduction * 100) : 0;
+            const triagePctEl = document.getElementById('triage-production-pct');
+            if (triagePctEl) triagePctEl.textContent = `${triagePct.toFixed(2)}%`;
+        } catch (triageErr) {
+            console.warn('[Losses] Erro ao calcular %Triagem/Produção:', triageErr);
+            const triagePctEl = document.getElementById('triage-production-pct');
+            if (triagePctEl) triagePctEl.textContent = '0.00%';
+        }
         
         // Atualizar dados específicos de borra
         const topBorraMPElement = document.getElementById('top-borra-mp');
@@ -8698,6 +8731,8 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         'pcp':               { path: './src/controllers/pcp.controller.js',              fn: 'setupPCPPage',
                                post: () => { if (typeof lucide !== 'undefined') lucide.createIcons(); } },
         'pmp':               { path: './src/controllers/pmp.controller.js',              fn: 'setupPMPPage',
+                               post: () => { if (typeof lucide !== 'undefined') lucide.createIcons(); } },
+        'qualidade':         { path: './src/controllers/triage.controller.js',           fn: 'setupQualidadePage',
                                post: () => { if (typeof lucide !== 'undefined') lucide.createIcons(); } }
     };
 
@@ -8717,7 +8752,8 @@ document.getElementById('edit-order-form').onsubmit = async function(e) {
         'ferramentaria':     [],
         'setup-maquinas':    [],
         'pmp':               [],
-        'historico-sistema': []
+        'historico-sistema': [],
+        'qualidade':         ['triage_entries']
     };
 
     function _prefetchForPage(page) {

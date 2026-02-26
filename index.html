@@ -4566,29 +4566,389 @@
                     </div>
                 </div>
                 
-                <!-- PÁGINA: Qualidade -->
+                <!-- PÁGINA: Qualidade — Triagem / Quarentena -->
                 <div id="qualidade-page" class="page-content hidden">
                     <div class="bg-gradient-to-br from-slate-50 to-gray-100 min-h-screen">
+
+                        <!-- ========== HEADER ========== -->
                         <div class="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
                             <div class="px-4 md:px-6 py-4">
-                                <div class="flex items-center gap-3">
-                                    <div class="p-2.5 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg">
-                                        <i data-lucide="shield-check" class="w-6 h-6 text-white"></i>
+                                <div class="flex items-center justify-between flex-wrap gap-3">
+                                    <div class="flex items-center gap-3">
+                                        <div class="p-2.5 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg">
+                                            <i data-lucide="shield-check" class="w-6 h-6 text-white"></i>
+                                        </div>
+                                        <div>
+                                            <h1 class="text-xl font-bold text-gray-800">Qualidade — Triagem</h1>
+                                            <p class="text-sm text-gray-500">Quarentena, triagem e reaproveitamento de peças</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <h1 class="text-xl font-bold text-gray-800">Qualidade</h1>
-                                        <p class="text-sm text-gray-500">Controle de Qualidade e Inspeção</p>
-                                    </div>
+                                    <button onclick="window._triageRefresh()" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Atualizar
+                                    </button>
+                                </div>
+
+                                <!-- Sub-tabs -->
+                                <div class="flex gap-1 mt-4 border-b border-gray-200">
+                                    <button class="qualidade-tab-btn px-4 py-2 text-sm font-medium border-b-2 transition-colors active bg-amber-50 text-amber-700 border-amber-500" data-qualidade-tab="triagem">
+                                        <i data-lucide="search" class="w-4 h-4 inline-block mr-1"></i>Triagem
+                                    </button>
+                                    <button class="qualidade-tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 transition-colors" data-qualidade-tab="nova-quarentena">
+                                        <i data-lucide="package-plus" class="w-4 h-4 inline-block mr-1"></i>Nova Quarentena
+                                    </button>
                                 </div>
                             </div>
                         </div>
-                        <div class="flex items-center justify-center" style="min-height: 60vh;">
-                            <div class="text-center p-8">
-                                <div class="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-amber-50 to-orange-100 rounded-2xl mb-6 border border-amber-200">
-                                    <i data-lucide="construction" class="w-10 h-10 text-amber-500"></i>
+
+                        <!-- ========== TAB: TRIAGEM (painel principal) ========== -->
+                        <div id="qualidade-tab-triagem" class="qualidade-tab-content px-4 md:px-6 py-5">
+
+                            <!-- KPIs -->
+                            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+                                <!-- Em quarentena -->
+                                <div class="bg-white rounded-xl border border-yellow-200 p-4 shadow-sm">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="w-2 h-2 rounded-full bg-yellow-400"></span>
+                                        <span class="text-xs font-medium text-yellow-700 uppercase tracking-wide">Quarentena</span>
+                                    </div>
+                                    <p id="triage-kpi-quarantine" class="text-2xl font-bold text-gray-800">0</p>
+                                    <p class="text-[11px] text-gray-400 mt-0.5">lotes aguardando</p>
                                 </div>
-                                <h2 class="text-2xl font-bold text-gray-700 mb-2">Em Desenvolvimento</h2>
-                                <p class="text-gray-500 max-w-md">A aba de Qualidade está sendo preparada. Em breve você terá acesso a inspeções, planos de controle, relatórios de não-conformidade e indicadores de qualidade.</p>
+                                <!-- Em triagem -->
+                                <div class="bg-white rounded-xl border border-blue-200 p-4 shadow-sm">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                                        <span class="text-xs font-medium text-blue-700 uppercase tracking-wide">Em Triagem</span>
+                                    </div>
+                                    <p id="triage-kpi-in-triage" class="text-2xl font-bold text-gray-800">0</p>
+                                    <p class="text-[11px] text-gray-400 mt-0.5">lotes em andamento</p>
+                                </div>
+                                <!-- Concluídos -->
+                                <div class="bg-white rounded-xl border border-green-200 p-4 shadow-sm">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                                        <span class="text-xs font-medium text-green-700 uppercase tracking-wide">Concluídas</span>
+                                    </div>
+                                    <p id="triage-kpi-completed" class="text-2xl font-bold text-gray-800">0</p>
+                                    <p class="text-[11px] text-gray-400 mt-0.5">triagens finalizadas</p>
+                                </div>
+                                <!-- Peças pendentes -->
+                                <div class="bg-white rounded-xl border border-amber-200 p-4 shadow-sm">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                                        <span class="text-xs font-medium text-amber-700 uppercase tracking-wide">Pçs Pendentes</span>
+                                    </div>
+                                    <p id="triage-kpi-pending-pieces" class="text-2xl font-bold text-gray-800">0</p>
+                                    <p class="text-[11px] text-gray-400 mt-0.5">peças a triar</p>
+                                </div>
+                                <!-- Aprovadas total -->
+                                <div class="bg-white rounded-xl border border-emerald-200 p-4 shadow-sm">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                        <span class="text-xs font-medium text-emerald-700 uppercase tracking-wide">Aprovadas</span>
+                                    </div>
+                                    <p id="triage-kpi-approved" class="text-2xl font-bold text-gray-800">0</p>
+                                    <p class="text-[11px] text-gray-400 mt-0.5">peças reaproveitadas</p>
+                                </div>
+                                <!-- Taxa de aprovação -->
+                                <div class="bg-white rounded-xl border border-indigo-200 p-4 shadow-sm">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+                                        <span class="text-xs font-medium text-indigo-700 uppercase tracking-wide">Taxa Aprov.</span>
+                                    </div>
+                                    <p id="triage-kpi-approval-rate" class="text-2xl font-bold text-gray-800">0.0%</p>
+                                    <p class="text-[11px] text-gray-400 mt-0.5">reaproveitamento</p>
+                                </div>
+                            </div>
+
+                            <!-- Filtros de status -->
+                            <div class="flex flex-wrap gap-2 mb-4">
+                                <button class="triage-filter-btn px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors active bg-amber-100 text-amber-800" data-triage-filter="all">Todos</button>
+                                <button class="triage-filter-btn px-3 py-1.5 text-xs font-medium rounded-lg border border-yellow-300 text-yellow-700 hover:bg-yellow-50 transition-colors" data-triage-filter="QUARENTENA">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-yellow-500 inline-block mr-1"></span>Quarentena
+                                </button>
+                                <button class="triage-filter-btn px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-300 text-blue-700 hover:bg-blue-50 transition-colors" data-triage-filter="EM_TRIAGEM">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block mr-1"></span>Em Triagem
+                                </button>
+                                <button class="triage-filter-btn px-3 py-1.5 text-xs font-medium rounded-lg border border-green-300 text-green-700 hover:bg-green-50 transition-colors" data-triage-filter="CONCLUIDA">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-green-500 inline-block mr-1"></span>Concluídas
+                                </button>
+                            </div>
+
+                            <!-- Tabela de lotes -->
+                            <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-left">
+                                        <thead class="bg-gray-50 border-b border-gray-200">
+                                            <tr>
+                                                <th class="px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase">Máquina</th>
+                                                <th class="px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase">Ordem</th>
+                                                <th class="px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase">Produto</th>
+                                                <th class="px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase">Defeito</th>
+                                                <th class="px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase text-center">Qtd Total</th>
+                                                <th class="px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase text-center" title="Aprovadas / Refugadas / Pendentes">Aprov / Ref / Pend</th>
+                                                <th class="px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase">Status</th>
+                                                <th class="px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase">Data</th>
+                                                <th class="px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase">Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="triage-table-body">
+                                            <tr>
+                                                <td colspan="9" class="px-4 py-8 text-center text-gray-400">Carregando dados de triagem...</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ========== TAB: NOVA QUARENTENA (formulário) ========== -->
+                        <div id="qualidade-tab-nova-quarentena" class="qualidade-tab-content hidden px-4 md:px-6 py-5">
+                            <div class="max-w-2xl mx-auto">
+                                <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+                                    <h2 class="text-lg font-bold text-gray-800 mb-1">Enviar Peças para Quarentena</h2>
+                                    <p class="text-sm text-gray-500 mb-5">Registre peças rejeitadas que possuem potencial de triagem e reaproveitamento.</p>
+
+                                    <form id="triage-quarantine-form" class="space-y-4">
+                                        <!-- Máquina + Turno -->
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">Máquina <span class="text-red-500">*</span></label>
+                                                <select id="triage-machine-select" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400">
+                                                    <option value="">Selecione</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">Turno</label>
+                                                <select id="triage-turno-select" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400">
+                                                    <option value="">Selecione</option>
+                                                    <option value="1T">1º Turno</option>
+                                                    <option value="2T">2º Turno</option>
+                                                    <option value="3T">3º Turno</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <!-- Ordem + Produto -->
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">Nº da Ordem</label>
+                                                <input id="triage-order-input" type="text" placeholder="Ex: 123456" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400">
+                                            </div>
+                                            <div class="relative">
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">Código do Produto</label>
+                                                <input id="triage-product-input" type="text" placeholder="Digite código ou nome..." autocomplete="off" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400">
+                                                <div id="triage-product-suggestions" class="hidden absolute z-30 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto"></div>
+                                            </div>
+                                        </div>
+                                        <!-- Info do produto selecionado -->
+                                        <div id="triage-product-info" class="hidden bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 text-sm">
+                                            <div class="flex items-center justify-between">
+                                                <div>
+                                                    <span class="text-amber-700 font-medium">Produto:</span>
+                                                    <span id="triage-product-name" class="text-gray-800 ml-1">-</span>
+                                                </div>
+                                                <button type="button" id="triage-product-clear" class="text-amber-500 hover:text-amber-700 transition-colors" title="Limpar">
+                                                    <i data-lucide="x-circle" class="w-4 h-4"></i>
+                                                </button>
+                                            </div>
+                                            <div class="flex gap-4 mt-1 text-xs text-gray-500">
+                                                <span>Cliente: <strong id="triage-product-client">-</strong></span>
+                                                <span>Cavidades: <strong id="triage-product-cavities">-</strong></span>
+                                                <span>Peso: <strong id="triage-product-weight">-</strong>g</span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Operador (cód. usuário) -->
+                                        <div class="relative">
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Operador (cód. usuário)</label>
+                                            <input id="triage-user-input" type="text" placeholder="Digite código ou nome..." autocomplete="off" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400">
+                                            <div id="triage-user-suggestions" class="hidden absolute z-30 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto"></div>
+                                            <p id="triage-user-resolved" class="hidden mt-1 text-xs text-green-600 font-medium"></p>
+                                        </div>
+
+                                        <!-- Modo de apontamento: Peças ou Peso -->
+                                        <div class="flex items-center gap-3 mb-1">
+                                            <span class="text-sm font-medium text-gray-700">Apontar por:</span>
+                                            <div class="inline-flex rounded-lg border border-gray-300 overflow-hidden">
+                                                <button type="button" id="triage-mode-pieces" class="triage-mode-btn px-3 py-1.5 text-xs font-medium bg-amber-100 text-amber-800 border-r border-gray-300 transition-colors" data-mode="pieces">Peças</button>
+                                                <button type="button" id="triage-mode-weight" class="triage-mode-btn px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors" data-mode="weight">Peso (g)</button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Quantidade + Motivo -->
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <!-- Input de peças (padrão) -->
+                                            <div id="triage-pieces-group">
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">Quantidade de Peças <span class="text-red-500">*</span></label>
+                                                <input id="triage-quantity-input" type="number" min="1" required placeholder="0" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400">
+                                            </div>
+                                            <!-- Input de peso (oculto por padrão) -->
+                                            <div id="triage-weight-group" class="hidden">
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">Peso Total (g) <span class="text-red-500">*</span></label>
+                                                <input id="triage-weight-input" type="number" min="0.1" step="0.1" placeholder="0.0" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400">
+                                                <p id="triage-weight-conversion" class="mt-1 text-xs text-teal-600 font-medium hidden"></p>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">Motivo do Defeito</label>
+                                                <select id="triage-defect-select" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400">
+                                                    <option value="">Selecione</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <!-- Observações -->
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+                                            <textarea id="triage-notes-input" rows="3" placeholder="Detalhes adicionais sobre o lote..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400 resize-none"></textarea>
+                                        </div>
+
+                                        <!-- Botão -->
+                                        <div class="pt-2">
+                                            <button type="submit" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 rounded-lg shadow-sm transition-all">
+                                                <i data-lucide="package-plus" class="w-4 h-4"></i>
+                                                Enviar para Quarentena
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ========== MODAL: Resultado da Triagem ========== -->
+                        <div id="triage-result-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+                                <div class="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200">
+                                    <h3 class="text-lg font-bold text-gray-800">Registrar Triagem</h3>
+                                    <button id="triage-modal-close" class="p-1 rounded-lg hover:bg-amber-100 transition-colors">
+                                        <i data-lucide="x" class="w-5 h-5 text-gray-500"></i>
+                                    </button>
+                                </div>
+                                <form id="triage-result-form" class="p-6 space-y-4">
+                                    <input type="hidden" id="triage-result-id">
+
+                                    <!-- Info do lote -->
+                                    <div class="grid grid-cols-2 gap-3 text-sm">
+                                        <div><span class="text-gray-500">Máquina:</span> <span id="triage-result-machine" class="font-medium text-gray-800">-</span></div>
+                                        <div><span class="text-gray-500">Ordem:</span> <span id="triage-result-order" class="font-medium text-gray-800">-</span></div>
+                                        <div><span class="text-gray-500">Defeito:</span> <span id="triage-result-defect" class="font-medium text-gray-800">-</span></div>
+                                        <div><span class="text-gray-500">Total:</span> <span id="triage-result-total" class="font-bold text-gray-800">0</span></div>
+                                    </div>
+
+                                    <div class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 text-sm">
+                                        Peças restantes para triar: <span id="triage-result-remaining" class="font-bold text-amber-700">0</span>
+                                        <span id="triage-result-piece-weight" class="hidden ml-2 text-xs text-amber-600">(peso unit.: <strong id="triage-result-pw-value">-</strong>g)</span>
+                                    </div>
+
+                                    <!-- Toggle: Peças ou Peso -->
+                                    <div class="flex items-center gap-3">
+                                        <span class="text-xs font-medium text-gray-600">Apontar por:</span>
+                                        <div class="inline-flex rounded-lg border border-gray-300 overflow-hidden">
+                                            <button type="button" class="triage-result-mode-btn px-3 py-1 text-xs font-medium bg-amber-100 text-amber-800 border-r border-gray-300 transition-colors" data-mode="pieces">Peças</button>
+                                            <button type="button" class="triage-result-mode-btn px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors" data-mode="weight">Peso (g)</button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Aprovadas / Refugadas (modo peças) -->
+                                    <div id="triage-result-pieces-group" class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-green-700 mb-1">Peças Aprovadas</label>
+                                            <input id="triage-result-approved" type="number" min="0" value="0" class="w-full border border-green-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 focus:border-green-400">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-red-700 mb-1">Peças Refugadas</label>
+                                            <input id="triage-result-rejected" type="number" min="0" value="0" class="w-full border border-red-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-400 focus:border-red-400">
+                                        </div>
+                                    </div>
+
+                                    <!-- Aprovadas / Refugadas (modo peso — oculto) -->
+                                    <div id="triage-result-weight-group" class="hidden space-y-3">
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="block text-sm font-medium text-green-700 mb-1">Peso Aprovado (g)</label>
+                                                <input id="triage-result-weight-approved" type="number" min="0" step="0.1" value="0" class="w-full border border-green-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 focus:border-green-400">
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-red-700 mb-1">Peso Refugado (g)</label>
+                                                <input id="triage-result-weight-rejected" type="number" min="0" step="0.1" value="0" class="w-full border border-red-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-400 focus:border-red-400">
+                                            </div>
+                                        </div>
+                                        <p id="triage-result-weight-conversion" class="text-xs text-teal-600 font-medium hidden"></p>
+                                    </div>
+
+                                    <!-- Notas -->
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+                                        <textarea id="triage-result-notes" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400" placeholder="Observações da triagem..."></textarea>
+                                    </div>
+
+                                    <button type="submit" class="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 rounded-lg shadow-sm transition-all">
+                                        <i data-lucide="check-circle" class="w-4 h-4"></i>
+                                        Registrar Resultado
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        <!-- ========== MODAL: Editar Lote de Triagem ========== -->
+                        <div id="triage-edit-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+                                <div class="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-200">
+                                    <h3 class="text-lg font-bold text-gray-800">Editar Lote de Triagem</h3>
+                                    <button id="triage-edit-modal-close" class="p-1 rounded-lg hover:bg-blue-100 transition-colors">
+                                        <i data-lucide="x" class="w-5 h-5 text-gray-500"></i>
+                                    </button>
+                                </div>
+                                <form id="triage-edit-form" class="p-6 space-y-4">
+                                    <input type="hidden" id="triage-edit-id">
+
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Máquina</label>
+                                            <select id="triage-edit-machine" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400"></select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Turno</label>
+                                            <select id="triage-edit-turno" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400">
+                                                <option value="">Selecione</option>
+                                                <option value="1T">1º Turno</option>
+                                                <option value="2T">2º Turno</option>
+                                                <option value="3T">3º Turno</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Nº da Ordem</label>
+                                            <input id="triage-edit-order" type="text" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Código do Produto</label>
+                                            <input id="triage-edit-product" type="text" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400">
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Quantidade Total</label>
+                                            <input id="triage-edit-quantity" type="number" min="1" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Motivo do Defeito</label>
+                                            <select id="triage-edit-defect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400"></select>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+                                        <textarea id="triage-edit-notes" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400"></textarea>
+                                    </div>
+
+                                    <button type="submit" class="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 rounded-lg shadow-sm transition-all">
+                                        <i data-lucide="save" class="w-4 h-4"></i>
+                                        Salvar Alterações
+                                    </button>
+                                </form>
                             </div>
                         </div>
                     </div>
@@ -5141,15 +5501,15 @@
                                         <p id="losses-percentage" class="text-2xl font-bold text-orange-600">---%</p>
                                         <p class="text-xs text-orange-600 opacity-70 mt-1">da Produção</p>
                                     </div>
-                                    <div class="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-2xl shadow-sm border border-yellow-200 p-4 hover:shadow-md transition">
+                                    <div class="bg-gradient-to-br from-teal-50 to-teal-100 rounded-2xl shadow-sm border border-teal-200 p-4 hover:shadow-md transition">
                                         <div class="flex items-center justify-between mb-2">
-                                            <p class="text-xs font-medium text-yellow-700">Total Borra</p>
-                                            <div class="p-1.5 bg-yellow-200 rounded">
-                                                <i data-lucide="droplet" class="w-3 h-3 text-yellow-600"></i>
+                                            <p class="text-xs font-medium text-teal-700">% Triagem/Produção</p>
+                                            <div class="p-1.5 bg-teal-200 rounded">
+                                                <i data-lucide="search-check" class="w-3 h-3 text-teal-600"></i>
                                             </div>
                                         </div>
-                                        <p id="total-borra" class="text-2xl font-bold text-yellow-600">---</p>
-                                        <p class="text-xs text-yellow-600 opacity-70 mt-1">kg</p>
+                                        <p id="triage-production-pct" class="text-2xl font-bold text-teal-600">---%</p>
+                                        <p class="text-xs text-teal-600 opacity-70 mt-1">peças triadas vs produzidas</p>
                                     </div>
                                     <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl shadow-sm border border-purple-200 p-4 hover:shadow-md transition">
                                         <div class="flex items-center justify-between mb-2">
@@ -5248,6 +5608,19 @@
                                             <i data-lucide="zap" class="w-5 h-5 text-amber-700"></i>
                                         </div>
                                         <h3 class="font-semibold text-amber-900 text-base">Análise Detalhada de Borras</h3>
+                                    </div>
+                                    <!-- KPI Total Borra -->
+                                    <div class="mb-4">
+                                        <div class="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-amber-200 inline-flex items-center gap-4 shadow-sm">
+                                            <div class="p-2 bg-yellow-100 rounded-lg">
+                                                <i data-lucide="droplet" class="w-5 h-5 text-yellow-600"></i>
+                                            </div>
+                                            <div>
+                                                <p class="text-xs font-medium text-yellow-700 uppercase tracking-wide">Total Borra</p>
+                                                <p id="total-borra" class="text-2xl font-bold text-yellow-600">---</p>
+                                                <p class="text-[11px] text-yellow-500">kg no período</p>
+                                            </div>
+                                        </div>
                                     </div>
                                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                         <!-- Borra por Máquina -->

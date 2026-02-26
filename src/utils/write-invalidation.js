@@ -81,6 +81,12 @@ const CACHE_KEYS_BY_COLLECTION = {
         stateManager: [],
         events:       [],
     },
+    'triage_entries': {
+        dataStore:    [],
+        cacheManager: ['triage_entries'],
+        stateManager: [],
+        events:       [],
+    },
     'system_logs': {
         dataStore:    [],
         cacheManager: [],
