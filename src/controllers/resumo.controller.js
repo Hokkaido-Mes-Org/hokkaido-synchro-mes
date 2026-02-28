@@ -7,6 +7,7 @@
 // =============================================
 import { getDowntimeCategory } from '../utils/color.utils.js';
 import { calculateShiftOEE, calculateRealTimeShiftOEE, getPlanParamsForShift } from '../utils/oee.utils.js';
+import { triageService } from '../services/triage.service.js';
 
 // ─── Window-forwarded dependencies (closure functions from script.js) ───
 const db = (() => { try { return firebase.firestore(); } catch { return null; } })();
@@ -90,6 +91,9 @@ function calculateRealTimeOEE(data) {
         if (item.piece_weight > 0) {
             groupedData[key].refugo_pcs += Math.round(((item.refugo_kg || 0) * 1000) / item.piece_weight);
         }
+
+        // INTEGRAÇÃO TRIAGEM: acumular peças de triagem que impactam qualidade
+        groupedData[key].refugo_pcs += (item.triagem_pcs || 0);
     });
 
     Object.values(groupedData).forEach(group => {
@@ -317,7 +321,7 @@ async function loadResumoData(showLoading = true) {
 
         const downtimes = downtimeSnapshot.docs.map(doc => doc.data());
 
-        currentReportData = processResumoData(plans, productions, downtimes);
+        currentReportData = await processResumoData(plans, productions, downtimes);
 
         const reportQuantBtn = getReportQuantBtn();
         const currentView = reportQuantBtn && reportQuantBtn.classList.contains('active') ? 'quant' : 'effic';
@@ -345,10 +349,33 @@ function getShiftFromTime(timeStr) {
     }
 }
 
-function processResumoData(plans, productions, downtimes) {
+async function processResumoData(plans, productions, downtimes) {
+    const dateStr = getResumoDateSelector()?.value || getProductionDateString();
+
+    // Pré-buscar dados de triagem para todas as máquinas/turnos em paralelo
+    const triageFetchPromises = [];
+    const triageMap = {}; // chave: "machine_turno" → totalForOEE
+    const uniqueMachines = [...new Set(plans.map(p => p.machine))];
+    const turnos = ['T1', 'T2', 'T3'];
+
+    for (const machine of uniqueMachines) {
+        for (const turno of turnos) {
+            triageFetchPromises.push(
+                triageService.getTriagePiecesForOEE(machine, dateStr, turno)
+                    .then(result => {
+                        triageMap[`${machine}_${turno}`] = result;
+                    })
+                    .catch(err => {
+                        console.warn(`[RESUMO] Erro ao buscar triagem para ${machine}/${turno}:`, err);
+                        triageMap[`${machine}_${turno}`] = { totalPending: 0, totalRejected: 0, totalForOEE: 0 };
+                    })
+            );
+        }
+    }
+    await Promise.all(triageFetchPromises);
+
     return plans.map(plan => {
         const data = { ...plan, T1: {}, T2: {}, T3: {} };
-        const turnos = ['T1', 'T2', 'T3'];
 
         const oeeExcludedCategoriesResumo = window.databaseModule?.oeeExcludedCategories || [];
 
@@ -378,16 +405,25 @@ function processResumoData(plans, productions, downtimes) {
             }, 0);
 
             const refugo_kg = entries.reduce((sum, item) => sum + (item.refugo_kg || 0), 0);
-            const refugo_pcs = plan.piece_weight > 0 ? Math.round((refugo_kg * 1000) / plan.piece_weight) : 0;
+            let refugo_pcs = plan.piece_weight > 0 ? Math.round((refugo_kg * 1000) / plan.piece_weight) : 0;
+
+            // INTEGRAÇÃO TRIAGEM → OEE: peças pendentes + rejeitadas impactam qualidade
+            const triageKey = `${plan.machine}_${turno}`;
+            const triageData = triageMap[triageKey];
+            const triagePcs = triageData ? triageData.totalForOEE : 0;
+            refugo_pcs += triagePcs;
 
             const ciclo_real = plan[`real_cycle_${turno.toLowerCase()}`] || plan.budgeted_cycle;
             const cav_ativas = plan[`active_cavities_${turno.toLowerCase()}`] || plan.mold_cavities;
 
             const oee = calculateShiftOEE(produzido, totalParadas, refugo_pcs, ciclo_real, cav_ativas);
 
-            data[turno] = { produzido, paradas: totalParadas, refugo_kg, refugo_pcs, ...oee };
+            data[turno] = {
+                produzido, paradas: totalParadas, refugo_kg, refugo_pcs,
+                triagem_pcs: triagePcs, // preservar para exibição
+                ...oee
+            };
 
-            const dateStr = getResumoDateSelector()?.value || getProductionDateString();
             saveOeeHistory(plan.machine, turno, dateStr, oee);
         });
 
@@ -499,6 +535,7 @@ function renderRelatorioEficiencia(data) {
                     produzido: item.T1.produzido || 0,
                     duracao_min: item.T1.paradas || 0,
                     refugo_kg: item.T1.refugo_kg || 0,
+                    triagem_pcs: item.T1.triagem_pcs || 0,
                     piece_weight: item.piece_weight,
                     real_cycle_t1: item.real_cycle_t1 || item.budgeted_cycle,
                     active_cavities_t1: item.active_cavities_t1 || item.mold_cavities,
@@ -511,6 +548,7 @@ function renderRelatorioEficiencia(data) {
                     produzido: item.T2.produzido || 0,
                     duracao_min: item.T2.paradas || 0,
                     refugo_kg: item.T2.refugo_kg || 0,
+                    triagem_pcs: item.T2.triagem_pcs || 0,
                     piece_weight: item.piece_weight,
                     real_cycle_t2: item.real_cycle_t2 || item.budgeted_cycle,
                     active_cavities_t2: item.active_cavities_t2 || item.mold_cavities,
@@ -523,6 +561,7 @@ function renderRelatorioEficiencia(data) {
                     produzido: item.T3.produzido || 0,
                     duracao_min: item.T3.paradas || 0,
                     refugo_kg: item.T3.refugo_kg || 0,
+                    triagem_pcs: item.T3.triagem_pcs || 0,
                     piece_weight: item.piece_weight,
                     real_cycle_t3: item.real_cycle_t3 || item.budgeted_cycle,
                     active_cavities_t3: item.active_cavities_t3 || item.mold_cavities,
@@ -629,6 +668,7 @@ window.handleResumoTableClick = handleResumoTableClick;
 window.handlePrintReport = handlePrintReport;
 window.calculateShiftOEE = calculateShiftOEE;
 window.calculateRealTimeOEE = calculateRealTimeOEE;
+window.processResumoData = processResumoData;
 window.loadOeeHistory = loadOeeHistory;
 window.groupOeeByPeriod = groupOeeByPeriod;
 window.saveOeeHistory = saveOeeHistory;

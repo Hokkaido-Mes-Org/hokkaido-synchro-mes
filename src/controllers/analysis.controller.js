@@ -2524,13 +2524,22 @@ Qualidade: ${(result.filtered.qualidade * 100).toFixed(1)}%`);
             }
 
             const totalTriagePieces = triageEntries.reduce((s, e) => s + (e.quantity || 0), 0);
+            const totalApproved = triageEntries.reduce((s, e) => s + (e.quantityApproved || 0), 0);
+            const totalRejected = triageEntries.reduce((s, e) => s + (e.quantityRejected || 0), 0);
+            const totalPending = triageEntries.reduce((s, e) => s + (e.quantityPending || 0), 0);
             const triagePct = totalProduction > 0 ? (totalTriagePieces / totalProduction * 100) : 0;
             const triagePctEl = document.getElementById('triage-production-pct');
             if (triagePctEl) triagePctEl.textContent = `${triagePct.toFixed(2)}%`;
+            const triageDetailEl = document.getElementById('triage-production-detail');
+            if (triageDetailEl) {
+                triageDetailEl.innerHTML = `${totalTriagePieces} pç · <span class="text-green-600">✓${totalApproved}</span> <span class="text-red-600">✗${totalRejected}</span> <span class="text-yellow-600">⏳${totalPending}</span>`;
+            }
         } catch (triageErr) {
             console.warn('[Losses] Erro ao calcular %Triagem/Produção:', triageErr);
             const triagePctEl = document.getElementById('triage-production-pct');
             if (triagePctEl) triagePctEl.textContent = '0.00%';
+            const triageDetailEl = document.getElementById('triage-production-detail');
+            if (triageDetailEl) triageDetailEl.textContent = 'peças triadas vs produzidas';
         }
         
         // Atualizar dados específicos de borra
@@ -6494,8 +6503,8 @@ ${content.innerHTML}
                 getDb().collection('downtime_entries').where('date', '>=', startDate).where('date', '<=', endDate).get())
         ]);
         
-        // Processar dados
-        let reportData = processResumoData(plans, productions, downtimes);
+        // Processar dados (async — inclui integração triagem/OEE)
+        let reportData = await processResumoData(plans, productions, downtimes);
         
         if (machine !== 'all') reportData = reportData.filter(r => r.machine === machine);
         if (shift !== 'all') {
@@ -6622,7 +6631,7 @@ ${content.innerHTML}
                 getDb().collection('downtime_entries').where('date', '>=', startDate).where('date', '<=', endDate).get())
         ]);
         
-        let reportData = processResumoData(plans, productions, downtimes);
+        let reportData = await processResumoData(plans, productions, downtimes);
         
         if (machine !== 'all') reportData = reportData.filter(r => r.machine === machine);
         
@@ -7321,8 +7330,8 @@ ${content.innerHTML}
                 getDb().collection('downtime_entries').where('date', '==', date).get()
             );
             
-            // Processar dados usando função existente
-            const reportData = processResumoData(plans, productions, downtimes);
+            // Processar dados usando função existente (async — inclui triagem/OEE)
+            const reportData = await processResumoData(plans, productions, downtimes);
             
             if (reportData.length === 0) {
                 showNotification('Nenhum dado encontrado para a data selecionada.', 'warning');

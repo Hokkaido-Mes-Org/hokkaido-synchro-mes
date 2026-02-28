@@ -162,7 +162,7 @@ class TriageService extends BaseService {
      * @param {number} result.rejected  - Peças refugadas nesta rodada
      * @param {string} [result.notes]   - Observações
      * @param {string} [result.operator]
-     * @returns {Promise<void>}
+     * @returns {Promise<Object>} — Retorna { doc, approved, rejected, isDone }
      */
     async recordTriageResult(id, result) {
         const doc = await this.getById(id);
@@ -188,7 +188,7 @@ class TriageService extends BaseService {
         // Se não há mais peças pendentes → triagem concluída
         const isDone = newPending <= 0;
 
-        return this.update(id, {
+        await this.update(id, {
             quantityApproved: newApproved,
             quantityRejected: newRejected,
             quantityPending:  newPending,
@@ -198,6 +198,8 @@ class TriageService extends BaseService {
             history,
             notes: result.notes || doc.notes || ''
         });
+
+        return { doc: { ...doc, quantityApproved: newApproved, quantityRejected: newRejected, quantityPending: newPending }, approved, rejected, isDone };
     }
 
     /**
@@ -232,6 +234,132 @@ class TriageService extends BaseService {
             history,
             notes: notes || doc.notes || ''
         });
+    }
+
+    // --- KPIs ---
+
+    /**
+     * Retorna peças aprovadas na triagem para a produção da OP de origem.
+     * Cria um registro em production_entries com as peças aprovadas como produção.
+     * @param {Object} triageDoc - Documento de triagem com dados do lote
+     * @param {number} approvedQty - Quantidade aprovada nesta rodada
+     * @param {string} operator - Operador que executou a triagem
+     * @returns {Promise<{success: boolean, productionEntryId: string|null}>}
+     */
+    async returnToProduction(triageDoc, approvedQty, operator) {
+        if (!approvedQty || approvedQty <= 0) {
+            return { success: false, productionEntryId: null };
+        }
+
+        try {
+            const db = firebase.firestore();
+
+            // Resolver peso unitário do produto
+            let pieceWeightG = triageDoc.pieceWeight || 0;
+            if (!pieceWeightG && triageDoc.productCode && window.productByCode) {
+                const prod = window.productByCode.get(Number(triageDoc.productCode));
+                if (prod && prod.weight) pieceWeightG = prod.weight;
+            }
+
+            // Calcular peso total das peças aprovadas (em kg)
+            const pesoKg = pieceWeightG > 0 ? Number(((approvedQty * pieceWeightG) / 1000).toFixed(3)) : 0;
+
+            // Resolver planId da máquina/ordem se possível
+            let planId = triageDoc.planId || null;
+            if (!planId && triageDoc.orderNumber && window.machineCardData) {
+                // Tentar encontrar o plano pela máquina
+                const machineData = window.machineCardData[triageDoc.machineId];
+                if (machineData) {
+                    const plans = Array.isArray(machineData) ? machineData : [machineData];
+                    const matchingPlan = plans.find(p => 
+                        String(p.order_number || p.order_number_original || '') === String(triageDoc.orderNumber)
+                    ) || plans[0];
+                    if (matchingPlan) planId = matchingPlan.id;
+                }
+            }
+
+            const turnoNorm = (triageDoc.turno || '').replace('T', '');
+            const turnoNum = parseInt(turnoNorm, 10) || null;
+
+            const productionEntry = {
+                planId: planId,
+                data: this._todayStr(),
+                turno: turnoNum || 1,
+                produzido: approvedQty,
+                peso_bruto: pesoKg,
+                refugo_kg: 0,
+                refugo_qty: 0,
+                perdas: '',
+                observacoes: `Retorno de triagem: ${approvedQty} peças aprovadas (lote: ${triageDoc.id || 'N/A'})`,
+                machine: triageDoc.machineId || null,
+                product_cod: triageDoc.productCode || '',
+                product: triageDoc.product || '',
+                orderId: triageDoc.orderId || null,
+                orderNumber: triageDoc.orderNumber || null,
+                manual: true,
+                isTriageReturn: true,
+                triageEntryId: triageDoc.id || null,
+                registradoPor: operator || '',
+                registradoPorNome: operator || '',
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            const docRef = await db.collection('production_entries').add(productionEntry);
+
+            console.log(`[Triage] ✅ Retorno à produção: ${approvedQty} peças → production_entries/${docRef.id} (OP: ${triageDoc.orderNumber || 'N/A'})`);
+
+            return { success: true, productionEntryId: docRef.id };
+        } catch (err) {
+            console.error('[Triage] ❌ Erro ao retornar peças à produção:', err);
+            return { success: false, productionEntryId: null };
+        }
+    }
+
+    /**
+     * Calcula total de peças em triagem/quarentena que impactam qualidade do OEE.
+     * Peças pendentes + em quarentena são consideradas "não-conformes" até serem triadas.
+     * @param {string} [machineId] - Filtrar por máquina
+     * @param {string} [date] - Filtrar por data (YYYY-MM-DD)
+     * @param {string|number} [turno] - Filtrar por turno
+     * @returns {Promise<{totalPending: number, totalRejected: number, totalForOEE: number}>}
+     */
+    async getTriagePiecesForOEE(machineId, date, turno) {
+        let entries = await this.getAll();
+
+        // Filtrar apenas lotes ativos (não concluídos retornam pendentes como impacto)
+        // Lotes concluídos retornam apenas refugadas
+        if (machineId) {
+            const mid = machineId.toUpperCase().trim();
+            entries = entries.filter(e => (e.machineId || '').toUpperCase().trim() === mid);
+        }
+
+        if (date) {
+            entries = entries.filter(e => (e.quarantineDate || '') === date);
+        }
+
+        if (turno) {
+            const t = String(turno).replace('T', '');
+            entries = entries.filter(e => {
+                const et = String(e.turno || '').replace('T', '');
+                return et === t;
+            });
+        }
+
+        // Peças pendentes em quarentena/triagem contam como "não-conformes" no OEE
+        const totalPending = entries
+            .filter(e => e.status !== TRIAGE_STATUS.CONCLUIDA)
+            .reduce((s, e) => s + (e.quantityPending || 0), 0);
+
+        // Peças rejeitadas (de todos os lotes) contam como refugo
+        const totalRejected = entries.reduce((s, e) => s + (e.quantityRejected || 0), 0);
+
+        // Total que impacta qualidade no OEE = pendentes + rejeitadas
+        return {
+            totalPending,
+            totalRejected,
+            totalForOEE: totalPending + totalRejected
+        };
     }
 
     // --- KPIs ---

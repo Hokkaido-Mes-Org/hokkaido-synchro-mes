@@ -317,13 +317,25 @@ function setupTriageResultModal() {
             }
 
             try {
-                await triageService.recordTriageResult(id, {
+                const triageResult = await triageService.recordTriageResult(id, {
                     approved,
                     rejected,
                     operator: currentUser,
                     notes
                 });
-                showNotification(`Triagem registrada: ${approved} aprovadas, ${rejected} refugadas`, 'success');
+
+                // ✅ RETORNO À PRODUÇÃO: peças aprovadas voltam como produção da OP de origem
+                if (approved > 0 && triageResult.doc) {
+                    const returnResult = await triageService.returnToProduction(triageResult.doc, approved, currentUser);
+                    if (returnResult.success) {
+                        showNotification(`Triagem: ${approved} aprovadas (retornaram à produção), ${rejected} refugadas`, 'success');
+                    } else {
+                        showNotification(`Triagem registrada: ${approved} aprovadas, ${rejected} refugadas (retorno à produção falhou)`, 'warning');
+                    }
+                } else {
+                    showNotification(`Triagem registrada: ${approved} aprovadas, ${rejected} refugadas`, 'success');
+                }
+
                 modal.classList.add('hidden');
                 resultForm.reset();
                 _resultInputMode = 'pieces';
@@ -372,6 +384,7 @@ function renderKPIs() {
 
     const totalPieces   = _triageData.reduce((s, e) => s + (e.quantity || 0), 0);
     const totalApproved = _triageData.reduce((s, e) => s + (e.quantityApproved || 0), 0);
+    const totalRejected = _triageData.reduce((s, e) => s + (e.quantityRejected || 0), 0);
     const totalPending  = _triageData.reduce((s, e) => s + (e.quantityPending || 0), 0);
 
     const rate = totalPieces > 0 ? ((totalApproved / totalPieces) * 100).toFixed(1) : '0.0';
@@ -381,7 +394,12 @@ function renderKPIs() {
     setKPI('triage-kpi-completed', completed.length);
     setKPI('triage-kpi-pending-pieces', totalPending);
     setKPI('triage-kpi-approved', totalApproved);
+    setKPI('triage-kpi-rejected', totalRejected);
     setKPI('triage-kpi-approval-rate', rate + '%');
+
+    // Impacto OEE: total pendentes + rejeitadas
+    const oeeImpact = totalPending + totalRejected;
+    setKPI('triage-kpi-oee-impact', oeeImpact);
 }
 
 function setKPI(id, value) {
@@ -410,7 +428,7 @@ function renderTriageTable() {
     if (filtered.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="9" class="px-4 py-8 text-center text-gray-400">
+                <td colspan="10" class="px-4 py-8 text-center text-gray-400">
                     Nenhum lote encontrado para o filtro selecionado.
                 </td>
             </tr>`;
@@ -421,17 +439,34 @@ function renderTriageTable() {
         const statusBadge = getStatusBadge(entry.status);
         const canTriage = entry.status === TRIAGE_STATUS.QUARENTENA || entry.status === TRIAGE_STATUS.EM_TRIAGEM;
 
+        // Barra de progresso da triagem
+        const total = entry.quantity || 0;
+        const processed = (entry.quantityApproved || 0) + (entry.quantityRejected || 0);
+        const progressPct = total > 0 ? Math.round((processed / total) * 100) : 0;
+        const progressColor = progressPct >= 100 ? 'bg-green-500' : progressPct > 50 ? 'bg-amber-400' : 'bg-blue-400';
+
+        // Nome do produto (código + nome se disponível)
+        const productDisplay = entry.product
+            ? `<span class="font-medium">${escHtml(entry.productCode || '-')}</span><br><span class="text-[11px] text-gray-400">${escHtml(entry.product)}</span>`
+            : escHtml(entry.productCode || '-');
+
         return `
             <tr class="hover:bg-gray-50 border-b border-gray-100">
                 <td class="px-3 py-2.5 text-sm font-medium text-gray-800">${escHtml(entry.machineId || '-')}</td>
                 <td class="px-3 py-2.5 text-sm text-gray-600">${escHtml(entry.orderNumber || '-')}</td>
-                <td class="px-3 py-2.5 text-sm text-gray-600 max-w-[180px] truncate" title="${escHtml(entry.product || '')}">${escHtml(entry.productCode || '-')}</td>
+                <td class="px-3 py-2.5 text-sm text-gray-600 max-w-[180px]" title="${escHtml(entry.product || '')}">${productDisplay}</td>
                 <td class="px-3 py-2.5 text-sm text-gray-600">${escHtml(entry.defectReason || '-')}</td>
-                <td class="px-3 py-2.5 text-sm text-center font-semibold text-gray-800">${entry.quantity || 0}</td>
+                <td class="px-3 py-2.5 text-xs text-center text-gray-500">${escHtml(entry.turno || '-')}</td>
+                <td class="px-3 py-2.5 text-sm text-center font-semibold text-gray-800">${total}</td>
                 <td class="px-3 py-2.5 text-sm text-center">
-                    <span class="text-green-600 font-medium">${entry.quantityApproved || 0}</span> /
-                    <span class="text-red-500 font-medium">${entry.quantityRejected || 0}</span> /
-                    <span class="text-amber-500 font-medium">${entry.quantityPending || 0}</span>
+                    <div class="flex items-center justify-center gap-1 text-xs">
+                        <span class="text-green-600 font-medium" title="Aprovadas">${entry.quantityApproved || 0}</span> /
+                        <span class="text-red-500 font-medium" title="Refugadas">${entry.quantityRejected || 0}</span> /
+                        <span class="text-amber-500 font-medium" title="Pendentes">${entry.quantityPending || 0}</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-1 mt-1">
+                        <div class="${progressColor} rounded-full h-1 transition-all" style="width: ${progressPct}%"></div>
+                    </div>
                 </td>
                 <td class="px-3 py-2.5 text-sm">${statusBadge}</td>
                 <td class="px-3 py-2.5 text-sm text-gray-500">${formatDate(entry.quarantineDate)}</td>
@@ -635,6 +670,24 @@ window._triageOpenResult = function(id) {
     el('triage-result-defect').textContent = entry.defectReason || '-';
     el('triage-result-total').textContent = entry.quantity || 0;
     el('triage-result-remaining').textContent = entry.quantityPending || 0;
+
+    // Exibir produto e turno
+    const productEl = el('triage-result-product');
+    if (productEl) productEl.textContent = entry.product ? `${entry.productCode} — ${entry.product}` : (entry.productCode || '-');
+    const turnoEl = el('triage-result-turno');
+    if (turnoEl) turnoEl.textContent = entry.turno || '-';
+
+    // Nota sobre impacto OEE
+    const oeeNoteEl = el('triage-result-oee-note');
+    if (oeeNoteEl) {
+        const pendingPcs = entry.quantityPending || 0;
+        if (pendingPcs > 0) {
+            oeeNoteEl.textContent = `${pendingPcs} peças pendentes impactam a qualidade no OEE. Peças aprovadas retornam como produção da OP de origem.`;
+            oeeNoteEl.classList.remove('hidden');
+        } else {
+            oeeNoteEl.classList.add('hidden');
+        }
+    }
 
     // Resolver peso unitário do produto para conversão peso→peças
     _resultPieceWeight = 0;
